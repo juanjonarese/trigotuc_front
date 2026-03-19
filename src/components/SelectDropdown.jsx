@@ -16,6 +16,7 @@ const SelectDropdown = ({
   const [open, setOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState({});
   const btnRef = useRef(null);
+  const menuRef = useRef(null);
 
   const selected = options.find((o) => String(o.value) === String(value));
 
@@ -61,6 +62,7 @@ const SelectDropdown = ({
     if (!open) return;
     const close = (e) => {
       if (btnRef.current && btnRef.current.contains(e.target)) return;
+      if (menuRef.current && menuRef.current.contains(e.target)) return;
       setOpen(false);
     };
     const closeOnScroll = () => setOpen(false);
@@ -101,6 +103,7 @@ const SelectDropdown = ({
       {open &&
         createPortal(
           <ul
+            ref={menuRef}
             className="dropdown-menu show shadow"
             style={menuStyle}
           >
@@ -117,6 +120,12 @@ const SelectDropdown = ({
                     .join(" ")}
                   onMouseDown={(e) => {
                     e.preventDefault(); // evita que blur cierre antes del click
+                    if (o.disabled) return;
+                    onChange(o.value);
+                    setOpen(false);
+                  }}
+                  onTouchEnd={(e) => {
+                    e.preventDefault();
                     if (o.disabled) return;
                     onChange(o.value);
                     setOpen(false);
