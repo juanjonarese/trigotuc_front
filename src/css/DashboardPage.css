@@ -1,0 +1,129 @@
+.dashboard-wrapper {
+  display: flex;
+  min-height: 100vh;
+  background: #f8f9fa;
+  overflow-x: hidden;
+}
+
+/* SIDEBAR */
+.sidebar {
+  width: 260px;
+  background: #343a40 !important;
+  position: fixed;
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  z-index: 1050;
+  transition: transform 0.3s ease;
+}
+
+.sidebar .nav-link {
+  padding: 0.75rem 1rem;
+  transition: all 0.2s ease;
+}
+
+.sidebar .nav-link:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.sidebar .nav-link.active {
+  background: #6c757d;
+  border-left: 3px solid #ff8c00;
+}
+
+/* MAIN CONTENT */
+.main-content {
+  flex: 1;
+  margin-left: 260px;
+  width: calc(100% - 260px);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  overflow-x: hidden;
+  min-width: 0; /* evita que flex desborde */
+}
+
+.page-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.main-header {
+  z-index: 1040;
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+}
+
+/* RESPONSIVE */
+@media (max-width: 991px) {
+  .sidebar {
+    transform: translateX(-100%);
+  }
+
+  .sidebar.show {
+    transform: translateX(0);
+  }
+
+  .main-content {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1040;
+  }
+}
+
+/* ANIMATIONS — desactivadas en móvil para evitar micro-desfases */
+@media (min-width: 992px) {
+  .btn {
+    transition: all 0.2s ease;
+  }
+
+  .btn:hover {
+    transform: translateY(-2px);
+  }
+
+  .btn:active {
+    transform: translateY(0);
+  }
+
+  .btn-outline-success:hover,
+  .btn-outline-primary:hover,
+  .btn-outline-info:hover,
+  .btn-outline-warning:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  }
+}
+
+/* CARDS */
+.card {
+  border-radius: 12px;
+}
+
+.card-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+/* CHARTS */
+.recharts-wrapper {
+  margin: 0 auto;
+}
+
+/* LOADING */
+.spinner-border {
+  animation: spinner-border 0.75s linear infinite;
+}

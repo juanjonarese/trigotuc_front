@@ -1,0 +1,27 @@
+/* Desactivar TODAS las transiciones y animaciones de la tabla */
+.tabla-sin-movimiento,
+.tabla-sin-movimiento *,
+.tabla-sin-movimiento::before,
+.tabla-sin-movimiento::after,
+.tabla-sin-movimiento tr,
+.tabla-sin-movimiento td,
+.tabla-sin-movimiento th {
+  transition: none !important;
+  animation: none !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Asegurar que los botones dentro de la tabla tampoco tengan transiciones */
+.tabla-sin-movimiento .btn,
+.tabla-sin-movimiento button {
+  transition: none !important;
+  animation: none !important;
+  transform: none !important;
+}
+
+/* Eliminar efectos hover si es necesario */
+.tabla-sin-movimiento tbody tr:hover {
+  background-color: inherit !important;
+  transition: none !important;
+}
