@@ -301,7 +301,7 @@ const Layout = ({ children }) => {
                   </a>
                 )}
 
-                {/* Decomisados */}
+                {/* Decomisados — comentado temporalmente
                 <a
                   href="#"
                   className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
@@ -312,6 +312,7 @@ const Layout = ({ children }) => {
                   <i className="bi bi-x-octagon"></i>
                   <span>Decomisados</span>
                 </a>
+                */}
               </div>
             )}
           </div>
