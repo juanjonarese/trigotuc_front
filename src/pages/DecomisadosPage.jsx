@@ -13,8 +13,8 @@ const formatNum = (n) =>
 
 const DecomisadosPage = () => {
   const rolUsuario     = localStorage.getItem("rolUsuario");
-  const esAdmin        = rolUsuario === "admin";
-  const puedeGestionar = rolUsuario === "admin" || rolUsuario === "granja";
+  const esAdmin        = rolUsuario === "superadmin";
+  const puedeGestionar = rolUsuario === "superadmin" || rolUsuario === "granja";
 
   const [decomisados, setDecomisados] = useState([]);
   const [lotes,       setLotes]       = useState([]);

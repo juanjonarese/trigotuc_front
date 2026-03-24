@@ -724,6 +724,35 @@ export const obtenerEnviosCamara = async () => {
 };
 
 
+// ============= ÓRDENES DE RETIRO =============
+
+export const obtenerOrdenesRetiro = async (filtros = {}) => {
+  const params = new URLSearchParams();
+  if (filtros.status) params.append("status", filtros.status);
+  if (filtros.clienteId) params.append("clienteId", filtros.clienteId);
+  if (filtros.camara) params.append("camara", filtros.camara);
+  const response = await fetch(`${API_URL}/ordenes-retiro?${params.toString()}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const obtenerOrdenRetiroPorVenta = async (ventaId) => {
+  const response = await fetch(`${API_URL}/ordenes-retiro?ventaId=${ventaId}`, {
+    headers: getAuthHeaders(),
+  });
+  const data = await handleResponse(response);
+  return data[0] || null;
+};
+
+export const marcarOrdenEntregada = async (id) => {
+  const response = await fetch(`${API_URL}/ordenes-retiro/${id}/entregar`, {
+    method: "PATCH",
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
 // ============= DECOMISADOS (GRANJA) =============
 
 export const obtenerDecomisados = async (filtros = {}) => {

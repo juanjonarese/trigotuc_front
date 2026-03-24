@@ -8,7 +8,7 @@ const Layout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [altasOpen, setAltasOpen] = useState(false);
   const [contableClientesOpen, setContableClientesOpen] = useState(false);
-  const [granjaOpen, setGranjaOpen] = useState(false);
+  const [frigorificoOpen, setFrigorificoOpen] = useState(false);
   const [comercialOpen, setComercialOpen] = useState(false);
   const rolUsuario = localStorage.getItem("rolUsuario");
 
@@ -44,7 +44,7 @@ const Layout = ({ children }) => {
 
     // Contable Clientes submenu
     if (
-      path === "/granja/ventas" ||
+      path === "/frigorifico/ventas" ||
       path.startsWith("/cobros") ||
       path.startsWith("/cta-cte-clientes")
     ) {
@@ -52,9 +52,10 @@ const Layout = ({ children }) => {
     }
 
     // Granja submenu
-    if (path.startsWith("/granja") && path !== "/granja/ventas") {
-      setGranjaOpen(true);
+    if (path.startsWith("/frigorifico") && path !== "/frigorifico/ventas") {
+      setFrigorificoOpen(true);
     }
+
 
 
     // Comercial submenu
@@ -79,20 +80,23 @@ const Layout = ({ children }) => {
         </div>
 
         <nav className="sidebar-nav flex-grow-1 p-3">
-          <a
-            href="#"
-            className={`nav-link d-flex align-items-center gap-2 mb-2 rounded ${
-              isActive("/dashboard") ? "text-white" : "text-white-50"
-            }`}
-            onClick={(e) => {
-              e.preventDefault();
-              navigate("/dashboard");
-            }}
-          >
-            <i className="bi bi-house-door fs-5"></i>
-            <span>Panel Principal</span>
-          </a>
+          {rolUsuario !== "frigorifico" && (
+            <a
+              href="#"
+              className={`nav-link d-flex align-items-center gap-2 mb-2 rounded ${
+                isActive("/dashboard") ? "text-white" : "text-white-50"
+              }`}
+              onClick={(e) => {
+                e.preventDefault();
+                navigate("/dashboard");
+              }}
+            >
+              <i className="bi bi-house-door fs-5"></i>
+              <span>Panel Principal</span>
+            </a>
+          )}
 
+          {(rolUsuario === "superadmin" || rolUsuario === "administracion") && (
           <div className="nav-section mb-2">
             <a
               href="#"
@@ -127,7 +131,7 @@ const Layout = ({ children }) => {
                   <i className="bi bi-person-badge"></i>
                   <span>Clientes</span>
                 </a>
-                {rolUsuario === "admin" && (
+                {rolUsuario === "superadmin" && (
                   <a
                     href="#"
                     className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
@@ -158,7 +162,9 @@ const Layout = ({ children }) => {
               </div>
             )}
           </div>
+          )}
 
+          {(rolUsuario === "superadmin" || rolUsuario === "administracion") && (
           <div className="nav-section mb-2">
             <a
               href="#"
@@ -185,19 +191,16 @@ const Layout = ({ children }) => {
                 <a
                   href="#"
                   className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
-                    isActive("/granja/ventas") ? "text-white" : "text-white-50"
+                    isActive("/frigorifico/ventas") ? "text-white" : "text-white-50"
                   }`}
                   onClick={(e) => {
                     e.preventDefault();
-                    navigate("/granja/ventas");
+                    navigate("/frigorifico/ventas");
                   }}
                 >
                   <i className="bi bi-cart3"></i>
                   <span>Ventas</span>
                 </a>
-                {/* Cobros y Cta Cte Clientes - No visibles para rol personal */}
-                {rolUsuario !== "personal" && (
-                <>
                 <a
                   href="#"
                   className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
@@ -226,11 +229,10 @@ const Layout = ({ children }) => {
                   <i className="bi bi-journal-text"></i>
                   <span>Cta Cte Clientes</span>
                 </a>
-                </>
-                )}
               </div>
             )}
           </div>
+          )}
 
           {/* Granja - visible para todos */}
           <div className="nav-section mb-2">
@@ -239,7 +241,7 @@ const Layout = ({ children }) => {
               className="nav-link text-white-50 d-flex align-items-center justify-content-between rounded"
               onClick={(e) => {
                 e.preventDefault();
-                setGranjaOpen(!granjaOpen);
+                setFrigorificoOpen(!frigorificoOpen);
               }}
             >
               <div className="d-flex align-items-center gap-2">
@@ -247,57 +249,70 @@ const Layout = ({ children }) => {
                 <span>Frigorífico</span>
               </div>
               <i
-                className={`bi bi-chevron-${granjaOpen ? "down" : "right"}`}
+                className={`bi bi-chevron-${frigorificoOpen ? "down" : "right"}`}
               ></i>
             </a>
 
-            {granjaOpen && (
+            {frigorificoOpen && (
               <div className="ps-4 mt-2">
                 <a
                   href="#"
                   className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
-                    isActive("/granja") && location.pathname === "/granja"
+                    isActive("/frigorifico") && location.pathname === "/frigorifico"
                       ? "text-white"
                       : "text-white-50"
                   }`}
                   onClick={(e) => {
                     e.preventDefault();
-                    navigate("/granja");
+                    navigate("/frigorifico");
                   }}
                 >
                   <i className="bi bi-bar-chart"></i>
                   <span>Stock</span>
                 </a>
-                {(rolUsuario === "admin" || rolUsuario === "granja") && (
+                {(rolUsuario === "superadmin" || rolUsuario === "frigorifico") && (
                   <>
                     <a
                       href="#"
                       className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
-                        isActive("/granja/lotes/nuevo") ? "text-white" : "text-white-50"
+                        isActive("/frigorifico/lotes/nuevo") ? "text-white" : "text-white-50"
                       }`}
                       onClick={(e) => {
                         e.preventDefault();
-                        navigate("/granja/lotes/nuevo");
+                        navigate("/frigorifico/lotes/nuevo");
                       }}
                     >
                       <i className="bi bi-plus-circle"></i>
                       <span>Nuevo Lote</span>
                     </a>
-</>
+                    <a
+                      href="#"
+                      className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
+                        isActive("/frigorifico/envios") ? "text-white" : "text-white-50"
+                      }`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        navigate("/frigorifico/envios");
+                      }}
+                    >
+                      <i className="bi bi-truck"></i>
+                      <span>Envío Cámara</span>
+                    </a>
+                  </>
                 )}
-                {(rolUsuario === "admin" || rolUsuario === "granja") && (
+                {(rolUsuario === "superadmin" || rolUsuario === "frigorifico" || rolUsuario === "camaras") && (
                   <a
                     href="#"
                     className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
-                      isActive("/granja/envios") ? "text-white" : "text-white-50"
+                      isActive("/frigorifico/ordenes-retiro") ? "text-white" : "text-white-50"
                     }`}
                     onClick={(e) => {
                       e.preventDefault();
-                      navigate("/granja/envios");
+                      navigate("/frigorifico/ordenes-retiro");
                     }}
                   >
-                    <i className="bi bi-truck"></i>
-                    <span>Envío Cámara</span>
+                    <i className="bi bi-box-arrow-right"></i>
+                    <span>Entregas</span>
                   </a>
                 )}
 
@@ -305,9 +320,9 @@ const Layout = ({ children }) => {
                 <a
                   href="#"
                   className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
-                    location.pathname === "/granja/decomisados" ? "text-white" : "text-white-50"
+                    location.pathname === "/frigorifico/decomisados" ? "text-white" : "text-white-50"
                   }`}
-                  onClick={(e) => { e.preventDefault(); navigate("/granja/decomisados"); }}
+                  onClick={(e) => { e.preventDefault(); navigate("/frigorifico/decomisados"); }}
                 >
                   <i className="bi bi-x-octagon"></i>
                   <span>Decomisados</span>
@@ -317,8 +332,8 @@ const Layout = ({ children }) => {
             )}
           </div>
 
-          {/* Comercial - solo admin */}
-          {rolUsuario === "admin" && (
+          {/* Comercial - superadmin y administracion */}
+          {(rolUsuario === "superadmin" || rolUsuario === "administracion") && (
             <div className="nav-section mb-2">
               <a
                 href="#"
@@ -358,15 +373,6 @@ const Layout = ({ children }) => {
           )}
         </nav>
 
-        <div className="p-3 border-top border-secondary">
-          <button
-            onClick={handleLogout}
-            className="btn btn-danger w-100 d-flex align-items-center justify-content-center gap-2"
-          >
-            <i className="bi bi-box-arrow-left"></i>
-            SALIR
-          </button>
-        </div>
       </aside>
 
       {/* Overlay para mobile */}
@@ -379,7 +385,7 @@ const Layout = ({ children }) => {
         {/* Header */}
         <header className="main-header bg-white shadow-sm sticky-top">
           <div className="container-fluid">
-            <div className="row align-items-center py-3">
+            <div className="row align-items-center py-2">
               <div className="col">
                 <button
                   className="btn btn-link d-lg-none p-0 text-dark"
@@ -389,15 +395,23 @@ const Layout = ({ children }) => {
                 </button>
               </div>
               <div className="col-auto">
-                <div className="d-flex align-items-center gap-2">
-                  <span className="text-muted d-none d-sm-inline text-truncate" style={{ maxWidth: "200px" }}>
-                    <strong>
-                      {localStorage.getItem("emailUsuario") || "Usuario"}
-                    </strong>
-                  </span>
-                  <div className="user-avatar bg-success rounded-circle d-flex align-items-center justify-content-center flex-shrink-0">
-                    <i className="bi bi-person-fill text-white"></i>
+                <div className="d-flex align-items-center gap-3">
+                  <div className="d-flex align-items-center gap-2">
+                    <div className="user-avatar bg-success rounded-circle d-flex align-items-center justify-content-center flex-shrink-0">
+                      <i className="bi bi-person-fill text-white"></i>
+                    </div>
+                    <span className="d-none d-sm-inline fw-semibold text-truncate" style={{ maxWidth: "180px" }}>
+                      {localStorage.getItem("nombreUsuario") || localStorage.getItem("emailUsuario") || "Usuario"}
+                    </span>
                   </div>
+                  <button
+                    onClick={handleLogout}
+                    className="btn btn-danger btn-sm d-flex align-items-center gap-1"
+                    title="Cerrar sesión"
+                  >
+                    <i className="bi bi-box-arrow-right"></i>
+                    <span className="d-none d-sm-inline">Salir</span>
+                  </button>
                 </div>
               </div>
             </div>

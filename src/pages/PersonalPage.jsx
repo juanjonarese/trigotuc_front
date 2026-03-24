@@ -22,15 +22,15 @@ const PersonalPage = () => {
     emailUsuario: "",
     telefonoUsuario: "",
     contraseniaUsuario: "",
-    rolUsuario: "compras",
+    rolUsuario: "administracion",
   });
 
-  // Verificar que el usuario sea admin
+  // Verificar que el usuario sea superadmin
   const rolUsuario = localStorage.getItem("rolUsuario");
 
   useEffect(() => {
-    // Si no es admin, redirigir al dashboard
-    if (rolUsuario !== "admin") {
+    // Si no es superadmin, redirigir al dashboard
+    if (rolUsuario !== "superadmin") {
       navigate("/dashboard");
       return;
     }
@@ -83,7 +83,7 @@ const PersonalPage = () => {
       emailUsuario: "",
       telefonoUsuario: "",
       contraseniaUsuario: "",
-      rolUsuario: "compras",
+      rolUsuario: "administracion",
     });
   };
 
@@ -202,8 +202,8 @@ const PersonalPage = () => {
     setCurrentPage(1);
   }, [searchTerm]);
 
-  // Si no es admin, no mostrar nada (ya redirige en useEffect)
-  if (rolUsuario !== "admin") {
+  // Si no es superadmin, no mostrar nada (ya redirige en useEffect)
+  if (rolUsuario !== "superadmin") {
     return null;
   }
 
@@ -298,10 +298,10 @@ const PersonalPage = () => {
                             </div>
                           </div>
                           <span className={`badge ${
-                            usuario.rolUsuario === 'admin' ? 'bg-danger' :
-                            usuario.rolUsuario === 'personal' ? 'bg-warning text-dark' :
-                            usuario.rolUsuario === 'contable' ? 'bg-info text-dark' :
-                            usuario.rolUsuario === 'granja' ? 'bg-success' :
+                            usuario.rolUsuario === 'superadmin' ? 'bg-danger' :
+                            usuario.rolUsuario === 'administracion' ? 'bg-primary' :
+                            usuario.rolUsuario === 'frigorifico' ? 'bg-info text-dark' :
+                            usuario.rolUsuario === 'camaras' ? 'bg-success' :
                             'bg-secondary'
                           }`}>
                             {usuario.rolUsuario}
@@ -317,6 +317,7 @@ const PersonalPage = () => {
                       <thead className="table-light">
                         <tr>
                           <th>Nombre</th>
+                          <th>Email</th>
                           <th>Rol</th>
                           <th>Acciones</th>
                         </tr>
@@ -324,16 +325,14 @@ const PersonalPage = () => {
                       <tbody>
                         {currentItems.map((usuario) => (
                           <tr key={usuario._id}>
-                            <td>
-                              <div>{usuario.nombreUsuario}</div>
-                              <small className="text-muted">{usuario.emailUsuario}</small>
-                            </td>
+                            <td>{usuario.nombreUsuario}</td>
+                            <td className="text-muted">{usuario.emailUsuario}</td>
                             <td>
                               <span className={`badge ${
-                                usuario.rolUsuario === 'admin' ? 'bg-danger' :
-                                usuario.rolUsuario === 'personal' ? 'bg-warning text-dark' :
-                                usuario.rolUsuario === 'contable' ? 'bg-info text-dark' :
-                                usuario.rolUsuario === 'granja' ? 'bg-success' :
+                                usuario.rolUsuario === 'superadmin' ? 'bg-danger' :
+                                usuario.rolUsuario === 'administracion' ? 'bg-primary' :
+                                usuario.rolUsuario === 'frigorifico' ? 'bg-info text-dark' :
+                                usuario.rolUsuario === 'camaras' ? 'bg-success' :
                                 'bg-secondary'
                               }`}>
                                 {usuario.rolUsuario}
@@ -486,17 +485,17 @@ const PersonalPage = () => {
                             onChange={handleChange}
                             required
                           >
-                            <option value="compras">Compras (Solo proveedores)</option>
-                            <option value="personal">Personal (Gestión clientes/proveedores)</option>
-                            <option value="contable">Contable (Gestión clientes/proveedores)</option>
-                            <option value="admin">Administrador (Acceso total)</option>
+                            <option value="administracion">Administración (Todo menos usuarios)</option>
+                            <option value="frigorifico">Frigorífico (Lotes y envíos cámara)</option>
+                            <option value="camaras">Cámaras (Entregas)</option>
+                            <option value="superadmin">Super Admin (Acceso total)</option>
                           </select>
                           <div className="form-text">
                             <small>
-                              <strong>Compras:</strong> Solo puede gestionar proveedores. <br />
-                              <strong>Personal:</strong> Puede crear/editar clientes y proveedores. <br />
-                              <strong>Contable:</strong> Puede crear/editar clientes y proveedores (mismo acceso que Personal). <br />
-                              <strong>Admin:</strong> Acceso completo al sistema.
+                              <strong>Administración:</strong> Acceso completo excepto gestión de usuarios. <br />
+                              <strong>Frigorífico:</strong> Carga de lotes y envíos entre cámaras. <br />
+                              <strong>Cámaras:</strong> Registro de entregas de mercadería. <br />
+                              <strong>Super Admin:</strong> Acceso total al sistema.
                             </small>
                           </div>
                         </div>

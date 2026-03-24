@@ -10,7 +10,7 @@ const GranjaDashboardPage = () => {
   const navigate = useNavigate();
   const rolUsuario = localStorage.getItem("rolUsuario");
   const esAdmin = rolUsuario === "admin";
-  const puedeGestionar = rolUsuario === "admin" || rolUsuario === "granja";
+  const puedeGestionar = rolUsuario === "superadmin" || rolUsuario === "frigorifico";
 
   const [resumen, setResumen] = useState({
     totalPollosVivos: 0,
@@ -232,7 +232,7 @@ const GranjaDashboardPage = () => {
           {puedeGestionar && (
               <button
                 className="btn btn-success btn-sm"
-                onClick={() => navigate("/granja/lotes/nuevo")}
+                onClick={() => navigate("/frigorifico/lotes/nuevo")}
               >
                 <i className="bi bi-plus-circle me-1"></i>
                 Nuevo Lote
@@ -241,7 +241,7 @@ const GranjaDashboardPage = () => {
           {(esAdmin || rolUsuario === "granja") && (
             <button
               className="btn btn-outline-secondary btn-sm"
-              onClick={() => navigate("/granja/envios")}
+              onClick={() => navigate("/frigorifico/envios")}
             >
               <i className="bi bi-truck me-1"></i>
               Envíos
@@ -298,6 +298,39 @@ const GranjaDashboardPage = () => {
           </div>
         </div>
       </div>
+
+      {/* ── Cajones por calibre (total) ── */}
+      {resumen.porCalibre && resumen.porCalibre.length > 0 && (
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-header bg-white py-2">
+            <h6 className="mb-0">
+              <i className="bi bi-box-seam me-2 text-primary"></i>
+              Cajones disponibles por calibre (total)
+            </h6>
+          </div>
+          <div className="card-body pb-2">
+            <div className="row g-2">
+              {resumen.porCalibre.map((c) => (
+                <div key={c.calibre} className="col-6 col-sm-4 col-md-3 col-lg-2">
+                  <div className="card border text-center h-100">
+                    <div className="card-body py-2 px-1">
+                      <span className="badge bg-primary mb-1">Cal. {c.calibre}</span>
+                      <div className="fs-5 fw-bold">{formatNum(c.cajones)}</div>
+                      <div className="text-muted" style={{ fontSize: "0.75rem" }}>cajones</div>
+                      <div className="text-muted" style={{ fontSize: "0.75rem" }}>
+                        {formatNum(c.pollos)} pollos
+                      </div>
+                      <div className="text-muted" style={{ fontSize: "0.75rem" }}>
+                        {formatNum(c.cajones * 20)} kg
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Stock por cámara ── */}
       {(totalCañeteKg > 0 || totalTrigotucKg > 0) && (
@@ -356,39 +389,6 @@ const GranjaDashboardPage = () => {
                   Total: <strong>{formatNum(totalTrigotucKg)} kg</strong>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Cajones por calibre (total) ── */}
-      {resumen.porCalibre && resumen.porCalibre.length > 0 && (
-        <div className="card border-0 shadow-sm mb-4">
-          <div className="card-header bg-white py-2">
-            <h6 className="mb-0">
-              <i className="bi bi-box-seam me-2 text-primary"></i>
-              Cajones disponibles por calibre (total)
-            </h6>
-          </div>
-          <div className="card-body pb-2">
-            <div className="row g-2">
-              {resumen.porCalibre.map((c) => (
-                <div key={c.calibre} className="col-6 col-sm-4 col-md-3 col-lg-2">
-                  <div className="card border text-center h-100">
-                    <div className="card-body py-2 px-1">
-                      <span className="badge bg-primary mb-1">Cal. {c.calibre}</span>
-                      <div className="fs-5 fw-bold">{formatNum(c.cajones)}</div>
-                      <div className="text-muted" style={{ fontSize: "0.75rem" }}>cajones</div>
-                      <div className="text-muted" style={{ fontSize: "0.75rem" }}>
-                        {formatNum(c.pollos)} pollos
-                      </div>
-                      <div className="text-muted" style={{ fontSize: "0.75rem" }}>
-                        {formatNum(c.cajones * 20)} kg
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
         </div>
@@ -453,31 +453,28 @@ const GranjaDashboardPage = () => {
                         </div>
                         {/* Faena */}
                         {lote.kgVivos > 0 && (
-                          <div className="border-top pt-2">
-                            <div className="text-muted small fw-semibold mb-1">Datos de faena</div>
-                            <div className="small">
-                              <span className="me-3">Kg vivos: <strong>{formatNum(lote.kgVivos)}</strong></span>
+                          <div className="border-top pt-2 small">
+                            <div className="text-muted fw-semibold mb-2" style={{fontSize:"0.7rem",textTransform:"uppercase",letterSpacing:"0.05em"}}>Datos de faena</div>
+                            <div className="mb-2 text-muted">
+                              <strong className="text-dark">{formatNum(lote.kgVivos)} kg</strong> vivos
                               {lote.unidadesFaenadas > 0 && (
-                                <span className="me-3">Prom: <strong>{formatNum(Math.round(lote.kgVivos / lote.unidadesFaenadas * 1000) / 1000)} kg/u</strong></span>
-                              )}
-                              {lote.rendimientoFaena != null && (
-                                <span className="badge bg-success ms-1">Rend. {formatNum(lote.rendimientoFaena)}%</span>
+                                <span className="ms-2">· {formatNum(Math.round(lote.kgVivos / lote.unidadesFaenadas * 1000) / 1000)} kg/u</span>
                               )}
                             </div>
-                            <div className="small mt-1 d-flex flex-wrap gap-2">
-                              {lote.unidadesDecomisadas > 0 && (
-                                <span className="text-danger">
-                                  Decomisados: <strong>{formatNum(lote.unidadesDecomisadas)} u{lote.kgDecomisados > 0 && ` / ${formatNum(lote.kgDecomisados)} kg`}</strong>
-                                  {pctDecom !== null && <span> ({pctDecom}%)</span>}
-                                </span>
-                              )}
-                              {lote.unidadesTrozadas > 0 && (
-                                <span className="text-warning">
-                                  Trozados: <strong>{formatNum(lote.unidadesTrozadas)} u{lote.kgTrozados > 0 && ` / ${formatNum(lote.kgTrozados)} kg`}</strong>
-                                  {pctTroz !== null && <span> ({pctTroz}%)</span>}
-                                </span>
-                              )}
-                            </div>
+                            {lote.unidadesDecomisadas > 0 && (
+                              <div className="d-flex align-items-center gap-2 mb-1">
+                                <span className="badge bg-danger" style={{minWidth:80}}>Decomisados</span>
+                                <span className="text-muted">{formatNum(lote.unidadesDecomisadas)} unidades{lote.kgDecomisados > 0 && ` · ${formatNum(lote.kgDecomisados)} kg`}</span>
+                                {pctDecom !== null && <span className="ms-auto fw-semibold text-muted">{pctDecom}%</span>}
+                              </div>
+                            )}
+                            {lote.unidadesTrozadas > 0 && (
+                              <div className="d-flex align-items-center gap-2">
+                                <span className="badge bg-warning text-dark" style={{minWidth:80}}>Trozados</span>
+                                <span className="text-muted">{formatNum(lote.unidadesTrozadas)} unidades{lote.kgTrozados > 0 && ` · ${formatNum(lote.kgTrozados)} kg`}</span>
+                                {pctTroz !== null && <span className="ms-auto fw-semibold text-muted">{pctTroz}%</span>}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -533,26 +530,27 @@ const GranjaDashboardPage = () => {
                           <td>
                             {lote.kgVivos > 0 ? (
                               <div className="small">
-                                <div className="mb-1">
-                                  <span className="me-3">Kg vivos: <strong>{formatNum(lote.kgVivos)}</strong></span>
-                                  {lote.unidadesFaenadas > 0 && (
-                                    <span>Prom: <strong>{formatNum(Math.round(lote.kgVivos / lote.unidadesFaenadas * 1000) / 1000)} kg/u</strong></span>
-                                  )}
+                                <div className="d-flex align-items-center gap-2 mb-1">
+                                  <span className="badge bg-success" style={{minWidth:80}}>Vivos</span>
+                                  <span className="text-muted">
+                                    {formatNum(lote.kgVivos)} kg
+                                    {lote.unidadesFaenadas > 0 && ` · ${formatNum(Math.round(lote.kgVivos / lote.unidadesFaenadas * 1000) / 1000)} kg/u`}
+                                  </span>
                                 </div>
-                                <div className="d-flex flex-wrap gap-2">
-                                  {lote.unidadesDecomisadas > 0 && (
-                                    <span className="text-danger">
-                                      Decomisados: <strong>{formatNum(lote.unidadesDecomisadas)} u{lote.kgDecomisados > 0 && ` / ${formatNum(lote.kgDecomisados)} kg`}</strong>
-                                      {pctDecom !== null && <span> ({pctDecom}%)</span>}
-                                    </span>
-                                  )}
-                                  {lote.unidadesTrozadas > 0 && (
-                                    <span className="text-warning">
-                                      Trozados: <strong>{formatNum(lote.unidadesTrozadas)} u{lote.kgTrozados > 0 && ` / ${formatNum(lote.kgTrozados)} kg`}</strong>
-                                      {pctTroz !== null && <span> ({pctTroz}%)</span>}
-                                    </span>
-                                  )}
-                                </div>
+                                {lote.unidadesDecomisadas > 0 && (
+                                  <div className="d-flex align-items-center gap-2 mb-1">
+                                    <span className="badge bg-danger" style={{minWidth:80}}>Decomisados</span>
+                                    <span className="text-muted">{formatNum(lote.unidadesDecomisadas)} unidades{lote.kgDecomisados > 0 && ` · ${formatNum(lote.kgDecomisados)} kg`}</span>
+                                    {pctDecom !== null && <span className="ms-auto fw-semibold text-muted">{pctDecom}%</span>}
+                                  </div>
+                                )}
+                                {lote.unidadesTrozadas > 0 && (
+                                  <div className="d-flex align-items-center gap-2">
+                                    <span className="badge bg-warning text-dark" style={{minWidth:80}}>Trozados</span>
+                                    <span className="text-muted">{formatNum(lote.unidadesTrozadas)} unidades{lote.kgTrozados > 0 && ` · ${formatNum(lote.kgTrozados)} kg`}</span>
+                                    {pctTroz !== null && <span className="ms-auto fw-semibold text-muted">{pctTroz}%</span>}
+                                  </div>
+                                )}
                               </div>
                             ) : (
                               <span className="text-muted small">—</span>
@@ -595,10 +593,12 @@ const GranjaDashboardPage = () => {
         </div>
       </div>
 
-      <p className="text-muted mt-2 small">
-        <i className="bi bi-clock me-1"></i>
-        Se actualiza automáticamente cada 30 segundos.
-      </p>
+      {localStorage.getItem("rolUsuario") !== "frigorifico" && (
+        <p className="text-muted mt-2 small">
+          <i className="bi bi-clock me-1"></i>
+          Se actualiza automáticamente cada 30 segundos.
+        </p>
+      )}
       </div>
     </Layout>
   );

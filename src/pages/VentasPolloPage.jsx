@@ -8,6 +8,7 @@ import {
   eliminarVentaPollo,
   obtenerClientes,
   obtenerResumenStock,
+  obtenerOrdenRetiroPorVenta,
 } from "../services/api";
 import Swal from "sweetalert2";
 import SelectDropdown from "../components/SelectDropdown";
@@ -127,6 +128,124 @@ const VentasPolloPage = () => {
   const descuentoImporte = subtotalBruto * (descuentoPct / 100);
   const totalVenta       = subtotalBruto - descuentoImporte;
 
+  // ── Imprimir Orden de Retiro ───────────────────────────────────────────
+  const imprimirOrden = (venta, ordenNumero) => {
+    const camara = CAMARAS.find((c) => c.value === venta.camara)?.label || venta.camara || "—";
+    const clienteNombre = venta.cliente?.razonSocial || venta._clienteNombre || "—";
+    const fecha = new Date(venta.fecha).toLocaleDateString("es-AR");
+    const fmtNum = (n) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n);
+    const fmtARS = (n) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n);
+
+    const filasCalibres = (venta.calibres || []).map((c) => `
+      <tr>
+        <td style="padding:10px 20px;border:1px solid #ddd;text-align:center;font-size:15px;">${c.calibre}</td>
+        <td style="padding:10px 20px;border:1px solid #ddd;text-align:right;font-size:15px;">${fmtNum(c.cajones)}</td>
+      </tr>`).join("");
+
+    const cuerpo = (etiqueta) => `
+      <div class="copy-label">${etiqueta}</div>
+      <div class="header">
+        <img src="/logo_trigotuc.png" alt="Trigotuc Avícola" />
+        <div class="header-right">
+          <h1>ORDEN DE RETIRO</h1>
+          <div class="nro">${ordenNumero || ""}</div>
+        </div>
+      </div>
+      <div class="meta">
+        <div><div class="lbl">Fecha</div><div class="val">${fecha}</div></div>
+        <div><div class="lbl">Cámara</div><div class="val">${camara}</div></div>
+        <div><div class="lbl">Cliente</div><div class="val">${clienteNombre}</div></div>
+      </div>
+      <table>
+        <thead><tr>
+          <th style="text-align:center;">Calibre</th>
+          <th style="text-align:right;">Cajones</th>
+        </tr></thead>
+        <tbody>
+          ${filasCalibres}
+          <tr class="total-row">
+            <td>Total kg</td>
+            <td style="text-align:right;">${fmtNum(venta.pesoTotalKg)} kg</td>
+          </tr>
+        </tbody>
+      </table>
+      ${venta.observaciones ? `<div style="font-size:12px;color:#555;margin-bottom:16px;">Obs: ${venta.observaciones}</div>` : ""}
+      <div class="firmas">
+        <div class="firma-box">
+          <div class="firma-line"></div>
+          <div class="firma-lbl">Firma y aclaración</div>
+        </div>
+        <div class="firma-box">
+          <div class="firma-line"></div>
+          <div class="firma-lbl">DNI</div>
+        </div>
+      </div>`;
+
+    const html = `<!DOCTYPE html><html lang="es"><head>
+      <meta charset="UTF-8"/>
+      <title>Orden de Retiro ${ordenNumero || ""}</title>
+      <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; color: #222; }
+        .copy {
+          height: 50vh;
+          padding: 20px 32px;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+        }
+        .copy:first-child { border-bottom: 2px dashed #999; }
+        .copy-label {
+          font-size: 10px;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          color: #999;
+          margin-bottom: 8px;
+        }
+        .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; border-bottom: 2px solid #222; padding-bottom: 10px; }
+        .header img { height: 72px; }
+        .header-right { text-align: right; }
+        .header-right h1 { font-size: 18px; margin-bottom: 2px; }
+        .header-right .nro { font-size: 13px; color: #555; }
+        .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; margin-bottom: 12px; }
+        .lbl { font-size: 9px; color: #888; text-transform: uppercase; letter-spacing: .5px; }
+        .val { font-size: 13px; font-weight: 600; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+        thead th { background: #f0f0f0; padding: 5px 12px; border: 1px solid #ddd; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+        th:last-child, td:last-child { text-align: right; }
+        th:first-child, td:first-child { text-align: center; }
+        tbody td { padding: 5px 12px; border: 1px solid #ddd; font-size: 13px; }
+        .total-row td { background: #f8f8f8; font-weight: 700; font-size: 13px; padding: 6px 12px; border: 1px solid #ddd; }
+        .firmas { display: flex; gap: 32px; margin-top: auto; margin-bottom: 32px; }
+        .firma-box { flex: 1; }
+        .firma-line { border-top: 1px solid #aaa; margin-bottom: 4px; }
+        .firma-lbl { font-size: 10px; color: #666; }
+        @media print {
+          body { margin: 0; }
+          .copy { height: 50vh; }
+        }
+      </style>
+    </head><body>
+      <div class="copy">${cuerpo("Original")}</div>
+      <div class="copy">${cuerpo("Duplicado")}</div>
+    </body></html>`;
+
+    const win = window.open("", "_blank", "width=700,height=600");
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    win.print();
+  };
+
+  const handleImprimirDesdeTabla = async (venta) => {
+    try {
+      const orden = await obtenerOrdenRetiroPorVenta(venta._id);
+      imprimirOrden(venta, orden?.numeroOrden);
+    } catch {
+      imprimirOrden(venta, null);
+    }
+  };
+
   // ── Submit ─────────────────────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -138,6 +257,7 @@ const VentasPolloPage = () => {
     }
     setSubmitting(true);
     try {
+      const clienteSeleccionado = clientes.find((c) => c._id === form.cliente);
       const ventaCreada = await crearVentaPollo({
         fecha:         form.fecha,
         camara:        form.camara || undefined,
@@ -151,15 +271,30 @@ const VentasPolloPage = () => {
         cliente:       form.cliente,
         observaciones: form.observaciones,
       });
-      const camaraLbl = CAMARAS.find((c) => c.value === form.camara)?.label || "";
-      const ocNum = ventaCreada?.numeroOrdenCobro ? formatOC(ventaCreada.numeroOrdenCobro) : "";
-      Swal.fire(
-        "Venta registrada",
-        `${ocNum ? ocNum + " · " : ""}${totalCajones} cajones · ${totalKg} kg · ${totalPollos} pollos${camaraLbl ? ` · ${camaraLbl}` : ""}`,
-        "success"
-      );
+
       cerrarModal();
       cargarDatos();
+
+      const camaraLbl = CAMARAS.find((c) => c.value === form.camara)?.label || "";
+      const ocNum = ventaCreada?.numeroOrdenCobro ? formatOC(ventaCreada.numeroOrdenCobro) : "";
+      const orNum = ventaCreada?._ordenNumero || "";
+
+      const result = await Swal.fire({
+        title: "Venta registrada",
+        html: `<div class="mb-2">${ocNum ? `<strong>${ocNum}</strong> · ` : ""}${totalCajones} cajones · ${totalKg} kg${camaraLbl ? ` · ${camaraLbl}` : ""}</div>
+               ${orNum ? `<div class="text-muted" style="font-size:13px">Orden de retiro: <strong>${orNum}</strong></div>` : ""}
+               <div class="mt-3" style="font-size:14px">¿Querés imprimir la orden de retiro?</div>`,
+        icon: "success",
+        showCancelButton: true,
+        confirmButtonText: '<i class="bi bi-printer me-1"></i> Imprimir',
+        cancelButtonText: "No, gracias",
+        confirmButtonColor: "#0d6efd",
+      });
+
+      if (result.isConfirmed) {
+        ventaCreada.cliente = { razonSocial: clienteSeleccionado?.razonSocial || "" };
+        imprimirOrden(ventaCreada, orNum);
+      }
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudo registrar la venta.", "error");
     } finally {
@@ -336,14 +471,23 @@ const VentasPolloPage = () => {
                             )}
                             <div className="mt-1">{camaraLabel(v.camara)}</div>
                           </div>
-                          {esAdmin && (
+                          <div className="d-flex gap-1">
                             <button
-                              className="btn btn-outline-danger btn-sm"
-                              onClick={() => handleEliminar(v._id)}
+                              className="btn btn-outline-primary btn-sm"
+                              onClick={() => handleImprimirDesdeTabla(v)}
+                              title="Imprimir orden de retiro"
                             >
-                              <i className="bi bi-trash"></i>
+                              <i className="bi bi-printer"></i>
                             </button>
-                          )}
+                            {esAdmin && (
+                              <button
+                                className="btn btn-outline-danger btn-sm"
+                                onClick={() => handleEliminar(v._id)}
+                              >
+                                <i className="bi bi-trash"></i>
+                              </button>
+                            )}
+                          </div>
                         </div>
 
                         <div className="d-flex flex-wrap gap-1 mb-2">
@@ -414,7 +558,7 @@ const VentasPolloPage = () => {
                         <th className="text-end">Total</th>
                         <th>Cliente</th>
                         <th>Usuario</th>
-                        {esAdmin && <th></th>}
+                        <th></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -458,17 +602,26 @@ const VentasPolloPage = () => {
                           <td className="text-muted small">
                             {v.registradoPor?.nombreUsuario || "—"}
                           </td>
-                          {esAdmin && (
-                            <td>
+                          <td>
+                            <div className="d-flex gap-1">
                               <button
-                                className="btn btn-outline-danger btn-sm"
-                                onClick={() => handleEliminar(v._id)}
-                                title="Eliminar"
+                                className="btn btn-outline-primary btn-sm"
+                                onClick={() => handleImprimirDesdeTabla(v)}
+                                title="Imprimir orden de retiro"
                               >
-                                <i className="bi bi-trash"></i>
+                                <i className="bi bi-printer"></i>
                               </button>
-                            </td>
-                          )}
+                              {esAdmin && (
+                                <button
+                                  className="btn btn-outline-danger btn-sm"
+                                  onClick={() => handleEliminar(v._id)}
+                                  title="Eliminar"
+                                >
+                                  <i className="bi bi-trash"></i>
+                                </button>
+                              )}
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>

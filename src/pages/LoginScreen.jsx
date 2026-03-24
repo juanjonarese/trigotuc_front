@@ -14,10 +14,6 @@ const LoginScreen = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Limpiar localStorage al montar el componente para evitar problemas con credenciales viejas
-  useEffect(() => {
-    localStorage.clear();
-  }, []);
 
   const handleChange = (e) => {
     setFormData({
@@ -61,9 +57,14 @@ const LoginScreen = () => {
         localStorage.setItem("token", data.token);
         localStorage.setItem("rolUsuario", data.rolUsuario);
         localStorage.setItem("emailUsuario", formData.emailUsuario.trim());
+        localStorage.setItem("nombreUsuario", data.nombreUsuario || "");
 
-        // Redirigir al dashboard
-        navigate("/dashboard");
+        // Redirigir según rol
+        if (data.rolUsuario === "frigorifico") {
+          navigate("/frigorifico/lotes/nuevo");
+        } else {
+          navigate("/dashboard");
+        }
       } else {
         setError(data.msg || "Usuario o contraseña incorrectos");
       }

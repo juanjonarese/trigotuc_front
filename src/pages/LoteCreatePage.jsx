@@ -60,7 +60,7 @@ const LoteCreatePage = () => {
         `${totalPollos} pollos · ${totalCajones} cajones · ${totalKg} kg`,
         "success"
       );
-      navigate("/granja");
+      navigate("/frigorifico");
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudo crear el lote.", "error");
     } finally {
@@ -77,7 +77,7 @@ const LoteCreatePage = () => {
       <div className="d-flex align-items-center gap-2 mb-4">
         <button
           className="btn btn-outline-secondary btn-sm"
-          onClick={() => navigate("/granja")}
+          onClick={() => navigate("/frigorifico")}
         >
           <i className="bi bi-arrow-left"></i>
         </button>
@@ -237,7 +237,7 @@ const LoteCreatePage = () => {
               <button
                 type="button"
                 className="btn btn-outline-secondary"
-                onClick={() => navigate("/granja")}
+                onClick={() => navigate("/frigorifico")}
               >
                 Cancelar
               </button>

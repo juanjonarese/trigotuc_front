@@ -17,6 +17,7 @@ import ListasPreciosPage from "./pages/ListasPreciosPage";
 import EnvioCamaraPage from "./pages/EnvioCamaraPage";
 import CamionesPage from "./pages/CamionesPage";
 import DecomisadosPage from "./pages/DecomisadosPage";
+import OrdenesRetiroPage from "./pages/OrdenesRetiroPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
@@ -118,7 +119,7 @@ function App() {
 
         {/* Rutas protegidas - Granja */}
         <Route
-          path="/granja"
+          path="/frigorifico"
           element={
             <ProtectedRoute>
               <GranjaDashboardPage />
@@ -126,7 +127,7 @@ function App() {
           }
         />
         <Route
-          path="/granja/lotes/nuevo"
+          path="/frigorifico/lotes/nuevo"
           element={
             <ProtectedRoute>
               <LoteCreatePage />
@@ -134,7 +135,7 @@ function App() {
           }
         />
         <Route
-          path="/granja/ventas"
+          path="/frigorifico/ventas"
           element={
             <ProtectedRoute>
               <VentasPolloPage />
@@ -150,7 +151,7 @@ function App() {
           }
         />
         <Route
-          path="/granja/envios"
+          path="/frigorifico/envios"
           element={
             <ProtectedRoute>
               <EnvioCamaraPage />
@@ -159,7 +160,15 @@ function App() {
         />
 
         <Route
-          path="/granja/decomisados"
+          path="/frigorifico/ordenes-retiro"
+          element={
+            <ProtectedRoute>
+              <OrdenesRetiroPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/frigorifico/decomisados"
           element={
             <ProtectedRoute>
               <DecomisadosPage />

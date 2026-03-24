@@ -3,7 +3,10 @@ import { useNavigate } from "react-router-dom";
 import "../css/DashboardPage.css";
 import { obtenerCtaCteClientes, obtenerResumenStock } from "../services/api";
 import Layout from "../components/Layout";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import {
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
+} from "recharts";
 
 const DashboardPage = () => {
   const navigate = useNavigate();
@@ -15,6 +18,11 @@ const DashboardPage = () => {
   const COLORS = ["#198754", "#0d6efd", "#ffc107", "#dc3545"];
 
   useEffect(() => {
+    const rol = localStorage.getItem("rolUsuario");
+    if (rol === "frigorifico") {
+      navigate("/frigorifico/lotes/nuevo");
+      return;
+    }
     cargarDatos();
   }, []);
 
@@ -56,6 +64,22 @@ const DashboardPage = () => {
     }),
     { facturado: 0, pagos: 0, saldo: 0 }
   );
+
+  // Gráfico frigorífico: cajones por calibre, desglosado por cámara
+  const dataGranjaBar = (() => {
+    if (!stockGranja) return [];
+    const calibres = new Set([
+      ...(stockGranja.stockCañete   || []).map((c) => c.calibre),
+      ...(stockGranja.stockTrigotuc || []).map((c) => c.calibre),
+    ]);
+    const cañeteMap   = Object.fromEntries((stockGranja.stockCañete   || []).map((c) => [c.calibre, c.cajones]));
+    const trigotucMap = Object.fromEntries((stockGranja.stockTrigotuc || []).map((c) => [c.calibre, c.cajones]));
+    return [...calibres].sort((a, b) => a - b).map((cal) => ({
+      calibre:  `Cal. ${cal}`,
+      Cañete:   cañeteMap[cal]   || 0,
+      Trigotuc: trigotucMap[cal] || 0,
+    }));
+  })();
 
   const dataClientesPie = [
     { name: "Facturado", value: totalesClientes.facturado },
@@ -177,7 +201,6 @@ const DashboardPage = () => {
                       <i className="bi bi-snow text-warning me-2"></i>
                       Frigorífico — Stock
                     </h5>
-                    <span className="badge bg-warning text-dark">activo</span>
                   </div>
                   <div className="row text-center g-0">
                     <div className="col-4 border-end">
@@ -212,7 +235,7 @@ const DashboardPage = () => {
                 <div className="card-footer bg-transparent border-0 pb-3">
                   <button
                     className="btn btn-outline-warning btn-sm w-100"
-                    onClick={() => navigate("/granja")}
+                    onClick={() => navigate("/frigorifico")}
                   >
                     Ver stock frigorífico
                   </button>
@@ -222,39 +245,72 @@ const DashboardPage = () => {
           )}
         </div>
 
-        {/* ── Gráfico clientes ── */}
-        {dataClientesPie.length > 0 && (
+        {/* ── Gráficos ── */}
+        {(dataClientesPie.length > 0 || dataGranjaBar.length > 0) && (
           <div className="row g-3">
-            <div className="col-12 col-md-6">
-              <div className="card border-0 shadow-sm">
-                <div className="card-body">
-                  <h5 className="card-title mb-3">
-                    <i className="bi bi-pie-chart-fill text-success me-2"></i>
-                    Distribución Clientes
-                  </h5>
-                  <ResponsiveContainer width="100%" height={260}>
-                    <PieChart>
-                      <Pie
-                        data={dataClientesPie}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, percent }) =>
-                          `${name} ${(percent * 100).toFixed(0)}%`
-                        }
-                        outerRadius={90}
-                        dataKey="value"
-                      >
-                        {dataClientesPie.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip content={<CustomTooltip />} />
-                    </PieChart>
-                  </ResponsiveContainer>
+
+            {/* Gráfico clientes */}
+            {dataClientesPie.length > 0 && (
+              <div className="col-12 col-md-6">
+                <div className="card border-0 shadow-sm h-100">
+                  <div className="card-body">
+                    <h5 className="card-title mb-3">
+                      <i className="bi bi-pie-chart-fill text-success me-2"></i>
+                      Distribución Clientes
+                    </h5>
+                    <ResponsiveContainer width="100%" height={260}>
+                      <PieChart>
+                        <Pie
+                          data={dataClientesPie}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) =>
+                            `${name} ${(percent * 100).toFixed(0)}%`
+                          }
+                          outerRadius={90}
+                          dataKey="value"
+                        >
+                          {dataClientesPie.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip content={<CustomTooltip />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+
+            {/* Gráfico frigorífico */}
+            {dataGranjaBar.length > 0 && (
+              <div className="col-12 col-md-6">
+                <div className="card border-0 shadow-sm h-100">
+                  <div className="card-body">
+                    <h5 className="card-title mb-3">
+                      <i className="bi bi-bar-chart-fill text-warning me-2"></i>
+                      Stock por calibre y cámara
+                    </h5>
+                    <ResponsiveContainer width="100%" height={260}>
+                      <BarChart data={dataGranjaBar} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="calibre" tick={{ fontSize: 12 }} />
+                        <YAxis tick={{ fontSize: 11 }} />
+                        <Tooltip
+                          formatter={(value, name) => [`${formatNum(value)} caj`, name]}
+                          contentStyle={{ fontSize: 13 }}
+                        />
+                        <Legend wrapperStyle={{ fontSize: 13 }} />
+                        <Bar dataKey="Cañete"   fill="#0dcaf0" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="Trigotuc" fill="#0d6efd" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            )}
+
           </div>
         )}
       </div>
