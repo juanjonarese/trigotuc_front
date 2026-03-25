@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Layout from "../components/Layout";
 import {
   obtenerListasPrecios,
@@ -15,7 +15,7 @@ const preciosVacios = () =>
 
 const ListasPreciosPage = () => {
   const rolUsuario = localStorage.getItem("rolUsuario");
-  const esAdmin = rolUsuario === "admin";
+  const esAdmin = rolUsuario === "superadmin" || rolUsuario === "administracion";
 
   const [listas, setListas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -23,6 +23,7 @@ const ListasPreciosPage = () => {
   const [editingLista, setEditingLista] = useState(null);
   const [form, setForm] = useState({ nombre: "", activa: true, precios: preciosVacios() });
   const [saving, setSaving] = useState(false);
+  const pctRef = useRef(null);
 
   const cargarListas = async () => {
     try {
@@ -68,9 +69,24 @@ const ListasPreciosPage = () => {
     setForm((prev) => ({
       ...prev,
       precios: prev.precios.map((p) =>
-        p.calibre === calibre ? { ...p, precioPorCajon: Number(valor) } : p
+        p.calibre === calibre ? { ...p, precioPorCajon: valor === "" ? 0 : Number(valor) } : p
       ),
     }));
+  };
+
+  const aplicarPorcentaje = () => {
+    const pct = parseFloat(pctRef.current?.value || "");
+    if (isNaN(pct) || pct === 0) return;
+    setForm((prev) => ({
+      ...prev,
+      precios: prev.precios.map((p) => ({
+        ...p,
+        precioPorCajon: p.precioPorCajon > 0
+          ? Math.round(p.precioPorCajon * (1 + pct / 100))
+          : p.precioPorCajon,
+      })),
+    }));
+    if (pctRef.current) pctRef.current.value = "";
   };
 
   const handleSubmit = async (e) => {
@@ -306,6 +322,28 @@ const ListasPreciosPage = () => {
                       </div>
 
                       <label className="form-label fw-semibold">Precios por calibre ($/cajón)</label>
+
+                      {/* Actualización porcentual */}
+                      <div className="d-flex align-items-center gap-2 mb-3 p-2 bg-light rounded">
+                        <span className="small text-muted fw-semibold text-nowrap">Ajuste masivo:</span>
+                        <input
+                          type="number"
+                          className="form-control form-control-sm"
+                          style={{ width: 90 }}
+                          ref={pctRef}
+                          placeholder="% ej: 10"
+                          step="0.1"
+                        />
+                        <span className="small text-muted text-nowrap">% (negativo para bajar)</span>
+                        <button
+                          type="button"
+                          className="btn btn-outline-primary btn-sm text-nowrap"
+                          onClick={aplicarPorcentaje}
+                        >
+                          <i className="bi bi-arrow-repeat me-1"></i>Aplicar
+                        </button>
+                      </div>
+
                       <div className="table-responsive">
                         <table className="table table-bordered table-sm">
                           <thead className="table-light">
@@ -326,10 +364,9 @@ const ListasPreciosPage = () => {
                                   <input
                                     type="number"
                                     className="form-control form-control-sm"
-                                    value={p.precioPorCajon}
-                                    onChange={(e) =>
-                                      handlePrecioChange(p.calibre, e.target.value)
-                                    }
+                                    value={p.precioPorCajon || ""}
+                                    onChange={(e) => handlePrecioChange(p.calibre, e.target.value)}
+                                    onFocus={(e) => e.target.select()}
                                     min="0"
                                     step="1"
                                     placeholder="0"
