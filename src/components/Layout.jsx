@@ -9,6 +9,7 @@ const Layout = ({ children }) => {
   const [altasOpen, setAltasOpen] = useState(false);
   const [contableClientesOpen, setContableClientesOpen] = useState(false);
   const [frigorificoOpen, setFrigorificoOpen] = useState(false);
+  const [granjaOpen, setGranjaOpen] = useState(false);
   const [comercialOpen, setComercialOpen] = useState(false);
   const rolUsuario = localStorage.getItem("rolUsuario");
 
@@ -51,10 +52,16 @@ const Layout = ({ children }) => {
       setContableClientesOpen(true);
     }
 
-    // Granja submenu
+    // Frigorifico submenu
     if (path.startsWith("/frigorifico") && path !== "/frigorifico/ventas") {
       setFrigorificoOpen(true);
     }
+
+    // Granja (crianza) submenu
+    if (path.startsWith("/granja")) {
+      setGranjaOpen(true);
+    }
+
 
 
 
@@ -164,6 +171,19 @@ const Layout = ({ children }) => {
           </div>
           )}
 
+          {rolUsuario === "superadmin" && (
+            <a
+              href="#"
+              className={`nav-link d-flex align-items-center gap-2 mb-2 rounded ${
+                isActive("/frigorifico/historial-accesos") ? "text-white" : "text-white-50"
+              }`}
+              onClick={(e) => { e.preventDefault(); navigate("/frigorifico/historial-accesos"); }}
+            >
+              <i className="bi bi-shield-lock fs-5"></i>
+              <span>Historial de Accesos</span>
+            </a>
+          )}
+
           {(rolUsuario === "superadmin" || rolUsuario === "administracion") && (
           <div className="nav-section mb-2">
             <a
@@ -234,7 +254,68 @@ const Layout = ({ children }) => {
           </div>
           )}
 
-          {/* Granja - visible para todos */}
+          {/* Granja (crianza) */}
+          {(rolUsuario === "superadmin" || rolUsuario === "frigorifico") && (
+          <div className="nav-section mb-2">
+            <a
+              href="#"
+              className="nav-link text-white-50 d-flex align-items-center justify-content-between rounded"
+              onClick={(e) => { e.preventDefault(); setGranjaOpen(!granjaOpen); }}
+            >
+              <div className="d-flex align-items-center gap-2">
+                <i className="bi bi-house-door fs-5"></i>
+                <span>Granja</span>
+              </div>
+              <i className={`bi bi-chevron-${granjaOpen ? "down" : "right"}`}></i>
+            </a>
+            {granjaOpen && (
+              <div className="ps-4 mt-2">
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/granja/galpones/nuevo") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/granja/galpones/nuevo"); }}
+                >
+                  <i className="bi bi-plus-circle"></i>
+                  <span>Ingreso de pollitos</span>
+                </a>
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/granja/galpones") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/granja/galpones"); }}
+                >
+                  <i className="bi bi-list-ul"></i>
+                  <span>Galpones</span>
+                </a>
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/granja/cargar-datos") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/granja/cargar-datos"); }}
+                >
+                  <i className="bi bi-pencil-square"></i>
+                  <span>Datos Semanales</span>
+                </a>
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/granja/ventas") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/granja/ventas"); }}
+                >
+                  <i className="bi bi-bag-check"></i>
+                  <span>Ventas Gordos</span>
+                </a>
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/granja/remitos") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/granja/remitos"); }}
+                >
+                  <i className="bi bi-truck"></i>
+                  <span>Remitos Frigorífico</span>
+                </a>
+              </div>
+            )}
+          </div>
+          )}
+
+          {/* Frigorifico - visible para todos */}
           <div className="nav-section mb-2">
             <a
               href="#"
@@ -299,6 +380,18 @@ const Layout = ({ children }) => {
                       <span>Envío Cámara</span>
                     </a>
                   </>
+                )}
+                {(rolUsuario === "superadmin" || rolUsuario === "frigorifico") && (
+                  <a
+                    href="#"
+                    className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
+                      isActive("/frigorifico/recepcion") ? "text-white" : "text-white-50"
+                    }`}
+                    onClick={(e) => { e.preventDefault(); navigate("/frigorifico/recepcion"); }}
+                  >
+                    <i className="bi bi-box-arrow-in-down"></i>
+                    <span>Recepción Remitos</span>
+                  </a>
                 )}
                 {(rolUsuario === "superadmin" || rolUsuario === "frigorifico" || rolUsuario === "camaras") && (
                   <a

@@ -28,7 +28,7 @@ const formInicial = {
 
 const VentasPolloPage = () => {
   const rolUsuario = localStorage.getItem("rolUsuario");
-  const esAdmin    = rolUsuario === "admin";
+  const esSuperAdmin = rolUsuario === "superadmin";
 
   const [ventas, setVentas]       = useState([]);
   const [clientes, setClientes]   = useState([]);
@@ -479,7 +479,7 @@ const VentasPolloPage = () => {
                             >
                               <i className="bi bi-printer"></i>
                             </button>
-                            {esAdmin && (
+                            {esSuperAdmin && (
                               <button
                                 className="btn btn-outline-danger btn-sm"
                                 onClick={() => handleEliminar(v._id)}
@@ -611,7 +611,7 @@ const VentasPolloPage = () => {
                               >
                                 <i className="bi bi-printer"></i>
                               </button>
-                              {esAdmin && (
+                              {esSuperAdmin && (
                                 <button
                                   className="btn btn-outline-danger btn-sm"
                                   onClick={() => handleEliminar(v._id)}

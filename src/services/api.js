@@ -53,7 +53,7 @@ export const obtenerUsuarios = async () => {
 export const crearUsuario = async (usuarioData) => {
   const response = await fetch(`${API_URL}/usuarios/registro`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: getAuthHeaders(),
     body: JSON.stringify(usuarioData),
   });
   return handleResponse(response);
@@ -723,6 +723,25 @@ export const obtenerEnviosCamara = async () => {
   return handleResponse(response);
 };
 
+export const eliminarEnvioCamara = async (id) => {
+  const response = await fetch(`${API_URL}/envios-camara/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const obtenerAuditLog = async (filtros = {}) => {
+  const params = new URLSearchParams();
+  if (filtros.entidad)    params.append("entidad",    filtros.entidad);
+  if (filtros.accion)     params.append("accion",     filtros.accion);
+  if (filtros.fechaDesde) params.append("fechaDesde", filtros.fechaDesde);
+  if (filtros.fechaHasta) params.append("fechaHasta", filtros.fechaHasta);
+  const response = await fetch(`${API_URL}/audit-log?${params.toString()}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
 
 // ============= ÓRDENES DE RETIRO =============
 
@@ -826,6 +845,151 @@ export const eliminarCamion = async (id) => {
   const response = await fetch(`${API_URL}/camiones/${id}`, {
     method: "DELETE",
     headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+// ============= GRANJA (CRIANZA) =============
+
+export const obtenerLotesGranja = async (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  const response = await fetch(`${API_URL}/lotes-granja${qs ? `?${qs}` : ""}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const obtenerLoteGranjaPorId = async (id) => {
+  const response = await fetch(`${API_URL}/lotes-granja/${id}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const crearLoteGranja = async (data) => {
+  const response = await fetch(`${API_URL}/lotes-granja`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const registrarPesajeGranja = async (id, data) => {
+  const response = await fetch(`${API_URL}/lotes-granja/${id}/pesaje`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const registrarMortandadGranja = async (id, data) => {
+  const response = await fetch(`${API_URL}/lotes-granja/${id}/mortandad`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const registrarEgresoGranja = async (id, data) => {
+  const response = await fetch(`${API_URL}/lotes-granja/${id}/egreso`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const actualizarLoteGranja = async (id, data) => {
+  const response = await fetch(`${API_URL}/lotes-granja/${id}`, {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const eliminarLoteGranja = async (id) => {
+  const response = await fetch(`${API_URL}/lotes-granja/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+// ============= VENTAS GRANJA (GORDOS) =============
+
+export const obtenerVentasGranja = async (filtros = {}) => {
+  const params = new URLSearchParams();
+  if (filtros.estado)     params.append("estado",     filtros.estado);
+  if (filtros.loteGranja) params.append("loteGranja", filtros.loteGranja);
+  const response = await fetch(`${API_URL}/ventas-granja?${params}`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+export const crearVentaGranja = async (data) => {
+  const response = await fetch(`${API_URL}/ventas-granja`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const confirmarRetiroGranja = async (id) => {
+  const response = await fetch(`${API_URL}/ventas-granja/${id}/confirmar`, {
+    method: "PATCH", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const cancelarVentaGranja = async (id) => {
+  const response = await fetch(`${API_URL}/ventas-granja/${id}/cancelar`, {
+    method: "PATCH", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const eliminarVentaGranja = async (id) => {
+  const response = await fetch(`${API_URL}/ventas-granja/${id}`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+// ============= REMITOS GRANJA (FRIGORÍFICO) =============
+
+export const obtenerRemitosGranja = async (filtros = {}) => {
+  const params = new URLSearchParams();
+  if (filtros.estado) params.append("estado", filtros.estado);
+  const response = await fetch(`${API_URL}/remitos-granja?${params}`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+export const crearRemitoGranja = async (data) => {
+  const response = await fetch(`${API_URL}/remitos-granja`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const confirmarRecepcionRemito = async (id, data) => {
+  const response = await fetch(`${API_URL}/remitos-granja/${id}/recepcion`, {
+    method: "PATCH", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const eliminarRemitoGranja = async (id) => {
+  const response = await fetch(`${API_URL}/remitos-granja/${id}`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const ingresarLoteDesdeRemito = async (id, data) => {
+  const response = await fetch(`${API_URL}/remitos-granja/${id}/ingreso-lote`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
   });
   return handleResponse(response);
 };

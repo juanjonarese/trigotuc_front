@@ -18,6 +18,13 @@ import EnvioCamaraPage from "./pages/EnvioCamaraPage";
 import CamionesPage from "./pages/CamionesPage";
 import DecomisadosPage from "./pages/DecomisadosPage";
 import OrdenesRetiroPage from "./pages/OrdenesRetiroPage";
+import GranjaLotesPage from "./pages/GranjaLotesPage";
+import GranjaLoteNuevoPage from "./pages/GranjaLoteNuevoPage";
+import GranjaCargaDatosPage from "./pages/GranjaCargaDatosPage";
+import VentasGranjaPage from "./pages/VentasGranjaPage";
+import GranjaRemitosPage from "./pages/GranjaRemitosPage";
+import RecepcionRemitosPage from "./pages/RecepcionRemitosPage";
+import HistorialAccesosPage from "./pages/HistorialAccesosPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
@@ -182,6 +189,47 @@ function App() {
           element={
             <ProtectedRoute>
               <CamionesPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Rutas protegidas - Granja (Crianza) */}
+        <Route
+          path="/granja/galpones"
+          element={
+            <ProtectedRoute>
+              <GranjaLotesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/granja/galpones/nuevo"
+          element={
+            <ProtectedRoute>
+              <GranjaLoteNuevoPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/granja/cargar-datos"
+          element={
+            <ProtectedRoute>
+              <GranjaCargaDatosPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route path="/granja/ventas" element={<ProtectedRoute><VentasGranjaPage /></ProtectedRoute>} />
+        <Route path="/granja/remitos" element={<ProtectedRoute><GranjaRemitosPage /></ProtectedRoute>} />
+        <Route path="/frigorifico/recepcion" element={<ProtectedRoute><RecepcionRemitosPage /></ProtectedRoute>} />
+
+        {/* Historial de Accesos (superadmin) */}
+        <Route
+          path="/frigorifico/historial-accesos"
+          element={
+            <ProtectedRoute>
+              <HistorialAccesosPage />
             </ProtectedRoute>
           }
         />

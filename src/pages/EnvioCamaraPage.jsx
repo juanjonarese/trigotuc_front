@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
-import { crearEnvioCamara, obtenerEnviosCamara, obtenerCamiones } from "../services/api";
+import { crearEnvioCamara, obtenerEnviosCamara, obtenerCamiones, eliminarEnvioCamara } from "../services/api";
 import Swal from "sweetalert2";
 
 const CAMARAS = [
@@ -20,6 +20,9 @@ const FORM_INICIAL = {
 
 const EnvioCamaraPage = () => {
   const navigate = useNavigate();
+  const rolUsuario   = localStorage.getItem("rolUsuario");
+  const esSuperAdmin = rolUsuario === "superadmin";
+
   const [camiones, setCamiones] = useState([]);
   const [envios, setEnvios]     = useState([]);
   const [loading, setLoading]   = useState(true);
@@ -44,6 +47,26 @@ const EnvioCamaraPage = () => {
   };
 
   useEffect(() => { cargarDatos(); }, []);
+
+  const handleEliminar = async (id) => {
+    const confirm = await Swal.fire({
+      title: "¿Eliminar envío?",
+      text: "Se revertirá el stock en las cámaras.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#dc3545",
+      confirmButtonText: "Sí, eliminar",
+      cancelButtonText: "Cancelar",
+    });
+    if (!confirm.isConfirmed) return;
+    try {
+      await eliminarEnvioCamara(id);
+      Swal.fire("Eliminado", "El envío fue eliminado y el stock revertido.", "success");
+      cargarDatos();
+    } catch (err) {
+      Swal.fire("Error", err.message || "No se pudo eliminar el envío.", "error");
+    }
+  };
 
   const lineasCalculadas = lineas.map((l) => ({
     ...l,
@@ -247,7 +270,18 @@ const EnvioCamaraPage = () => {
                       <div className="card-body py-3">
                         <div className="d-flex justify-content-between align-items-center mb-2">
                           <span className="badge bg-dark fs-6">{e.numeroEnvio}</span>
-                          <span className="text-muted small">{formatFecha(e.fecha)}</span>
+                          <div className="d-flex align-items-center gap-2">
+                            <span className="text-muted small">{formatFecha(e.fecha)}</span>
+                            {esSuperAdmin && (
+                              <button
+                                className="btn btn-outline-danger btn-sm"
+                                onClick={() => handleEliminar(e._id)}
+                                title="Eliminar"
+                              >
+                                <i className="bi bi-trash"></i>
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <div className="mb-2">
                           <span className="badge bg-secondary me-1">{camaraLabel(e.camaraOrigen)}</span>
@@ -303,6 +337,7 @@ const EnvioCamaraPage = () => {
                         <th className="text-end">Cajones</th>
                         <th className="text-end">Kg</th>
                         <th>Observaciones</th>
+                        {esSuperAdmin && <th></th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -333,6 +368,17 @@ const EnvioCamaraPage = () => {
                           <td className="text-end">{formatNum(e.totalCajones)}</td>
                           <td className="text-end">{formatNum(e.pesoTotalKg)}</td>
                           <td className="text-muted small">{e.observaciones || "—"}</td>
+                          {esSuperAdmin && (
+                            <td>
+                              <button
+                                className="btn btn-outline-danger btn-sm"
+                                onClick={() => handleEliminar(e._id)}
+                                title="Eliminar"
+                              >
+                                <i className="bi bi-trash"></i>
+                              </button>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>

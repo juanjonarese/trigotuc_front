@@ -9,7 +9,7 @@ import Swal from "sweetalert2";
 const GranjaDashboardPage = () => {
   const navigate = useNavigate();
   const rolUsuario = localStorage.getItem("rolUsuario");
-  const esAdmin = rolUsuario === "admin";
+  const esSuperAdmin = rolUsuario === "superadmin";
   const puedeGestionar = rolUsuario === "superadmin" || rolUsuario === "frigorifico";
 
   const [resumen, setResumen] = useState({
@@ -238,7 +238,7 @@ const GranjaDashboardPage = () => {
                 Nuevo Lote
               </button>
             )}
-          {(esAdmin || rolUsuario === "granja") && (
+          {(esSuperAdmin || rolUsuario === "granja") && (
             <button
               className="btn btn-outline-secondary btn-sm"
               onClick={() => navigate("/frigorifico/envios")}
@@ -429,7 +429,7 @@ const GranjaDashboardPage = () => {
                           <button className="btn btn-outline-success btn-sm" title="Exportar Excel" onClick={() => exportarLoteExcel(lote)}>
                             <i className="bi bi-file-earmark-excel"></i>
                           </button>
-                          {esAdmin && (
+                          {esSuperAdmin && (
                             <button className="btn btn-outline-danger btn-sm" title="Eliminar" onClick={() => handleEliminarLote(lote)}>
                               <i className="bi bi-trash"></i>
                             </button>
@@ -575,7 +575,7 @@ const GranjaDashboardPage = () => {
                               <button className="btn btn-outline-success btn-sm" title="Exportar Excel" onClick={() => exportarLoteExcel(lote)}>
                                 <i className="bi bi-file-earmark-excel"></i>
                               </button>
-                              {esAdmin && (
+                              {esSuperAdmin && (
                                 <button className="btn btn-outline-danger btn-sm" title="Eliminar" onClick={() => handleEliminarLote(lote)}>
                                   <i className="bi bi-trash"></i>
                                 </button>
