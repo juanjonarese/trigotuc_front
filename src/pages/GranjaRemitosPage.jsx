@@ -5,6 +5,7 @@ import {
   crearRemitoGranja,
   eliminarRemitoGranja,
   obtenerLotesGranja,
+  obtenerCamiones,
 } from "../services/api";
 import { obtenerFechaHoy } from "../utils/dateUtils";
 import Swal from "sweetalert2";
@@ -24,12 +25,13 @@ const badgeEstado = (estado) => {
   return <span className="badge bg-secondary">{estado}</span>;
 };
 
-const FORM_INICIAL = { loteGranja: "", cantidadEnviada: "", pesoEstimadoKg: "", fechaEnvio: obtenerFechaHoy(), observaciones: "" };
+const FORM_INICIAL = { loteGranja: "", cantidadEnviada: "", pesoEstimadoKg: "", fechaEnvio: obtenerFechaHoy(), camion: "", observaciones: "" };
 
 const GranjaRemitosPage = () => {
-  const [remitos, setRemitos] = useState([]);
-  const [lotes, setLotes]     = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [remitos, setRemitos]   = useState([]);
+  const [lotes, setLotes]       = useState([]);
+  const [camiones, setCamiones] = useState([]);
+  const [loading, setLoading]   = useState(true);
 
   const [showModal, setShowModal]   = useState(false);
   const [form, setForm]             = useState(FORM_INICIAL);
@@ -37,12 +39,14 @@ const GranjaRemitosPage = () => {
 
   const cargar = useCallback(async () => {
     try {
-      const [r, l] = await Promise.all([
+      const [r, l, c] = await Promise.all([
         obtenerRemitosGranja(),
         obtenerLotesGranja({ estado: "en_crianza" }),
+        obtenerCamiones(),
       ]);
       setRemitos(r);
       setLotes(l);
+      setCamiones(c.camiones || []);
     } catch (e) {
       Swal.fire("Error", e.message, "error");
     } finally {
@@ -78,6 +82,7 @@ const GranjaRemitosPage = () => {
         <div class="row"><span class="lbl">Fecha de envío</span><span class="val">${fmtFecha(remito.fechaEnvio)}</span></div>
         <div class="row"><span class="lbl">Cantidad enviada</span><span class="val">${fmtNum(remito.cantidadEnviada)} pollos</span></div>
         ${remito.pesoEstimadoKg ? `<div class="row"><span class="lbl">Peso estimado</span><span class="val">${fmtNum(remito.pesoEstimadoKg)} kg</span></div>` : ""}
+        ${remito.camion ? `<div class="row"><span class="lbl">Camión</span><span class="val">${remito.camion.marca} — ${remito.camion.patente}</span></div>` : ""}
       </div>
       ${remito.observacionesEnvio ? `<p style="font-size:13px;color:#555;">Obs: ${remito.observacionesEnvio}</p>` : ""}
       <div class="firmas">
@@ -101,12 +106,24 @@ const GranjaRemitosPage = () => {
         cantidadEnviada: Number(form.cantidadEnviada),
         pesoEstimadoKg:  form.pesoEstimadoKg ? Number(form.pesoEstimadoKg) : undefined,
         fechaEnvio:      form.fechaEnvio,
+        camion:          form.camion || undefined,
         observaciones:   form.observaciones || undefined,
       });
       setShowModal(false);
       setForm(FORM_INICIAL);
       await cargar();
-      imprimirRemito(remito);
+      const { isConfirmed } = await Swal.fire({
+        icon: "success",
+        title: `Remito ${remito.numeroRemito} creado`,
+        text: "¿Querés imprimir el remito?",
+        confirmButtonText: "Imprimir",
+        cancelButtonText: "Aceptar",
+        showCancelButton: true,
+        confirmButtonColor: "#0d6efd",
+        cancelButtonColor: "#6c757d",
+        reverseButtons: true,
+      });
+      if (isConfirmed) imprimirRemito(remito);
     } catch (err) {
       Swal.fire("Error", err.message, "error");
     } finally {
@@ -149,6 +166,7 @@ const GranjaRemitosPage = () => {
                       <th>Código</th>
                       <th>Galpón</th>
                       <th>Fecha envío</th>
+                      <th>Camión</th>
                       <th className="text-end">Enviados</th>
                       <th className="text-end">Recibidos</th>
                       <th className="text-end">Dif.</th>
@@ -164,6 +182,7 @@ const GranjaRemitosPage = () => {
                           <td><span className="badge bg-primary fs-6">{r.numeroRemito}</span></td>
                           <td className="small">{lote ? `${GRANJA_LABEL[lote.granja]} G${GRANJA_PREFIX[lote.granja]}${lote.galpon}` : "—"}</td>
                           <td className="small">{fmtFecha(r.fechaEnvio)}</td>
+                          <td className="small text-muted">{r.camion ? `${r.camion.marca} — ${r.camion.patente}` : "—"}</td>
                           <td className="text-end fw-semibold">{fmtNum(r.cantidadEnviada)}</td>
                           <td className="text-end">{r.cantidadRecibida != null ? fmtNum(r.cantidadRecibida) : <span className="text-muted">—</span>}</td>
                           <td className="text-end">
@@ -235,6 +254,15 @@ const GranjaRemitosPage = () => {
                           onChange={(e) => setForm({ ...form, fechaEnvio: e.target.value })} required />
                       </div>
                       <div className="col-12">
+                        <label className="form-label">Camión <span className="text-muted">(opcional)</span></label>
+                        <select className="form-select" value={form.camion} onChange={(e) => setForm({ ...form, camion: e.target.value })}>
+                          <option value="">— Sin especificar —</option>
+                          {camiones.map((c) => (
+                            <option key={c._id} value={c._id}>{c.marca} — {c.patente}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-12">
                         <label className="form-label">Observaciones <span className="text-muted">(opcional)</span></label>
                         <input type="text" className="form-control" value={form.observaciones}
                           onChange={(e) => setForm({ ...form, observaciones: e.target.value })} />
@@ -246,7 +274,7 @@ const GranjaRemitosPage = () => {
                   <button className="btn btn-outline-secondary" onClick={() => setShowModal(false)} disabled={submitting}>Cancelar</button>
                   <button type="submit" form="form-remito" className="btn btn-primary" disabled={submitting}>
                     {submitting && <span className="spinner-border spinner-border-sm me-1"></span>}
-                    <i className="bi bi-printer me-1"></i>Registrar e imprimir
+                    <i className="bi bi-check-circle me-1"></i>Registrar
                   </button>
                 </div>
               </div>
