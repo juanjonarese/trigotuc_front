@@ -13,6 +13,7 @@ const LoginScreen = () => {
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
 
   const handleChange = (e) => {
@@ -143,17 +144,27 @@ const LoginScreen = () => {
                     >
                       CLAVE DE INGRESO
                     </label>
-                    <input
-                      type="password"
-                      className="form-control"
-                      id="contraseniaUsuario"
-                      name="contraseniaUsuario"
-                      placeholder="Clave de Ingreso"
-                      value={formData.contraseniaUsuario}
-                      onChange={handleChange}
-                      disabled={loading}
-                      required
-                    />
+                    <div className="input-group">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        className="form-control"
+                        id="contraseniaUsuario"
+                        name="contraseniaUsuario"
+                        placeholder="Clave de Ingreso"
+                        value={formData.contraseniaUsuario}
+                        onChange={handleChange}
+                        disabled={loading}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary"
+                        onClick={() => setShowPassword((v) => !v)}
+                        tabIndex="-1"
+                      >
+                        <i className={`bi ${showPassword ? "bi-eye-slash" : "bi-eye"}`}></i>
+                      </button>
+                    </div>
                   </div>
 
                   <button

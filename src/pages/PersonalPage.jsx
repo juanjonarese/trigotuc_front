@@ -24,6 +24,9 @@ const PersonalPage = () => {
     contraseniaUsuario: "",
     rolUsuario: "administracion",
   });
+  const [confirmarContrasenia, setConfirmarContrasenia] = useState("");
+  const [showPass, setShowPass]       = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   // Verificar que el usuario sea superadmin
   const rolUsuario = localStorage.getItem("rolUsuario");
@@ -72,6 +75,9 @@ const PersonalPage = () => {
         rolUsuario: "compras",
       });
     }
+    setConfirmarContrasenia("");
+    setShowPass(false);
+    setShowConfirm(false);
     setShowModal(true);
   };
 
@@ -85,6 +91,9 @@ const PersonalPage = () => {
       contraseniaUsuario: "",
       rolUsuario: "administracion",
     });
+    setConfirmarContrasenia("");
+    setShowPass(false);
+    setShowConfirm(false);
   };
 
   const handleChange = (e) => {
@@ -96,6 +105,12 @@ const PersonalPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Validar coincidencia de contraseñas
+    if (formData.contraseniaUsuario && formData.contraseniaUsuario !== confirmarContrasenia) {
+      Swal.fire({ title: "Las contraseñas no coinciden", icon: "warning", confirmButtonColor: "#d33" });
+      return;
+    }
 
     // Validar contraseña solo si se está creando un usuario nuevo o si se ingresó una contraseña al editar
     if (formData.contraseniaUsuario) {
@@ -449,19 +464,24 @@ const PersonalPage = () => {
                             Contraseña {!editingUsuario && <span className="text-danger">*</span>}
                             {editingUsuario && <small className="text-muted"> (dejar vacío para mantener actual)</small>}
                           </label>
-                          <input
-                            type="password"
-                            className="form-control"
-                            id="contraseniaUsuario"
-                            name="contraseniaUsuario"
-                            value={formData.contraseniaUsuario}
-                            onChange={handleChange}
-                            placeholder={editingUsuario ? "Nueva contraseña (opcional)" : "Ej: Arqui123"}
-                            autoComplete="new-password"
-                            data-form-type="other"
-                            minLength="6"
-                            required={!editingUsuario}
-                          />
+                          <div className="input-group">
+                            <input
+                              type={showPass ? "text" : "password"}
+                              className="form-control"
+                              id="contraseniaUsuario"
+                              name="contraseniaUsuario"
+                              value={formData.contraseniaUsuario}
+                              onChange={handleChange}
+                              placeholder={editingUsuario ? "Nueva contraseña (opcional)" : "Ej: Arqui123"}
+                              autoComplete="new-password"
+                              data-form-type="other"
+                              minLength="6"
+                              required={!editingUsuario}
+                            />
+                            <button type="button" className="btn btn-outline-secondary" onClick={() => setShowPass((v) => !v)} tabIndex="-1">
+                              <i className={`bi ${showPass ? "bi-eye-slash" : "bi-eye"}`}></i>
+                            </button>
+                          </div>
                           {!editingUsuario && (
                             <div className="form-text">
                               <small>
@@ -471,6 +491,35 @@ const PersonalPage = () => {
                           )}
                         </div>
                       </div>
+
+                      {/* Confirmar contraseña — solo cuando se escribe una contraseña */}
+                      {formData.contraseniaUsuario && (
+                        <div className="row">
+                          <div className="col-md-6 mb-3">
+                            <label className="form-label">
+                              Confirmar contraseña <span className="text-danger">*</span>
+                            </label>
+                            <div className="input-group">
+                              <input
+                                type={showConfirm ? "text" : "password"}
+                                className={`form-control ${confirmarContrasenia && (confirmarContrasenia === formData.contraseniaUsuario ? "is-valid" : "is-invalid")}`}
+                                value={confirmarContrasenia}
+                                onChange={(e) => setConfirmarContrasenia(e.target.value)}
+                                placeholder="Repetí la contraseña"
+                                autoComplete="new-password"
+                                required={!!formData.contraseniaUsuario}
+                              />
+                              <button type="button" className="btn btn-outline-secondary" onClick={() => setShowConfirm((v) => !v)} tabIndex="-1">
+                                <i className={`bi ${showConfirm ? "bi-eye-slash" : "bi-eye"}`}></i>
+                              </button>
+                              {confirmarContrasenia && confirmarContrasenia !== formData.contraseniaUsuario && (
+                                <div className="invalid-feedback">Las contraseñas no coinciden</div>
+                              )}
+                            </div>
+                          </div>
+                        <div className="col-md-6"></div>
+                      </div>
+                      )}
 
                       <div className="row">
                         <div className="col-md-12 mb-3">
