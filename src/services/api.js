@@ -959,6 +959,11 @@ export const eliminarVentaGranja = async (id) => {
 
 // ============= REMITOS GRANJA (FRIGORÍFICO) =============
 
+export const obtenerRemitoGranjaPorId = async (id) => {
+  const response = await fetch(`${API_URL}/remitos-granja/${id}`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
 export const obtenerRemitosGranja = async (filtros = {}) => {
   const params = new URLSearchParams();
   if (filtros.estado) params.append("estado", filtros.estado);
