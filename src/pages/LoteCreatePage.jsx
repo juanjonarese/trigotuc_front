@@ -264,17 +264,35 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
                 {totalCajones > 0 && (
                   <div className="alert alert-info py-2 mt-3 mb-0">
                     <div className="row text-center g-0">
-                      <div className="col-4">
-                        <div className="text-muted small">Pollos</div>
+                      <div className="col border-end">
+                        <div className="text-muted small">Pollos calibres</div>
                         <div className="fw-bold">{fmtNum(totalPollos)}</div>
                       </div>
-                      <div className="col-4 border-start border-end">
+                      <div className="col border-end">
                         <div className="text-muted small">Cajones</div>
                         <div className="fw-bold">{fmtNum(totalCajones)}</div>
                       </div>
-                      <div className="col-4">
-                        <div className="text-muted small">Kg</div>
+                      <div className="col border-end">
+                        <div className="text-muted small">Kg calibres</div>
                         <div className="fw-bold">{fmtNum(totalKg)}</div>
+                      </div>
+                      {form.unidadesTrozadas && (
+                        <div className="col border-end">
+                          <div className="text-muted small">Trozados (u)</div>
+                          <div className="fw-bold">{fmtNum(Number(form.unidadesTrozadas))}</div>
+                        </div>
+                      )}
+                      {form.kgTrozados && (
+                        <div className="col border-end">
+                          <div className="text-muted small">Trozados (kg)</div>
+                          <div className="fw-bold">{fmtNum(Number(form.kgTrozados))}</div>
+                        </div>
+                      )}
+                      <div className="col">
+                        <div className="text-muted small fw-semibold">Total pollos</div>
+                        <div className="fw-bold text-primary">
+                          {fmtNum(totalPollos + (Number(form.unidadesTrozadas) || 0))}
+                        </div>
                       </div>
                     </div>
                   </div>
