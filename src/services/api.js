@@ -957,6 +957,68 @@ export const eliminarVentaGranja = async (id) => {
   return handleResponse(response);
 };
 
+// ============= ÓRDENES DE CARGA (VENTAS GORDOS) =============
+
+export const obtenerOrdenesCarga = async (filtros = {}) => {
+  const params = new URLSearchParams();
+  if (filtros.estado) params.append("estado", filtros.estado);
+  if (filtros.granja) params.append("granja", filtros.granja);
+  const response = await fetch(`${API_URL}/ordenes-carga?${params}`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+export const obtenerOrdenCargaPorId = async (id) => {
+  const response = await fetch(`${API_URL}/ordenes-carga/${id}`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+export const crearOrdenCarga = async (data) => {
+  const response = await fetch(`${API_URL}/ordenes-carga`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const actualizarOrdenCarga = async (id, data) => {
+  const response = await fetch(`${API_URL}/ordenes-carga/${id}`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const entregarOrdenCarga = async (id, data) => {
+  const response = await fetch(`${API_URL}/ordenes-carga/${id}/entregar`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const eliminarOrdenCarga = async (id) => {
+  const response = await fetch(`${API_URL}/ordenes-carga/${id}`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const liberarOrdenCarga = async (id) => {
+  const response = await fetch(`${API_URL}/ordenes-carga/${id}/liberar`, {
+    method: "POST", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+// ============= CTA CTE GRANJA =============
+
+export const obtenerCtaCteGranja = async () => {
+  const response = await fetch(`${API_URL}/ctacte-granja`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+export const obtenerDetalleCtaCteGranja = async (clienteId) => {
+  const response = await fetch(`${API_URL}/ctacte-granja/${clienteId}`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
 // ============= REMITOS GRANJA (FRIGORÍFICO) =============
 
 export const obtenerRemitoGranjaPorId = async (id) => {

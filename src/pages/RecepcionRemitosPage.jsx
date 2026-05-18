@@ -1,13 +1,11 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
-import CalibreTable, { calcularCajones } from "../components/CalibreTable";
 import {
   obtenerRemitosGranja,
   confirmarRecepcionRemito,
-  ingresarLoteDesdeRemito,
   eliminarRemitoGranja,
 } from "../services/api";
-import { obtenerFechaHoy } from "../utils/dateUtils";
 import Swal from "sweetalert2";
 
 const rolUsuario   = () => localStorage.getItem("rolUsuario");
@@ -16,37 +14,28 @@ const esSuperAdmin = () => rolUsuario() === "superadmin";
 const GRANJA_LABEL  = { cañete: "Cañete", los_pinos: "Los Pinos" };
 const GRANJA_PREFIX = { cañete: "C", los_pinos: "P" };
 
-const fmtNum = (n) => n != null ? new Intl.NumberFormat("es-AR").format(n) : "—";
+const fmtNum   = (n) => n != null ? new Intl.NumberFormat("es-AR").format(n) : "—";
 const fmtFecha = (f) => f ? new Date(f).toLocaleDateString("es-AR") : "—";
 
 const badgeEstado = (estado) => {
-  if (estado === "en_transito")    return <span className="badge bg-warning text-dark">En tránsito</span>;
-  if (estado === "recibido")       return <span className="badge bg-success">Recibido ✓</span>;
-  if (estado === "con_diferencia") return <span className="badge bg-danger">Con diferencia ⚠</span>;
+  if (estado === "en_transito") return <span className="badge bg-warning text-dark">En tránsito</span>;
+  if (estado === "recibido")    return <span className="badge bg-success">Recibido ✓</span>;
   return <span className="badge bg-secondary">{estado}</span>;
 };
 
 const RecepcionRemitosPage = () => {
-  const [remitos, setRemitos] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+  const [remitos, setRemitos]           = useState([]);
+  const [loading, setLoading]           = useState(true);
   const [filtroEstado, setFiltroEstado] = useState("en_transito");
 
   // Modal recepción
-  const [remitoRec, setRemitoRec]             = useState(null);
-  const [formRec, setFormRec]                 = useState({ cantidadRecibida: "", observaciones: "" });
-  const [submittingRec, setSubmittingRec]     = useState(false);
-
-  // Modal ingreso calibres
-  const [remitoLote, setRemitoLote]           = useState(null);
-  const [lineas, setLineas]                   = useState([]);
-  const [formFaena, setFormFaena]             = useState({
-    fechaIngreso: obtenerFechaHoy(),
-    unidadesDecomisadas: "", kgDecomisados: "",
-    unidadesTrozadas: "", kgTrozados: "", observaciones: "",
-  });
-  const [submittingLote, setSubmittingLote]   = useState(false);
+  const [remitoRec, setRemitoRec]         = useState(null);
+  const [formRec, setFormRec]             = useState({ muertos: "0", kgMuertos: "", decomisados: "0", kgDecomisados: "", observaciones: "" });
+  const [submittingRec, setSubmittingRec] = useState(false);
 
   const cargar = useCallback(async () => {
+    setLoading(true);
     try {
       const data = await obtenerRemitosGranja(filtroEstado ? { estado: filtroEstado } : {});
       setRemitos(data);
@@ -60,80 +49,42 @@ const RecepcionRemitosPage = () => {
   useEffect(() => { cargar(); }, [cargar]);
 
   // ── Confirmar recepción ──
+  const netosRecepcion = remitoRec
+    ? remitoRec.cantidadEnviada - Number(formRec.muertos || 0) - Number(formRec.decomisados || 0)
+    : 0;
+
   const handleRecepcion = async (e) => {
     e.preventDefault();
+    const muertos     = Number(formRec.muertos     || 0);
+    const decomisados = Number(formRec.decomisados || 0);
+    if (muertos + decomisados > remitoRec.cantidadEnviada) {
+      Swal.fire("Error", "La suma de muertos y decomisados supera la cantidad enviada.", "error");
+      return;
+    }
     setSubmittingRec(true);
     try {
       await confirmarRecepcionRemito(remitoRec._id, {
-        cantidadRecibida: Number(formRec.cantidadRecibida),
-        observaciones:    formRec.observaciones || undefined,
+        muertos,
+        kgMuertos:    formRec.kgMuertos    ? Number(formRec.kgMuertos)    : 0,
+        decomisados,
+        kgDecomisados: formRec.kgDecomisados ? Number(formRec.kgDecomisados) : 0,
+        observaciones: formRec.observaciones || undefined,
       });
-      const dif = remitoRec.cantidadEnviada - Number(formRec.cantidadRecibida);
       setRemitoRec(null);
-      await cargar();
-      if (dif !== 0) {
-        Swal.fire({
-          icon: "warning",
-          title: "Diferencia registrada",
-          html: `Enviados: <strong>${fmtNum(remitoRec.cantidadEnviada)}</strong> — Recibidos: <strong>${fmtNum(Number(formRec.cantidadRecibida))}</strong><br/>
-                 <span class="text-danger fw-bold">Diferencia: ${fmtNum(dif)} pollos</span>`,
-        });
-      } else {
-        Swal.fire({ icon: "success", title: "Recepción confirmada. Cantidades coinciden.", timer: 1800, showConfirmButton: false });
-      }
-    } catch (err) {
-      Swal.fire("Error", err.message, "error");
-    } finally {
-      setSubmittingRec(false);
-    }
-  };
-
-  // ── Ingresar calibres ──
-  const abrirIngresoCalibre = (remito) => {
-    setRemitoLote(remito);
-    setLineas([]);
-    setFormFaena({ fechaIngreso: obtenerFechaHoy(), unidadesDecomisadas: "", kgDecomisados: "", unidadesTrozadas: "", kgTrozados: "", observaciones: "" });
-  };
-
-  const lineasConCajones = lineas.map((l) => ({
-    ...l, cajones: calcularCajones(l.pollos, l.calibre),
-  }));
-  const totalPollos  = lineasConCajones.reduce((acc, l) => acc + Number(l.pollos || 0), 0);
-  const totalCajones = lineasConCajones.reduce((acc, l) => acc + l.cajones, 0);
-  const totalKg      = totalCajones * 20;
-
-  const handleIngresarLote = async (e) => {
-    e.preventDefault();
-    const lineasValidas = lineasConCajones.filter((l) => l.cajones > 0);
-    if (lineasValidas.length === 0) {
-      Swal.fire("Error", "Ingresá al menos un calibre con cajones.", "error");
-      return;
-    }
-    setSubmittingLote(true);
-    try {
-      const lote = await ingresarLoteDesdeRemito(remitoLote._id, {
-        fechaIngreso:        formFaena.fechaIngreso,
-        calibres:            lineasValidas.map(({ calibre, pollos, cajones }) => ({ calibre: Number(calibre), pollos: Number(pollos), cajones })),
-        unidadesDecomisadas: formFaena.unidadesDecomisadas ? Number(formFaena.unidadesDecomisadas) : 0,
-        kgDecomisados:       formFaena.kgDecomisados       ? Number(formFaena.kgDecomisados)       : 0,
-        unidadesTrozadas:    formFaena.unidadesTrozadas     ? Number(formFaena.unidadesTrozadas)    : 0,
-        kgTrozados:          formFaena.kgTrozados           ? Number(formFaena.kgTrozados)          : 0,
-        observaciones:       formFaena.observaciones        || undefined,
-      });
-      setRemitoLote(null);
-      setFiltroEstado("");
       await cargar();
       Swal.fire({
         icon: "success",
-        title: `Lote #${lote.numeroLote} ingresado`,
-        html: `${fmtNum(totalPollos)} pollos · ${fmtNum(totalCajones)} cajones · ${fmtNum(totalKg)} kg`,
+        title: "Recepción confirmada",
+        html: `Enviados: <strong>${fmtNum(remitoRec.cantidadEnviada)}</strong><br/>
+               Muertos: <strong>${fmtNum(muertos)}</strong> · Decomisados: <strong>${fmtNum(decomisados)}</strong><br/>
+               <span class="text-success fw-bold">Netos para faena: ${fmtNum(remitoRec.cantidadEnviada - muertos - decomisados)}</span>`,
         timer: 2500,
         showConfirmButton: false,
       });
     } catch (err) {
       Swal.fire("Error", err.message, "error");
     } finally {
-      setSubmittingLote(false);
+      setSubmittingRec(false);
     }
   };
 
@@ -160,7 +111,6 @@ const RecepcionRemitosPage = () => {
           {[
             { v: "en_transito", l: "En tránsito" },
             { v: "recibido",    l: "Recibidos" },
-            { v: "con_diferencia", l: "Con diferencia" },
             { v: "",            l: "Todos" },
           ].map(({ v, l }) => (
             <button key={v} className={`btn btn-sm ${filtroEstado === v ? "btn-dark" : "btn-outline-secondary"}`} onClick={() => setFiltroEstado(v)}>{l}</button>
@@ -172,7 +122,9 @@ const RecepcionRemitosPage = () => {
             {loading ? (
               <div className="text-center p-4"><div className="spinner-border text-primary"></div></div>
             ) : remitos.length === 0 ? (
-              <p className="text-center text-muted p-4 mb-0">No hay remitos.</p>
+              <p className="text-center text-muted p-4 mb-0">
+                {filtroEstado === "en_transito" ? "No hay remitos en tránsito." : filtroEstado === "recibido" ? "No hay remitos recibidos." : "No hay remitos registrados."}
+              </p>
             ) : (
               <div className="table-responsive">
                 <table className="table table-hover align-middle mb-0">
@@ -182,8 +134,9 @@ const RecepcionRemitosPage = () => {
                       <th>Origen</th>
                       <th>Fecha envío</th>
                       <th className="text-end">Enviados</th>
-                      <th className="text-end">Recibidos</th>
-                      <th className="text-end">Dif.</th>
+                      <th className="text-end">Muertos</th>
+                      <th className="text-end">Decomis.</th>
+                      <th className="text-end">Netos</th>
                       <th>Estado</th>
                       <th>Lote ingresado</th>
                       <th></th>
@@ -193,17 +146,26 @@ const RecepcionRemitosPage = () => {
                     {remitos.map((r) => {
                       const lote = r.loteGranja;
                       return (
-                        <tr key={r._id} className={r.estado === "con_diferencia" ? "table-warning" : ""}>
+                        <tr key={r._id}>
                           <td><span className="badge bg-primary fs-6">{r.numeroRemito}</span></td>
                           <td className="small">
                             {lote ? `${GRANJA_LABEL[lote.granja]} G${GRANJA_PREFIX[lote.granja]}${lote.galpon}` : "—"}
                           </td>
                           <td className="small">{fmtFecha(r.fechaEnvio)}</td>
                           <td className="text-end fw-semibold">{fmtNum(r.cantidadEnviada)}</td>
-                          <td className="text-end">{r.cantidadRecibida != null ? fmtNum(r.cantidadRecibida) : <span className="text-muted">—</span>}</td>
                           <td className="text-end">
-                            {r.diferencia != null
-                              ? <span className={r.diferencia !== 0 ? "text-danger fw-bold" : "text-success"}>{r.diferencia !== 0 ? `−${fmtNum(r.diferencia)}` : "✓"}</span>
+                            {r.muertos != null && r.estado !== "en_transito"
+                              ? <span className={r.muertos > 0 ? "text-danger" : "text-muted"}>{fmtNum(r.muertos)}</span>
+                              : <span className="text-muted">—</span>}
+                          </td>
+                          <td className="text-end">
+                            {r.decomisados != null && r.estado !== "en_transito"
+                              ? <span className={r.decomisados > 0 ? "text-warning" : "text-muted"}>{fmtNum(r.decomisados)}</span>
+                              : <span className="text-muted">—</span>}
+                          </td>
+                          <td className="text-end">
+                            {r.netos != null
+                              ? <span className="fw-bold text-success">{fmtNum(r.netos)}</span>
                               : <span className="text-muted">—</span>}
                           </td>
                           <td>{badgeEstado(r.estado)}</td>
@@ -215,13 +177,13 @@ const RecepcionRemitosPage = () => {
                           <td>
                             <div className="d-flex gap-1">
                               {r.estado === "en_transito" && (
-                                <button className="btn btn-warning btn-sm" onClick={() => { setRemitoRec(r); setFormRec({ cantidadRecibida: r.cantidadEnviada, observaciones: "" }); }}>
-                                  Confirmar recepción
+                                <button className="btn btn-warning btn-sm" onClick={() => { setRemitoRec(r); setFormRec({ muertos: "0", decomisados: "0", observaciones: "" }); }}>
+                                  Recepcionar
                                 </button>
                               )}
-                              {(r.estado === "recibido" || r.estado === "con_diferencia") && !r.loteIngresado && (
-                                <button className="btn btn-success btn-sm" onClick={() => abrirIngresoCalibre(r)}>
-                                  <i className="bi bi-plus-circle me-1"></i>Ingresar calibres
+                              {r.estado === "recibido" && !r.loteIngresado && (
+                                <button className="btn btn-success btn-sm" onClick={() => navigate(`/frigorifico/lotes/nuevo?remito=${r._id}`)}>
+                                  <i className="bi bi-plus-circle me-1"></i>Ingresar lote
                                 </button>
                               )}
                               {esSuperAdmin() && (
@@ -254,113 +216,70 @@ const RecepcionRemitosPage = () => {
                   <button className="btn-close" onClick={() => setRemitoRec(null)} disabled={submittingRec}></button>
                 </div>
                 <div className="modal-body">
-                  <div className="alert alert-info py-2 mb-3">
-                    Granja envió: <strong>{fmtNum(remitoRec.cantidadEnviada)} pollos</strong>
+                  <div className="alert alert-primary py-2 mb-3">
+                    Enviados desde granja: <strong>{fmtNum(remitoRec.cantidadEnviada)} pollos</strong>
                     {remitoRec.pesoEstimadoKg && <> · {fmtNum(remitoRec.pesoEstimadoKg)} kg est.</>}
                   </div>
                   <form id="form-recepcion" onSubmit={handleRecepcion}>
-                    <div className="mb-3">
-                      <label className="form-label fw-semibold">Cantidad recibida en frigorífico</label>
-                      <input type="number" className="form-control form-control-lg" value={formRec.cantidadRecibida}
-                        onChange={(e) => setFormRec({ ...formRec, cantidadRecibida: e.target.value })} min="0" required autoFocus />
-                      {formRec.cantidadRecibida !== "" && Number(formRec.cantidadRecibida) !== remitoRec.cantidadEnviada && (
-                        <div className="text-danger fw-semibold mt-1">
-                          ⚠ Diferencia: {fmtNum(remitoRec.cantidadEnviada - Number(formRec.cantidadRecibida))} pollos
+                    <div className="row g-3">
+                      <div className="col-6">
+                        <label className="form-label fw-semibold text-danger">Muertos (u)</label>
+                        <input
+                          type="number" className="form-control"
+                          value={formRec.muertos}
+                          onChange={(e) => setFormRec({ ...formRec, muertos: e.target.value })}
+                          min="0" max={remitoRec.cantidadEnviada} required autoFocus
+                        />
+                      </div>
+                      <div className="col-6">
+                        <label className="form-label fw-semibold text-danger">Muertos (kg)</label>
+                        <input
+                          type="number" className="form-control"
+                          value={formRec.kgMuertos}
+                          onChange={(e) => setFormRec({ ...formRec, kgMuertos: e.target.value })}
+                          min="0" step="0.01" placeholder="0"
+                        />
+                      </div>
+                      <div className="col-6">
+                        <label className="form-label fw-semibold text-warning">Decomisados (u)</label>
+                        <input
+                          type="number" className="form-control"
+                          value={formRec.decomisados}
+                          onChange={(e) => setFormRec({ ...formRec, decomisados: e.target.value })}
+                          min="0" max={remitoRec.cantidadEnviada} required
+                        />
+                      </div>
+                      <div className="col-6">
+                        <label className="form-label fw-semibold text-warning">Decomisados (kg)</label>
+                        <input
+                          type="number" className="form-control"
+                          value={formRec.kgDecomisados}
+                          onChange={(e) => setFormRec({ ...formRec, kgDecomisados: e.target.value })}
+                          min="0" step="0.01" placeholder="0"
+                        />
+                      </div>
+                      <div className="col-12">
+                        <div className={`alert py-2 mb-0 ${netosRecepcion < 0 ? "alert-danger" : "alert-success"}`}>
+                          <span className="me-2">Netos para faena:</span>
+                          <strong className="fs-5">{netosRecepcion >= 0 ? fmtNum(netosRecepcion) : "⚠ Error"} pollos</strong>
+                          <span className="text-muted ms-2 small">
+                            ({fmtNum(remitoRec.cantidadEnviada)} − {fmtNum(Number(formRec.muertos || 0))} − {fmtNum(Number(formRec.decomisados || 0))})
+                          </span>
                         </div>
-                      )}
-                    </div>
-                    <div className="mb-3">
-                      <label className="form-label">Observaciones <span className="text-muted">(requerido si hay diferencia)</span></label>
-                      <textarea className="form-control" rows={2} value={formRec.observaciones}
-                        onChange={(e) => setFormRec({ ...formRec, observaciones: e.target.value })} />
+                      </div>
+                      <div className="col-12">
+                        <label className="form-label">Observaciones <span className="text-muted">(opcional)</span></label>
+                        <textarea className="form-control" rows={2} value={formRec.observaciones}
+                          onChange={(e) => setFormRec({ ...formRec, observaciones: e.target.value })} />
+                      </div>
                     </div>
                   </form>
                 </div>
                 <div className="modal-footer">
                   <button className="btn btn-outline-secondary" onClick={() => setRemitoRec(null)} disabled={submittingRec}>Cancelar</button>
-                  <button type="submit" form="form-recepcion" className="btn btn-warning" disabled={submittingRec}>
+                  <button type="submit" form="form-recepcion" className="btn btn-warning" disabled={submittingRec || netosRecepcion < 0}>
                     {submittingRec && <span className="spinner-border spinner-border-sm me-1"></span>}
                     Confirmar recepción
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="modal-backdrop show"></div>
-        </>
-      )}
-
-      {/* Modal ingresar calibres */}
-      {remitoLote && (
-        <>
-          <div className="modal show d-block" tabIndex="-1">
-            <div className="modal-dialog modal-lg modal-dialog-scrollable">
-              <div className="modal-content">
-                <div className="modal-header bg-success text-white">
-                  <div>
-                    <h5 className="modal-title mb-0">Ingresar calibres — {remitoLote.numeroRemito}</h5>
-                    <div className="small mt-1 opacity-75">
-                      {remitoLote.cantidadRecibida != null
-                        ? `${fmtNum(remitoLote.cantidadRecibida)} pollos recibidos`
-                        : `${fmtNum(remitoLote.cantidadEnviada)} pollos enviados`}
-                      {remitoLote.diferencia !== 0 && remitoLote.diferencia != null &&
-                        <span className="ms-2 badge bg-warning text-dark">⚠ Diferencia: {fmtNum(remitoLote.diferencia)}</span>}
-                    </div>
-                  </div>
-                  <button className="btn-close btn-close-white" onClick={() => setRemitoLote(null)} disabled={submittingLote}></button>
-                </div>
-                <div className="modal-body">
-                  <form id="form-calibres" onSubmit={handleIngresarLote}>
-                    <div className="row g-3 mb-3">
-                      <div className="col-6 col-md-3">
-                        <label className="form-label fw-semibold">Fecha de ingreso</label>
-                        <input type="date" className="form-control" value={formFaena.fechaIngreso}
-                          onChange={(e) => setFormFaena({ ...formFaena, fechaIngreso: e.target.value })} required />
-                      </div>
-                      <div className="col-6 col-md-3">
-                        <label className="form-label">Decomisados (u)</label>
-                        <input type="number" className="form-control" value={formFaena.unidadesDecomisadas}
-                          onChange={(e) => setFormFaena({ ...formFaena, unidadesDecomisadas: e.target.value })} min="0" placeholder="0" />
-                      </div>
-                      <div className="col-6 col-md-3">
-                        <label className="form-label">Decomisados (kg)</label>
-                        <input type="number" className="form-control" value={formFaena.kgDecomisados}
-                          onChange={(e) => setFormFaena({ ...formFaena, kgDecomisados: e.target.value })} min="0" step="0.01" placeholder="0" />
-                      </div>
-                      <div className="col-6 col-md-3">
-                        <label className="form-label">Trozados (u)</label>
-                        <input type="number" className="form-control" value={formFaena.unidadesTrozadas}
-                          onChange={(e) => setFormFaena({ ...formFaena, unidadesTrozadas: e.target.value })} min="0" placeholder="0" />
-                      </div>
-                      <div className="col-6 col-md-3">
-                        <label className="form-label">Trozados (kg)</label>
-                        <input type="number" className="form-control" value={formFaena.kgTrozados}
-                          onChange={(e) => setFormFaena({ ...formFaena, kgTrozados: e.target.value })} min="0" step="0.01" placeholder="0" />
-                      </div>
-                      <div className="col-12 col-md-9">
-                        <label className="form-label">Observaciones</label>
-                        <input type="text" className="form-control" value={formFaena.observaciones}
-                          onChange={(e) => setFormFaena({ ...formFaena, observaciones: e.target.value })} />
-                      </div>
-                    </div>
-
-                    <label className="form-label fw-semibold">Calibres (resultado de la faena)</label>
-                    <CalibreTable lineas={lineas} onChange={setLineas} />
-
-                    {totalCajones > 0 && (
-                      <div className="alert alert-success py-2 mt-2 mb-0">
-                        <span className="me-3">{fmtNum(totalPollos)} pollos</span>
-                        <span className="me-3">{fmtNum(totalCajones)} cajones</span>
-                        <span>{fmtNum(totalKg)} kg</span>
-                      </div>
-                    )}
-                  </form>
-                </div>
-                <div className="modal-footer">
-                  <button className="btn btn-outline-secondary" onClick={() => setRemitoLote(null)} disabled={submittingLote}>Cancelar</button>
-                  <button type="submit" form="form-calibres" className="btn btn-success" disabled={submittingLote}>
-                    {submittingLote && <span className="spinner-border spinner-border-sm me-1"></span>}
-                    <i className="bi bi-check-circle me-1"></i>Ingresar lote al sistema
                   </button>
                 </div>
               </div>

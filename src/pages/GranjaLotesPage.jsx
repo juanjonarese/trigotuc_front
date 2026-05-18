@@ -1,13 +1,21 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
-import { obtenerLotesGranja, actualizarLoteGranja, eliminarLoteGranja } from "../services/api";
+import { obtenerLotesGranja } from "../services/api";
 import { formatearFechaLocal } from "../utils/dateUtils";
-import Swal from "sweetalert2";
 
 const GRANJAS = [
   { key: "cañete",    label: "Cañete",    prefix: "C", galpones: 6 },
   { key: "los_pinos", label: "Los Pinos", prefix: "P", galpones: 8 },
+];
+
+const TABLA_REF = [
+  { semana: 1, min: 175, max: 190 },
+  { semana: 2, min: 450, max: 480 },
+  { semana: 3, min: 900, max: 950 },
+  { semana: 4, min: 1500, max: 1600 },
+  { semana: 5, min: 2200, max: 2300 },
+  { semana: 6, min: 2900, max: 3000 },
 ];
 
 const GRANJA_OPTS = [
@@ -18,17 +26,39 @@ const GRANJA_OPTS = [
 const diasDeVida = (f) =>
   Math.floor((Date.now() - new Date(f).getTime()) / (1000 * 60 * 60 * 24));
 
-const semana = (f) => Math.max(1, Math.ceil(diasDeVida(f) / 7));
+const semana = (f) => Math.max(1, Math.floor(diasDeVida(f) / 7) + 1);
 
 const formatPeso = (g) => {
   if (g == null) return "-";
   return g >= 1000 ? `${(g / 1000).toFixed(3).replace(".", ",")} kg` : `${g} g`;
 };
 
-const badgeDif = (dif, esp) => {
-  if (dif == null || !esp) return null;
-  const pct = dif / esp;
-  const cls = pct >= -0.05 ? "bg-success" : pct >= -0.15 ? "bg-warning text-dark" : "bg-danger";
+const formatRango = (min, max) => {
+  if (max >= 1000) {
+    const minK = (min / 1000).toFixed(1).replace(".", ",");
+    const maxK = (max / 1000).toFixed(1).replace(".", ",");
+    return `${minK}–${maxK} kg`;
+  }
+  return `${min}–${max} g`;
+};
+
+const clsPeso = (peso, ref) => {
+  if (peso == null || !ref) return "text-muted";
+  if (peso >= ref.min && peso <= ref.max) return "text-success fw-bold";
+  if (peso > ref.max) return peso <= ref.max * 1.10 ? "text-warning fw-bold" : "text-danger fw-bold";
+  return peso >= ref.min * 0.90 ? "text-warning fw-bold" : "text-danger fw-bold";
+};
+
+const pesoEnSemana = (pesajes, sem) =>
+  [...pesajes].filter((p) => p.semana === sem).pop() || null;
+
+const badgeDif = (dif, ref, peso) => {
+  if (dif == null || ref == null || peso == null) return null;
+  const cls = (() => {
+    if (peso >= ref.min && peso <= ref.max) return "bg-success";
+    if (peso > ref.max) return peso <= ref.max * 1.10 ? "bg-warning text-dark" : "bg-danger";
+    return peso >= ref.min * 0.90 ? "bg-warning text-dark" : "bg-danger";
+  })();
   return <span className={`badge ${cls}`}>{dif >= 0 ? "+" : ""}{dif} g</span>;
 };
 
@@ -76,30 +106,89 @@ const GalponModal = ({ lote, galponLabel, onClose }) => {
               </li>
             </ul>
             <div className="p-3">
-              {tab === "pesaje" && (
-                lote.pesajes.length === 0
-                  ? <p className="text-muted text-center py-4">Sin pesajes registrados todavía</p>
-                  : (
-                    <div className="table-responsive">
-                      <table className="table table-sm align-middle">
-                        <thead className="table-light">
-                          <tr><th>Semana</th><th>Fecha</th><th>Peso real</th><th>Esperado</th><th>Diferencia</th></tr>
-                        </thead>
-                        <tbody>
-                          {[...lote.pesajes].reverse().map((p) => (
-                            <tr key={p._id}>
-                              <td className="fw-semibold">Sem. {p.semana}</td>
-                              <td>{formatearFechaLocal(p.fecha)}</td>
-                              <td className="fw-bold">{formatPeso(p.pesoPromedio)}</td>
-                              <td className="text-muted">{p.pesoEsperado ? formatPeso(p.pesoEsperado) : "-"}</td>
-                              <td>{badgeDif(p.diferencia, p.pesoEsperado)}</td>
+              {tab === "pesaje" && (() => {
+                const semMaxRef = Math.max(...TABLA_REF.map((r) => r.semana));
+                const pesajesExtra = lote.pesajes
+                  .filter((p) => p.semana > semMaxRef)
+                  .reduce((acc, p) => {
+                    acc[p.semana] = acc[p.semana] || [];
+                    acc[p.semana].push(p);
+                    return acc;
+                  }, {});
+                const semanasExtra = Object.keys(pesajesExtra).map(Number).sort((a, b) => a - b);
+
+                return (
+                  <div className="table-responsive">
+                    <table className="table table-sm align-middle mb-0">
+                      <thead className="table-light">
+                        <tr>
+                          <th>Semana</th>
+                          <th>Objetivo</th>
+                          <th>Peso real</th>
+                          <th>Estado</th>
+                          <th className="d-none d-sm-table-cell">Fecha</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {TABLA_REF.map((ref) => {
+                          const p = pesoEnSemana(lote.pesajes, ref.semana);
+                          const esSemActual = ref.semana === sem;
+                          return (
+                            <tr key={ref.semana} className={esSemActual ? "table-primary" : ""}>
+                              <td className="fw-semibold">
+                                Sem. {ref.semana}
+                                {esSemActual && (
+                                  <span className="badge bg-primary ms-1" style={{ fontSize: "0.65rem" }}>actual</span>
+                                )}
+                              </td>
+                              <td className="text-muted small">{formatRango(ref.min, ref.max)}</td>
+                              {p ? (
+                                <>
+                                  <td className={clsPeso(p.pesoPromedio, ref)}>{formatPeso(p.pesoPromedio)}</td>
+                                  <td>{badgeDif(p.diferencia, ref, p.pesoPromedio)}</td>
+                                  <td className="d-none d-sm-table-cell text-muted small">{formatearFechaLocal(p.fecha)}</td>
+                                </>
+                              ) : (
+                                <>
+                                  <td className="text-muted">—</td>
+                                  <td><span className="text-muted small">Pendiente</span></td>
+                                  <td className="d-none d-sm-table-cell"></td>
+                                </>
+                              )}
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          );
+                        })}
+                        {semanasExtra.map((s) => {
+                          const p = [...pesajesExtra[s]].pop();
+                          const esSemActual = s === sem;
+                          return (
+                            <tr key={s} className={esSemActual ? "table-primary" : ""}>
+                              <td className="fw-semibold">
+                                Sem. {s}
+                                {esSemActual && (
+                                  <span className="badge bg-primary ms-1" style={{ fontSize: "0.65rem" }}>actual</span>
+                                )}
+                              </td>
+                              <td className="text-muted small">—</td>
+                              <td className="fw-bold text-primary">{formatPeso(p.pesoPromedio)}</td>
+                              <td>—</td>
+                              <td className="d-none d-sm-table-cell text-muted small">{formatearFechaLocal(p.fecha)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    {lote.pesajes.length === 0 && (
+                      <div className="text-center text-muted py-3 small">Sin pesajes registrados todavía</div>
+                    )}
+                    <div className="d-flex gap-3 flex-wrap pt-2 pb-1 px-1 small text-muted border-top mt-1">
+                      <span><span className="text-success fw-bold me-1">●</span>Dentro del rango</span>
+                      <span><span className="text-warning fw-bold me-1">●</span>Hasta ±10% del rango</span>
+                      <span><span className="text-danger fw-bold me-1">●</span>Más de ±10% del rango</span>
                     </div>
-                  )
-              )}
+                  </div>
+                );
+              })()}
               {tab === "mortandad" && (
                 lote.mortandad.length === 0
                   ? <p className="text-muted text-center py-4">Sin bajas registradas</p>
@@ -155,6 +244,9 @@ const GalponCard = ({ label, lote, onClick }) => {
   const alerta = dias >= 40;
   const barColor = dias < 30 ? "#198754" : dias < 40 ? "#fd7e14" : "#dc3545";
   const progresoPct = Math.min(100, Math.round((dias / 45) * 100));
+  const lastPeso = lote.pesajes?.length > 0
+    ? lote.pesajes[lote.pesajes.length - 1].pesoPromedio
+    : null;
 
   return (
     <div
@@ -166,6 +258,11 @@ const GalponCard = ({ label, lote, onClick }) => {
         <div className="fw-bold fs-4" style={{ color: barColor }}>{label}</div>
         <div className="fw-semibold small mt-1">Día {dias} — Sem. {sem}</div>
         <div className="text-muted small">{lote.cantidadActual.toLocaleString("es-AR")} pollos</div>
+        {lastPeso != null && (
+          <div className="small mt-1" style={{ color: "#0d6efd" }}>
+            <i className="bi bi-speedometer2 me-1"></i>{formatPeso(lastPeso)}
+          </div>
+        )}
         <div className="text-muted small mt-1"><i className="bi bi-calendar-event me-1"></i>{formatearFechaLocal(lote.fechaIngreso)}</div>
         {bajas > 0 && <div className="mt-1"><span className="badge bg-danger bg-opacity-75">{bajas} bajas</span></div>}
         {alerta && <div className="mt-1"><span className="badge bg-warning text-dark">¡Revisar egreso!</span></div>}
@@ -261,7 +358,7 @@ const EditarIngresoModal = ({ lote, onClose, onGuardado }) => {
                     <div className="form-text">Cantidad × kg — Actual: {lote.cantidadIngreso}</div>
                   </div>
                   <div className="col-12">
-                    <label className="form-label">Proveedor (opcional)</label>
+                    <label className="form-label">Enviado por (opcional)</label>
                     <input
                       type="text" className="form-control"
                       value={form.proveedor}
@@ -302,19 +399,13 @@ const GranjaLotesPage = () => {
   const esSuperAdmin = rolUsuario === "superadmin";
 
   const [lotes, setLotes]         = useState([]);
-  const [todosLotes, setTodosLotes] = useState([]);
   const [loading, setLoading]     = useState(true);
   const [modalLote, setModalLote] = useState(null);
-  const [editLote, setEditLote]   = useState(null);
 
   const cargarLotes = useCallback(async () => {
     try {
-      const [activos, todos] = await Promise.all([
-        obtenerLotesGranja({ estado: "en_crianza" }),
-        obtenerLotesGranja(),
-      ]);
+      const activos = await obtenerLotesGranja({ estado: "en_crianza" });
       setLotes(activos);
-      setTodosLotes(todos);
     } catch (e) {
       console.error(e);
     } finally {
@@ -326,26 +417,6 @@ const GranjaLotesPage = () => {
 
   const loteDeGalpon = (granja, galpon) =>
     lotes.find((l) => l.granja === granja && l.galpon === galpon) || null;
-
-  const handleEliminar = async (lote) => {
-    const confirm = await Swal.fire({
-      title: "¿Eliminar ingreso?",
-      html: `Se eliminará el lote <strong>#${lote.numeroLote}</strong> y todos sus registros.`,
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#dc3545",
-      confirmButtonText: "Sí, eliminar",
-      cancelButtonText: "Cancelar",
-    });
-    if (!confirm.isConfirmed) return;
-    try {
-      await eliminarLoteGranja(lote._id);
-      await cargarLotes();
-      Swal.fire({ icon: "success", title: "Eliminado", timer: 1500, showConfirmButton: false });
-    } catch (err) {
-      Swal.fire("Error", err.message || "No se pudo eliminar.", "error");
-    }
-  };
 
   if (loading) {
     return (
@@ -402,105 +473,88 @@ const GranjaLotesPage = () => {
           <span><span className="badge bg-light text-muted border me-1">●</span>Vacío</span>
         </div>
 
-        {/* Tabla de ingresos */}
-        <div className="card border-0 shadow-sm">
-          <div className="card-header bg-white py-2 d-flex align-items-center justify-content-between">
-            <h6 className="mb-0"><i className="bi bi-list-ul me-2 text-success"></i>Historial de ingresos</h6>
-            <span className="text-muted small">{todosLotes.length} registros</span>
-          </div>
-          <div className="card-body p-0">
-            {todosLotes.length === 0 ? (
-              <p className="text-center text-muted p-4 mb-0">Sin ingresos registrados.</p>
-            ) : (
-              <>
-                {/* Mobile */}
-                <div className="d-md-none p-3">
-                  {todosLotes.map((lote) => (
-                    <div key={lote._id} className="card border mb-2">
-                      <div className="card-body py-2 px-3">
-                        <div className="d-flex justify-content-between align-items-start mb-1">
-                          <div>
-                            <span className="badge bg-dark me-1">#{lote.numeroLote}</span>
-                            <span className={`badge ${lote.estado === "en_crianza" ? "bg-success" : "bg-secondary"}`}>
-                              {lote.estado === "en_crianza" ? "En crianza" : "Finalizado"}
-                            </span>
-                          </div>
-                          <div className="d-flex gap-1">
-                            {puedeEditar && (
-                              <button className="btn btn-outline-primary btn-sm" title="Editar" onClick={() => setEditLote(lote)}>
-                                <i className="bi bi-pencil"></i>
-                              </button>
-                            )}
-                            {esSuperAdmin && (
-                              <button className="btn btn-outline-danger btn-sm" title="Eliminar" onClick={() => handleEliminar(lote)}>
-                                <i className="bi bi-trash"></i>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        <div className="small text-muted">
-                          {GRANJA_OPTS.find((g) => g.value === lote.granja)?.label} — Galpón {lote.galpon}
-                        </div>
-                        <div className="small">{formatearFechaLocal(lote.fechaIngreso)} · {lote.cantidadIngreso.toLocaleString("es-AR")} ingresados · {lote.cantidadActual.toLocaleString("es-AR")} actuales</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+        {/* Tabla comparativa de crecimiento */}
+        {lotes.length > 0 && (() => {
+          const semMaxRef = Math.max(...TABLA_REF.map((r) => r.semana));
+          const todasLasSemanas = [...new Set(
+            lotes.flatMap((l) => l.pesajes.map((p) => p.semana))
+          )].sort((a, b) => a - b);
+          const semanasExtra = todasLasSemanas.filter((s) => s > semMaxRef);
 
-                {/* Desktop */}
-                <div className="d-none d-md-block table-responsive">
-                  <table className="table table-hover align-middle mb-0">
-                    <thead className="table-light">
-                      <tr>
-                        <th>#Lote</th>
-                        <th>Granja</th>
-                        <th>Galpón</th>
-                        <th>Fecha ingreso</th>
-                        <th className="text-end">Ingresados</th>
-                        <th className="text-end">Actuales</th>
-                        <th>Proveedor</th>
-                        <th>Estado</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {todosLotes.map((lote) => (
+          return (
+            <div className="card border-0 shadow-sm mb-4">
+              <div className="card-header bg-white py-2">
+                <h6 className="mb-0">
+                  <i className="bi bi-bar-chart-line me-2 text-success"></i>
+                  Comparativa de crecimiento por galpón
+                </h6>
+              </div>
+              <div className="table-responsive">
+                <table className="table table-sm table-bordered align-middle mb-0">
+                  <thead className="table-light text-center">
+                    <tr>
+                      <th className="text-start">Galpón</th>
+                      {TABLA_REF.map((r) => (
+                        <th key={r.semana}>
+                          Sem. {r.semana}
+                          <div className="text-muted fw-normal" style={{ fontSize: "0.7rem" }}>
+                            {formatRango(r.min, r.max)}
+                          </div>
+                        </th>
+                      ))}
+                      {semanasExtra.map((s) => (
+                        <th key={s}>
+                          Sem. {s}
+                          <div className="text-muted fw-normal" style={{ fontSize: "0.7rem" }}>sin ref.</div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lotes.map((lote) => {
+                      const prefix = GRANJAS.find((g) => g.key === lote.granja)?.prefix;
+                      const semActual = semana(lote.fechaIngreso);
+                      return (
                         <tr key={lote._id}>
-                          <td><span className="badge bg-dark">#{lote.numeroLote}</span></td>
-                          <td>{GRANJA_OPTS.find((g) => g.value === lote.granja)?.label || lote.granja}</td>
-                          <td className="fw-semibold">{GRANJAS.find((g) => g.key === lote.granja)?.prefix}{lote.galpon}</td>
-                          <td>{formatearFechaLocal(lote.fechaIngreso)}</td>
-                          <td className="text-end">{lote.cantidadIngreso.toLocaleString("es-AR")}</td>
-                          <td className="text-end fw-semibold">{lote.cantidadActual.toLocaleString("es-AR")}</td>
-                          <td className="text-muted small">{lote.proveedor || "—"}</td>
-                          <td>
-                            <span className={`badge ${lote.estado === "en_crianza" ? "bg-success" : "bg-secondary"}`}>
-                              {lote.estado === "en_crianza" ? "En crianza" : "Finalizado"}
-                            </span>
-                          </td>
-                          <td>
-                            <div className="d-flex gap-1">
-                              {puedeEditar && (
-                                <button className="btn btn-outline-primary btn-sm" title="Editar" onClick={() => setEditLote(lote)}>
-                                  <i className="bi bi-pencil"></i>
-                                </button>
-                              )}
-                              {esSuperAdmin && (
-                                <button className="btn btn-outline-danger btn-sm" title="Eliminar" onClick={() => handleEliminar(lote)}>
-                                  <i className="bi bi-trash"></i>
-                                </button>
-                              )}
+                          <td className="fw-semibold" style={{ whiteSpace: "nowrap" }}>
+                            {prefix}{lote.galpon}
+                            <div className="text-muted fw-normal" style={{ fontSize: "0.7rem" }}>
+                              Sem. {semActual} actual
                             </div>
                           </td>
+                          {TABLA_REF.map((ref) => {
+                            const p = pesoEnSemana(lote.pesajes, ref.semana);
+                            if (!p) return <td key={ref.semana} className="text-center text-muted">—</td>;
+                            return (
+                              <td key={ref.semana} className={`text-center ${clsPeso(p.pesoPromedio, ref)}`}>
+                                {formatPeso(p.pesoPromedio)}
+                              </td>
+                            );
+                          })}
+                          {semanasExtra.map((s) => {
+                            const p = pesoEnSemana(lote.pesajes, s);
+                            if (!p) return <td key={s} className="text-center text-muted">—</td>;
+                            return (
+                              <td key={s} className="text-center fw-bold text-primary">
+                                {formatPeso(p.pesoPromedio)}
+                              </td>
+                            );
+                          })}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="card-footer bg-white small text-muted d-flex gap-3 flex-wrap py-2">
+                <span><span className="text-success fw-bold me-1">●</span>Dentro del rango</span>
+                <span><span className="text-warning fw-bold me-1">●</span>Hasta ±10% del rango</span>
+                <span><span className="text-danger fw-bold me-1">●</span>Más de ±10% del rango</span>
+              </div>
+            </div>
+          );
+        })()}
+
 
       </div>
 
@@ -509,14 +563,6 @@ const GranjaLotesPage = () => {
           lote={modalLote}
           galponLabel={`${GRANJAS.find((g) => g.key === modalLote.granja)?.prefix}${modalLote.galpon}`}
           onClose={() => setModalLote(null)}
-        />
-      )}
-
-      {editLote && (
-        <EditarIngresoModal
-          lote={editLote}
-          onClose={() => setEditLote(null)}
-          onGuardado={() => { setEditLote(null); cargarLotes(); }}
         />
       )}
 
