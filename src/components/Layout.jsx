@@ -46,7 +46,7 @@ const Layout = ({ children }) => {
 
     // Contable Granja (top-level)
     if (
-      path === "/frigorifico/ventas" ||
+      path.startsWith("/granja/ventas") ||
       path.startsWith("/granja/ordenes-carga") ||
       path.startsWith("/granja/cobros") ||
       path.startsWith("/granja/cta-cte")
@@ -207,8 +207,8 @@ const Layout = ({ children }) => {
               <div className="ps-4 mt-2">
                 <a
                   href="#"
-                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/frigorifico/ventas") ? "text-white" : "text-white-50"}`}
-                  onClick={(e) => { e.preventDefault(); navigate("/frigorifico/ventas"); }}
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/granja/ventas") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/granja/ventas"); }}
                 >
                   <i className="bi bi-cart3"></i>
                   <span>Ventas Gordos</span>

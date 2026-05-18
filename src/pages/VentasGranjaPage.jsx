@@ -12,6 +12,143 @@ import {
 import { formatearFechaLocal, obtenerFechaHoy } from "../utils/dateUtils";
 import Swal from "sweetalert2";
 
+// ── Modal confirmación de retiro con cantidades reales ──────────────────────
+const ConfirmarRetiroModal = ({ venta, onClose, onConfirmado }) => {
+  const [form, setForm] = useState({ cantidadReal: "", pesoRealKg: "", observacionesRetiro: "" });
+  const [saving, setSaving] = useState(false);
+
+  const totalReal = form.cantidadReal && form.pesoRealKg
+    ? (Number(form.pesoRealKg) * venta.precioPorKg).toFixed(2)
+    : null;
+
+  const difCant = form.cantidadReal !== "" && Number(form.cantidadReal) !== venta.cantidadComprometida;
+  const difPeso = form.pesoEstimadoKg !== "" && form.pesoRealKg !== "" &&
+    venta.pesoEstimadoKg && Math.abs(Number(form.pesoRealKg) - venta.pesoEstimadoKg) > 0.01;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.cantidadReal || !form.pesoRealKg) {
+      Swal.fire("Faltan datos", "Ingresá cantidad real y kg reales.", "warning"); return;
+    }
+    setSaving(true);
+    try {
+      await confirmarRetiroGranja(venta._id, {
+        cantidadReal:        Number(form.cantidadReal),
+        pesoRealKg:          Number(form.pesoRealKg),
+        observacionesRetiro: form.observacionesRetiro || undefined,
+      });
+      onConfirmado();
+      Swal.fire({ icon: "success", title: "Retiro confirmado", text: `Total: $${Number(totalReal).toLocaleString("es-AR")}`, timer: 2000, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire("Error", err.message, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="modal show d-block" tabIndex="-1">
+        <div className="modal-dialog modal-dialog-scrollable">
+          <div className="modal-content">
+            <div className="modal-header bg-success text-white">
+              <div>
+                <h5 className="modal-title mb-0"><i className="bi bi-check2-circle me-2"></i>Confirmar retiro</h5>
+                <div className="small opacity-75 mt-1">{venta.numeroVenta} — {venta.cliente?.razonSocial}</div>
+              </div>
+              <button className="btn-close btn-close-white" onClick={onClose} disabled={saving}></button>
+            </div>
+            <div className="modal-body">
+
+              {/* Resumen del pedido */}
+              <div className="card border-0 bg-light mb-3">
+                <div className="card-body py-2 px-3">
+                  <div className="small text-muted fw-semibold mb-1 text-uppercase" style={{ letterSpacing: "0.05em" }}>Pedido original</div>
+                  <div className="d-flex gap-4">
+                    <div>
+                      <div className="fw-bold">{fmtNum(venta.cantidadComprometida)}</div>
+                      <div className="text-muted" style={{ fontSize: "0.72rem" }}>pollos comprometidos</div>
+                    </div>
+                    {venta.pesoEstimadoKg && (
+                      <div>
+                        <div className="fw-bold">{venta.pesoEstimadoKg} kg</div>
+                        <div className="text-muted" style={{ fontSize: "0.72rem" }}>kg estimados</div>
+                      </div>
+                    )}
+                    <div>
+                      <div className="fw-bold">{fmtARS(venta.precioPorKg)}/kg</div>
+                      <div className="text-muted" style={{ fontSize: "0.72rem" }}>precio pactado</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <form id="form-confirmar-retiro" onSubmit={handleSubmit}>
+                <div className="row g-3">
+                  <div className="col-6">
+                    <label className="form-label fw-semibold">Cantidad real retirada <span className="text-danger">*</span></label>
+                    <input type="number" min="1" className={`form-control form-control-lg text-center ${difCant ? "border-warning" : ""}`}
+                      placeholder={venta.cantidadComprometida}
+                      value={form.cantidadReal}
+                      onChange={(e) => setForm({ ...form, cantidadReal: e.target.value })}
+                      required autoFocus />
+                    {difCant && (
+                      <div className="form-text text-warning fw-semibold text-center">
+                        Dif: {Number(form.cantidadReal) - venta.cantidadComprometida > 0 ? "+" : ""}
+                        {Number(form.cantidadReal) - venta.cantidadComprometida} pollos
+                      </div>
+                    )}
+                  </div>
+                  <div className="col-6">
+                    <label className="form-label fw-semibold">Kg reales (peso vivo) <span className="text-danger">*</span></label>
+                    <input type="number" min="0.01" step="0.01" className={`form-control form-control-lg text-center ${difPeso ? "border-warning" : ""}`}
+                      placeholder={venta.pesoEstimadoKg || "0"}
+                      value={form.pesoRealKg}
+                      onChange={(e) => setForm({ ...form, pesoRealKg: e.target.value })}
+                      required />
+                    {difPeso && (
+                      <div className="form-text text-warning fw-semibold text-center">
+                        Dif: {(Number(form.pesoRealKg) - venta.pesoEstimadoKg) > 0 ? "+" : ""}
+                        {(Number(form.pesoRealKg) - venta.pesoEstimadoKg).toFixed(1)} kg
+                      </div>
+                    )}
+                  </div>
+
+                  {totalReal && (
+                    <div className="col-12">
+                      <div className="alert alert-success py-2 mb-0 text-center">
+                        <div className="small text-muted">Total real</div>
+                        <div className="fw-bold fs-5">{fmtARS(Number(totalReal))}</div>
+                        <div className="small text-muted">{form.pesoRealKg} kg × {fmtARS(venta.precioPorKg)}/kg</div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="col-12">
+                    <label className="form-label">Observaciones del retiro <span className="text-muted">(opcional)</span></label>
+                    <textarea className="form-control" rows={2}
+                      value={form.observacionesRetiro}
+                      onChange={(e) => setForm({ ...form, observacionesRetiro: e.target.value })}
+                      placeholder="Notas sobre el retiro..." />
+                  </div>
+                </div>
+              </form>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-outline-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
+              <button type="submit" form="form-confirmar-retiro" className="btn btn-success btn-lg px-4" disabled={saving}>
+                {saving && <span className="spinner-border spinner-border-sm me-2"></span>}
+                <i className="bi bi-check-circle me-1"></i>Confirmar retiro
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="modal-backdrop show"></div>
+    </>
+  );
+};
+
 const rolUsuario   = () => localStorage.getItem("rolUsuario");
 const esSuperAdmin = () => rolUsuario() === "superadmin";
 
@@ -40,9 +177,10 @@ const VentasGranjaPage = () => {
   const [loading, setLoading]   = useState(true);
   const [filtroEstado, setFiltroEstado] = useState("pendiente");
 
-  const [showModal, setShowModal]   = useState(false);
-  const [form, setForm]             = useState(FORM_INICIAL);
-  const [submitting, setSubmitting] = useState(false);
+  const [showModal, setShowModal]         = useState(false);
+  const [ventaRetiro, setVentaRetiro]     = useState(null);
+  const [form, setForm]                   = useState(FORM_INICIAL);
+  const [submitting, setSubmitting]       = useState(false);
 
   const loteSeleccionado = lotes.find((l) => l._id === form.loteGranja);
   const pesoTotal = form.pesoEstimadoKg && form.precioPorKg
@@ -133,24 +271,7 @@ const VentasGranjaPage = () => {
     win.document.close();
   };
 
-  const handleConfirmar = async (venta) => {
-    const confirm = await Swal.fire({
-      title: `Confirmar retiro ${venta.numeroVenta}`,
-      html: `<strong>${venta.cliente?.razonSocial}</strong><br/>${fmtNum(venta.cantidadComprometida)} pollos`,
-      icon: "question",
-      showCancelButton: true,
-      confirmButtonText: "Confirmar retiro",
-      cancelButtonText: "Cancelar",
-    });
-    if (!confirm.isConfirmed) return;
-    try {
-      await confirmarRetiroGranja(venta._id);
-      await cargar();
-      Swal.fire({ icon: "success", title: "Retiro confirmado", timer: 1500, showConfirmButton: false });
-    } catch (err) {
-      Swal.fire("Error", err.message, "error");
-    }
-  };
+  const handleConfirmar = (venta) => setVentaRetiro(venta);
 
   const handleCancelar = async (venta) => {
     const confirm = await Swal.fire({
@@ -265,9 +386,11 @@ const VentasGranjaPage = () => {
                         <th>Código</th>
                         <th>Cliente</th>
                         <th>Galpón</th>
-                        <th className="text-end">Cantidad</th>
+                        <th className="text-end">Cant. comprometida</th>
+                        <th className="text-end">Cant. real</th>
+                        <th className="text-end">Kg reales</th>
                         <th className="text-end">$/kg</th>
-                        <th className="text-end">Total est.</th>
+                        <th className="text-end">Total real</th>
                         <th>Fecha retiro</th>
                         <th>Estado</th>
                         <th></th>
@@ -282,9 +405,11 @@ const VentasGranjaPage = () => {
                             {v.loteGranja ? `${GRANJA_LABEL[v.loteGranja.granja]} — G${GRANJA_PREFIX[v.loteGranja.granja]}${v.loteGranja.galpon}` : "—"}
                           </td>
                           <td className="text-end">{fmtNum(v.cantidadComprometida)}</td>
+                          <td className="text-end fw-semibold">{v.cantidadReal != null ? fmtNum(v.cantidadReal) : <span className="text-muted">—</span>}</td>
+                          <td className="text-end">{v.pesoRealKg != null ? `${v.pesoRealKg} kg` : <span className="text-muted">—</span>}</td>
                           <td className="text-end">{fmtARS(v.precioPorKg)}</td>
-                          <td className="text-end">{v.precioTotal ? fmtARS(v.precioTotal) : <span className="text-muted">—</span>}</td>
-                          <td>{formatearFechaLocal(v.fechaPactada)}</td>
+                          <td className="text-end fw-semibold text-success">{v.precioTotalReal ? fmtARS(v.precioTotalReal) : <span className="text-muted">—</span>}</td>
+                          <td>{v.fechaRetiro ? formatearFechaLocal(v.fechaRetiro) : formatearFechaLocal(v.fechaPactada)}</td>
                           <td>{badgeEstado(v.estado)}</td>
                           <td>
                             <div className="d-flex gap-1">
@@ -309,6 +434,15 @@ const VentasGranjaPage = () => {
         </div>
 
       </div>
+
+      {/* Modal confirmar retiro */}
+      {ventaRetiro && (
+        <ConfirmarRetiroModal
+          venta={ventaRetiro}
+          onClose={() => setVentaRetiro(null)}
+          onConfirmado={() => { setVentaRetiro(null); cargar(); }}
+        />
+      )}
 
       {/* Modal nueva venta */}
       {showModal && (
