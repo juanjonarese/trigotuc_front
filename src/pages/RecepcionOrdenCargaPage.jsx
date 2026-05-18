@@ -552,7 +552,7 @@ const RecepcionOrdenCargaPage = () => {
       {ordenModal && (
         <ConfirmarModal
           orden={ordenModal}
-          saltarCodigo={!!ordenModal.liberada}
+          saltarCodigo={true}
           onClose={() => setOrdenModal(null)}
           onConfirmada={() => { setOrdenModal(null); cargar(); }}
         />
