@@ -17,7 +17,29 @@ const GRANJAS = [
 const diasDeVida = (f) =>
   Math.floor((Date.now() - new Date(f).getTime()) / (1000 * 60 * 60 * 24));
 
-const semana = (f) => Math.max(1, Math.ceil(diasDeVida(f) / 7));
+const semana = (f) => Math.max(1, Math.floor(diasDeVida(f) / 7) + 1);
+
+const formatPeso = (g) => {
+  if (g == null) return null;
+  return g >= 1000
+    ? `${(g / 1000).toFixed(3).replace(".", ",")} kg`
+    : `${g} g`;
+};
+
+const ultimoPeso = (lote) => {
+  if (!lote.pesajes || lote.pesajes.length === 0) return null;
+  return lote.pesajes[lote.pesajes.length - 1].pesoPromedio;
+};
+
+// Misma lógica que el backend: calcula semana de la fecha del pesaje relativa al ingreso
+const semanaParaFecha = (fechaIngreso, fechaPesaje) => {
+  const msXDia = 1000 * 60 * 60 * 24;
+  // Normalizar a mediodía UTC para coincidir con ajustarFechaParaGuardar
+  const ref  = new Date(`${fechaPesaje}T12:00:00.000Z`);
+  const base = new Date(fechaIngreso);
+  const dias = Math.floor((ref.getTime() - base.getTime()) / msXDia);
+  return Math.max(1, Math.floor(dias / 7) + 1);
+};
 
 const GranjaCargaDatosPage = () => {
   const navigate = useNavigate();
@@ -45,8 +67,12 @@ const GranjaCargaDatosPage = () => {
 
   const handleGuardar = async (e) => {
     e.preventDefault();
-    if (!form.pesoPromedio && !form.mortandad) {
-      Swal.fire("Faltan datos", "Ingresá al menos el peso promedio o la mortandad.", "warning");
+    if (!form.pesoPromedio) {
+      Swal.fire("Faltan datos", "El peso promedio es obligatorio.", "warning");
+      return;
+    }
+    if (form.mortandad === "") {
+      Swal.fire("Faltan datos", "Ingresá la mortandad. Si no hubo bajas, poné 0.", "warning");
       return;
     }
     setSaving(true);
@@ -62,7 +88,7 @@ const GranjaCargaDatosPage = () => {
           })
         );
       }
-      if (form.mortandad) {
+      if (Number(form.mortandad) > 0) {
         promesas.push(
           registrarMortandadGranja(loteSeleccionado._id, {
             fecha,
@@ -112,16 +138,18 @@ const GranjaCargaDatosPage = () => {
           const sem  = semana(loteSeleccionado.fechaIngreso);
           const galponLabel = `${prefixDeGranja(loteSeleccionado.granja)}${loteSeleccionado.galpon}`;
           const bajas = loteSeleccionado.mortandad.reduce((s, m) => s + m.cantidad, 0);
+          const pesoActual = ultimoPeso(loteSeleccionado);
 
           return (
-            <div className="card border-0 shadow mb-4 border-start border-4 border-warning" style={{ maxWidth: "90%" }}>
-              <div className="card-header bg-warning text-dark d-flex align-items-center justify-content-between">
+            <div className="card border-0 shadow mb-4 border-start border-4 border-warning">
+              <div className="card-header bg-warning text-dark py-2 d-flex align-items-center justify-content-between">
                 <div>
-                  <span className="fw-bold fs-5">Galpón {galponLabel}</span>
-                  <span className="ms-3 small">
-                    Día {dias} — Semana {sem} &nbsp;·&nbsp;
+                  <span className="fw-bold">Galpón {galponLabel}</span>
+                  <span className="ms-2 small">
+                    Día {dias} — Sem. {sem} &nbsp;·&nbsp;
                     {loteSeleccionado.cantidadActual.toLocaleString("es-AR")} pollos
                     {bajas > 0 && ` · ${bajas} bajas`}
+                    {pesoActual != null && ` · Último peso: ${formatPeso(pesoActual)}`}
                   </span>
                 </div>
                 <button className="btn btn-sm btn-outline-dark" onClick={() => setLoteSeleccionado(null)}>
@@ -129,26 +157,51 @@ const GranjaCargaDatosPage = () => {
                 </button>
               </div>
 
-              <div className="card-body">
+              <div className="card-body py-3">
                 <form onSubmit={handleGuardar}>
-                  <div className="row g-3">
-                    <div className="col-12 col-sm-6 col-md-3">
-                      <label className="form-label fw-semibold">Fecha</label>
+                  {(() => {
+                    if (!form.fecha) return null;
+                    const fechaIngresoStr = loteSeleccionado.fechaIngreso?.split("T")[0];
+                    const antesDeLIngreso = form.fecha < fechaIngresoStr;
+                    const semFecha = semanaParaFecha(loteSeleccionado.fechaIngreso, form.fecha);
+                    const yaHayPesaje = !antesDeLIngreso && loteSeleccionado.pesajes?.some((p) => p.semana === semFecha);
+                    if (antesDeLIngreso) {
+                      return (
+                        <div className="alert alert-danger py-2 px-3 mb-2 small">
+                          <i className="bi bi-exclamation-triangle-fill me-1"></i>
+                          La fecha elegida es anterior al ingreso del lote (<strong>{formatearFechaLocal(loteSeleccionado.fechaIngreso)}</strong>).
+                          Seleccioná una fecha igual o posterior al ingreso.
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className={`alert py-2 px-3 mb-2 small ${yaHayPesaje ? "alert-warning" : "alert-info"}`}>
+                        {yaHayPesaje
+                          ? <><i className="bi bi-exclamation-triangle me-1"></i>La semana <strong>{semFecha}</strong> ya tiene un pesaje cargado.</>
+                          : <><i className="bi bi-calendar-check me-1"></i>Carga para la <strong>semana {semFecha}</strong> (ingreso: {formatearFechaLocal(loteSeleccionado.fechaIngreso)}).</>
+                        }
+                      </div>
+                    );
+                  })()}
+                  <div className="row g-2">
+                    <div className="col-6 col-md-3">
+                      <label className="form-label fw-semibold small mb-1">Fecha</label>
                       <input
                         type="date"
-                        className="form-control form-control-lg"
+                        className="form-control form-control-sm"
                         value={form.fecha}
                         onChange={(e) => setForm({ ...form, fecha: e.target.value })}
+                        min={loteSeleccionado.fechaIngreso?.split("T")[0]}
                         required
                       />
                     </div>
-                    <div className="col-12 col-sm-6 col-md-3">
-                      <label className="form-label fw-semibold">
+                    <div className="col-6 col-md-3">
+                      <label className="form-label fw-semibold small mb-1">
                         Peso promedio <span className="text-muted fw-normal">(kg)</span>
                       </label>
                       <input
                         type="number"
-                        className="form-control form-control-lg"
+                        className="form-control form-control-sm"
                         placeholder="Ej: 1.350"
                         value={form.pesoPromedio}
                         onChange={(e) => setForm({ ...form, pesoPromedio: e.target.value })}
@@ -156,23 +209,23 @@ const GranjaCargaDatosPage = () => {
                         step="0.001"
                       />
                     </div>
-                    <div className="col-12 col-sm-6 col-md-3">
-                      <label className="form-label fw-semibold">Mortandad</label>
+                    <div className="col-6 col-md-3">
+                      <label className="form-label fw-semibold small mb-1">Mortandad <span className="text-muted fw-normal">(unidades)</span></label>
                       <input
                         type="number"
-                        className="form-control form-control-lg"
+                        className="form-control form-control-sm"
                         placeholder="0"
                         value={form.mortandad}
                         onChange={(e) => setForm({ ...form, mortandad: e.target.value })}
-                        min="1"
+                        min="0"
                         max={loteSeleccionado.cantidadActual}
                       />
                     </div>
-                    <div className="col-12 col-sm-6 col-md-3">
-                      <label className="form-label">Observaciones <span className="text-muted">(opcional)</span></label>
+                    <div className="col-6 col-md-3">
+                      <label className="form-label small mb-1">Observaciones <span className="text-muted">(opcional)</span></label>
                       <input
                         type="text"
-                        className="form-control form-control-lg"
+                        className="form-control form-control-sm"
                         placeholder="Cualquier nota..."
                         value={form.observaciones}
                         onChange={(e) => setForm({ ...form, observaciones: e.target.value })}
@@ -180,12 +233,12 @@ const GranjaCargaDatosPage = () => {
                     </div>
                   </div>
                   <div className="mt-3">
-                    <button className="btn btn-warning btn-lg px-5" disabled={saving}>
+                    <button className="btn btn-warning btn-sm px-4" disabled={saving}>
                       {saving
-                        ? <span className="spinner-border spinner-border-sm me-2"></span>
-                        : <i className="bi bi-check-circle me-2"></i>
+                        ? <span className="spinner-border spinner-border-sm me-1"></span>
+                        : <i className="bi bi-check-circle me-1"></i>
                       }
-                      Aceptar
+                      Guardar
                     </button>
                   </div>
                 </form>
@@ -237,6 +290,11 @@ const GranjaCargaDatosPage = () => {
                           <div className="small text-muted">
                             {lote.cantidadActual.toLocaleString("es-AR")} pollos
                           </div>
+                          {ultimoPeso(lote) != null && (
+                            <div className="small text-muted">
+                              {formatPeso(ultimoPeso(lote))}
+                            </div>
+                          )}
                           {seleccionado && (
                             <div className="mt-1">
                               <span className="badge bg-primary">Seleccionado</span>

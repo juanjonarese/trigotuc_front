@@ -12,6 +12,7 @@ import CtaCteClientesPage from "./pages/CtaCteClientesPage";
 import CajaPage from "./pages/CajaPage";
 import GranjaDashboardPage from "./pages/GranjaDashboardPage";
 import LoteCreatePage from "./pages/LoteCreatePage";
+import PedidosGranjaPage from "./pages/PedidosGranjaPage";
 import VentasPolloPage from "./pages/VentasPolloPage";
 import ListasPreciosPage from "./pages/ListasPreciosPage";
 import EnvioCamaraPage from "./pages/EnvioCamaraPage";
@@ -23,6 +24,11 @@ import GranjaLoteNuevoPage from "./pages/GranjaLoteNuevoPage";
 import GranjaCargaDatosPage from "./pages/GranjaCargaDatosPage";
 import VentasGranjaPage from "./pages/VentasGranjaPage";
 import GranjaRemitosPage from "./pages/GranjaRemitosPage";
+import GranjaHistorialPage from "./pages/GranjaHistorialPage";
+import OrdenCargaListPage from "./pages/OrdenCargaListPage";
+import OrdenCargaDetallePage from "./pages/OrdenCargaDetallePage";
+import RecepcionOrdenCargaPage from "./pages/RecepcionOrdenCargaPage";
+import CtaCteGranjaPage from "./pages/CtaCteGranjaPage";
 import RecepcionRemitosPage from "./pages/RecepcionRemitosPage";
 import HistorialAccesosPage from "./pages/HistorialAccesosPage";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -142,6 +148,14 @@ function App() {
           }
         />
         <Route
+          path="/frigorifico/pedidos-granja"
+          element={
+            <ProtectedRoute>
+              <PedidosGranjaPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/frigorifico/ventas"
           element={
             <ProtectedRoute>
@@ -220,6 +234,11 @@ function App() {
           }
         />
 
+        <Route path="/granja/historial" element={<ProtectedRoute><GranjaHistorialPage /></ProtectedRoute>} />
+        <Route path="/granja/ordenes-carga" element={<ProtectedRoute><OrdenCargaListPage /></ProtectedRoute>} />
+        <Route path="/granja/ordenes-carga/:id" element={<ProtectedRoute><OrdenCargaDetallePage /></ProtectedRoute>} />
+        <Route path="/granja/recepcion-ordenes" element={<ProtectedRoute><RecepcionOrdenCargaPage /></ProtectedRoute>} />
+        <Route path="/granja/cta-cte" element={<ProtectedRoute><CtaCteGranjaPage /></ProtectedRoute>} />
         <Route path="/granja/ventas" element={<ProtectedRoute><VentasGranjaPage /></ProtectedRoute>} />
         <Route path="/granja/remitos" element={<ProtectedRoute><GranjaRemitosPage /></ProtectedRoute>} />
         <Route path="/frigorifico/recepcion" element={<ProtectedRoute><RecepcionRemitosPage /></ProtectedRoute>} />

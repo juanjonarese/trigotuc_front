@@ -28,8 +28,33 @@
 }
 
 .form-control:focus {
-  border-color: #4caf50;
-  box-shadow: 0 0 0 0.2rem rgba(76, 175, 80, 0.15);
+  border-color: #dee2e6;
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.password-input-wrapper {
+  position: relative;
+}
+
+.password-input-wrapper .form-control {
+  padding-right: 2.5rem;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  top: 50%;
+  right: 0.5rem;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #6c757d;
+  padding: 0;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.password-toggle-btn:hover {
+  color: #333;
 }
 
 .btn-login {

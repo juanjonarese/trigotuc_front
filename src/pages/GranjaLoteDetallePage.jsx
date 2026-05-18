@@ -251,7 +251,7 @@ const GranjaLoteDetallePage = () => {
   if (!lote) return <Layout><div className="container-fluid pt-4 text-muted">Lote no encontrado.</div></Layout>;
 
   const dias = diasDeVida(lote.fechaIngreso);
-  const semanaActual = Math.max(1, Math.ceil(dias / 7));
+  const semanaActual = Math.max(1, Math.floor(dias / 7) + 1);
   const progresoPct = Math.min(100, Math.round((dias / 45) * 100));
   const bajasTotales = lote.mortandad.reduce((s, m) => s + m.cantidad, 0);
   const pctMortandad = lote.cantidadIngreso > 0
@@ -319,7 +319,7 @@ const GranjaLoteDetallePage = () => {
               </div>
               {lote.proveedor && (
                 <div className="col-6 col-md-3">
-                  <div className="text-muted small">Proveedor</div>
+                  <div className="text-muted small">Enviado por</div>
                   <div className="fw-bold">{lote.proveedor}</div>
                 </div>
               )}
@@ -834,7 +834,7 @@ const GranjaLoteDetallePage = () => {
                         <div className="form-text">Cantidad × kg — Actual: {lote.cantidadIngreso}</div>
                       </div>
                       <div className="col-12">
-                        <label className="form-label">Proveedor (opcional)</label>
+                        <label className="form-label">Enviado por (opcional)</label>
                         <input
                           type="text"
                           className="form-control"

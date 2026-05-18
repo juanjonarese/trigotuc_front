@@ -144,7 +144,7 @@ const LoginScreen = () => {
                     >
                       CLAVE DE INGRESO
                     </label>
-                    <div className="input-group">
+                    <div className="password-input-wrapper">
                       <input
                         type={showPassword ? "text" : "password"}
                         className="form-control"
@@ -158,7 +158,7 @@ const LoginScreen = () => {
                       />
                       <button
                         type="button"
-                        className="btn btn-outline-secondary"
+                        className="password-toggle-btn"
                         onClick={() => setShowPassword((v) => !v)}
                         tabIndex="-1"
                       >
