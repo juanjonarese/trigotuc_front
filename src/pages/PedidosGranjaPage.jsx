@@ -367,6 +367,9 @@ const NuevoPedidoModal = ({ lotePresel, onClose, onCreado }) => {
 
 // ── Página principal ────────────────────────────────────────────────────────
 const PedidosGranjaPage = () => {
+  const rolUsuario = localStorage.getItem("rolUsuario");
+  const esAdmin    = rolUsuario === "superadmin" || rolUsuario === "administracion";
+
   const [lotes, setLotes]               = useState([]);
   const [pedidos, setPedidos]           = useState([]);
   const [loading, setLoading]           = useState(true);
@@ -487,6 +490,72 @@ const PedidosGranjaPage = () => {
                 </div>
               );
             })}
+
+            {/* ── Alertas de diferencias (solo admin) ── */}
+            {esAdmin && (() => {
+              const conDif = pedidos.filter((o) =>
+                o.estado === "entregada" && (
+                  (o.diferenciaCantidad != null && o.diferenciaCantidad !== 0) ||
+                  (o.diferenciaKg != null && Math.abs(o.diferenciaKg) > 0.01)
+                )
+              );
+              if (conDif.length === 0) return null;
+              return (
+                <div className="mb-4">
+                  <h6 className="fw-semibold mb-2" style={{ color: "#b45309" }}>
+                    <i className="bi bi-exclamation-triangle-fill me-2 text-warning"></i>
+                    Diferencias en recepciones ({conDif.length})
+                  </h6>
+                  <div className="card border-warning border-0 shadow-sm">
+                    <div className="card-body p-0">
+                      <div className="table-responsive">
+                        <table className="table table-sm align-middle mb-0">
+                          <thead style={{ background: "#fef9c3" }}>
+                            <tr>
+                              <th>N° Pedido</th>
+                              <th>Granja / Galpón</th>
+                              <th>Fecha recepción</th>
+                              <th className="text-end">Cant. pedida</th>
+                              <th className="text-end">Cant. recibida</th>
+                              <th className="text-end">Dif. unidades</th>
+                              <th className="text-end">Kg pedidos</th>
+                              <th className="text-end">Kg recibidos</th>
+                              <th className="text-end">Dif. kg</th>
+                              <th>Motivo</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {conDif.map((o) => (
+                              <tr key={o._id} style={{ background: "#fffbeb" }}>
+                                <td><span className="badge bg-warning text-dark">{o.numero}</span></td>
+                                <td className="small">
+                                  {o.granja === "cañete" ? "Cañete" : "Los Pinos"}
+                                  {o.galpon && ` — G${o.galpon}`}
+                                </td>
+                                <td className="small text-muted">{formatearFechaLocal(o.fechaEntrega)}</td>
+                                <td className="text-end">{o.cantidadEstimada?.toLocaleString("es-AR")}</td>
+                                <td className="text-end fw-semibold">{o.cantidadReal?.toLocaleString("es-AR")}</td>
+                                <td className="text-end fw-bold" style={{ color: o.diferenciaCantidad < 0 ? "#dc2626" : "#16a34a" }}>
+                                  {o.diferenciaCantidad > 0 ? "+" : ""}{o.diferenciaCantidad}
+                                </td>
+                                <td className="text-end">{o.pesoEstimadoKg} kg</td>
+                                <td className="text-end fw-semibold">{o.pesoRealKg} kg</td>
+                                <td className="text-end fw-bold" style={{ color: o.diferenciaKg < 0 ? "#dc2626" : "#16a34a" }}>
+                                  {o.diferenciaKg > 0 ? "+" : ""}{o.diferenciaKg?.toFixed(1)} kg
+                                </td>
+                                <td className="small text-muted" style={{ maxWidth: "180px" }}>
+                                  {o.observacionesEntrega || <span className="text-muted fst-italic">Sin motivo</span>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* ── Mis pedidos ── */}
             <div className="d-flex align-items-center justify-content-between mb-2 mt-2">
