@@ -64,6 +64,7 @@ const NuevaOrdenModal = ({ onClose, onCreada }) => {
     setSaving(true);
     try {
       await crearOrdenCarga({
+        tipo:             "venta_gordos",
         cliente:          form.cliente,
         granja:           form.granja,
         galpon:           form.galpon ? Number(form.galpon) : undefined,
@@ -303,8 +304,8 @@ const VentasGranjaPage = () => {
     try {
       const [v, entregadas, enPendiente] = await Promise.all([
         obtenerVentasGranja(),
-        obtenerOrdenesCarga({ estado: "entregada" }),
-        obtenerOrdenesCarga({ estado: "pendiente" }),
+        obtenerOrdenesCarga({ estado: "entregada", tipo: "venta_gordos" }),
+        obtenerOrdenesCarga({ estado: "pendiente", tipo: "venta_gordos" }),
       ]);
       setVentas(v);
       setPendientes(entregadas.filter((o) => !o.ventaGranjaAsociada));

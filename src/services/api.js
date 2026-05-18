@@ -946,6 +946,7 @@ export const obtenerOrdenesCarga = async (filtros = {}) => {
   const params = new URLSearchParams();
   if (filtros.estado) params.append("estado", filtros.estado);
   if (filtros.granja) params.append("granja", filtros.granja);
+  if (filtros.tipo)   params.append("tipo",   filtros.tipo);
   const response = await fetch(`${API_URL}/ordenes-carga?${params}`, { headers: getAuthHeaders() });
   return handleResponse(response);
 };
