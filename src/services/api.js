@@ -936,9 +936,9 @@ export const crearVentaGranja = async (data) => {
   return handleResponse(response);
 };
 
-export const confirmarRetiroGranja = async (id) => {
+export const confirmarRetiroGranja = async (id, data) => {
   const response = await fetch(`${API_URL}/ventas-granja/${id}/confirmar`, {
-    method: "PATCH", headers: getAuthHeaders(),
+    method: "PATCH", headers: getAuthHeaders(), body: JSON.stringify(data),
   });
   return handleResponse(response);
 };
