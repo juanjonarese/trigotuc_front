@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef } from "react";
 import SelectDropdown from "./SelectDropdown";
 
 const CALIBRES = [5, 6, 7, 8, 9, 10, 11];
@@ -22,7 +22,7 @@ const calcularCajones = (pollos, calibre) =>
  *   preciosPorCalibre: { [calibre]: number } | null
  *     Precio sugerido por calibre (de la lista del cliente). Se autocarga al cambiar el calibre.
  */
-const CalibreTable = ({
+const CalibreTable = forwardRef(({
   lineas,
   onChange,
   showTotals = true,
@@ -30,7 +30,7 @@ const CalibreTable = ({
   inputCajones = false,
   stockCalibres = null,
   preciosPorCalibre = null,
-}) => {
+}, ref) => {
   const calibresUsados = lineas.map((l) => Number(l.calibre));
 
   // Primer calibre con stock disponible (o simplemente el primero libre)
@@ -180,6 +180,23 @@ const CalibreTable = ({
     }).format(n);
 
   const mostrarFormulario = !todosUsados && !sinStockTotal;
+
+  // Expone getLineas() — devuelve las líneas actuales + el draft si es válido
+  // Usar en handleSubmit del padre para no depender del timing de setState
+  useImperativeHandle(ref, () => ({
+    getLineas: () => {
+      if (!draft.valor || draftNum <= 0) return lineas;
+      if (calibresUsados.includes(Number(draft.calibre))) return lineas;
+      const nuevaLinea = {
+        calibre: Number(draft.calibre),
+        pollos:  inputCajones ? draftNum * Number(draft.calibre) : draftNum,
+        cajones: draftCajones,
+      };
+      const nuevasLineas = [...lineas, nuevaLinea];
+      onChange(nuevasLineas);
+      return nuevasLineas;
+    },
+  }));
 
   // ── Render ───────────────────────────────────────────────────────────
   return (
@@ -417,7 +434,9 @@ const CalibreTable = ({
       )}
     </div>
   );
-};
+});
+
+CalibreTable.displayName = "CalibreTable";
 
 export { calcularCajones, CALIBRES };
 export default CalibreTable;

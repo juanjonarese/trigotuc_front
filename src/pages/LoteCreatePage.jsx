@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
@@ -36,6 +36,7 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
   const [form, setForm]     = useState(FORM_VACIO);
   const [lineas, setLineas] = useState([]);
   const [saving, setSaving] = useState(false);
+  const calibreRef          = useRef(null);
 
   useEffect(() => {
     setLoadingRec(true);
@@ -63,44 +64,49 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
     }
   };
 
-  const lineasCalculadas = lineas.map((l) => ({
-    ...l, cajones: calcularCajones(l.pollos, l.calibre),
-  }));
-  const totalPollos  = lineasCalculadas.reduce((acc, l) => acc + Number(l.pollos || 0), 0);
-  const totalCajones = lineasCalculadas.reduce((acc, l) => acc + l.cajones, 0);
+  // Totales para preview en el modal (sin incluir draft)
+  const totalCajones = lineas.reduce((acc, l) => acc + calcularCajones(l.pollos, l.calibre), 0);
+  const totalPollos  = lineas.reduce((acc, l) => acc + Number(l.pollos || 0), 0);
   const totalKg      = totalCajones * 20;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (totalCajones === 0) {
-      Swal.fire("Error", "Ingresá al menos una línea con pollos.", "error");
+    // Obtiene líneas incluyendo el draft pendiente (si el usuario no clickeó "Aceptar")
+    const lineasFinales = calibreRef.current?.getLineas() ?? lineas;
+    const calibresPayload = lineasFinales
+      .map((l) => ({ calibre: Number(l.calibre), pollos: Number(l.pollos), cajones: calcularCajones(l.pollos, l.calibre) }))
+      .filter((l) => l.cajones > 0);
+
+    if (calibresPayload.length === 0) {
+      Swal.fire("Error", "Agregá al menos un calibre con pollos en la tabla de calibres.", "error");
       return;
     }
     setSaving(true);
     try {
-      const calibresPayload = lineasCalculadas
-        .filter((l) => l.pollos && l.cajones > 0)
-        .map(({ calibre, pollos, cajones }) => ({ calibre: Number(calibre), pollos: Number(pollos), cajones }));
+
+      const totalCajonesF = calibresPayload.reduce((a, c) => a + c.cajones, 0);
+      const totalPollosF  = calibresPayload.reduce((a, c) => a + c.pollos, 0);
+      const totalKgF      = totalCajonesF * 20;
 
       const payload = {
         fechaIngreso:  form.fechaIngreso,
         calibres:      calibresPayload,
         observaciones: form.observaciones || undefined,
       };
-      if (form.kgVivos)              payload.kgVivos             = Number(form.kgVivos);
+      if (form.kgVivos)             payload.kgVivos             = Number(form.kgVivos);
       if (form.unidadesFaenadas)    payload.unidadesFaenadas    = Number(form.unidadesFaenadas);
       if (form.unidadesDecomisadas) payload.unidadesDecomisadas = Number(form.unidadesDecomisadas);
       if (form.kgDecomisados)       payload.kgDecomisados       = Number(form.kgDecomisados);
       if (form.unidadesTrozadas)    payload.unidadesTrozadas    = Number(form.unidadesTrozadas);
       if (form.kgTrozados)          payload.kgTrozados          = Number(form.kgTrozados);
-      if (recepcionSel)           payload.ordenCarga        = recepcionSel._id;
+      if (recepcionSel)             payload.ordenCarga          = recepcionSel._id;
 
       const loteCreado = await crearLote(payload);
       onCreado();
       Swal.fire({
         icon: "success",
         title: `Lote #${loteCreado.numeroLote} creado`,
-        html:  `${fmtNum(totalPollos)} pollos · ${fmtNum(totalCajones)} cajones · ${fmtNum(totalKg)} kg`,
+        html:  `${fmtNum(totalPollosF)} pollos · ${fmtNum(totalCajonesF)} cajones · ${fmtNum(totalKgF)} kg`,
         timer: 2000,
         showConfirmButton: false,
       });
@@ -253,7 +259,7 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
                   )}
                 </label>
                 <p className="text-muted small mb-2">El calibre indica cuántos pollos entran en un cajón de 20 kg.</p>
-                <CalibreTable lineas={lineas} onChange={setLineas} />
+                <CalibreTable ref={calibreRef} lineas={lineas} onChange={setLineas} />
 
                 {totalCajones > 0 && (
                   <div className="alert alert-info py-2 mt-3 mb-0">
