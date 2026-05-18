@@ -940,6 +940,44 @@ export const eliminarVentaGranja = async (id) => {
   return handleResponse(response);
 };
 
+// ============= PEDIDOS FRIGORIFICO (venta pollos faenados) =============
+
+export const obtenerPedidosFrigorifico = async (filtros = {}) => {
+  const params = new URLSearchParams();
+  if (filtros.estado) params.append("estado", filtros.estado);
+  if (filtros.camara) params.append("camara", filtros.camara);
+  const response = await fetch(`${API_URL}/pedidos-frigorifico?${params}`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+export const crearPedidoFrigorifico = async (data) => {
+  const response = await fetch(`${API_URL}/pedidos-frigorifico`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const confirmarEntregaPedidoFrigorifico = async (id) => {
+  const response = await fetch(`${API_URL}/pedidos-frigorifico/${id}/confirmar`, {
+    method: "PATCH", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const emitirVentaPedidoFrigorifico = async (id, data) => {
+  const response = await fetch(`${API_URL}/pedidos-frigorifico/${id}/emitir`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const eliminarPedidoFrigorifico = async (id) => {
+  const response = await fetch(`${API_URL}/pedidos-frigorifico/${id}`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
 // ============= ÓRDENES DE CARGA (VENTAS GORDOS) =============
 
 export const obtenerOrdenesCarga = async (filtros = {}) => {
