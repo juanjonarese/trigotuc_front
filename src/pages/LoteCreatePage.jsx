@@ -19,11 +19,13 @@ const GRANJA_PREFIX = { cañete: "C", los_pinos: "P" };
 
 const FORM_VACIO = {
   fechaIngreso:     obtenerFechaHoy(),
-  unidadesFaenadas: "",
-  kgVivos:          "",
-  unidadesTrozadas: "",
-  kgTrozados:       "",
-  observaciones:    "",
+  unidadesFaenadas:    "",
+  kgVivos:             "",
+  unidadesDecomisadas: "",
+  kgDecomisados:       "",
+  unidadesTrozadas:    "",
+  kgTrozados:          "",
+  observaciones:       "",
 };
 
 // ── Modal nuevo lote ────────────────────────────────────────────────────────
@@ -37,7 +39,7 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
 
   useEffect(() => {
     setLoadingRec(true);
-    obtenerOrdenesCarga({ estado: "entregada" })
+    obtenerOrdenesCarga({ estado: "entregada", tipo: "pedido_frigorifico" })
       .then((data) => setRecepciones(data.filter((o) => !o.loteAsociado)))
       .catch(() => {})
       .finally(() => setLoadingRec(false));
@@ -85,10 +87,12 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
         calibres:      calibresPayload,
         observaciones: form.observaciones || undefined,
       };
-      if (form.kgVivos)           payload.kgVivos           = Number(form.kgVivos);
-      if (form.unidadesFaenadas)  payload.unidadesFaenadas  = Number(form.unidadesFaenadas);
-      if (form.unidadesTrozadas)  payload.unidadesTrozadas  = Number(form.unidadesTrozadas);
-      if (form.kgTrozados)        payload.kgTrozados        = Number(form.kgTrozados);
+      if (form.kgVivos)              payload.kgVivos             = Number(form.kgVivos);
+      if (form.unidadesFaenadas)    payload.unidadesFaenadas    = Number(form.unidadesFaenadas);
+      if (form.unidadesDecomisadas) payload.unidadesDecomisadas = Number(form.unidadesDecomisadas);
+      if (form.kgDecomisados)       payload.kgDecomisados       = Number(form.kgDecomisados);
+      if (form.unidadesTrozadas)    payload.unidadesTrozadas    = Number(form.unidadesTrozadas);
+      if (form.kgTrozados)          payload.kgTrozados          = Number(form.kgTrozados);
       if (recepcionSel)           payload.ordenCarga        = recepcionSel._id;
 
       const loteCreado = await crearLote(payload);
@@ -205,6 +209,20 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
                       value={form.kgVivos}
                       onChange={(e) => setForm({ ...form, kgVivos: e.target.value })}
                       min="0" step="0.01" placeholder={recepcionSel ? recepcionSel.pesoRealKg : "0"} />
+                  </div>
+                  <div className="col-6 col-md-3">
+                    <label className="form-label">Decomisados (u)</label>
+                    <input type="number" className="form-control"
+                      value={form.unidadesDecomisadas}
+                      onChange={(e) => setForm({ ...form, unidadesDecomisadas: e.target.value })}
+                      min="0" placeholder="0" />
+                  </div>
+                  <div className="col-6 col-md-3">
+                    <label className="form-label">Decomisados (kg)</label>
+                    <input type="number" className="form-control"
+                      value={form.kgDecomisados}
+                      onChange={(e) => setForm({ ...form, kgDecomisados: e.target.value })}
+                      min="0" step="0.01" placeholder="0" />
                   </div>
                   <div className="col-6 col-md-3">
                     <label className="form-label">Trozados (u)</label>
@@ -417,6 +435,8 @@ const LoteCreatePage = () => {
                         <th>Calibres / Stock</th>
                         <th className="text-end">Cajones</th>
                         <th className="text-end">Kg totales</th>
+                        <th className="text-end">Decomisados</th>
+                        <th className="text-end">Kg decomis.</th>
                         <th className="text-end">Rendimiento</th>
                         {esSuperAdmin && <th></th>}
                       </tr>
@@ -451,6 +471,18 @@ const LoteCreatePage = () => {
                             </td>
                             <td className="text-end fw-semibold">{fmtNum(totalCajones)}</td>
                             <td className="text-end">{fmtNum(lote.pesoTotal)} kg</td>
+                            <td className="text-end">
+                              {lote.unidadesDecomisadas
+                                ? <span className="text-danger">{fmtNum(lote.unidadesDecomisadas)}</span>
+                                : <span className="text-muted">—</span>
+                              }
+                            </td>
+                            <td className="text-end">
+                              {lote.kgDecomisados
+                                ? <span className="text-danger">{fmtNum(lote.kgDecomisados)} kg</span>
+                                : <span className="text-muted">—</span>
+                              }
+                            </td>
                             <td className="text-end">
                               {lote.rendimientoFaena != null
                                 ? <span className="fw-semibold text-success">{fmtNum(lote.rendimientoFaena)}%</span>

@@ -380,7 +380,7 @@ const PedidosGranjaPage = () => {
     try {
       const [l, p] = await Promise.all([
         obtenerLotesGranja({ estado: "en_crianza" }),
-        obtenerOrdenesCarga({}),
+        obtenerOrdenesCarga({ tipo: "pedido_frigorifico" }),
       ]);
       setLotes(l);
       setPedidos(p);
