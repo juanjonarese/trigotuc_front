@@ -232,11 +232,29 @@ const EmitirVentaModal = ({ pedido, onClose, onEmitida }) => {
         fecha,
         observaciones: observaciones || undefined,
       });
-      // Imprimir comprobante con código si viene en la respuesta
-      if (resultado?._ordenRetiro?.codigoRetiro) {
-        imprimirOrdenRetiro(resultado._ordenRetiro, pedido);
-      }
+
+      const ordenRetiro = resultado?._ordenRetiro;
       onEmitida();
+
+      if (ordenRetiro?.codigoRetiro) {
+        try {
+          imprimirOrdenRetiro(ordenRetiro, pedido);
+        } catch {
+          // Si el popup fue bloqueado, mostrar el código directamente
+          await Swal.fire({
+            icon: "success",
+            title: "Venta emitida",
+            html: `<p>Total: <strong>${fmtARS(total)}</strong></p>
+              <p class="text-muted small">El popup fue bloqueado. Código de retiro:</p>
+              <div style="font-size:2rem;font-weight:bold;letter-spacing:0.3em;color:#b45309;border:3px solid #f59e0b;border-radius:8px;padding:12px;background:#fffbeb">
+                ${ordenRetiro.codigoRetiro}
+              </div>
+              <p class="text-muted small mt-2">N° Orden: ${ordenRetiro.numeroOrden}</p>`,
+          });
+          return;
+        }
+      }
+
       Swal.fire({ icon: "success", title: "Venta emitida", text: `Total: ${fmtARS(total)}`, timer: 2000, showConfirmButton: false });
     } catch (err) {
       Swal.fire("Error", err.message, "error");
