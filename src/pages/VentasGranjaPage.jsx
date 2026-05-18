@@ -27,6 +27,52 @@ const GRANJAS = [
   { key: "los_pinos", label: "Los Pinos", galpones: 8 },
 ];
 
+const imprimirOrdenRetiro = (o) => {
+  const granja  = GRANJA_LABEL[o.granja] || o.granja;
+  const galpon  = o.galpon ? ` — Galpón ${o.galpon}` : "";
+  const cliente = o.cliente?.razonSocial || o.cliente?.nombre || "—";
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
+    <title>Orden ${o.numero}</title>
+    <style>
+      body { font-family: Arial, sans-serif; padding: 40px; color: #222; max-width: 600px; margin: 0 auto; }
+      .logo { font-size: 22px; font-weight: bold; margin-bottom: 4px; }
+      .logo span { color: #f59e0b; }
+      .subtitulo { font-size: 13px; color: #666; margin-bottom: 24px; }
+      h2 { font-size: 16px; border-bottom: 2px solid #222; padding-bottom: 6px; margin: 20px 0 12px; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; margin-bottom: 20px; }
+      .fila { display: flex; flex-direction: column; }
+      .lbl { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: .5px; }
+      .val { font-size: 14px; font-weight: 600; }
+      .codigo-box { text-align: center; margin: 24px 0; border: 3px solid #f59e0b; border-radius: 8px; padding: 16px; background: #fffbeb; }
+      .codigo-lbl { font-size: 11px; color: #92400e; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+      .codigo-val { font-size: 42px; font-weight: bold; color: #b45309; letter-spacing: 8px; }
+      .alerta { background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; padding: 10px 14px; font-size: 12px; color: #166534; margin-top: 20px; }
+      @media print { body { padding: 20px; } }
+    </style></head><body>
+    <div class="logo">Trigotuc <span>Avícola</span></div>
+    <div class="subtitulo">Orden de Retiro — Pollos en Pie</div>
+    <h2>Datos del pedido</h2>
+    <div class="grid">
+      <div class="fila"><span class="lbl">N° Orden</span><span class="val">${o.numero}</span></div>
+      <div class="fila"><span class="lbl">Fecha</span><span class="val">${new Date(o.fechaEmision).toLocaleDateString("es-AR")}</span></div>
+      <div class="fila"><span class="lbl">Cliente</span><span class="val">${cliente}</span></div>
+      <div class="fila"><span class="lbl">Granja / Galpón</span><span class="val">${granja}${galpon}</span></div>
+      <div class="fila"><span class="lbl">Cantidad estimada</span><span class="val">${fmtNum(o.cantidadEstimada)} pollos</span></div>
+      <div class="fila"><span class="lbl">Peso estimado</span><span class="val">${o.pesoEstimadoKg} kg</span></div>
+    </div>
+    ${o.observaciones ? `<p style="font-size:13px;color:#555"><strong>Obs:</strong> ${o.observaciones}</p>` : ""}
+    <div class="codigo-box">
+      <div class="codigo-lbl">Código de retiro — presentar al empleado del galpón</div>
+      <div class="codigo-val">${o.codigoRetiro || "—"}</div>
+    </div>
+    <div class="alerta">⚠️ El empleado del galpón necesita este código para confirmar la entrega. Sin el código no se realizará el despacho.</div>
+    <script>window.onload=()=>{window.print();}<\/script>
+  </body></html>`;
+  const win = window.open("", "_blank", "width=720,height=700");
+  win.document.write(html);
+  win.document.close();
+};
+
 // ── Modal nueva orden de retiro ──────────────────────────────────────────────
 const NuevaOrdenModal = ({ onClose, onCreada }) => {
   const [clientes, setClientes]   = useState([]);
@@ -370,7 +416,9 @@ const VentasGranjaPage = () => {
                             <th>Cliente</th>
                             <th className="text-end">Cant. estimada</th>
                             <th className="text-end">Peso est.</th>
+                            <th>Código retiro</th>
                             <th>Fecha</th>
+                            <th></th>
                           </tr>
                         </thead>
                         <tbody>
@@ -381,7 +429,18 @@ const VentasGranjaPage = () => {
                               <td className="small">{o.cliente?.razonSocial || o.cliente?.nombre || <span className="text-muted">—</span>}</td>
                               <td className="text-end">{fmtNum(o.cantidadEstimada)}</td>
                               <td className="text-end">{o.pesoEstimadoKg} kg</td>
+                              <td>
+                                {o.codigoRetiro
+                                  ? <span className="fw-bold text-warning" style={{ letterSpacing: "0.2em", fontSize: "1rem" }}>{o.codigoRetiro}</span>
+                                  : <span className="text-muted">—</span>
+                                }
+                              </td>
                               <td className="small text-muted">{formatearFechaLocal(o.fechaEmision)}</td>
+                              <td>
+                                <button className="btn btn-outline-secondary btn-sm" title="Imprimir comprobante" onClick={() => imprimirOrdenRetiro(o)}>
+                                  <i className="bi bi-printer"></i>
+                                </button>
+                              </td>
                             </tr>
                           ))}
                         </tbody>

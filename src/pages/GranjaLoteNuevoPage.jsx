@@ -44,7 +44,7 @@ const NuevoIngresoModal = ({ onClose, onCreado, ocupados }) => {
       Swal.fire("Faltan datos", "Completá granja, galpón y cantidad.", "warning");
       return;
     }
-    if (form.bajasIngreso && !form.motivoBajas.trim()) {
+    if (Number(form.bajasIngreso) > 0 && !form.motivoBajas.trim()) {
       Swal.fire("Faltan datos", "Indicá el motivo de las bajas.", "warning");
       return;
     }
