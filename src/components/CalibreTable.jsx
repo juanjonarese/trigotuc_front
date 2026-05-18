@@ -191,6 +191,7 @@ const CalibreTable = forwardRef(({
         calibre: Number(draft.calibre),
         pollos:  inputCajones ? draftNum * Number(draft.calibre) : draftNum,
         cajones: draftCajones,
+        ...(showPrecio ? { precioPorCajon: Number(draft.precioPorCajon || 0) } : {}),
       };
       const nuevasLineas = [...lineas, nuevaLinea];
       onChange(nuevasLineas);
