@@ -921,31 +921,14 @@ export const eliminarLoteGranja = async (id) => {
 
 // ============= VENTAS GRANJA (GORDOS) =============
 
-export const obtenerVentasGranja = async (filtros = {}) => {
-  const params = new URLSearchParams();
-  if (filtros.estado)     params.append("estado",     filtros.estado);
-  if (filtros.loteGranja) params.append("loteGranja", filtros.loteGranja);
-  const response = await fetch(`${API_URL}/ventas-granja?${params}`, { headers: getAuthHeaders() });
+export const obtenerVentasGranja = async () => {
+  const response = await fetch(`${API_URL}/ventas-granja`, { headers: getAuthHeaders() });
   return handleResponse(response);
 };
 
-export const crearVentaGranja = async (data) => {
-  const response = await fetch(`${API_URL}/ventas-granja`, {
+export const emitirVentaGranja = async (ordenId, data) => {
+  const response = await fetch(`${API_URL}/ventas-granja/desde-orden/${ordenId}`, {
     method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
-  });
-  return handleResponse(response);
-};
-
-export const confirmarRetiroGranja = async (id, data) => {
-  const response = await fetch(`${API_URL}/ventas-granja/${id}/confirmar`, {
-    method: "PATCH", headers: getAuthHeaders(), body: JSON.stringify(data),
-  });
-  return handleResponse(response);
-};
-
-export const cancelarVentaGranja = async (id) => {
-  const response = await fetch(`${API_URL}/ventas-granja/${id}/cancelar`, {
-    method: "PATCH", headers: getAuthHeaders(),
   });
   return handleResponse(response);
 };
