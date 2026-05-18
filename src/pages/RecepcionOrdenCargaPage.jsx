@@ -455,16 +455,25 @@ const RecepcionOrdenCargaPage = () => {
                     </div>
 
                     <div className="card-footer bg-transparent border-top-0 pt-0 pb-3 px-3 d-flex flex-column gap-2">
-                      <button
-                        className="btn btn-success w-100"
-                        onClick={() => setOrdenModal(o)}
-                      >
-                        <i className="bi bi-check2-circle me-1"></i>Confirmar entrega
-                      </button>
-                      {puedeLiberar && !o.liberada && (
-                        <button className="btn btn-outline-warning btn-sm w-100" onClick={(e) => handleLiberar(e, o)}>
-                          <i className="bi bi-unlock me-1"></i>Liberar orden (sin código)
-                        </button>
+                      {o.tipo === "pedido_frigorifico" ? (
+                        <div className="text-center text-muted small py-1">
+                          <i className="bi bi-arrow-right-circle me-1"></i>
+                          La recepción se registra en <strong>Frigorifico → Pedidos a Granja</strong>
+                        </div>
+                      ) : (
+                        <>
+                          <button
+                            className="btn btn-success w-100"
+                            onClick={() => setOrdenModal(o)}
+                          >
+                            <i className="bi bi-check2-circle me-1"></i>Confirmar entrega
+                          </button>
+                          {puedeLiberar && !o.liberada && (
+                            <button className="btn btn-outline-warning btn-sm w-100" onClick={(e) => handleLiberar(e, o)}>
+                              <i className="bi bi-unlock me-1"></i>Liberar orden (sin código)
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
