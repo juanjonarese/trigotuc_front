@@ -764,10 +764,16 @@ export const obtenerOrdenRetiroPorVenta = async (ventaId) => {
   return data[0] || null;
 };
 
-export const marcarOrdenEntregada = async (id) => {
+export const marcarOrdenEntregada = async (id, data = {}) => {
   const response = await fetch(`${API_URL}/ordenes-retiro/${id}/entregar`, {
-    method: "PATCH",
-    headers: getAuthHeaders(),
+    method: "PATCH", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const liberarOrdenRetiro = async (id) => {
+  const response = await fetch(`${API_URL}/ordenes-retiro/${id}/liberar`, {
+    method: "POST", headers: getAuthHeaders(),
   });
   return handleResponse(response);
 };

@@ -19,6 +19,55 @@ const CAMARAS = [
 ];
 
 const fmtNum = (n) => n != null ? new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n) : "—";
+
+const imprimirOrdenRetiro = ({ numeroOrden, codigoRetiro }, pedido) => {
+  const cliente = pedido.cliente?.razonSocial || "—";
+  const camara  = pedido.camara === "cañete" ? "Cañete" : "Trigotuc";
+  const calibres = (pedido.calibres || []).map((c) =>
+    `<tr><td style="padding:4px 12px;border:1px solid #dee2e6;text-align:center">Cal. ${c.calibre}</td>
+         <td style="padding:4px 12px;border:1px solid #dee2e6;text-align:right">${fmtNum(c.cajones)} cajones</td></tr>`
+  ).join("");
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
+    <title>Orden ${numeroOrden}</title>
+    <style>
+      body{font-family:Arial,sans-serif;padding:40px;color:#222;max-width:600px;margin:0 auto}
+      .logo{font-size:22px;font-weight:bold;margin-bottom:4px}.logo span{color:#f59e0b}
+      h2{font-size:16px;border-bottom:2px solid #222;padding-bottom:6px;margin:20px 0 12px}
+      .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;margin-bottom:16px}
+      .fila{display:flex;flex-direction:column}
+      .lbl{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px}
+      .val{font-size:14px;font-weight:600}
+      .codigo-box{text-align:center;margin:24px 0;border:3px solid #f59e0b;border-radius:8px;padding:16px;background:#fffbeb}
+      .codigo-lbl{font-size:11px;color:#92400e;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+      .codigo-val{font-size:42px;font-weight:bold;color:#b45309;letter-spacing:8px}
+      .alerta{background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:10px 14px;font-size:12px;color:#166534;margin-top:20px}
+      table{width:100%;border-collapse:collapse;margin-bottom:12px}
+      @media print{body{padding:20px}}
+    </style></head><body>
+    <div class="logo">Trigotuc <span>Avícola</span></div>
+    <p style="font-size:13px;color:#666;margin-bottom:24px">Orden de Retiro — Pollos Faenados</p>
+    <h2>Datos del pedido</h2>
+    <div class="grid">
+      <div class="fila"><span class="lbl">N° Orden</span><span class="val">${numeroOrden}</span></div>
+      <div class="fila"><span class="lbl">Cámara</span><span class="val">${camara}</span></div>
+      <div class="fila"><span class="lbl">Cliente</span><span class="val">${cliente}</span></div>
+    </div>
+    <table><thead><tr>
+      <th style="padding:4px 12px;background:#f8f9fa;border:1px solid #dee2e6;text-align:center">Calibre</th>
+      <th style="padding:4px 12px;background:#f8f9fa;border:1px solid #dee2e6;text-align:right">Cajones</th>
+    </tr></thead><tbody>${calibres}</tbody></table>
+    <div class="codigo-box">
+      <div class="codigo-lbl">Código de retiro — presentar al frigorifico</div>
+      <div class="codigo-val">${codigoRetiro || "—"}</div>
+    </div>
+    <div class="alerta">⚠️ El frigorifico necesita este código para confirmar la entrega. Sin el código no se realizará el despacho.</div>
+    <script>window.onload=()=>{window.print();}<\/script>
+  </body></html>`;
+  const win = window.open("", "_blank", "width=720,height=700");
+  win.document.write(html);
+  win.document.close();
+};
+
 const fmtARS = (n) => n != null
   ? new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n)
   : "—";
@@ -177,12 +226,16 @@ const EmitirVentaModal = ({ pedido, onClose, onEmitida }) => {
     }
     setSaving(true);
     try {
-      await emitirVentaPedidoFrigorifico(pedido._id, {
+      const resultado = await emitirVentaPedidoFrigorifico(pedido._id, {
         calibres:      lineasFinales.map((l) => ({ calibre: Number(l.calibre), cajones: Number(l.cajones), precioPorCajon: Number(l.precioPorCajon || 0) })),
         descuento:     Number(descuento),
         fecha,
         observaciones: observaciones || undefined,
       });
+      // Imprimir comprobante con código si viene en la respuesta
+      if (resultado?._ordenRetiro?.codigoRetiro) {
+        imprimirOrdenRetiro(resultado._ordenRetiro, pedido);
+      }
       onEmitida();
       Swal.fire({ icon: "success", title: "Venta emitida", text: `Total: ${fmtARS(total)}`, timer: 2000, showConfirmButton: false });
     } catch (err) {
