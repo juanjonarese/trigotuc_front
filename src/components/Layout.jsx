@@ -65,14 +65,13 @@ const Layout = ({ children }) => {
     }
 
     // Frigorifico submenu
-    if (path.startsWith("/frigorifico") && path !== "/frigorifico/ventas") {
+    if (path.startsWith("/frigorifico") && path !== "/frigorifico/ventas" && path !== "/frigorifico/historial-accesos") {
       setFrigorificoOpen(true);
     }
 
-    // Granja (crianza) submenu — excluye rutas de contable granja
+    // Granja (crianza) submenu
     if (
       path.startsWith("/granja") &&
-      !path.startsWith("/granja/ordenes-carga") &&
       !path.startsWith("/granja/cobros") &&
       !path.startsWith("/granja/cta-cte")
     ) {
@@ -189,97 +188,21 @@ const Layout = ({ children }) => {
           </div>
           )}
 
-          {/* Contable Granja */}
+          {/* Contable Granja — comentado temporalmente
           {(rolUsuario === "superadmin" || rolUsuario === "administracion") && (
           <div className="nav-section mb-2">
-            <a
-              href="#"
-              className="nav-link text-white-50 d-flex align-items-center justify-content-between rounded"
-              onClick={(e) => { e.preventDefault(); setContableGranjaOpen(!contableGranjaOpen); }}
-            >
-              <div className="d-flex align-items-center gap-2">
-                <i className="bi bi-house-door fs-5"></i>
-                <span>Contable Granja</span>
-              </div>
-              <i className={`bi bi-chevron-${contableGranjaOpen ? "down" : "right"}`}></i>
-            </a>
-            {contableGranjaOpen && (
-              <div className="ps-4 mt-2">
-                <a
-                  href="#"
-                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/granja/ventas") ? "text-white" : "text-white-50"}`}
-                  onClick={(e) => { e.preventDefault(); navigate("/granja/ventas"); }}
-                >
-                  <i className="bi bi-cart3"></i>
-                  <span>Ventas Gordos</span>
-                </a>
-                <a
-                  href="#"
-                  className="nav-link d-flex align-items-center gap-2 rounded mb-1 text-white-50"
-                  onClick={(e) => e.preventDefault()}
-                  style={{ opacity: 0.5, cursor: "not-allowed" }}
-                >
-                  <i className="bi bi-cash"></i>
-                  <span>Cobros</span>
-                </a>
-                <a
-                  href="#"
-                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/granja/cta-cte") ? "text-white" : "text-white-50"}`}
-                  onClick={(e) => { e.preventDefault(); navigate("/granja/cta-cte"); }}
-                >
-                  <i className="bi bi-journal-text"></i>
-                  <span>Cta Cte Granja</span>
-                </a>
-
-              </div>
-            )}
+            ...Contable Granja...
           </div>
           )}
+          */}
 
-          {/* Contable Frigorifico */}
+          {/* Contable Frigorifico — comentado temporalmente
           {(rolUsuario === "superadmin" || rolUsuario === "administracion") && (
           <div className="nav-section mb-2">
-            <a
-              href="#"
-              className="nav-link text-white-50 d-flex align-items-center justify-content-between rounded"
-              onClick={(e) => { e.preventDefault(); setContableClientesOpen(!contableClientesOpen); }}
-            >
-              <div className="d-flex align-items-center gap-2">
-                <i className="bi bi-snow fs-5"></i>
-                <span>Contable Frigorifico</span>
-              </div>
-              <i className={`bi bi-chevron-${contableClientesOpen ? "down" : "right"}`}></i>
-            </a>
-            {contableClientesOpen && (
-              <div className="ps-4 mt-2">
-                <a
-                  href="#"
-                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${location.pathname === "/frigorifico/ventas" ? "text-white" : "text-white-50"}`}
-                  onClick={(e) => { e.preventDefault(); navigate("/frigorifico/ventas"); }}
-                >
-                  <i className="bi bi-cart3"></i>
-                  <span>Ventas</span>
-                </a>
-                <a
-                  href="#"
-                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/cobros") ? "text-white" : "text-white-50"}`}
-                  onClick={(e) => { e.preventDefault(); navigate("/cobros"); }}
-                >
-                  <i className="bi bi-cash-coin"></i>
-                  <span>Cobros</span>
-                </a>
-                <a
-                  href="#"
-                  className={`nav-link d-flex align-items-center gap-2 rounded ${isActive("/cta-cte-clientes") ? "text-white" : "text-white-50"}`}
-                  onClick={(e) => { e.preventDefault(); navigate("/cta-cte-clientes"); }}
-                >
-                  <i className="bi bi-journal-text"></i>
-                  <span>Cta Cte Clientes</span>
-                </a>
-              </div>
-            )}
+            ...Contable Frigorifico...
           </div>
           )}
+          */}
 
           {/* Historial de Accesos — comentado temporalmente
           {rolUsuario === "superadmin" && (
@@ -298,7 +221,7 @@ const Layout = ({ children }) => {
 
 
           {/* Granja (crianza) */}
-          {(rolUsuario === "superadmin" || rolUsuario === "frigorifico") && (
+          {(rolUsuario === "superadmin" || rolUsuario === "frigorifico" || rolUsuario === "administracion") && (
           <div className="nav-section mb-2">
             <a
               href="#"
@@ -313,6 +236,16 @@ const Layout = ({ children }) => {
             </a>
             {granjaOpen && (
               <div className="ps-4 mt-2">
+                {(rolUsuario === "superadmin" || rolUsuario === "administracion") && (
+                  <a
+                    href="#"
+                    className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/granja/ordenes-carga") ? "text-white" : "text-white-50"}`}
+                    onClick={(e) => { e.preventDefault(); navigate("/granja/ordenes-carga"); }}
+                  >
+                    <i className="bi bi-file-earmark-text"></i>
+                    <span>Órdenes de Carga</span>
+                  </a>
+                )}
                 <a
                   href="#"
                   className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/granja/galpones/nuevo") ? "text-white" : "text-white-50"}`}
@@ -396,6 +329,18 @@ const Layout = ({ children }) => {
                   >
                     <i className="bi bi-clipboard2-check"></i>
                     <span>Pedidos a Granja</span>
+                  </a>
+                )}
+                {(rolUsuario === "superadmin" || rolUsuario === "frigorifico" || rolUsuario === "administracion") && (
+                  <a
+                    href="#"
+                    className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
+                      isActive("/frigorifico/stock-empaque") ? "text-white" : "text-white-50"
+                    }`}
+                    onClick={(e) => { e.preventDefault(); navigate("/frigorifico/stock-empaque"); }}
+                  >
+                    <i className="bi bi-box-seam"></i>
+                    <span>Stock Empaque</span>
                   </a>
                 )}
                 {(rolUsuario === "superadmin" || rolUsuario === "frigorifico") && (

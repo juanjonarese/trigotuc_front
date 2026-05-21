@@ -17,7 +17,7 @@ const GRANJAS = [
 const diasDeVida = (f) =>
   Math.floor((Date.now() - new Date(f).getTime()) / (1000 * 60 * 60 * 24));
 
-const semanaActual = (f) => Math.max(1, Math.floor(diasDeVida(f) / 7) + 1);
+const semanaActual = (f) => Math.max(1, Math.ceil(diasDeVida(f) / 7));
 
 const formatPeso = (g) => {
   if (g == null) return null;
@@ -196,10 +196,18 @@ const NuevoPedidoModal = ({ lotePresel, onClose, onCreado }) => {
     obtenerLotesGranja({ estado: "en_crianza" }).then(setLotes).catch(() => {});
   }, []);
 
+  const granjaInfo       = GRANJAS.find((g) => g.key === form.granja) || null;
   const loteSeleccionado = lotes.find((l) => l._id === form.lote) || lotePresel || null;
-  const lotesFiltrados   = form.granja
-    ? lotes.filter((l) => l.granja === form.granja)
-    : lotes;
+  const lotesFiltrados   = lotes.filter((l) =>
+    (!form.granja || l.granja === form.granja) &&
+    (!form.galpon  || l.galpon === Number(form.galpon))
+  );
+
+  const handleSeleccionarGalpon = (n) => {
+    const lotesGalpon = lotes.filter((l) => l.granja === form.granja && l.galpon === n);
+    const loteAuto = lotesGalpon.length === 1 ? lotesGalpon[0]._id : "";
+    setForm((f) => ({ ...f, galpon: String(n), lote: loteAuto }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -289,26 +297,51 @@ const NuevoPedidoModal = ({ lotePresel, onClose, onCreado }) => {
                       ))}
                     </div>
                   </div>
-                  <div className="col-6">
-                    <label className="form-label fw-semibold">Galpón</label>
-                    <select className="form-select" value={form.lote}
-                      onChange={(e) => {
-                        const lote = lotes.find((l) => l._id === e.target.value);
-                        setForm((f) => ({
-                          ...f,
-                          lote:   e.target.value,
-                          galpon: lote ? String(lote.galpon) : "",
-                        }));
-                      }}
-                      disabled={!form.granja}>
-                      <option value="">Sin lote específico</option>
-                      {lotesFiltrados.map((l) => (
-                        <option key={l._id} value={l._id}>
-                          {granjaPrefix(l.granja)}{l.galpon} — {l.cantidadActual?.toLocaleString("es-AR")} pollos
-                          {ultimoPeso(l) ? ` · ${formatPeso(ultimoPeso(l))}` : ""}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="col-12">
+                    <label className="form-label fw-semibold">
+                      Galpón
+                      {!form.granja && <span className="text-muted fw-normal ms-1">(elegí la granja primero)</span>}
+                    </label>
+                    {granjaInfo ? (
+                      <div className="d-flex flex-wrap gap-2">
+                        {Array.from({ length: granjaInfo.galpones }, (_, i) => i + 1).map((n) => {
+                          const loteGalpon = lotes.find((l) => l.granja === form.granja && l.galpon === n);
+                          const seleccionado = form.galpon === String(n);
+                          return (
+                            <button
+                              key={n}
+                              type="button"
+                              disabled={!loteGalpon}
+                              title={!loteGalpon ? "Galpón vacío" : `${loteGalpon.cantidadActual?.toLocaleString("es-AR")} pollos${ultimoPeso(loteGalpon) ? ` · ${formatPeso(ultimoPeso(loteGalpon))}` : ""}`}
+                              onClick={() => handleSeleccionarGalpon(n)}
+                              className={`btn btn-sm ${seleccionado ? "btn-success" : "btn-outline-secondary"}`}
+                              style={{ minWidth: "54px", opacity: loteGalpon ? 1 : 0.45 }}
+                            >
+                              {loteGalpon ? (
+                                <>
+                                  <div className="fw-bold">{granjaInfo.prefix}{n}</div>
+                                  <div style={{ fontSize: "0.65rem" }}>{loteGalpon.cantidadActual?.toLocaleString("es-AR")}</div>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="fw-bold">{granjaInfo.prefix}{n}</div>
+                                  <div><i className="bi bi-lock-fill" style={{ fontSize: "0.75rem" }}></i></div>
+                                </>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-muted small fst-italic">—</div>
+                    )}
+                    {loteSeleccionado && (
+                      <div className="form-text text-success mt-1">
+                        <i className="bi bi-check-circle me-1"></i>
+                        Stock: <strong>{loteSeleccionado.cantidadActual?.toLocaleString("es-AR")}</strong> pollos
+                        {ultimoPeso(loteSeleccionado) && <span className="ms-2">· {formatPeso(ultimoPeso(loteSeleccionado))}</span>}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -415,9 +448,18 @@ const PedidosGranjaPage = () => {
             <i className="bi bi-clipboard2-check me-2 text-success"></i>
             Pedidos a Granja
           </h1>
-          <button className="btn btn-success" onClick={() => abrirModal()}>
-            <i className="bi bi-plus-circle me-1"></i>Nuevo pedido
-          </button>
+          <span title={lotes.length === 0 ? "No hay galpones con pollos en crianza" : ""}>
+            <button
+              className="btn btn-success"
+              onClick={() => abrirModal()}
+              disabled={lotes.length === 0}
+            >
+              {lotes.length === 0
+                ? <><i className="bi bi-lock me-1"></i>Sin stock en granja</>
+                : <><i className="bi bi-plus-circle me-1"></i>Nuevo pedido</>
+              }
+            </button>
+          </span>
         </div>
 
         {loading ? (
@@ -479,7 +521,10 @@ const PedidosGranjaPage = () => {
                                   </div>
                                 </>
                               ) : (
-                                <div className="small text-muted mt-1">Vacío</div>
+                                <>
+                                  <i className="bi bi-lock-fill text-secondary mt-1" style={{ fontSize: "1.4rem" }}></i>
+                                  <div className="small text-muted mt-1">Vacío</div>
+                                </>
                               )}
                             </div>
                           </div>
@@ -529,8 +574,7 @@ const PedidosGranjaPage = () => {
                               <tr key={o._id} style={{ background: "#fffbeb" }}>
                                 <td><span className="badge bg-warning text-dark">{o.numero}</span></td>
                                 <td className="small">
-                                  {o.granja === "cañete" ? "Cañete" : "Los Pinos"}
-                                  {o.galpon && ` — G${o.galpon}`}
+                                  {(o.granja === "cañete" ? "C" : "P")}{o.galpon || ""}
                                 </td>
                                 <td className="small text-muted">{formatearFechaLocal(o.fechaEntrega)}</td>
                                 <td className="text-end">{o.cantidadEstimada?.toLocaleString("es-AR")}</td>
@@ -597,31 +641,35 @@ const PedidosGranjaPage = () => {
                       </thead>
                       <tbody>
                         {pedidosFiltrados.map((o) => {
-                          const difCant = o.diferenciaCantidad != null && o.diferenciaCantidad !== 0;
-                          const difKg   = o.diferenciaKg != null && Math.abs(o.diferenciaKg) > 0.01;
+                          const entregada = o.estado === "entregada";
+                          const dcant = o.cantidadReal != null ? (o.diferenciaCantidad ?? (o.cantidadReal - o.cantidadEstimada)) : null;
+                          const dkg   = o.pesoRealKg  != null ? (o.diferenciaKg      ?? (o.pesoRealKg  - o.pesoEstimadoKg))   : null;
                           return (
                           <tr key={o._id}>
                             <td><span className="badge bg-dark">{o.numero}</span></td>
                             <td className="text-muted small">
-                              {o.granja === "cañete" ? "Cañete" : "Los Pinos"}
-                              {o.galpon && ` — G${o.galpon}`}
+                              {(o.granja === "cañete" ? "C" : "P")}{o.galpon || ""}
                             </td>
                             <td className="text-muted small">{formatearFechaLocal(o.fechaEmision)}</td>
                             <td className="text-end">{o.cantidadEstimada?.toLocaleString("es-AR")}</td>
-                            <td className={`text-end fw-semibold ${difCant ? "text-warning" : ""}`}>
+                            <td className={`text-end fw-semibold ${entregada && dcant !== 0 ? "text-warning" : ""}`}>
                               {o.cantidadReal != null ? (
                                 <>
                                   {o.cantidadReal.toLocaleString("es-AR")}
-                                  {difCant && <span className="ms-1 small">({o.diferenciaCantidad > 0 ? "+" : ""}{o.diferenciaCantidad})</span>}
+                                  <span className={`ms-1 small ${dcant === 0 ? "text-success" : "text-warning"}`}>
+                                    ({dcant > 0 ? "+" : ""}{dcant})
+                                  </span>
                                 </>
                               ) : "—"}
                             </td>
                             <td className="text-end">{o.pesoEstimadoKg} kg</td>
-                            <td className={`text-end fw-semibold ${difKg ? "text-warning" : ""}`}>
+                            <td className={`text-end fw-semibold ${entregada && Math.abs(dkg) > 0.01 ? "text-warning" : ""}`}>
                               {o.pesoRealKg != null ? (
                                 <>
                                   {o.pesoRealKg} kg
-                                  {difKg && <span className="ms-1 small">({o.diferenciaKg > 0 ? "+" : ""}{o.diferenciaKg?.toFixed(1)})</span>}
+                                  <span className={`ms-1 small ${Math.abs(dkg) <= 0.01 ? "text-success" : "text-warning"}`}>
+                                    ({dkg > 0 ? "+" : ""}{dkg?.toFixed(1)})
+                                  </span>
                                 </>
                               ) : "—"}
                             </td>

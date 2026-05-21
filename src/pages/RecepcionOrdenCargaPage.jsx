@@ -1,8 +1,118 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Layout from "../components/Layout";
-import { obtenerOrdenesCarga, entregarOrdenCarga, liberarOrdenCarga } from "../services/api";
+import { obtenerOrdenesCarga, entregarOrdenCarga } from "../services/api";
 import { formatearFechaLocal, obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
 import Swal from "sweetalert2";
+
+const fmtNum = (n) => n != null ? new Intl.NumberFormat("es-AR").format(n) : "—";
+
+const imprimirComprobanteEntrega = (orden, datosReales) => {
+  const granja  = orden.granja === "cañete" ? "Cañete" : "Los Pinos";
+  const galpon  = orden.galpon ? ` — Galpón ${orden.galpon}` : "";
+  const cliente = orden.cliente?.razonSocial || orden.cliente?.nombre || "—";
+  const fechaEntrega = datosReales.fechaEntrega
+    ? new Date(datosReales.fechaEntrega + "T12:00:00").toLocaleDateString("es-AR")
+    : new Date().toLocaleDateString("es-AR");
+
+  const cantEst = Number(orden.cantidadEstimada);
+  const cantReal = Number(datosReales.cantidadReal);
+  const pesoEst  = Number(orden.pesoEstimadoKg);
+  const pesoReal = Number(datosReales.pesoRealKg);
+  const difCant  = cantReal - cantEst;
+  const difKg    = pesoReal - pesoEst;
+  const hayDif   = difCant !== 0 || Math.abs(difKg) > 0.01;
+
+  const bloque = (copia) => `
+    <div class="copia">
+      <div class="copia-label">${copia}</div>
+      <div class="logo">Trigotuc <span>Avícola</span></div>
+      <div class="subtitulo">Comprobante de Entrega — Pollos en Pie</div>
+      <h2>Datos de la orden</h2>
+      <div class="grid">
+        <div class="fila"><span class="lbl">N° Orden</span><span class="val">${orden.numero}</span></div>
+        <div class="fila"><span class="lbl">Fecha entrega</span><span class="val">${fechaEntrega}</span></div>
+        <div class="fila"><span class="lbl">Cliente</span><span class="val">${cliente}</span></div>
+        <div class="fila"><span class="lbl">Granja / Galpón</span><span class="val">${granja}${galpon}</span></div>
+      </div>
+      <h2>Detalle de entrega</h2>
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th style="text-align:right">Cantidad (pollos)</th>
+            <th style="text-align:right">Peso (kg)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="color:#555">Pedido estimado</td>
+            <td style="text-align:right">${fmtNum(cantEst)}</td>
+            <td style="text-align:right">${pesoEst.toLocaleString("es-AR", { minimumFractionDigits: 1 })}</td>
+          </tr>
+          <tr>
+            <td style="font-weight:600">Entregado real</td>
+            <td style="text-align:right;font-weight:600">${fmtNum(cantReal)}</td>
+            <td style="text-align:right;font-weight:600">${pesoReal.toLocaleString("es-AR", { minimumFractionDigits: 1 })}</td>
+          </tr>
+          <tr>
+            <td class="dif">Diferencia</td>
+            <td class="dif" style="text-align:right">${difCant > 0 ? "+" : ""}${difCant}</td>
+            <td class="dif" style="text-align:right">${difKg > 0 ? "+" : ""}${difKg.toFixed(1)}</td>
+          </tr>
+        </tbody>
+      </table>
+      ${datosReales.observacionesEntrega
+        ? `<div class="obs"><strong>Observaciones:</strong> ${datosReales.observacionesEntrega}</div>`
+        : ""}
+      <div class="firma-grid">
+        <div class="firma-box">
+          <div class="firma-linea"></div>
+          <div class="firma-lbl">Firma y aclaración del cliente</div>
+        </div>
+        <div class="firma-box">
+          <div class="firma-linea"></div>
+          <div class="firma-lbl">Firma del empleado de granja</div>
+        </div>
+      </div>
+    </div>`;
+
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
+    <title>Comprobante Entrega ${orden.numero}</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { font-family: Arial, sans-serif; padding: 20px; color: #222; margin: 0; }
+      .copia { max-width: 640px; margin: 0 auto; padding: 20px 30px; }
+      .separador { border: none; border-top: 2px dashed #aaa; margin: 12px auto; max-width: 640px; }
+      .copia-label { float: right; font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 1px; border: 1px solid #ccc; padding: 2px 8px; border-radius: 4px; margin-bottom: 4px; }
+      .logo { font-size: 20px; font-weight: bold; margin-bottom: 2px; }
+      .logo span { color: #f59e0b; }
+      .subtitulo { font-size: 12px; color: #666; margin-bottom: 16px; }
+      h2 { font-size: 13px; border-bottom: 2px solid #222; padding-bottom: 5px; margin: 16px 0 10px; text-transform: uppercase; letter-spacing: .5px; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 20px; margin-bottom: 14px; }
+      .fila { display: flex; flex-direction: column; }
+      .lbl { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: .5px; }
+      .val { font-size: 13px; font-weight: 600; }
+      table { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 12px; }
+      th { background: #f3f4f6; text-align: left; padding: 6px 8px; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: #555; }
+      td { padding: 7px 8px; border-bottom: 1px solid #e5e7eb; }
+      .dif { color: ${hayDif ? "#92400e" : "#166534"}; font-weight: 600; }
+      .firma-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 40px; }
+      .firma-box { text-align: center; }
+      .firma-linea { border-top: 1.5px solid #222; margin-bottom: 5px; }
+      .firma-lbl { font-size: 10px; color: #555; }
+      .obs { background: #fffbeb; border: 1px solid #fde68a; border-radius: 4px; padding: 8px 12px; font-size: 11px; color: #78350f; margin-top: 10px; margin-bottom: 6px; }
+      @media print { body { padding: 0; } }
+    </style></head><body>
+    ${bloque("Original — Cliente")}
+    <hr class="separador"/>
+    ${bloque("Duplicado — Granja")}
+    <script>window.onload=()=>{window.print();}<\/script>
+  </body></html>`;
+
+  const win = window.open("", "_blank", "width=720,height=700");
+  win.document.write(html);
+  win.document.close();
+};
 
 const ConfirmarModal = ({ orden, onClose, onConfirmada, saltarCodigo = false }) => {
   const [paso, setPaso]   = useState(saltarCodigo ? 2 : 1);
@@ -41,17 +151,15 @@ const ConfirmarModal = ({ orden, onClose, onConfirmada, saltarCodigo = false }) 
       Swal.fire("Faltan datos", "Ingresá cantidad y peso real.", "warning");
       return;
     }
-    if (hayDiferencia() && !form.observacionesEntrega.trim()) {
-      Swal.fire("Falta el motivo", "Hay una diferencia con el pedido. Explicá el motivo antes de confirmar.", "warning");
-      return;
-    }
+    const difCant = Number(form.cantidadReal) - orden.cantidadEstimada;
+    const difKg   = Number(form.pesoRealKg) - orden.pesoEstimadoKg;
     const ok = await Swal.fire({
       title: "¿Confirmar entrega?",
       html: `
         <div style="text-align:left;font-size:14px">
-          <div><strong>Pedido:</strong> ${Number(orden.cantidadEstimada).toLocaleString("es-AR")} pollos · ${orden.pesoEstimadoKg} kg</div>
+          <div><strong>Estimado:</strong> ${Number(orden.cantidadEstimada).toLocaleString("es-AR")} pollos · ${orden.pesoEstimadoKg} kg</div>
           <div style="margin-top:6px"><strong>Recibido:</strong> ${Number(form.cantidadReal).toLocaleString("es-AR")} pollos · ${form.pesoRealKg} kg</div>
-          ${hayDiferencia() ? `<div style="margin-top:6px;color:#856404"><strong>Motivo:</strong> ${form.observacionesEntrega}</div>` : ""}
+          ${hayDiferencia() ? `<div style="margin-top:6px;color:#856404"><strong>Diferencia:</strong> ${difCant > 0 ? "+" : ""}${difCant} pollos · ${difKg > 0 ? "+" : ""}${difKg.toFixed(1)} kg</div>` : ""}
         </div>`,
       icon: "question",
       showCancelButton: true,
@@ -69,6 +177,7 @@ const ConfirmarModal = ({ orden, onClose, onConfirmada, saltarCodigo = false }) 
         observacionesEntrega: form.observacionesEntrega || undefined,
         fechaEntrega:         ajustarFechaParaGuardar(form.fechaEntrega),
       });
+      imprimirComprobanteEntrega(orden, form);
       onConfirmada();
       Swal.fire({
         icon: "success",
@@ -147,7 +256,7 @@ const ConfirmarModal = ({ orden, onClose, onConfirmada, saltarCodigo = false }) 
                   <div className="card border-0 bg-light mb-3">
                     <div className="card-body py-2 px-3">
                       <div className="small text-muted fw-semibold mb-2 text-uppercase" style={{ letterSpacing: "0.05em" }}>
-                        Pedido del frigorifico
+                        Estimado del pedido
                       </div>
                       <div className="row g-2 text-center">
                         <div className="col-6">
@@ -234,27 +343,16 @@ const ConfirmarModal = ({ orden, onClose, onConfirmada, saltarCodigo = false }) 
                         />
                       </div>
                       <div className="col-12">
-                        <label className={`form-label fw-semibold ${hayDiferencia() ? "text-warning" : ""}`}>
-                          {hayDiferencia()
-                            ? <><i className="bi bi-exclamation-triangle me-1"></i>Motivo de la diferencia <span className="text-danger">*</span></>
-                            : "Observaciones (opcional)"
-                          }
+                        <label className="form-label fw-semibold">
+                          Observaciones <span className="text-muted fw-normal">(opcional)</span>
                         </label>
                         <textarea
-                          className={`form-control ${hayDiferencia() && !form.observacionesEntrega.trim() ? "border-warning" : ""}`}
+                          className="form-control"
                           rows={2}
-                          placeholder={hayDiferencia()
-                            ? "Explicá por qué no se envió la cantidad/peso pedido..."
-                            : "Cualquier nota adicional..."
-                          }
+                          placeholder="Cualquier nota adicional..."
                           value={form.observacionesEntrega}
                           onChange={(e) => setForm({ ...form, observacionesEntrega: e.target.value })}
                         />
-                        {hayDiferencia() && !form.observacionesEntrega.trim() && (
-                          <div className="form-text text-warning">
-                            Campo obligatorio cuando hay diferencia con el pedido.
-                          </div>
-                        )}
                       </div>
                     </div>
                   </form>
@@ -281,8 +379,7 @@ const ConfirmarModal = ({ orden, onClose, onConfirmada, saltarCodigo = false }) 
 };
 
 const RecepcionOrdenCargaPage = () => {
-  const rolUsuario   = localStorage.getItem("rolUsuario");
-  const puedeLiberar = rolUsuario === "superadmin" || rolUsuario === "administracion";
+  const rolUsuario = localStorage.getItem("rolUsuario");
 
   const [ordenes, setOrdenes]           = useState([]);
   const [loading, setLoading]           = useState(true);
@@ -293,7 +390,7 @@ const RecepcionOrdenCargaPage = () => {
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
-      const params = filtroEstado ? { estado: filtroEstado } : {};
+      const params = { tipo: "venta_gordos", ...(filtroEstado ? { estado: filtroEstado } : {}) };
       const data = await obtenerOrdenesCarga(params);
       setOrdenes(data);
     } catch (e) {
@@ -304,27 +401,6 @@ const RecepcionOrdenCargaPage = () => {
   }, [filtroEstado]);
 
   useEffect(() => { cargar(); }, [cargar]);
-
-  const handleLiberar = async (e, orden) => {
-    e.stopPropagation();
-    const ok = await Swal.fire({
-      title: `¿Liberar orden ${orden.numero}?`,
-      text: "La granja podrá completar la entrega sin el código del cliente.",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#f59e0b",
-      confirmButtonText: "Sí, liberar",
-      cancelButtonText: "Cancelar",
-    });
-    if (!ok.isConfirmed) return;
-    try {
-      await liberarOrdenCarga(orden._id);
-      await cargar();
-      Swal.fire({ icon: "success", title: "Orden liberada", text: "La granja ya puede completar la entrega.", timer: 1800, showConfirmButton: false });
-    } catch (err) {
-      Swal.fire("Error", err.message, "error");
-    }
-  };
 
   const ordenesFiltradas = ordenes.filter((o) => {
     if (!busqueda) return true;
@@ -407,17 +483,30 @@ const RecepcionOrdenCargaPage = () => {
                     style={{ borderLeft: `4px solid ${barColor}` }}
                   >
                     <div className="card-body">
+                      {/* Número + turno + estado */}
                       <div className="d-flex justify-content-between align-items-start mb-2">
                         <span className="badge bg-dark fs-6">{o.numero}</span>
-                        {o.liberada
-                          ? <span className="badge bg-warning text-dark"><i className="bi bi-unlock me-1"></i>Liberada</span>
-                          : <span className="badge bg-warning text-dark"><i className="bi bi-hourglass-split me-1"></i>Pendiente</span>
-                        }
+                        <div className="d-flex gap-1 flex-wrap justify-content-end">
+                          {o.turno && (
+                            <span className={`badge ${o.turno === "mañana" ? "bg-warning text-dark" : "bg-info text-dark"}`}>
+                              <i className={`bi ${o.turno === "mañana" ? "bi-sunrise" : "bi-sunset"} me-1`}></i>
+                              {o.turno === "mañana" ? "Mañana" : "Tarde"}
+                            </span>
+                          )}
+                          <span className="badge bg-secondary"><i className="bi bi-hourglass-split me-1"></i>Pendiente</span>
+                        </div>
                       </div>
 
-                      {/* Granja y galpón */}
+                      {/* Cliente */}
+                      {o.cliente && (
+                        <div className="fw-semibold mb-1">
+                          {o.cliente.razonSocial || o.cliente.nombre}
+                        </div>
+                      )}
+
+                      {/* Granja, galpón y fecha */}
                       <div className="mb-2">
-                        <span className="fw-bold fs-5" style={{ color: barColor }}>
+                        <span className="fw-bold" style={{ color: barColor }}>
                           {o.granja === "cañete" ? "Cañete" : "Los Pinos"}
                           {o.galpon && ` — Galpón ${o.galpon}`}
                         </span>
@@ -427,17 +516,42 @@ const RecepcionOrdenCargaPage = () => {
                         </div>
                       </div>
 
-                      {/* Cantidades */}
-                      <div className="d-flex gap-4 mb-2 p-2 rounded" style={{ background: "#f0fdf4" }}>
-                        <div>
-                          <div className="fw-bold text-success fs-5">{Number(o.cantidadEstimada).toLocaleString("es-AR")}</div>
-                          <div className="text-muted" style={{ fontSize: "0.7rem" }}>pollos a preparar</div>
+                      {/* Detalle de carga */}
+                      {o.detalle?.length > 0 ? (
+                        <div className="mb-2 rounded overflow-hidden" style={{ border: "1px solid #d1fae5" }}>
+                          {o.detalle.map((l, idx) => (
+                            <div key={idx} className="d-flex justify-content-between align-items-center px-2 py-1"
+                              style={{ borderBottom: idx < o.detalle.length - 1 ? "1px solid #d1fae5" : "none", background: "#f0fdf4" }}>
+                              <span className="fw-semibold text-success">{Number(l.cantidad).toLocaleString("es-AR")} pollos</span>
+                              <span className="text-muted small">
+                                {l.pesoMax && Math.abs(l.pesoMax - l.pesoMin) > 0.05
+                                  ? `${l.pesoMin} – ${l.pesoMax} kg`
+                                  : `${l.pesoMin} kg`}
+                              </span>
+                            </div>
+                          ))}
+                          <div className="d-flex justify-content-between align-items-center px-2 py-1 fw-bold"
+                            style={{ background: "#dcfce7" }}>
+                            <span className="text-success">{Number(o.cantidadEstimada).toLocaleString("es-AR")} pollos</span>
+                            <span className="text-muted small">
+                              {o.pesoEstimadoMax && Math.abs(o.pesoEstimadoMax - o.pesoEstimadoKg) > 0.5
+                                ? `${o.pesoEstimadoKg} – ${o.pesoEstimadoMax} kg`
+                                : `${o.pesoEstimadoKg} kg`} est.
+                            </span>
+                          </div>
                         </div>
-                        <div>
-                          <div className="fw-bold text-success fs-5">{o.pesoEstimadoKg} kg</div>
-                          <div className="text-muted" style={{ fontSize: "0.7rem" }}>peso estimado</div>
+                      ) : (
+                        <div className="d-flex gap-4 mb-2 p-2 rounded" style={{ background: "#f0fdf4" }}>
+                          <div>
+                            <div className="fw-bold text-success fs-5">{Number(o.cantidadEstimada).toLocaleString("es-AR")}</div>
+                            <div className="text-muted" style={{ fontSize: "0.7rem" }}>pollos a preparar</div>
+                          </div>
+                          <div>
+                            <div className="fw-bold text-success fs-5">{o.pesoEstimadoKg} kg</div>
+                            <div className="text-muted" style={{ fontSize: "0.7rem" }}>peso estimado</div>
+                          </div>
                         </div>
-                      </div>
+                      )}
 
                       {/* Observaciones */}
                       {o.observaciones && (
@@ -447,34 +561,12 @@ const RecepcionOrdenCargaPage = () => {
                         </div>
                       )}
 
-                      {o.liberada && (
-                        <div className="mb-2 small text-warning fw-semibold">
-                          <i className="bi bi-unlock-fill me-1"></i>Código liberado por administración
-                        </div>
-                      )}
                     </div>
 
-                    <div className="card-footer bg-transparent border-top-0 pt-0 pb-3 px-3 d-flex flex-column gap-2">
-                      {o.tipo === "pedido_frigorifico" ? (
-                        <div className="text-center text-muted small py-1">
-                          <i className="bi bi-arrow-right-circle me-1"></i>
-                          La recepción se registra en <strong>Frigorifico → Pedidos a Granja</strong>
-                        </div>
-                      ) : (
-                        <>
-                          <button
-                            className="btn btn-success w-100"
-                            onClick={() => setOrdenModal(o)}
-                          >
-                            <i className="bi bi-check2-circle me-1"></i>Confirmar entrega
-                          </button>
-                          {puedeLiberar && !o.liberada && (
-                            <button className="btn btn-outline-warning btn-sm w-100" onClick={(e) => handleLiberar(e, o)}>
-                              <i className="bi bi-unlock me-1"></i>Liberar orden (sin código)
-                            </button>
-                          )}
-                        </>
-                      )}
+                    <div className="card-footer bg-transparent border-top-0 pt-0 pb-3 px-3">
+                      <button className="btn btn-success w-100" onClick={() => setOrdenModal(o)}>
+                        <i className="bi bi-check2-circle me-1"></i>Confirmar entrega
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -506,26 +598,41 @@ const RecepcionOrdenCargaPage = () => {
                   <tbody>
                     {ordenesFiltradas.map((o) => {
                       const entregada = o.estado === "entregada";
-                      const difCant = entregada && o.diferenciaCantidad != null && o.diferenciaCantidad !== 0;
-                      const difKg   = entregada && o.diferenciaKg   != null && Math.abs(o.diferenciaKg) > 0.01;
+                      const dcant = entregada && o.cantidadReal != null
+                        ? (o.diferenciaCantidad ?? (o.cantidadReal - o.cantidadEstimada))
+                        : null;
+                      const dkg = entregada && o.pesoRealKg != null
+                        ? (o.diferenciaKg ?? (o.pesoRealKg - o.pesoEstimadoKg))
+                        : null;
                       return (
                         <tr key={o._id}>
                           <td><span className="badge bg-dark">{o.numero}</span></td>
                           <td className="fw-semibold">{o.cliente?.razonSocial || o.cliente?.nombre}</td>
                           <td className="text-muted small">
-                            {o.granja === "cañete" ? "Cañete" : "Los Pinos"}
-                            {o.galpon && ` — G${o.galpon}`}
+                            {(o.granja === "cañete" ? "C" : "P")}{o.galpon || ""}
                           </td>
                           <td className="text-muted small">{formatearFechaLocal(o.fechaEmision)}</td>
                           <td className="text-end">{o.cantidadEstimada?.toLocaleString("es-AR")}</td>
-                          <td className={`text-end fw-semibold ${difCant ? "text-warning" : ""}`}>
-                            {entregada ? o.cantidadReal?.toLocaleString("es-AR") : "—"}
-                            {difCant && <span className="ms-1 small">({o.diferenciaCantidad > 0 ? "+" : ""}{o.diferenciaCantidad})</span>}
+                          <td className={`text-end fw-semibold ${dcant !== null && dcant !== 0 ? "text-warning" : ""}`}>
+                            {entregada && o.cantidadReal != null ? (
+                              <>
+                                {o.cantidadReal.toLocaleString("es-AR")}
+                                <span className={`ms-1 small ${dcant === 0 ? "text-success" : "text-warning"}`}>
+                                  ({dcant > 0 ? "+" : ""}{dcant})
+                                </span>
+                              </>
+                            ) : "—"}
                           </td>
                           <td className="text-end">{o.pesoEstimadoKg} kg</td>
-                          <td className={`text-end fw-semibold ${difKg ? "text-warning" : ""}`}>
-                            {entregada ? `${o.pesoRealKg} kg` : "—"}
-                            {difKg && <span className="ms-1 small">({o.diferenciaKg > 0 ? "+" : ""}{o.diferenciaKg?.toFixed(1)})</span>}
+                          <td className={`text-end fw-semibold ${dkg !== null && Math.abs(dkg) > 0.01 ? "text-warning" : ""}`}>
+                            {entregada && o.pesoRealKg != null ? (
+                              <>
+                                {o.pesoRealKg} kg
+                                <span className={`ms-1 small ${Math.abs(dkg) <= 0.01 ? "text-success" : "text-warning"}`}>
+                                  ({dkg > 0 ? "+" : ""}{dkg?.toFixed(1)})
+                                </span>
+                              </>
+                            ) : "—"}
                           </td>
                           <td className="text-muted small">{entregada ? formatearFechaLocal(o.fechaEntrega) : "—"}</td>
                           <td>

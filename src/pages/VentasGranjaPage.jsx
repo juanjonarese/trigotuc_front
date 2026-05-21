@@ -94,12 +94,23 @@ const NuevaOrdenModal = ({ onClose, onCreada }) => {
     }).catch(() => {});
   }, []);
 
-  const lotesFiltrados   = form.granja ? lotes.filter((l) => l.granja === form.granja) : lotes;
+  const granjaInfo       = GRANJAS.find((g) => g.key === form.granja) || null;
+  const lotesFiltrados   = lotes.filter((l) =>
+    (!form.granja || l.granja === form.granja) &&
+    (!form.galpon  || l.galpon === Number(form.galpon))
+  );
   const loteSeleccionado = lotes.find((l) => l._id === form.lote) || null;
+
+  const handleSeleccionarGalpon = (e) => {
+    const galpon = e.target.value;
+    const lotesGalpon = lotes.filter((l) => l.granja === form.granja && l.galpon === Number(galpon));
+    const loteAuto = lotesGalpon.length === 1 ? lotesGalpon[0]._id : "";
+    setForm((f) => ({ ...f, galpon, lote: loteAuto }));
+  };
 
   const handleSeleccionarLote = (e) => {
     const lote = lotes.find((l) => l._id === e.target.value) || null;
-    setForm((f) => ({ ...f, lote: e.target.value, galpon: lote ? String(lote.galpon) : "" }));
+    setForm((f) => ({ ...f, lote: e.target.value, galpon: lote ? String(lote.galpon) : f.galpon }));
   };
 
   const handleSubmit = async (e) => {
@@ -157,26 +168,55 @@ const NuevaOrdenModal = ({ onClose, onCreada }) => {
                       {GRANJAS.map((g) => (
                         <button key={g.key} type="button"
                           className={`btn flex-grow-1 ${form.granja === g.key ? "btn-primary" : "btn-outline-secondary"}`}
-                          onClick={() => setForm((f) => ({ ...f, granja: g.key, lote: "", galpon: "" }))}>
+                          onClick={() => setForm((f) => ({ ...f, granja: g.key, galpon: "", lote: "" }))}>
                           {g.label}
                         </button>
                       ))}
                     </div>
                   </div>
 
-                  <div className="col-6">
-                    <label className="form-label fw-semibold">Galpón</label>
-                    <select className="form-select" value={form.lote} onChange={handleSeleccionarLote} disabled={!form.granja}>
-                      <option value="">— Sin galpón específico —</option>
-                      {lotesFiltrados.map((l) => (
-                        <option key={l._id} value={l._id}>
-                          G{l.galpon} — {fmtNum(l.cantidadActual)} pollos
-                        </option>
-                      ))}
-                    </select>
+                  <div className="col-12">
+                    <label className="form-label fw-semibold">
+                      Galpón <span className="text-danger">*</span>
+                      {!form.granja && <span className="text-muted fw-normal ms-1">(elegí la granja primero)</span>}
+                    </label>
+                    {granjaInfo ? (
+                      <div className="d-flex flex-wrap gap-2">
+                        {Array.from({ length: granjaInfo.galpones }, (_, i) => i + 1).map((n) => {
+                          const loteGalpon = lotes.find((l) => l.granja === form.granja && l.galpon === n);
+                          const seleccionado = form.galpon === String(n);
+                          return (
+                            <button
+                              key={n}
+                              type="button"
+                              disabled={!loteGalpon}
+                              title={!loteGalpon ? "Galpón vacío" : `${fmtNum(loteGalpon.cantidadActual)} pollos`}
+                              onClick={() => handleSeleccionarGalpon({ target: { value: String(n) } })}
+                              className={`btn btn-sm ${seleccionado ? "btn-primary" : loteGalpon ? "btn-outline-secondary" : "btn-outline-secondary"}`}
+                              style={{ minWidth: "52px", opacity: loteGalpon ? 1 : 0.45 }}
+                            >
+                              {loteGalpon ? (
+                                <>
+                                  <div className="fw-bold">{granjaInfo.key === "cañete" ? "C" : "P"}{n}</div>
+                                  <div style={{ fontSize: "0.65rem" }}>{fmtNum(loteGalpon.cantidadActual)}</div>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="fw-bold">{granjaInfo.key === "cañete" ? "C" : "P"}{n}</div>
+                                  <div><i className="bi bi-lock-fill" style={{ fontSize: "0.75rem" }}></i></div>
+                                </>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-muted small fst-italic">—</div>
+                    )}
                     {loteSeleccionado && (
-                      <div className="form-text text-success">
-                        Stock actual: <strong>{fmtNum(loteSeleccionado.cantidadActual)}</strong> pollos
+                      <div className="form-text text-success mt-1">
+                        <i className="bi bi-check-circle me-1"></i>
+                        Stock: <strong>{fmtNum(loteSeleccionado.cantidadActual)}</strong> pollos
                       </div>
                     )}
                   </div>
@@ -425,7 +465,7 @@ const VentasGranjaPage = () => {
                           {enEspera.map((o) => (
                             <tr key={o._id}>
                               <td><span className="badge bg-secondary">{o.numero}</span></td>
-                              <td className="small">{GRANJA_LABEL[o.granja]}{o.galpon ? ` G${o.galpon}` : ""}</td>
+                              <td className="small">{o.granja === "cañete" ? "C" : "P"}{o.galpon || ""}</td>
                               <td className="small">{o.cliente?.razonSocial || o.cliente?.nombre || <span className="text-muted">—</span>}</td>
                               <td className="text-end">{fmtNum(o.cantidadEstimada)}</td>
                               <td className="text-end">{o.pesoEstimadoKg} kg</td>
@@ -538,7 +578,7 @@ const VentasGranjaPage = () => {
                               <td><span className="badge bg-success">{v.numeroVenta}</span></td>
                               <td><span className="badge bg-dark">{o?.numero || "—"}</span></td>
                               <td className="text-muted small">
-                                {o ? `${GRANJA_LABEL[o.granja]}${o.galpon ? ` G${o.galpon}` : ""}` : "—"}
+                                {o ? `${o.granja === "cañete" ? "C" : "P"}${o.galpon || ""}` : "—"}
                               </td>
                               <td>{v.cliente?.razonSocial || <span className="text-muted">—</span>}</td>
                               <td className="text-end">{fmtNum(o?.cantidadReal)}</td>

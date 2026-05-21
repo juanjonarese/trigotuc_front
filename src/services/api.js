@@ -1088,3 +1088,71 @@ export const ingresarLoteDesdeRemito = async (id, data) => {
   });
   return handleResponse(response);
 };
+
+// ============= STOCK EMPAQUE =============
+
+export const obtenerStockEstadisticas = async () => {
+  const response = await fetch(`${API_URL}/stock-empaque/estadisticas`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+export const obtenerStockArticulos = async () => {
+  const response = await fetch(`${API_URL}/stock-empaque/articulos`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+export const crearStockArticulo = async (data) => {
+  const response = await fetch(`${API_URL}/stock-empaque/articulos`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const actualizarStockArticulo = async (id, data) => {
+  const response = await fetch(`${API_URL}/stock-empaque/articulos/${id}`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const eliminarStockArticulo = async (id) => {
+  const response = await fetch(`${API_URL}/stock-empaque/articulos/${id}`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const obtenerStockMovimientos = async (articuloId) => {
+  const response = await fetch(`${API_URL}/stock-empaque/movimientos/${articuloId}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const resetearBaseDeDatos = async () => {
+  const response = await fetch(`${API_URL}/system/reset`, {
+    method: "POST", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const consumirStockLote = async (data) => {
+  const response = await fetch(`${API_URL}/stock-empaque/consumo-lote`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const enviarPedidoStock = async (data) => {
+  const response = await fetch(`${API_URL}/stock-empaque/pedido`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const registrarStockMovimiento = async (data) => {
+  const response = await fetch(`${API_URL}/stock-empaque/movimientos`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};

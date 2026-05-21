@@ -7,12 +7,112 @@ import {
   obtenerOrdenesCarga,
   obtenerLotes,
   eliminarLote,
+  consumirStockLote,
 } from "../services/api";
 import { obtenerFechaHoy } from "../utils/dateUtils";
 import Swal from "sweetalert2";
 
 const fmtNum = (n) =>
   n != null ? new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n) : "—";
+
+// ── Tabla de trozados ────────────────────────────────────────────────────────
+const TROZADO_TIPOS = [
+  { tipo: "menudo",  label: "Menudo",  kgCajaDefault: 10, editableKg: false },
+  { tipo: "filet",   label: "Filet",   kgCajaDefault: 15, editableKg: false },
+  { tipo: "pata",    label: "Pata",    kgCajaDefault: 15, editableKg: false },
+  { tipo: "alita",   label: "Alita",   kgCajaDefault: 15, editableKg: false },
+  { tipo: "carcaza", label: "Carcaza", kgCajaDefault: 12, editableKg: true  },
+];
+
+const TrozadoTable = ({ lineas, onChange, kgTrozadosTotal }) => {
+  const set = (tipo, campo, valor) => {
+    const nuevas = lineas.map((l) =>
+      l.tipo === tipo ? { ...l, [campo]: valor } : l
+    );
+    onChange(nuevas);
+  };
+
+  const totalKg    = lineas.reduce((s, l) => s + (Number(l.kgTotal) || 0), 0);
+  const totalCajas = lineas.reduce((s, l) => {
+    const kg    = Number(l.kgTotal) || 0;
+    const kgCaj = Number(l.kgCaja)  || 1;
+    return s + Math.floor(kg / kgCaj);
+  }, 0);
+
+  const kgRef     = Number(kgTrozadosTotal) || 0;
+  const diferencia = kgRef > 0 ? +(totalKg - kgRef).toFixed(2) : null;
+
+  return (
+    <div>
+      <div className="table-responsive">
+        <table className="table table-sm align-middle mb-0">
+          <thead className="table-light">
+            <tr>
+              <th style={{ width: 110 }}>Tipo</th>
+              <th style={{ width: 90 }} className="text-center">Kg/caja</th>
+              <th style={{ width: 130 }}>Kg totales</th>
+              <th className="text-end">Cajas</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lineas.map((l) => {
+              const kg    = Number(l.kgTotal) || 0;
+              const kgCaj = Number(l.kgCaja)  || 1;
+              const cajas = Math.floor(kg / kgCaj);
+              return (
+                <tr key={l.tipo}>
+                  <td className="fw-semibold small">{l.label}</td>
+                  <td className="text-center">
+                    {l.editableKg ? (
+                      <input
+                        type="number"
+                        className="form-control form-control-sm text-center"
+                        value={l.kgCaja}
+                        onChange={(e) => set(l.tipo, "kgCaja", e.target.value)}
+                        min="1" max="20" step="0.5"
+                        style={{ width: 70 }}
+                      />
+                    ) : (
+                      <span className="text-muted">{l.kgCaja} kg</span>
+                    )}
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      className="form-control form-control-sm"
+                      value={l.kgTotal}
+                      onChange={(e) => set(l.tipo, "kgTotal", e.target.value)}
+                      min="0" step="0.1" placeholder="0"
+                    />
+                  </td>
+                  <td className="text-end fw-semibold">
+                    {cajas > 0 ? cajas : <span className="text-muted">—</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot className="table-light">
+            <tr>
+              <td colSpan={2} className="fw-semibold small">Total</td>
+              <td className="fw-semibold">
+                {totalKg > 0 ? `${fmtNum(totalKg)} kg` : "—"}
+                {diferencia !== null && (
+                  <span className={`ms-2 small ${Math.abs(diferencia) > 0.1 ? "text-danger" : "text-success"}`}>
+                    {diferencia === 0 ? "✓" : `(${diferencia > 0 ? "+" : ""}${diferencia} kg vs ingresado)`}
+                  </span>
+                )}
+              </td>
+              <td className="text-end fw-semibold text-primary">
+                {totalCajas > 0 ? `${totalCajas} cajas` : "—"}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+};
 
 const GRANJA_LABEL  = { cañete: "Cañete", los_pinos: "Los Pinos" };
 const GRANJA_PREFIX = { cañete: "C", los_pinos: "P" };
@@ -33,10 +133,13 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
   const [recepciones, setRecepciones]         = useState([]);
   const [loadingRec, setLoadingRec]           = useState(true);
   const [recepcionSel, setRecepcionSel]       = useState(null);
-  const [form, setForm]     = useState(FORM_VACIO);
-  const [lineas, setLineas] = useState([]);
-  const [saving, setSaving] = useState(false);
-  const calibreRef          = useRef(null);
+  const [form, setForm]         = useState(FORM_VACIO);
+  const [lineas, setLineas]     = useState([]);
+  const [trozados, setTrozados] = useState(
+    TROZADO_TIPOS.map((t) => ({ ...t, kgCaja: t.kgCajaDefault, kgTotal: "" }))
+  );
+  const [saving, setSaving]     = useState(false);
+  const calibreRef              = useRef(null);
 
   useEffect(() => {
     setLoadingRec(true);
@@ -101,14 +204,51 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
       if (form.kgTrozados)          payload.kgTrozados          = Number(form.kgTrozados);
       if (recepcionSel)             payload.ordenCarga          = recepcionSel._id;
 
+      const trozadosPayload = trozados
+        .filter((t) => Number(t.kgTotal) > 0)
+        .map((t) => ({ tipo: t.tipo, kgCaja: Number(t.kgCaja), kgTotal: Number(t.kgTotal) }));
+      if (trozadosPayload.length > 0) payload.trozados = trozadosPayload;
+
       const loteCreado = await crearLote(payload);
+
+      // Descontar stock de empaque automáticamente
+      let consumoHtml = "";
+      let alertaHtml  = "";
+      try {
+        const { consumidos, alertas } = await consumirStockLote({
+          calibres:   calibresPayload,
+          loteId:     loteCreado._id,
+          loteNumero: loteCreado.numeroLote,
+        });
+        if (consumidos.length > 0) {
+          consumoHtml = `<div class="mt-2 text-start small">
+            <strong>Stock descontado:</strong><br>
+            ${consumidos.map((c) => `· ${fmtNum(c.cantidad)} ${c.unidad} de <em>${c.nombre}</em>`).join("<br>")}
+          </div>`;
+        } else {
+          consumoHtml = `<div class="mt-2 text-start small text-muted">
+            Sin artículos de empaque configurados para consumo automático.
+          </div>`;
+        }
+        if (alertas.length > 0) {
+          alertaHtml = `<div class="mt-2 text-start small text-danger">
+            <strong>⚠ Stock insuficiente:</strong><br>
+            ${alertas.map((a) => `· ${a.nombre}: tenía ${fmtNum(a.stockActual)}, necesitaba ${fmtNum(a.requerido)}`).join("<br>")}
+          </div>`;
+        }
+      } catch (err) {
+        alertaHtml = `<div class="mt-2 small text-danger">
+          <strong>Error al descontar stock:</strong> ${err.message || "Error desconocido"}
+        </div>`;
+      }
+
       onCreado();
       Swal.fire({
-        icon: "success",
+        icon:  alertaHtml ? "warning" : "success",
         title: `Lote #${loteCreado.numeroLote} creado`,
-        html:  `${fmtNum(totalPollosF)} pollos · ${fmtNum(totalCajonesF)} cajones · ${fmtNum(totalKgF)} kg`,
-        timer: 2000,
-        showConfirmButton: false,
+        html:  `${fmtNum(totalPollosF)} pollos · ${fmtNum(totalCajonesF)} cajones · ${fmtNum(totalKgF)} kg
+                ${consumoHtml}${alertaHtml}`,
+        confirmButtonText: "OK",
       });
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudo crear el lote.", "error");
@@ -251,6 +391,22 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
                       onChange={(e) => setForm({ ...form, observaciones: e.target.value })} />
                   </div>
                 </div>
+
+                {/* Trozados — desglose por tipo */}
+                {(form.kgTrozados || form.unidadesTrozadas) && (
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold">
+                      <i className="bi bi-scissors me-1 text-warning"></i>
+                      Distribución de trozados
+                      <span className="text-muted fw-normal ms-2 small">valores estimados</span>
+                    </label>
+                    <TrozadoTable
+                      lineas={trozados}
+                      onChange={setTrozados}
+                      kgTrozadosTotal={form.kgTrozados}
+                    />
+                  </div>
+                )}
 
                 <label className="form-label fw-semibold">
                   Calibres (resultado de la faena)
@@ -439,6 +595,15 @@ const LoteCreatePage = () => {
                             <strong className="text-dark">{fmtNum(totalCajones)}</strong> cajones ·{" "}
                             <strong className="text-dark">{fmtNum(lote.pesoTotal)}</strong> kg
                           </div>
+                          {(lote.trozados || []).length > 0 && (
+                            <div className="d-flex flex-wrap gap-1 mt-1">
+                              {lote.trozados.map((t) => (
+                                <span key={t.tipo} className="badge bg-warning text-dark">
+                                  {t.tipo.charAt(0).toUpperCase() + t.tipo.slice(1)}: {t.cajas} caj
+                                </span>
+                              ))}
+                            </div>
+                          )}
                           {lote.rendimientoFaena != null && (
                             <div className="text-muted mt-1">Rendimiento: <strong className="text-dark">{fmtNum(lote.rendimientoFaena)}%</strong></div>
                           )}
@@ -461,6 +626,7 @@ const LoteCreatePage = () => {
                         <th className="text-end">Kg totales</th>
                         <th className="text-end">Decomisados</th>
                         <th className="text-end">Kg decomis.</th>
+                        <th>Trozados</th>
                         <th className="text-end">Rendimiento</th>
                         {esSuperAdmin && <th></th>}
                       </tr>
@@ -506,6 +672,24 @@ const LoteCreatePage = () => {
                                 ? <span className="text-danger">{fmtNum(lote.kgDecomisados)} kg</span>
                                 : <span className="text-muted">—</span>
                               }
+                            </td>
+                            <td>
+                              {(lote.trozados || []).length > 0 ? (
+                                <div className="d-flex flex-wrap gap-1">
+                                  {lote.trozados.map((t) => (
+                                    <span key={t.tipo} className="badge bg-warning text-dark" title={`${fmtNum(t.kgTotal)} kg · ${t.kgCaja} kg/caja`}>
+                                      {t.tipo.charAt(0).toUpperCase() + t.tipo.slice(1)}: {t.cajas}
+                                    </span>
+                                  ))}
+                                  <span className="badge bg-secondary">
+                                    {fmtNum(lote.trozados.reduce((s, t) => s + t.kgTotal, 0))} kg
+                                  </span>
+                                </div>
+                              ) : (
+                                lote.kgTrozados
+                                  ? <span className="text-muted small">{fmtNum(lote.kgTrozados)} kg</span>
+                                  : <span className="text-muted">—</span>
+                              )}
                             </td>
                             <td className="text-end">
                               {lote.rendimientoFaena != null
