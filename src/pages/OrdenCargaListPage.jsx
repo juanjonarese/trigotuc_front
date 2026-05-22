@@ -42,17 +42,36 @@ const diferenciaLabel = (o) => {
 const formatARS = (n) =>
   n != null ? new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(n) : "—";
 
+const GALPONES_MAX = { cañete: 6, los_pinos: 8 };
+
+const calcTotales = (lineas) =>
+  lineas.reduce((acc, l) => {
+    const cant = Number(l.cantidad) || 0;
+    const pMin = Number(l.pesoMin)  || 0;
+    const pMax = Number(l.pesoMax)  || pMin;
+    return { cant: acc.cant + cant, pesoMin: acc.pesoMin + cant * pMin, pesoMax: acc.pesoMax + cant * pMax };
+  }, { cant: 0, pesoMin: 0, pesoMax: 0 });
+
 const NuevaOrdenModal = ({ onClose, onCreada, lotes }) => {
-  const [saving, setSaving]               = useState(false);
-  const [busqueda, setBusqueda]           = useState("");
-  const [resultados, setResultados]       = useState([]);
+  const [saving, setSaving]   = useState(false);
+  const [busqueda, setBusqueda]     = useState("");
+  const [resultados, setResultados] = useState([]);
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
   const [form, setForm] = useState({
     cliente: "", granja: "", galpon: "", lote: "",
     fechaEmision: obtenerFechaHoy(),
-    cantidadEstimada: "", pesoEstimadoKg: "",
+    turno: "",
+    totalPollos: "",
+    kgMin: "",
+    kgMax: "",
     observaciones: "",
   });
+  const [detalle, setDetalle] = useState([{ cantidad: "", pesoMin: "", pesoMax: "" }]);
+
+  const maxGalpones = form.granja ? (GALPONES_MAX[form.granja] || 8) : 0;
+
+  const sumLineas       = detalle.reduce((s, l) => s + (Number(l.cantidad) || 0), 0);
+  const totalVerificado = Number(form.totalPollos) > 0 && sumLineas === Number(form.totalPollos);
 
   useEffect(() => {
     if (busqueda.length < 2) { setResultados([]); return; }
@@ -72,26 +91,63 @@ const NuevaOrdenModal = ({ onClose, onCreada, lotes }) => {
     setForm((f) => ({ ...f, cliente: c._id }));
   };
 
-  const granjaLabel = (g) => g === "cañete" ? "Cañete" : "Los Pinos";
+
+  const actualizarLinea = (idx, campo, valor) =>
+    setDetalle((prev) => prev.map((l, i) => i === idx ? { ...l, [campo]: valor } : l));
+
+  const agregarLinea  = () => setDetalle((prev) => [...prev, { cantidad: "", pesoMin: "", pesoMax: "" }]);
+  const eliminarLinea = (idx) => setDetalle((prev) => prev.filter((_, i) => i !== idx));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.cliente || !form.granja || !form.cantidadEstimada || !form.pesoEstimadoKg) {
-      Swal.fire("Faltan datos", "Completá todos los campos obligatorios.", "warning");
+    if (!form.cliente)     { Swal.fire("Faltan datos", "Seleccioná un cliente.", "warning"); return; }
+    if (!form.granja)      { Swal.fire("Faltan datos", "Seleccioná la granja.", "warning"); return; }
+    if (!form.turno)       { Swal.fire("Faltan datos", "Indicá si la carga es por la mañana o por la tarde.", "warning"); return; }
+    if (!form.kgMin)       { Swal.fire("Faltan datos", "Ingresá los kg totales.", "warning"); return; }
+    if (!form.totalPollos) { Swal.fire("Faltan datos", "Ingresá el total de pollos.", "warning"); return; }
+
+    const lineasValidas = detalle.filter((l) => Number(l.pesoMin) > 0);
+    if (lineasValidas.length === 0) {
+      Swal.fire("Faltan datos", "Agregá al menos una línea de composición.", "warning");
       return;
     }
+    const sumEsp = lineasValidas.reduce((s, l) => s + (Number(l.cantidad) || 0), 0);
+    if (sumEsp !== Number(form.totalPollos)) {
+      const ok = await Swal.fire({
+        icon: "warning",
+        title: "La suma no coincide",
+        html: `Las líneas suman <strong>${sumEsp.toLocaleString("es-AR")}</strong> pollos pero el total es <strong>${Number(form.totalPollos).toLocaleString("es-AR")}</strong>.<br>¿Querés guardar igual?`,
+        showCancelButton: true,
+        confirmButtonText: "Sí, guardar",
+        cancelButtonText: "Corregir",
+      });
+      if (!ok.isConfirmed) return;
+    }
+
+    const detalleGuardar = lineasValidas.map((l) => ({
+      cantidad: Number(l.cantidad),
+      pesoMin:  Number(l.pesoMin),
+      pesoMax:  l.pesoMax ? Number(l.pesoMax) : undefined,
+    }));
+
     setSaving(true);
     try {
       const orden = await crearOrdenCarga({
-        ...form,
-        fechaEmision:     ajustarFechaParaGuardar(form.fechaEmision),
-        cantidadEstimada: Number(form.cantidadEstimada),
-        pesoEstimadoKg:   Number(form.pesoEstimadoKg),
+        tipo:             "venta_gordos",
+        cliente:          form.cliente,
+        granja:           form.granja,
         galpon:           form.galpon ? Number(form.galpon) : undefined,
         lote:             form.lote || undefined,
+        fechaEmision:     ajustarFechaParaGuardar(form.fechaEmision),
+        turno:            form.turno,
+        cantidadEstimada: Number(form.totalPollos),
+        pesoEstimadoKg:   Number(form.kgMin),
+        pesoEstimadoMax:  form.kgMax && Math.abs(Number(form.kgMax) - Number(form.kgMin)) > 0.5
+                            ? Number(form.kgMax) : undefined,
+        detalle:          detalleGuardar,
+        observaciones:    form.observaciones || undefined,
       });
       onCreada(orden);
-
       const { isConfirmed } = await Swal.fire({
         icon: "success",
         title: `Orden ${orden.numero} creada`,
@@ -100,24 +156,12 @@ const NuevaOrdenModal = ({ onClose, onCreada, lotes }) => {
         confirmButtonText: "Descargar PDF",
         cancelButtonText: "No, cerrar",
       });
-      if (isConfirmed) {
-        generarPDF({ ...orden, cliente: clienteSeleccionado });
-      }
+      if (isConfirmed) generarPDF({ ...orden, cliente: clienteSeleccionado });
     } catch (err) {
       Swal.fire("Error", err.message, "error");
     } finally {
       setSaving(false);
     }
-  };
-
-  const lotesFiltrados = form.granja ? lotes.filter((l) => l.granja === form.granja) : lotes;
-
-  const GALPONES_MAX = { cañete: 6, los_pinos: 8 };
-  const maxGalpones = form.granja ? (GALPONES_MAX[form.granja] || 8) : 0;
-
-  const seleccionarLote = (loteId) => {
-    const lote = lotes.find((l) => l._id === loteId);
-    setForm((f) => ({ ...f, lote: loteId, galpon: lote ? String(lote.galpon) : f.galpon }));
   };
 
   return (
@@ -131,93 +175,176 @@ const NuevaOrdenModal = ({ onClose, onCreada, lotes }) => {
             </div>
             <div className="modal-body">
               <form id="form-nueva-orden" onSubmit={handleSubmit}>
-                <div className="row g-3">
-                  <div className="col-12 col-md-6">
+
+                {/* ── Cliente + Fecha + Turno ── */}
+                <div className="row g-3 mb-3">
+                  <div className="col-12">
                     <label className="form-label fw-semibold">Cliente <span className="text-danger">*</span></label>
                     <div className="position-relative">
-                      <input
-                        type="text"
+                      <input type="text"
                         className={`form-control ${clienteSeleccionado ? "is-valid" : ""}`}
                         placeholder="Escribí el nombre del cliente..."
                         value={busqueda}
                         onChange={(e) => { setBusqueda(e.target.value); setClienteSeleccionado(null); setForm((f) => ({ ...f, cliente: "" })); }}
-                        autoComplete="off"
-                      />
+                        autoComplete="off" autoFocus />
                       {resultados.length > 0 && (
                         <div className="position-absolute w-100 bg-white border rounded shadow-sm" style={{ zIndex: 1055, maxHeight: "200px", overflowY: "auto" }}>
                           {resultados.map((c) => (
-                            <div
-                              key={c._id}
-                              className="px-3 py-2 border-bottom"
-                              style={{ cursor: "pointer" }}
-                              onMouseDown={() => seleccionarCliente(c)}
-                            >
+                            <div key={c._id} className="px-3 py-2 border-bottom" style={{ cursor: "pointer" }} onMouseDown={() => seleccionarCliente(c)}>
                               {c.razonSocial || c.nombre}
                             </div>
                           ))}
                         </div>
                       )}
                     </div>
-                    {clienteSeleccionado && (
-                      <div className="form-text text-success"><i className="bi bi-check-circle me-1"></i>{clienteSeleccionado.nombre}</div>
+                  </div>
+                  <div className="col-6">
+                    <label className="form-label fw-semibold">Fecha pactada <span className="text-danger">*</span></label>
+                    <input type="date" className="form-control" value={form.fechaEmision}
+                      onChange={(e) => setForm({ ...form, fechaEmision: e.target.value })} required />
+                  </div>
+                  <div className="col-6">
+                    <label className="form-label fw-semibold">Turno <span className="text-danger">*</span></label>
+                    <div className="d-flex gap-2">
+                      {[{ value: "mañana", label: "Mañana", icon: "bi-sunrise" }, { value: "tarde", label: "Tarde", icon: "bi-sunset" }].map((t) => (
+                        <button key={t.value} type="button"
+                          className={`btn flex-grow-1 py-2 ${form.turno === t.value ? "btn-success" : "btn-outline-secondary"}`}
+                          onClick={() => setForm((f) => ({ ...f, turno: t.value }))}>
+                          <i className={`bi ${t.icon} me-1`}></i>{t.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Granja + Galpón ── */}
+                <div className="mb-3">
+                  <label className="form-label fw-semibold">Granja <span className="text-danger">*</span></label>
+                  <div className="d-flex gap-2">
+                    {GRANJAS.map((g) => (
+                      <button key={g.value} type="button"
+                        className={`btn flex-grow-1 py-2 ${form.granja === g.value ? "btn-success" : "btn-outline-secondary"}`}
+                        onClick={() => setForm((f) => ({ ...f, granja: g.value, galpon: "", lote: "" }))}>
+                        {g.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {form.granja && (
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold">Galpón</label>
+                    <div className="d-flex flex-wrap gap-2">
+                      {Array.from({ length: maxGalpones }, (_, i) => i + 1).map((n) => (
+                        <button key={n} type="button"
+                          className={`btn ${form.galpon == n ? "btn-success" : "btn-outline-secondary"}`}
+                          style={{ minWidth: "3rem" }}
+                          onClick={() => setForm((f) => ({ ...f, galpon: n }))}>{n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Cantidad total ── */}
+                <div className="p-3 rounded mb-3" style={{ background: "#f8f9fa", border: "1px solid #dee2e6" }}>
+                  <div className="fw-semibold mb-2 small text-uppercase text-muted" style={{ letterSpacing: "0.05em" }}>
+                    Cantidad total
+                  </div>
+                  <div className="row g-3">
+                    <div className="col-4">
+                      <label className="form-label fw-semibold">Total pollos <span className="text-danger">*</span></label>
+                      <input type="number" className="form-control" min="1" placeholder="ej: 500"
+                        value={form.totalPollos} onChange={(e) => setForm({ ...form, totalPollos: e.target.value })} />
+                    </div>
+                    <div className="col-4">
+                      <label className="form-label fw-semibold">Kg mín <span className="text-danger">*</span></label>
+                      <input type="number" className="form-control" min="1" step="1" placeholder="ej: 1800"
+                        value={form.kgMin} onChange={(e) => setForm({ ...form, kgMin: e.target.value })} />
+                    </div>
+                    <div className="col-4">
+                      <label className="form-label fw-semibold">Kg máx <span className="text-muted fw-normal">(opcional)</span></label>
+                      <input type="number" className="form-control" min="1" step="1" placeholder="ej: 1900"
+                        value={form.kgMax} onChange={(e) => setForm({ ...form, kgMax: e.target.value })} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Composición ── */}
+                <div className="mb-3">
+                  <div className="fw-semibold mb-2 small text-uppercase text-muted" style={{ letterSpacing: "0.05em" }}>
+                    Composición
+                  </div>
+                  <div className="table-responsive">
+                    <table className="table table-sm table-bordered align-middle mb-2">
+                      <thead className="table-light">
+                        <tr>
+                          <th style={{ width: "30%" }}>Pollos</th>
+                          <th>Peso mín (kg)</th>
+                          <th>Peso máx (kg)</th>
+                          <th style={{ width: "2.5rem" }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detalle.map((linea, idx) => (
+                          <tr key={idx}>
+                            <td>
+                              <input type="number" className="form-control form-control-sm" min="1" placeholder="ej: 300"
+                                value={linea.cantidad}
+                                onChange={(e) => actualizarLinea(idx, "cantidad", e.target.value)} />
+                            </td>
+                            <td>
+                              <input type="number" className="form-control form-control-sm" min="0.1" step="0.1" placeholder="ej: 3.5"
+                                value={linea.pesoMin}
+                                onChange={(e) => actualizarLinea(idx, "pesoMin", e.target.value)} />
+                            </td>
+                            <td>
+                              <input type="number" className="form-control form-control-sm" min="0.1" step="0.1" placeholder="igual al mín"
+                                value={linea.pesoMax}
+                                onChange={(e) => actualizarLinea(idx, "pesoMax", e.target.value)} />
+                            </td>
+                            <td className="text-center">
+                              {detalle.length > 1 && (
+                                <button type="button" className="btn btn-outline-danger btn-sm p-0 px-1" onClick={() => eliminarLinea(idx)}>
+                                  <i className="bi bi-x-lg"></i>
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="d-flex align-items-center justify-content-between">
+                    <button type="button" className="btn btn-outline-success btn-sm" onClick={agregarLinea}>
+                      <i className="bi bi-plus-circle me-1"></i>Agregar línea
+                    </button>
+                    {Number(form.totalPollos) > 0 && sumLineas > 0 && (
+                      <span className={`small fw-semibold ${totalVerificado ? "text-success" : "text-warning"}`}>
+                        {totalVerificado
+                          ? <><i className="bi bi-check-circle me-1"></i>Composición verificada</>
+                          : <><i className="bi bi-exclamation-triangle me-1"></i>
+                              {sumLineas.toLocaleString("es-AR")} de {Number(form.totalPollos).toLocaleString("es-AR")}</>
+                        }
+                      </span>
                     )}
                   </div>
-                  <div className="col-6 col-md-3">
-                    <label className="form-label fw-semibold">Granja <span className="text-danger">*</span></label>
-                    <select className="form-select" value={form.granja} onChange={(e) => setForm({ ...form, granja: e.target.value, galpon: "", lote: "" })} required>
-                      <option value="">Seleccioná...</option>
-                      {GRANJAS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
-                    </select>
-                  </div>
-                  <div className="col-6 col-md-3">
-                    <label className="form-label fw-semibold">Galpón <span className="text-danger">*</span></label>
-                    <input
-                      type="number" className="form-control"
-                      placeholder="Nº"
-                      value={form.galpon}
-                      onChange={(e) => setForm({ ...form, galpon: e.target.value })}
-                      min="1" max={maxGalpones}
-                      disabled={!form.granja}
-                      required
-                    />
-                    {form.granja && <div className="form-text">1 – {maxGalpones}</div>}
-                  </div>
-                  <div className="col-6 col-md-3">
-                    <label className="form-label fw-semibold">Fecha emisión <span className="text-danger">*</span></label>
-                    <input type="date" className="form-control" value={form.fechaEmision} onChange={(e) => setForm({ ...form, fechaEmision: e.target.value })} required />
-                  </div>
-                  <div className="col-12 col-md-6">
-                    <label className="form-label">Lote activo (opcional — auto-completa galpón)</label>
-                    <select className="form-select" value={form.lote} onChange={(e) => seleccionarLote(e.target.value)} disabled={!form.granja}>
-                      <option value="">Sin lote específico</option>
-                      {lotesFiltrados.map((l) => (
-                        <option key={l._id} value={l._id}>
-                          #{l.numeroLote} — Galpón {l.galpon}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="col-6 col-md-2">
-                    <label className="form-label fw-semibold">Cant. estimada <span className="text-danger">*</span></label>
-                    <input type="number" className="form-control" placeholder="pollos" min="1" value={form.cantidadEstimada} onChange={(e) => setForm({ ...form, cantidadEstimada: e.target.value })} required />
-                  </div>
-                  <div className="col-6 col-md-2">
-                    <label className="form-label fw-semibold">Peso est. (kg) <span className="text-danger">*</span></label>
-                    <input type="number" className="form-control" placeholder="0" min="0.01" step="0.01" value={form.pesoEstimadoKg} onChange={(e) => setForm({ ...form, pesoEstimadoKg: e.target.value })} required />
-                  </div>
-                  <div className="col-12">
-                    <label className="form-label">Observaciones (opcional)</label>
-                    <textarea className="form-control" rows={2} value={form.observaciones} onChange={(e) => setForm({ ...form, observaciones: e.target.value })} />
-                  </div>
-
                 </div>
+
+                {/* ── Observaciones ── */}
+                <div className="mb-1">
+                  <label className="form-label">Observaciones <span className="text-muted fw-normal">(opcional)</span></label>
+                  <textarea className="form-control" rows={2} value={form.observaciones}
+                    onChange={(e) => setForm({ ...form, observaciones: e.target.value })}
+                    placeholder="Cualquier dato adicional..." />
+                </div>
+
               </form>
             </div>
             <div className="modal-footer">
               <button className="btn btn-outline-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
               <button type="submit" form="form-nueva-orden" className="btn btn-success" disabled={saving}>
                 {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
-                Confirmar valores de carga
+                Confirmar orden de carga
               </button>
             </div>
           </div>
@@ -327,19 +454,31 @@ const generarPDF = (o) => {
 };
 
 const EditarOrdenModal = ({ orden, lotes, onClose, onGuardado }) => {
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving]     = useState(false);
   const [busqueda, setBusqueda] = useState(orden.cliente?.razonSocial || orden.cliente?.nombre || "");
-  const [resultados, setResultados] = useState([]);
+  const [resultados, setResultados]         = useState([]);
   const [clienteSeleccionado, setClienteSeleccionado] = useState(orden.cliente);
   const [form, setForm] = useState({
-    cliente:          orden.cliente?._id || "",
-    granja:           orden.granja || "",
-    lote:             orden.lote?._id || "",
-    fechaEmision:     orden.fechaEmision?.split("T")[0] || "",
-    cantidadEstimada: orden.cantidadEstimada || "",
-    pesoEstimadoKg:   orden.pesoEstimadoKg || "",
-    observaciones:    orden.observaciones || "",
+    cliente:      orden.cliente?._id || "",
+    granja:       orden.granja || "",
+    galpon:       orden.galpon || "",
+    lote:         orden.lote?._id || "",
+    fechaEmision: orden.fechaEmision?.split("T")[0] || "",
+    turno:        orden.turno || "",
+    observaciones: orden.observaciones || "",
   });
+  const [detalle, setDetalle] = useState(
+    orden.detalle?.length > 0
+      ? orden.detalle.map((l) => ({ cantidad: String(l.cantidad), pesoMin: String(l.pesoMin), pesoMax: l.pesoMax ? String(l.pesoMax) : "" }))
+      : [{ cantidad: "", pesoMin: "", pesoMax: "" }]
+  );
+
+  const maxGalpones    = form.granja ? (GALPONES_MAX[form.granja] || 8) : 0;
+  const lotesFiltrados = form.granja ? lotes.filter((l) => l.granja === form.granja) : lotes;
+  const totales        = calcTotales(detalle);
+  const pesoRangeStr   = totales.pesoMax > totales.pesoMin + 0.5
+    ? `${Math.round(totales.pesoMin).toLocaleString("es-AR")} – ${Math.round(totales.pesoMax).toLocaleString("es-AR")} kg`
+    : `${Math.round(totales.pesoMin).toLocaleString("es-AR")} kg`;
 
   useEffect(() => {
     if (busqueda.length < 2) { setResultados([]); return; }
@@ -359,18 +498,36 @@ const EditarOrdenModal = ({ orden, lotes, onClose, onGuardado }) => {
     setForm((f) => ({ ...f, cliente: c._id }));
   };
 
-  const granjaLabel = (g) => g === "cañete" ? "Cañete" : "Los Pinos";
-  const lotesFiltrados = form.granja ? lotes.filter((l) => l.granja === form.granja) : lotes;
+  const actualizarLinea = (idx, campo, valor) =>
+    setDetalle((prev) => prev.map((l, i) => i === idx ? { ...l, [campo]: valor } : l));
+  const agregarLinea  = () => setDetalle((prev) => [...prev, { cantidad: "", pesoMin: "", pesoMax: "" }]);
+  const eliminarLinea = (idx) => setDetalle((prev) => prev.filter((_, i) => i !== idx));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const lineasValidas = detalle.filter((l) => Number(l.cantidad) > 0 && Number(l.pesoMin) > 0);
+    if (lineasValidas.length === 0) {
+      Swal.fire("Faltan datos", "Agregá al menos una línea con cantidad y peso.", "warning");
+      return;
+    }
+    const { cant, pesoMin, pesoMax } = calcTotales(lineasValidas);
+    const pesoEstimadoKg  = +pesoMin.toFixed(1);
+    const pesoEstimadoMax = +pesoMax.toFixed(1);
+
     setSaving(true);
     try {
       await actualizarOrdenCarga(orden._id, {
         ...form,
-        cantidadEstimada: Number(form.cantidadEstimada),
-        pesoEstimadoKg:   Number(form.pesoEstimadoKg),
+        galpon:           form.galpon ? Number(form.galpon) : undefined,
         lote:             form.lote || undefined,
+        cantidadEstimada: cant,
+        pesoEstimadoKg,
+        pesoEstimadoMax:  Math.abs(pesoEstimadoMax - pesoEstimadoKg) > 0.5 ? pesoEstimadoMax : undefined,
+        detalle:          lineasValidas.map((l) => ({
+          cantidad: Number(l.cantidad),
+          pesoMin:  Number(l.pesoMin),
+          pesoMax:  l.pesoMax ? Number(l.pesoMax) : undefined,
+        })),
       });
       onGuardado();
       Swal.fire({ icon: "success", title: "Orden actualizada", timer: 1400, showConfirmButton: false });
@@ -392,8 +549,8 @@ const EditarOrdenModal = ({ orden, lotes, onClose, onGuardado }) => {
             </div>
             <div className="modal-body">
               <form id="form-editar-orden" onSubmit={handleSubmit}>
-                <div className="row g-3">
-                  <div className="col-12 col-md-6">
+                <div className="row g-3 mb-3">
+                  <div className="col-12">
                     <label className="form-label fw-semibold">Cliente</label>
                     <div className="position-relative">
                       <input type="text" className={`form-control ${clienteSeleccionado ? "is-valid" : ""}`}
@@ -410,40 +567,116 @@ const EditarOrdenModal = ({ orden, lotes, onClose, onGuardado }) => {
                       )}
                     </div>
                   </div>
-                  <div className="col-6 col-md-3">
-                    <label className="form-label fw-semibold">Granja</label>
-                    <select className="form-select" value={form.granja} onChange={(e) => setForm({ ...form, granja: e.target.value, lote: "" })} required>
-                      <option value="">Seleccioná...</option>
-                      {[{ value: "cañete", label: "Cañete" }, { value: "los_pinos", label: "Los Pinos" }].map((g) => (
-                        <option key={g.value} value={g.value}>{g.label}</option>
+                  <div className="col-6">
+                    <label className="form-label fw-semibold">Fecha pactada</label>
+                    <input type="date" className="form-control" value={form.fechaEmision}
+                      onChange={(e) => setForm({ ...form, fechaEmision: e.target.value })} required />
+                  </div>
+                  <div className="col-6">
+                    <label className="form-label fw-semibold">Turno</label>
+                    <div className="d-flex gap-2">
+                      {[
+                        { value: "mañana", label: "Mañana", icon: "bi-sunrise" },
+                        { value: "tarde",  label: "Tarde",  icon: "bi-sunset"  },
+                      ].map((t) => (
+                        <button key={t.value} type="button"
+                          className={`btn flex-grow-1 ${form.turno === t.value ? "btn-success" : "btn-outline-secondary"}`}
+                          onClick={() => setForm((f) => ({ ...f, turno: t.value }))}>
+                          <i className={`bi ${t.icon} me-1`}></i>{t.label}
+                        </button>
                       ))}
-                    </select>
+                    </div>
                   </div>
-                  <div className="col-6 col-md-3">
-                    <label className="form-label fw-semibold">Fecha emisión</label>
-                    <input type="date" className="form-control" value={form.fechaEmision} onChange={(e) => setForm({ ...form, fechaEmision: e.target.value })} required />
+                </div>
+
+                <div className="mb-3">
+                  <label className="form-label fw-semibold">Granja</label>
+                  <div className="d-flex gap-2">
+                    {GRANJAS.map((g) => (
+                      <button key={g.value} type="button"
+                        className={`btn flex-grow-1 py-2 ${form.granja === g.value ? "btn-success" : "btn-outline-secondary"}`}
+                        onClick={() => setForm((f) => ({ ...f, granja: g.value, galpon: "", lote: "" }))}>
+                        {g.label}
+                      </button>
+                    ))}
                   </div>
-                  <div className="col-12 col-md-6">
-                    <label className="form-label">Lote (opcional)</label>
-                    <select className="form-select" value={form.lote} onChange={(e) => setForm({ ...form, lote: e.target.value })} disabled={!form.granja}>
-                      <option value="">Sin lote específico</option>
-                      {lotesFiltrados.map((l) => (
-                        <option key={l._id} value={l._id}>#{l.numeroLote} — {granjaLabel(l.granja)} Galpón {l.galpon}</option>
+                </div>
+
+                {form.granja && (
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold">Galpón</label>
+                    <div className="d-flex flex-wrap gap-2">
+                      {Array.from({ length: maxGalpones }, (_, i) => i + 1).map((n) => (
+                        <button key={n} type="button"
+                          className={`btn ${form.galpon == n ? "btn-success" : "btn-outline-secondary"}`}
+                          style={{ minWidth: "3rem" }}
+                          onClick={() => setForm((f) => ({ ...f, galpon: n }))}>
+                          {n}
+                        </button>
                       ))}
-                    </select>
+                    </div>
+                    {lotesFiltrados.length > 0 && (
+                      <div className="mt-2">
+                        <select className="form-select form-select-sm" value={form.lote}
+                          onChange={(e) => {
+                            const lote = lotes.find((l) => l._id === e.target.value);
+                            setForm((f) => ({ ...f, lote: e.target.value, galpon: lote ? lote.galpon : f.galpon }));
+                          }}>
+                          <option value="">Sin lote específico</option>
+                          {lotesFiltrados.map((l) => (
+                            <option key={l._id} value={l._id}>Lote #{l.numeroLote} — Galpón {l.galpon}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
-                  <div className="col-6 col-md-2">
-                    <label className="form-label fw-semibold">Cant. estimada</label>
-                    <input type="number" className="form-control" min="1" value={form.cantidadEstimada} onChange={(e) => setForm({ ...form, cantidadEstimada: e.target.value })} required />
+                )}
+
+                <div className="mb-3">
+                  <label className="form-label fw-semibold">Detalle de carga</label>
+                  <div className="table-responsive">
+                    <table className="table table-sm table-bordered align-middle mb-2">
+                      <thead className="table-light">
+                        <tr>
+                          <th>Cantidad (pollos)</th>
+                          <th>Peso mín (kg)</th>
+                          <th>Peso máx (kg)</th>
+                          <th style={{ width: "2.5rem" }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detalle.map((linea, idx) => (
+                          <tr key={idx}>
+                            <td><input type="number" className="form-control form-control-sm" min="1" value={linea.cantidad} onChange={(e) => actualizarLinea(idx, "cantidad", e.target.value)} /></td>
+                            <td><input type="number" className="form-control form-control-sm" min="0.1" step="0.1" value={linea.pesoMin} onChange={(e) => actualizarLinea(idx, "pesoMin", e.target.value)} /></td>
+                            <td><input type="number" className="form-control form-control-sm" min="0.1" step="0.1" placeholder="igual al mín" value={linea.pesoMax} onChange={(e) => actualizarLinea(idx, "pesoMax", e.target.value)} /></td>
+                            <td className="text-center">
+                              {detalle.length > 1 && (
+                                <button type="button" className="btn btn-outline-danger btn-sm p-0 px-1" onClick={() => eliminarLinea(idx)}>
+                                  <i className="bi bi-x-lg"></i>
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                  <div className="col-6 col-md-2">
-                    <label className="form-label fw-semibold">Peso est. (kg)</label>
-                    <input type="number" className="form-control" min="0.01" step="0.01" value={form.pesoEstimadoKg} onChange={(e) => setForm({ ...form, pesoEstimadoKg: e.target.value })} required />
-                  </div>
-                  <div className="col-12">
-                    <label className="form-label">Observaciones (opcional)</label>
-                    <textarea className="form-control" rows={2} value={form.observaciones} onChange={(e) => setForm({ ...form, observaciones: e.target.value })} />
-                  </div>
+                  <button type="button" className="btn btn-outline-success btn-sm" onClick={agregarLinea}>
+                    <i className="bi bi-plus-circle me-1"></i>Agregar línea
+                  </button>
+                  {totales.cant > 0 && (
+                    <div className="mt-2 p-2 rounded text-center" style={{ background: "#f0fdf4" }}>
+                      <span className="fw-bold text-success">{totales.cant.toLocaleString("es-AR")} pollos</span>
+                      <span className="text-muted ms-2">· {pesoRangeStr} estimados</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mb-1">
+                  <label className="form-label">Observaciones (opcional)</label>
+                  <textarea className="form-control" rows={2} value={form.observaciones}
+                    onChange={(e) => setForm({ ...form, observaciones: e.target.value })} />
                 </div>
               </form>
             </div>
@@ -479,7 +712,7 @@ const OrdenCargaListPage = () => {
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await obtenerOrdenesCarga(filtroEstado ? { estado: filtroEstado } : {});
+      const data = await obtenerOrdenesCarga({ tipo: "venta_gordos", ...(filtroEstado ? { estado: filtroEstado } : {}) });
       setOrdenes(data);
     } catch (e) {
       Swal.fire("Error", e.message, "error");
@@ -568,12 +801,12 @@ const OrdenCargaListPage = () => {
                             <button className="btn btn-outline-secondary btn-sm" onClick={(ev) => { ev.stopPropagation(); generarPDF(o); }} title="Bajar orden">
                               <i className="bi bi-file-earmark-arrow-down"></i>
                             </button>
-                            {(puedeCrear && o.estado === "pendiente" || esSuperAdmin) && (
+                            {o.estado !== "entregada" && (puedeCrear || esSuperAdmin) && (
                               <button className="btn btn-outline-primary btn-sm" onClick={(ev) => { ev.stopPropagation(); setEditOrden(o); }} title="Editar">
                                 <i className="bi bi-pencil"></i>
                               </button>
                             )}
-                            {esSuperAdmin && (
+                            {o.estado !== "entregada" && esSuperAdmin && (
                               <button className="btn btn-outline-danger btn-sm" onClick={(ev) => { ev.stopPropagation(); handleEliminar(o); }} title="Eliminar">
                                 <i className="bi bi-trash"></i>
                               </button>
@@ -587,6 +820,18 @@ const OrdenCargaListPage = () => {
                         <div className="small text-muted">
                           {o.cantidadEstimada?.toLocaleString("es-AR")} pollos · {o.pesoEstimadoKg} kg est.
                         </div>
+                        {o.estado === "entregada" && o.pesoRealKg != null && (
+                          <div className="small fw-semibold">
+                            <i className="bi bi-check2 me-1 text-success"></i>
+                            {o.cantidadReal != null && o.cantidadReal !== o.cantidadEstimada
+                              ? `${o.cantidadReal.toLocaleString("es-AR")} pollos · `
+                              : ""}
+                            {o.pesoRealKg} kg cargados
+                            {tieneDiferencia(o) && (
+                              <span className="badge bg-danger ms-1" style={{ fontSize: "0.65rem" }}>Dif.</span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -603,6 +848,7 @@ const OrdenCargaListPage = () => {
                         <th>Fecha</th>
                         <th className="text-end">Cant. est.</th>
                         <th className="text-end">Peso est.</th>
+                        <th className="text-end">Cargado</th>
                         <th>Estado</th>
                         <th></th>
                       </tr>
@@ -615,7 +861,21 @@ const OrdenCargaListPage = () => {
                           <td className="text-muted small">{o.granja === "cañete" ? "Cañete" : "Los Pinos"}</td>
                           <td className="text-muted small">{formatearFechaLocal(o.fechaEmision)}</td>
                           <td className="text-end">{o.cantidadEstimada?.toLocaleString("es-AR")}</td>
-                          <td className="text-end">{o.pesoEstimadoKg} kg</td>
+                          <td className="text-end text-muted">{o.pesoEstimadoKg} kg</td>
+                          <td className="text-end">
+                            {o.estado === "entregada" && o.pesoRealKg != null ? (
+                              <>
+                                {o.cantidadReal != null && o.cantidadReal !== o.cantidadEstimada && (
+                                  <div className="fw-bold small">
+                                    {o.cantidadReal.toLocaleString("es-AR")} pollos
+                                  </div>
+                                )}
+                                <div className="fw-bold">{o.pesoRealKg} kg</div>
+                              </>
+                            ) : (
+                              <span className="text-muted">—</span>
+                            )}
+                          </td>
                           <td>
                             {estadoBadge(o.estado)}
                             {esAdmin && tieneDiferencia(o) && (
@@ -629,12 +889,12 @@ const OrdenCargaListPage = () => {
                               <button className="btn btn-outline-secondary btn-sm" onClick={() => generarPDF(o)} title="Bajar orden">
                                 <i className="bi bi-file-earmark-arrow-down"></i>
                               </button>
-                              {(puedeCrear && o.estado === "pendiente" || esSuperAdmin) && (
+                              {o.estado !== "entregada" && (puedeCrear || esSuperAdmin) && (
                                 <button className="btn btn-outline-primary btn-sm" onClick={() => setEditOrden(o)} title="Editar">
                                   <i className="bi bi-pencil"></i>
                                 </button>
                               )}
-                              {esSuperAdmin && (
+                              {o.estado !== "entregada" && esSuperAdmin && (
                                 <button className="btn btn-outline-danger btn-sm" onClick={() => handleEliminar(o)} title="Eliminar">
                                   <i className="bi bi-trash"></i>
                                 </button>

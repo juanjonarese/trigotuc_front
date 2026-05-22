@@ -26,7 +26,7 @@ const GRANJA_OPTS = [
 const diasDeVida = (f) =>
   Math.floor((Date.now() - new Date(f).getTime()) / (1000 * 60 * 60 * 24));
 
-const semana = (f) => Math.max(1, Math.floor(diasDeVida(f) / 7) + 1);
+const semana = (f) => Math.max(1, Math.ceil(diasDeVida(f) / 7));
 
 const formatPeso = (g) => {
   if (g == null) return "-";
@@ -52,6 +52,23 @@ const clsPeso = (peso, ref) => {
 const pesoEnSemana = (pesajes, sem) =>
   [...pesajes].filter((p) => p.semana === sem).pop() || null;
 
+// Peso ideal semana 6: 2900-3000 g
+const PESO_IDEAL_MIN = 2900;
+const PESO_IDEAL_MAX = 3000;
+
+const estadoEgreso = (lote) => {
+  const sem = semana(lote.fechaIngreso);
+  if (sem < 6) return null;
+  const lastPesaje = lote.pesajes?.length > 0
+    ? lote.pesajes[lote.pesajes.length - 1]
+    : null;
+  const peso = lastPesaje?.pesoPromedio ?? null;
+  if (peso === null) return sem >= 6 ? "sin-pesaje" : null;
+  if (peso >= PESO_IDEAL_MIN && peso <= PESO_IDEAL_MAX) return "ideal";
+  if (peso > PESO_IDEAL_MAX) return "excede";
+  return "bajo";  // sem >= 6 pero peso aún no alcanzó el ideal
+};
+
 const badgeDif = (dif, ref, peso) => {
   if (dif == null || ref == null || peso == null) return null;
   const cls = (() => {
@@ -65,9 +82,11 @@ const badgeDif = (dif, ref, peso) => {
 // ── Modal lectura (desde galpón card) ─────────────────────────────────────────
 const GalponModal = ({ lote, galponLabel, onClose }) => {
   const [tab, setTab] = useState("pesaje");
-  const dias  = diasDeVida(lote.fechaIngreso);
-  const sem   = semana(lote.fechaIngreso);
-  const bajas = lote.mortandad.reduce((s, m) => s + m.cantidad, 0);
+  const dias   = diasDeVida(lote.fechaIngreso);
+  const sem    = semana(lote.fechaIngreso);
+  const bajas  = lote.mortandad.reduce((s, m) => s + m.cantidad, 0);
+  const egreso = estadoEgreso(lote);
+  const cfg    = egreso ? EGRESO_CONFIG[egreso] : null;
 
   return (
     <div
@@ -92,6 +111,33 @@ const GalponModal = ({ lote, galponLabel, onClose }) => {
           </div>
 
           <div className="modal-body p-0">
+            {/* Banner de egreso */}
+            {egreso === "ideal" && (
+              <div className="alert alert-warning rounded-0 mb-0 d-flex align-items-center gap-2 px-3 py-2">
+                <i className="bi bi-star-fill fs-5 text-warning"></i>
+                <div>
+                  <strong>¡Peso ideal alcanzado!</strong> — Este lote está listo para faena o venta.
+                  <div className="small text-muted">Rango ideal: {(PESO_IDEAL_MIN/1000).toFixed(3)}–{(PESO_IDEAL_MAX/1000).toFixed(3)} kg · Último pesaje: {formatPeso(lote.pesajes[lote.pesajes.length-1]?.pesoPromedio)}</div>
+                </div>
+              </div>
+            )}
+            {egreso === "excede" && (
+              <div className="alert alert-danger rounded-0 mb-0 d-flex align-items-center gap-2 px-3 py-2">
+                <i className="bi bi-exclamation-circle-fill fs-5"></i>
+                <div>
+                  <strong>Excede el peso ideal</strong> — Se recomienda sacar urgente para no perder calidad.
+                  <div className="small">Último pesaje: <strong>{formatPeso(lote.pesajes[lote.pesajes.length-1]?.pesoPromedio)}</strong> · Ideal: hasta {(PESO_IDEAL_MAX/1000).toFixed(3)} kg</div>
+                </div>
+              </div>
+            )}
+            {egreso === "sin-pesaje" && (
+              <div className="alert alert-primary rounded-0 mb-0 d-flex align-items-center gap-2 px-3 py-2">
+                <i className="bi bi-question-circle fs-5"></i>
+                <div>
+                  <strong>Semana 6 sin pesaje registrado</strong> — Registrá un pesaje para evaluar si está listo para egreso.
+                </div>
+              </div>
+            )}
             <ul className="nav nav-tabs px-3 pt-2 bg-light border-bottom">
               <li className="nav-item">
                 <button className={`nav-link ${tab === "pesaje" ? "active" : ""}`} onClick={() => setTab("pesaje")}>
@@ -228,6 +274,13 @@ const GalponModal = ({ lote, galponLabel, onClose }) => {
 };
 
 // ── Tarjeta galpón ─────────────────────────────────────────────────────────────
+const EGRESO_CONFIG = {
+  ideal:       { bg: "#fefce8", border: "#ca8a04", text: "#854d0e", badge: "bg-warning text-dark", icono: "bi-star-fill",        label: "¡Peso ideal! Listo para sacar" },
+  excede:      { bg: "#fff7ed", border: "#ea580c", text: "#9a3412", badge: "bg-danger",             icono: "bi-exclamation-circle-fill", label: "Excede peso ideal — Sacar urgente" },
+  "sin-pesaje":{ bg: "#f5f3ff", border: "#7c3aed", text: "#5b21b6", badge: "bg-primary",            icono: "bi-question-circle", label: "Sem. 6 — Registrar pesaje" },
+  bajo:        { bg: "#f0fdf4", border: "#16a34a", text: "#166534", badge: null,                    icono: null,                 label: null },
+};
+
 const GalponCard = ({ label, lote, onClick }) => {
   if (!lote) {
     return (
@@ -238,11 +291,15 @@ const GalponCard = ({ label, lote, onClick }) => {
       </div>
     );
   }
-  const dias = diasDeVida(lote.fechaIngreso);
-  const sem  = semana(lote.fechaIngreso);
-  const bajas = lote.mortandad.reduce((s, m) => s + m.cantidad, 0);
-  const alerta = dias >= 40;
-  const barColor = dias < 30 ? "#198754" : dias < 40 ? "#fd7e14" : "#dc3545";
+  const dias    = diasDeVida(lote.fechaIngreso);
+  const sem     = semana(lote.fechaIngreso);
+  const bajas   = lote.mortandad.reduce((s, m) => s + m.cantidad, 0);
+  const egreso  = estadoEgreso(lote);
+  const cfg     = egreso ? EGRESO_CONFIG[egreso] : null;
+
+  const alerta   = dias >= 40 && !egreso;
+  const barColor = egreso ? cfg.border : (dias < 30 ? "#198754" : dias < 40 ? "#fd7e14" : "#dc3545");
+  const bgColor  = egreso ? cfg.bg : (alerta ? "#fff9e6" : "#f0fdf4");
   const progresoPct = Math.min(100, Math.round((dias / 45) * 100));
   const lastPeso = lote.pesajes?.length > 0
     ? lote.pesajes[lote.pesajes.length - 1].pesoPromedio
@@ -251,7 +308,7 @@ const GalponCard = ({ label, lote, onClick }) => {
   return (
     <div
       className="card border-0 shadow-sm text-center"
-      style={{ cursor: "pointer", minHeight: "110px", background: alerta ? "#fff9e6" : "#f0fdf4", borderLeft: `4px solid ${barColor}`, overflow: "hidden", position: "relative" }}
+      style={{ cursor: "pointer", minHeight: "110px", background: bgColor, borderLeft: `4px solid ${barColor}`, overflow: "hidden", position: "relative" }}
       onClick={() => onClick(lote)}
     >
       <div className="p-3 pb-2">
@@ -259,12 +316,20 @@ const GalponCard = ({ label, lote, onClick }) => {
         <div className="fw-semibold small mt-1">Día {dias} — Sem. {sem}</div>
         <div className="text-muted small">{lote.cantidadActual.toLocaleString("es-AR")} pollos</div>
         {lastPeso != null && (
-          <div className="small mt-1" style={{ color: "#0d6efd" }}>
+          <div className="small mt-1" style={{ color: egreso ? cfg.text : "#0d6efd" }}>
             <i className="bi bi-speedometer2 me-1"></i>{formatPeso(lastPeso)}
           </div>
         )}
         <div className="text-muted small mt-1"><i className="bi bi-calendar-event me-1"></i>{formatearFechaLocal(lote.fechaIngreso)}</div>
         {bajas > 0 && <div className="mt-1"><span className="badge bg-danger bg-opacity-75">{bajas} bajas</span></div>}
+        {egreso && cfg.badge && (
+          <div className="mt-1">
+            <span className={`badge ${cfg.badge}`}>
+              {cfg.icono && <i className={`bi ${cfg.icono} me-1`}></i>}
+              {cfg.label}
+            </span>
+          </div>
+        )}
         {alerta && <div className="mt-1"><span className="badge bg-warning text-dark">¡Revisar egreso!</span></div>}
       </div>
       <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "5px", background: "#e9ecef" }}>
@@ -470,6 +535,8 @@ const GranjaLotesPage = () => {
         <div className="d-flex gap-3 flex-wrap mb-4 small text-muted">
           <span><span className="badge bg-success me-1">●</span>En crianza</span>
           <span><span className="badge bg-warning text-dark me-1">●</span>≥ 40 días — revisar egreso</span>
+          <span style={{ color: "#ca8a04" }}><i className="bi bi-star-fill me-1"></i>Peso ideal — listo para sacar</span>
+          <span className="text-danger"><i className="bi bi-exclamation-circle-fill me-1"></i>Excede peso ideal</span>
           <span><span className="badge bg-light text-muted border me-1">●</span>Vacío</span>
         </div>
 

@@ -31,6 +31,7 @@ import RecepcionOrdenCargaPage from "./pages/RecepcionOrdenCargaPage";
 import CtaCteGranjaPage from "./pages/CtaCteGranjaPage";
 import RecepcionRemitosPage from "./pages/RecepcionRemitosPage";
 import HistorialAccesosPage from "./pages/HistorialAccesosPage";
+import StockEmpaquePage from "./pages/StockEmpaquePage";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
@@ -242,6 +243,15 @@ function App() {
         <Route path="/granja/ventas" element={<ProtectedRoute><VentasGranjaPage /></ProtectedRoute>} />
         <Route path="/granja/remitos" element={<ProtectedRoute><GranjaRemitosPage /></ProtectedRoute>} />
         <Route path="/frigorifico/recepcion" element={<ProtectedRoute><RecepcionRemitosPage /></ProtectedRoute>} />
+
+        <Route
+          path="/frigorifico/stock-empaque"
+          element={
+            <ProtectedRoute>
+              <StockEmpaquePage />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Historial de Accesos (superadmin) */}
         <Route

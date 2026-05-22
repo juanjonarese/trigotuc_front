@@ -505,7 +505,12 @@ const GranjaLoteNuevoPage = () => {
                           {GRANJAS_LABEL[lote.granja]} — Galpón {GRANJAS_PREFIX[lote.granja]}{lote.galpon}
                         </div>
                         <div className="small">
-                          {formatearFechaLocal(lote.fechaIngreso)} · {lote.cantidadIngreso.toLocaleString("es-AR")} ingresados · {lote.cantidadActual.toLocaleString("es-AR")} actuales
+                          {formatearFechaLocal(lote.fechaIngreso)} · {lote.cantidadIngreso.toLocaleString("es-AR")} ingresados
+                          {lote.bajasIngreso > 0 && (
+                            <span className="text-danger"> · {lote.bajasIngreso.toLocaleString("es-AR")} bajas
+                              {lote.motivoBajas && <span className="text-muted"> ({lote.motivoBajas})</span>}
+                            </span>
+                          )}
                         </div>
                         {lote.proveedor && <div className="small text-muted">{lote.proveedor}</div>}
                       </div>
@@ -523,7 +528,7 @@ const GranjaLoteNuevoPage = () => {
                         <th>Galpón</th>
                         <th>Fecha ingreso</th>
                         <th className="text-end">Ingresados</th>
-                        <th className="text-end">Actuales</th>
+                        <th className="text-end">Bajas ing.</th>
                         <th>Enviado por</th>
                         <th>Estado</th>
                         <th></th>
@@ -537,7 +542,14 @@ const GranjaLoteNuevoPage = () => {
                           <td className="fw-semibold">{GRANJAS_PREFIX[lote.granja]}{lote.galpon}</td>
                           <td>{formatearFechaLocal(lote.fechaIngreso)}</td>
                           <td className="text-end">{lote.cantidadIngreso.toLocaleString("es-AR")}</td>
-                          <td className="text-end fw-semibold">{lote.cantidadActual.toLocaleString("es-AR")}</td>
+                          <td className="text-end">
+                            {lote.bajasIngreso > 0 ? (
+                              <>
+                                <span className="text-danger fw-semibold">{lote.bajasIngreso.toLocaleString("es-AR")}</span>
+                                {lote.motivoBajas && <div className="small text-muted">{lote.motivoBajas}</div>}
+                              </>
+                            ) : <span className="text-muted">—</span>}
+                          </td>
                           <td className="text-muted small">{lote.proveedor || "—"}</td>
                           <td>
                             <span className={`badge ${lote.estado === "en_crianza" ? "bg-success" : "bg-secondary"}`}>

@@ -14,10 +14,28 @@ const GRANJAS = [
   { key: "los_pinos", label: "Los Pinos", prefix: "P" },
 ];
 
+// Tabla de referencia en kg (convertida de gramos)
+const TABLA_REF_KG = {
+  1: { min: 0.175, max: 0.190 },
+  2: { min: 0.450, max: 0.480 },
+  3: { min: 0.900, max: 0.950 },
+  4: { min: 1.500, max: 1.600 },
+  5: { min: 2.200, max: 2.300 },
+  6: { min: 2.900, max: 3.000 },
+};
+
+const validarPeso = (val) => {
+  const n = Number(val);
+  if (!val || isNaN(n)) return null;
+  if (n > 15)  return "error";    // imposible (probablemente en gramos)
+  if (n > 6)   return "warning";  // inusualmente alto
+  return "ok";
+};
+
 const diasDeVida = (f) =>
   Math.floor((Date.now() - new Date(f).getTime()) / (1000 * 60 * 60 * 24));
 
-const semana = (f) => Math.max(1, Math.floor(diasDeVida(f) / 7) + 1);
+const semana = (f) => Math.max(1, Math.ceil(diasDeVida(f) / 7));
 
 const formatPeso = (g) => {
   if (g == null) return null;
@@ -38,7 +56,7 @@ const semanaParaFecha = (fechaIngreso, fechaPesaje) => {
   const ref  = new Date(`${fechaPesaje}T12:00:00.000Z`);
   const base = new Date(fechaIngreso);
   const dias = Math.floor((ref.getTime() - base.getTime()) / msXDia);
-  return Math.max(1, Math.floor(dias / 7) + 1);
+  return Math.max(1, Math.ceil(dias / 7));
 };
 
 const GranjaCargaDatosPage = () => {
@@ -70,6 +88,30 @@ const GranjaCargaDatosPage = () => {
     if (!form.pesoPromedio) {
       Swal.fire("Faltan datos", "El peso promedio es obligatorio.", "warning");
       return;
+    }
+    const pesoVal = Number(form.pesoPromedio);
+    if (pesoVal > 15) {
+      Swal.fire({
+        icon: "error",
+        title: "Peso inválido",
+        html: `<strong>${pesoVal} kg</strong> es un peso imposible para un pollo vivo.<br><br>
+               El campo es en <strong>kg</strong>, no en gramos.<br>
+               Ej: para <em>450 gramos</em> ingresá <strong>0.450</strong>`,
+      });
+      return;
+    }
+    if (pesoVal > 6) {
+      const { isConfirmed } = await Swal.fire({
+        icon: "warning",
+        title: "Peso inusualmente alto",
+        html: `Ingresaste <strong>${pesoVal} kg</strong>. ¿Es correcto?<br><br>
+               Recordá que el campo es en <strong>kg</strong>. Si quisiste ingresar gramos, escribí el valor dividido por 1000.<br>
+               Ej: para <em>6.000 gramos</em> ingresá <strong>6.000</strong>`,
+        showCancelButton: true,
+        confirmButtonText: "Sí, es correcto",
+        cancelButtonText: "Corregir",
+      });
+      if (!isConfirmed) return;
     }
     if (form.mortandad === "") {
       Swal.fire("Faltan datos", "Ingresá la mortandad. Si no hubo bajas, poné 0.", "warning");
@@ -199,15 +241,49 @@ const GranjaCargaDatosPage = () => {
                       <label className="form-label fw-semibold small mb-1">
                         Peso promedio <span className="text-muted fw-normal">(kg)</span>
                       </label>
-                      <input
-                        type="number"
-                        className="form-control form-control-sm"
-                        placeholder="Ej: 1.350"
-                        value={form.pesoPromedio}
-                        onChange={(e) => setForm({ ...form, pesoPromedio: e.target.value })}
-                        min="0.001"
-                        step="0.001"
-                      />
+                      {(() => {
+                        const nivel = validarPeso(form.pesoPromedio);
+                        const semFechaLocal = form.fecha
+                          ? semanaParaFecha(loteSeleccionado.fechaIngreso, form.fecha)
+                          : null;
+                        const ref = semFechaLocal ? TABLA_REF_KG[semFechaLocal] : null;
+                        return (
+                          <>
+                            <input
+                              type="number"
+                              className={`form-control form-control-sm ${nivel === "error" ? "is-invalid" : nivel === "warning" ? "border-warning" : ""}`}
+                              placeholder={ref ? `Ej: ${ref.min.toFixed(3)}` : "Ej: 1.350"}
+                              value={form.pesoPromedio}
+                              onChange={(e) => setForm({ ...form, pesoPromedio: e.target.value })}
+                              min="0.001"
+                              max="15"
+                              step="0.001"
+                            />
+                            {nivel === "error" && (
+                              <div className="invalid-feedback d-block small">
+                                <i className="bi bi-exclamation-triangle-fill me-1"></i>
+                                ¿En gramos? El campo es en <strong>kg</strong>. Ej: <strong>0.450</strong> para 450 g
+                              </div>
+                            )}
+                            {nivel === "warning" && (
+                              <div className="text-warning small mt-1">
+                                <i className="bi bi-exclamation-triangle me-1"></i>
+                                Peso alto — verificá que sea en kg
+                              </div>
+                            )}
+                            {nivel === "ok" && ref && (
+                              <div className="form-text">
+                                Sem. {semFechaLocal}: referencia {ref.min.toFixed(3)}–{ref.max.toFixed(3)} kg
+                              </div>
+                            )}
+                            {nivel === null && ref && (
+                              <div className="form-text">
+                                Sem. {semFechaLocal}: referencia {ref.min.toFixed(3)}–{ref.max.toFixed(3)} kg
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                     <div className="col-6 col-md-3">
                       <label className="form-label fw-semibold small mb-1">Mortandad <span className="text-muted fw-normal">(unidades)</span></label>
