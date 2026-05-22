@@ -390,7 +390,7 @@ const RecepcionOrdenCargaPage = () => {
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
-      const params = { tipo: "venta_gordos", ...(filtroEstado ? { estado: filtroEstado } : {}) };
+      const params = { ...(filtroEstado ? { estado: filtroEstado } : {}) };
       const data = await obtenerOrdenesCarga(params);
       setOrdenes(data);
     } catch (e) {
@@ -475,18 +475,20 @@ const RecepcionOrdenCargaPage = () => {
           /* ── TARJETAS — solo pendientes ── */
           <div className="row g-3">
             {ordenesFiltradas.map((o) => {
-              const barColor = o.liberada ? "#f59e0b" : "#198754";
+              const esPedidoFrigo = o.tipo === "pedido_frigorifico";
+              const barColor = esPedidoFrigo ? "#2563eb" : o.liberada ? "#f59e0b" : "#198754";
               return (
                 <div key={o._id} className="col-12 col-md-6 col-lg-4">
-                  <div
-                    className="card border-0 shadow-sm h-100"
-                    style={{ borderLeft: `4px solid ${barColor}` }}
-                  >
+                  <div className="card border-0 shadow-sm h-100" style={{ borderLeft: `4px solid ${barColor}` }}>
                     <div className="card-body">
-                      {/* Número + turno + estado */}
+
+                      {/* Número + tipo + turno */}
                       <div className="d-flex justify-content-between align-items-start mb-2">
                         <span className="badge bg-dark fs-6">{o.numero}</span>
                         <div className="d-flex gap-1 flex-wrap justify-content-end">
+                          {esPedidoFrigo && (
+                            <span className="badge bg-primary"><i className="bi bi-snow me-1"></i>Pedido Frigorifico</span>
+                          )}
                           {o.turno && (
                             <span className={`badge ${o.turno === "mañana" ? "bg-warning text-dark" : "bg-info text-dark"}`}>
                               <i className={`bi ${o.turno === "mañana" ? "bi-sunrise" : "bi-sunset"} me-1`}></i>
@@ -497,11 +499,9 @@ const RecepcionOrdenCargaPage = () => {
                         </div>
                       </div>
 
-                      {/* Cliente */}
-                      {o.cliente && (
-                        <div className="fw-semibold mb-1">
-                          {o.cliente.razonSocial || o.cliente.nombre}
-                        </div>
+                      {/* Cliente (solo venta_gordos) */}
+                      {o.cliente && !esPedidoFrigo && (
+                        <div className="fw-semibold mb-1">{o.cliente.razonSocial || o.cliente.nombre}</div>
                       )}
 
                       {/* Granja, galpón y fecha */}
@@ -511,43 +511,38 @@ const RecepcionOrdenCargaPage = () => {
                           {o.galpon && ` — Galpón ${o.galpon}`}
                         </span>
                         <div className="text-muted small">
-                          <i className="bi bi-calendar me-1"></i>
-                          {formatearFechaLocal(o.fechaEmision)}
+                          <i className="bi bi-calendar me-1"></i>{formatearFechaLocal(o.fechaEmision)}
                         </div>
                       </div>
 
                       {/* Detalle de carga */}
                       {o.detalle?.length > 0 ? (
-                        <div className="mb-2 rounded overflow-hidden" style={{ border: "1px solid #d1fae5" }}>
+                        <div className="mb-2 rounded overflow-hidden" style={{ border: `1px solid ${esPedidoFrigo ? "#bfdbfe" : "#d1fae5"}` }}>
                           {o.detalle.map((l, idx) => (
                             <div key={idx} className="d-flex justify-content-between align-items-center px-2 py-1"
-                              style={{ borderBottom: idx < o.detalle.length - 1 ? "1px solid #d1fae5" : "none", background: "#f0fdf4" }}>
-                              <span className="fw-semibold text-success">{Number(l.cantidad).toLocaleString("es-AR")} pollos</span>
+                              style={{ borderBottom: idx < o.detalle.length - 1 ? `1px solid ${esPedidoFrigo ? "#bfdbfe" : "#d1fae5"}` : "none", background: esPedidoFrigo ? "#eff6ff" : "#f0fdf4" }}>
+                              <span className="fw-semibold" style={{ color: barColor }}>{Number(l.cantidad).toLocaleString("es-AR")} pollos</span>
                               <span className="text-muted small">
                                 {l.pesoMax && Math.abs(l.pesoMax - l.pesoMin) > 0.05
                                   ? `${l.pesoMin} – ${l.pesoMax} kg`
-                                  : `${l.pesoMin} kg`}
+                                  : `${l.pesoMin} kg`} prom.
                               </span>
                             </div>
                           ))}
                           <div className="d-flex justify-content-between align-items-center px-2 py-1 fw-bold"
-                            style={{ background: "#dcfce7" }}>
-                            <span className="text-success">{Number(o.cantidadEstimada).toLocaleString("es-AR")} pollos</span>
-                            <span className="text-muted small">
-                              {o.pesoEstimadoMax && Math.abs(o.pesoEstimadoMax - o.pesoEstimadoKg) > 0.5
-                                ? `${o.pesoEstimadoKg} – ${o.pesoEstimadoMax} kg`
-                                : `${o.pesoEstimadoKg} kg`} est.
-                            </span>
+                            style={{ background: esPedidoFrigo ? "#dbeafe" : "#dcfce7" }}>
+                            <span style={{ color: barColor }}>{Number(o.cantidadEstimada).toLocaleString("es-AR")} pollos</span>
+                            <span className="text-muted small">{o.pesoEstimadoKg} kg est.</span>
                           </div>
                         </div>
                       ) : (
-                        <div className="d-flex gap-4 mb-2 p-2 rounded" style={{ background: "#f0fdf4" }}>
+                        <div className="d-flex gap-4 mb-2 p-2 rounded" style={{ background: esPedidoFrigo ? "#eff6ff" : "#f0fdf4" }}>
                           <div>
-                            <div className="fw-bold text-success fs-5">{Number(o.cantidadEstimada).toLocaleString("es-AR")}</div>
+                            <div className="fw-bold fs-5" style={{ color: barColor }}>{Number(o.cantidadEstimada).toLocaleString("es-AR")}</div>
                             <div className="text-muted" style={{ fontSize: "0.7rem" }}>pollos a preparar</div>
                           </div>
                           <div>
-                            <div className="fw-bold text-success fs-5">{o.pesoEstimadoKg} kg</div>
+                            <div className="fw-bold fs-5" style={{ color: barColor }}>{o.pesoEstimadoKg} kg</div>
                             <div className="text-muted" style={{ fontSize: "0.7rem" }}>peso estimado</div>
                           </div>
                         </div>
@@ -556,17 +551,23 @@ const RecepcionOrdenCargaPage = () => {
                       {/* Observaciones */}
                       {o.observaciones && (
                         <div className="mb-2 p-2 rounded" style={{ background: "#fffbeb", border: "1px solid #fde68a", fontSize: "0.85rem" }}>
-                          <i className="bi bi-info-circle me-1 text-warning"></i>
-                          {o.observaciones}
+                          <i className="bi bi-info-circle me-1 text-warning"></i>{o.observaciones}
                         </div>
                       )}
 
                     </div>
 
                     <div className="card-footer bg-transparent border-top-0 pt-0 pb-3 px-3">
-                      <button className="btn btn-success w-100" onClick={() => setOrdenModal(o)}>
-                        <i className="bi bi-check2-circle me-1"></i>Confirmar entrega
-                      </button>
+                      {esPedidoFrigo ? (
+                        <div className="rounded px-3 py-2 text-center small" style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1d4ed8" }}>
+                          <i className="bi bi-info-circle me-1"></i>
+                          Preparar para el frigorifico — la recepción la confirma frigorifico
+                        </div>
+                      ) : (
+                        <button className="btn btn-success w-100" onClick={() => setOrdenModal(o)}>
+                          <i className="bi bi-check2-circle me-1"></i>Confirmar entrega
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

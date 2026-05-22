@@ -1,11 +1,151 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import * as XLSX from "xlsx";
 import { GiRoastChicken, GiChickenLeg } from "react-icons/gi";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
-import { obtenerResumenStock, obtenerLotes, eliminarLote } from "../services/api";
+import CalibreTable, { calcularCajones } from "../components/CalibreTable";
+import { obtenerResumenStock, obtenerLotes, eliminarLote, actualizarLote } from "../services/api";
 import Swal from "sweetalert2";
 
+const fmtNum = (n) =>
+  n != null ? new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n) : "—";
+
+// ── Modal editar lote ────────────────────────────────────────────────────────
+const EditarLoteModal = ({ lote, onClose, onGuardado }) => {
+  const calibreRef = useRef(null);
+  const [saving, setSaving] = useState(false);
+  const [lineas, setLineas] = useState(
+    (lote.calibres || []).map((c) => ({ calibre: c.calibre, pollos: c.pollos }))
+  );
+  const [form, setForm] = useState({
+    unidadesFaenadas:    lote.unidadesFaenadas    != null ? String(lote.unidadesFaenadas)    : "",
+    kgVivos:             lote.kgVivos             != null ? String(lote.kgVivos)             : "",
+    unidadesDecomisadas: lote.unidadesDecomisadas != null ? String(lote.unidadesDecomisadas) : "",
+    kgDecomisados:       lote.kgDecomisados       != null ? String(lote.kgDecomisados)       : "",
+    unidadesTrozadas:    lote.unidadesTrozadas     != null ? String(lote.unidadesTrozadas)    : "",
+    kgTrozados:          lote.kgTrozados           != null ? String(lote.kgTrozados)          : "",
+    observaciones:       lote.observaciones || "",
+  });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const lineasFinales = calibreRef.current?.getLineas() ?? lineas;
+    const calibresPayload = lineasFinales
+      .filter((l) => Number(l.pollos) > 0)
+      .map((l) => ({ calibre: Number(l.calibre), pollos: Number(l.pollos) }));
+    if (calibresPayload.length === 0) {
+      Swal.fire("Faltan datos", "Ingresá al menos un calibre con pollos.", "warning"); return;
+    }
+    setSaving(true);
+    try {
+      await actualizarLote(lote._id, {
+        calibres:            calibresPayload,
+        unidadesFaenadas:    form.unidadesFaenadas    !== "" ? Number(form.unidadesFaenadas)    : undefined,
+        kgVivos:             form.kgVivos             !== "" ? Number(form.kgVivos)             : undefined,
+        unidadesDecomisadas: form.unidadesDecomisadas !== "" ? Number(form.unidadesDecomisadas) : undefined,
+        kgDecomisados:       form.kgDecomisados       !== "" ? Number(form.kgDecomisados)       : undefined,
+        unidadesTrozadas:    form.unidadesTrozadas     !== "" ? Number(form.unidadesTrozadas)    : undefined,
+        kgTrozados:          form.kgTrozados           !== "" ? Number(form.kgTrozados)          : undefined,
+        observaciones:       form.observaciones || undefined,
+      });
+      onGuardado();
+      Swal.fire({ icon: "success", title: "Lote actualizado", timer: 1500, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire("Error", err.message, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const set = (campo, valor) => setForm((f) => ({ ...f, [campo]: valor }));
+
+  return (
+    <>
+      <div className="modal show d-block" tabIndex="-1">
+        <div className="modal-dialog modal-lg modal-dialog-scrollable">
+          <div className="modal-content">
+            <div className="modal-header bg-warning text-dark">
+              <h5 className="modal-title">
+                <i className="bi bi-pencil-square me-2"></i>
+                Editar lote #{lote.numeroLote} — {new Date(lote.fechaIngreso).toLocaleDateString("es-AR")}
+              </h5>
+              <button className="btn-close" onClick={onClose} disabled={saving}></button>
+            </div>
+            <div className="modal-body">
+              <form id="form-editar-lote" onSubmit={handleSubmit}>
+
+                {/* Calibres */}
+                <div className="mb-4">
+                  <div className="fw-semibold mb-2 small text-uppercase text-muted" style={{ letterSpacing: "0.05em" }}>
+                    Calibres en cámara
+                  </div>
+                  <CalibreTable ref={calibreRef} lineas={lineas} onChange={setLineas} showTotals />
+                </div>
+
+                {/* Datos de faena */}
+                <div className="mb-4">
+                  <div className="fw-semibold mb-2 small text-uppercase text-muted" style={{ letterSpacing: "0.05em" }}>
+                    Datos de faena
+                  </div>
+                  <div className="row g-3">
+                    <div className="col-6 col-md-3">
+                      <label className="form-label fw-semibold small">Pollos faenados</label>
+                      <input type="number" className="form-control" min="0" placeholder="0"
+                        value={form.unidadesFaenadas} onChange={(e) => set("unidadesFaenadas", e.target.value)} />
+                    </div>
+                    <div className="col-6 col-md-3">
+                      <label className="form-label fw-semibold small">Kg vivos</label>
+                      <input type="number" className="form-control" min="0" step="0.01" placeholder="0"
+                        value={form.kgVivos} onChange={(e) => set("kgVivos", e.target.value)} />
+                    </div>
+                    <div className="col-6 col-md-3">
+                      <label className="form-label fw-semibold small text-danger">Decomisados (u)</label>
+                      <input type="number" className="form-control" min="0" placeholder="0"
+                        value={form.unidadesDecomisadas} onChange={(e) => set("unidadesDecomisadas", e.target.value)} />
+                    </div>
+                    <div className="col-6 col-md-3">
+                      <label className="form-label fw-semibold small text-danger">Decomisados (kg)</label>
+                      <input type="number" className="form-control" min="0" step="0.01" placeholder="0"
+                        value={form.kgDecomisados} onChange={(e) => set("kgDecomisados", e.target.value)} />
+                    </div>
+                    <div className="col-6 col-md-3">
+                      <label className="form-label fw-semibold small text-warning">Trozados (u)</label>
+                      <input type="number" className="form-control" min="0" placeholder="0"
+                        value={form.unidadesTrozadas} onChange={(e) => set("unidadesTrozadas", e.target.value)} />
+                    </div>
+                    <div className="col-6 col-md-3">
+                      <label className="form-label fw-semibold small text-warning">Trozados (kg)</label>
+                      <input type="number" className="form-control" min="0" step="0.01" placeholder="0"
+                        value={form.kgTrozados} onChange={(e) => set("kgTrozados", e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Observaciones */}
+                <div>
+                  <label className="form-label fw-semibold small">Observaciones</label>
+                  <textarea className="form-control" rows={2} value={form.observaciones}
+                    onChange={(e) => set("observaciones", e.target.value)} />
+                </div>
+
+              </form>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-outline-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
+              <button type="submit" form="form-editar-lote" className="btn btn-warning" disabled={saving}>
+                {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
+                <i className="bi bi-check-circle me-1"></i>Guardar cambios
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="modal-backdrop show"></div>
+    </>
+  );
+};
+
+// ────────────────────────────────────────────────────────────────────────────
 const GranjaDashboardPage = () => {
   const navigate = useNavigate();
   const rolUsuario = localStorage.getItem("rolUsuario");
@@ -20,9 +160,10 @@ const GranjaDashboardPage = () => {
     stockCañete: [],
     stockTrigotuc: [],
   });
-  const [lotes, setLotes] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [lotes, setLotes]         = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState(null);
+  const [loteEditar, setLoteEditar] = useState(null);
 
   const cargarDatos = useCallback(async () => {
     try {
@@ -46,8 +187,7 @@ const GranjaDashboardPage = () => {
     return () => clearInterval(interval);
   }, [cargarDatos]);
 
-  const formatNum = (n) =>
-    new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n);
+  const formatNum = fmtNum;
 
   const handleEliminarLote = async (lote) => {
     const confirm = await Swal.fire({
@@ -394,6 +534,72 @@ const GranjaDashboardPage = () => {
         </div>
       )}
 
+      {/* ── Lotes de faena activos ── */}
+      {lotes.length > 0 && (
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+            <h6 className="mb-0">
+              <i className="bi bi-list-check me-2 text-success"></i>
+              Lotes de faena activos
+            </h6>
+          </div>
+          <div className="card-body p-0">
+            <div className="table-responsive">
+              <table className="table table-hover align-middle mb-0">
+                <thead className="table-light">
+                  <tr>
+                    <th>Lote</th>
+                    <th>Fecha faena</th>
+                    <th className="text-end">Cajones</th>
+                    <th className="text-end">Kg cámara</th>
+                    <th className="text-end">Faenados</th>
+                    <th className="text-end">Kg vivos</th>
+                    <th className="text-end">Decomis.</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lotes.map((l) => {
+                    const totalCaj = (l.calibres || []).reduce((a, c) => a + c.cajones, 0);
+                    return (
+                      <tr key={l._id}>
+                        <td><span className="badge bg-dark">#{l.numeroLote}</span></td>
+                        <td className="text-muted small">{new Date(l.fechaIngreso).toLocaleDateString("es-AR")}</td>
+                        <td className="text-end">{formatNum(totalCaj)}</td>
+                        <td className="text-end">{formatNum(l.pesoTotal)} kg</td>
+                        <td className="text-end">{l.unidadesFaenadas != null ? formatNum(l.unidadesFaenadas) : "—"}</td>
+                        <td className="text-end">{l.kgVivos != null ? `${formatNum(l.kgVivos)} kg` : "—"}</td>
+                        <td className="text-end">
+                          {l.unidadesDecomisadas > 0
+                            ? <span className="text-danger fw-semibold">{formatNum(l.unidadesDecomisadas)}</span>
+                            : "—"}
+                        </td>
+                        <td>
+                          <div className="d-flex gap-1 justify-content-end">
+                            {puedeGestionar && (
+                              <button className="btn btn-outline-warning btn-sm" title="Editar"
+                                onClick={() => setLoteEditar(l)}>
+                                <i className="bi bi-pencil"></i>
+                              </button>
+                            )}
+                            {esSuperAdmin && (
+                              <button className="btn btn-outline-danger btn-sm" title="Eliminar"
+                                onClick={() => handleEliminarLote(l)}>
+                                <i className="bi bi-trash"></i>
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
       {localStorage.getItem("rolUsuario") !== "frigorifico" && (
         <p className="text-muted mt-2 small">
           <i className="bi bi-clock me-1"></i>
@@ -401,6 +607,14 @@ const GranjaDashboardPage = () => {
         </p>
       )}
       </div>
+
+      {loteEditar && (
+        <EditarLoteModal
+          lote={loteEditar}
+          onClose={() => setLoteEditar(null)}
+          onGuardado={() => { setLoteEditar(null); cargarDatos(); }}
+        />
+      )}
     </Layout>
   );
 };

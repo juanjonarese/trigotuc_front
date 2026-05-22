@@ -4,6 +4,7 @@ import {
   obtenerLotesGranja,
   obtenerOrdenesCarga,
   crearOrdenCarga,
+  actualizarOrdenCarga,
   entregarOrdenCarga,
 } from "../services/api";
 import { formatearFechaLocal, ajustarFechaParaGuardar, obtenerFechaHoy } from "../utils/dateUtils";
@@ -179,18 +180,16 @@ const RecepcionarModal = ({ orden, onClose, onConfirmada }) => {
 
 // ── Modal nuevo pedido ──────────────────────────────────────────────────────
 const NuevoPedidoModal = ({ lotePresel, onClose, onCreado }) => {
-  const [lotes, setLotes] = useState([]);
+  const [lotes, setLotes]   = useState([]);
   const [saving, setSaving] = useState(false);
-
   const [form, setForm] = useState({
-    granja:           lotePresel?.granja || "",
-    galpon:           lotePresel?.galpon ? String(lotePresel.galpon) : "",
-    lote:             lotePresel?._id    || "",
-    fechaEmision:     obtenerFechaHoy(),
-    cantidadEstimada: "",
-    pesoEstimadoKg:   "",
-    observaciones:    "",
+    granja:        lotePresel?.granja || "",
+    galpon:        lotePresel?.galpon ? String(lotePresel.galpon) : "",
+    lote:          lotePresel?._id    || "",
+    fechaEmision:  obtenerFechaHoy(),
+    observaciones: "",
   });
+  const [lineas, setLineas] = useState([{ cantidad: "", pesoMin: "", pesoMax: "" }]);
 
   useEffect(() => {
     obtenerLotesGranja({ estado: "en_crianza" }).then(setLotes).catch(() => {});
@@ -198,22 +197,33 @@ const NuevoPedidoModal = ({ lotePresel, onClose, onCreado }) => {
 
   const granjaInfo       = GRANJAS.find((g) => g.key === form.granja) || null;
   const loteSeleccionado = lotes.find((l) => l._id === form.lote) || lotePresel || null;
-  const lotesFiltrados   = lotes.filter((l) =>
-    (!form.granja || l.granja === form.granja) &&
-    (!form.galpon  || l.galpon === Number(form.galpon))
-  );
+
+  const totalPollos = lineas.reduce((s, l) => s + (Number(l.cantidad) || 0), 0);
+  const totalKg     = lineas.reduce((s, l) => {
+    const cant = Number(l.cantidad) || 0;
+    const pMin = Number(l.pesoMin)  || 0;
+    const pMax = Number(l.pesoMax)  || pMin;
+    return s + cant * ((pMin + pMax) / 2);
+  }, 0);
+
+  const actualizarLinea = (idx, campo, valor) =>
+    setLineas((prev) => prev.map((l, i) => i === idx ? { ...l, [campo]: valor } : l));
+  const agregarLinea  = () => setLineas((prev) => [...prev, { cantidad: "", pesoMin: "", pesoMax: "" }]);
+  const eliminarLinea = (idx) => setLineas((prev) => prev.filter((_, i) => i !== idx));
 
   const handleSeleccionarGalpon = (n) => {
-    const lotesGalpon = lotes.filter((l) => l.granja === form.granja && l.galpon === n);
-    const loteAuto = lotesGalpon.length === 1 ? lotesGalpon[0]._id : "";
+    const loteAuto = lotes.find((l) => l.granja === form.granja && l.galpon === n)?._id || "";
     setForm((f) => ({ ...f, galpon: String(n), lote: loteAuto }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.granja || !form.cantidadEstimada || !form.pesoEstimadoKg) {
-      Swal.fire("Faltan datos", "Completá granja, cantidad y peso estimado.", "warning");
-      return;
+    if (!form.granja) {
+      Swal.fire("Faltan datos", "Seleccioná la granja.", "warning"); return;
+    }
+    const lineasValidas = lineas.filter((l) => Number(l.cantidad) > 0 && Number(l.pesoMin) > 0);
+    if (lineasValidas.length === 0) {
+      Swal.fire("Faltan datos", "Completá al menos una línea con cantidad y peso mínimo.", "warning"); return;
     }
     setSaving(true);
     try {
@@ -222,9 +232,14 @@ const NuevoPedidoModal = ({ lotePresel, onClose, onCreado }) => {
         galpon:           form.galpon ? Number(form.galpon) : undefined,
         lote:             form.lote   || undefined,
         fechaEmision:     ajustarFechaParaGuardar(form.fechaEmision),
-        cantidadEstimada: Number(form.cantidadEstimada),
-        pesoEstimadoKg:   Number(form.pesoEstimadoKg),
-        observaciones:    form.observaciones || undefined,
+        cantidadEstimada: totalPollos,
+        pesoEstimadoKg:   Math.round(totalKg * 10) / 10,
+        detalle:          lineasValidas.map((l) => ({
+          cantidad: Number(l.cantidad),
+          pesoMin:  Number(l.pesoMin),
+          pesoMax:  l.pesoMax ? Number(l.pesoMax) : undefined,
+        })),
+        observaciones: form.observaciones || undefined,
       });
       onCreado();
       Swal.fire({ icon: "success", title: "Pedido creado", timer: 1500, showConfirmButton: false });
@@ -255,17 +270,25 @@ const NuevoPedidoModal = ({ lotePresel, onClose, onCreado }) => {
               {loteSeleccionado && (
                 <div className="card bg-light border-0 mb-3">
                   <div className="card-body py-2 px-3">
-                    <div className="small text-muted fw-semibold mb-1 text-uppercase" style={{ letterSpacing: "0.05em" }}>
-                      Stock del galpón
-                    </div>
+                    <div className="small text-muted fw-semibold mb-1 text-uppercase" style={{ letterSpacing: "0.05em" }}>Stock del galpón</div>
                     <div className="d-flex flex-wrap gap-3 align-items-center">
-                      <div className="fw-bold fs-5">
-                        {granjaPrefix(loteSeleccionado.granja)}{loteSeleccionado.galpon}
-                      </div>
+                      <div className="fw-bold fs-5">{granjaPrefix(loteSeleccionado.granja)}{loteSeleccionado.galpon}</div>
                       <div>
                         <span className="fw-bold text-success">{loteSeleccionado.cantidadActual?.toLocaleString("es-AR")}</span>
-                        <span className="text-muted small ms-1">pollos actuales</span>
+                        <span className="text-muted small ms-1">totales</span>
                       </div>
+                      {(loteSeleccionado.cantidadComprometida || 0) > 0 && (
+                        <>
+                          <div>
+                            <span className="fw-semibold text-warning">{loteSeleccionado.cantidadComprometida.toLocaleString("es-AR")}</span>
+                            <span className="text-muted small ms-1">comprometidos</span>
+                          </div>
+                          <div>
+                            <span className="fw-semibold text-success">{(loteSeleccionado.cantidadActual - loteSeleccionado.cantidadComprometida).toLocaleString("es-AR")}</span>
+                            <span className="text-muted small ms-1">disponibles</span>
+                          </div>
+                        </>
+                      )}
                       <div>
                         <span className="text-muted small">Día {diasDeVida(loteSeleccionado.fechaIngreso)} — Sem. {semanaActual(loteSeleccionado.fechaIngreso)}</span>
                       </div>
@@ -283,98 +306,117 @@ const NuevoPedidoModal = ({ lotePresel, onClose, onCreado }) => {
 
               <form id="form-nuevo-pedido" onSubmit={handleSubmit}>
 
-                {/* Granja + Galpón */}
-                <div className="row g-3 mb-3">
-                  <div className="col-6">
-                    <label className="form-label fw-semibold">Granja <span className="text-danger">*</span></label>
-                    <div className="d-flex gap-2">
-                      {GRANJAS.map((g) => (
-                        <button key={g.key} type="button"
-                          className={`btn flex-grow-1 ${form.granja === g.key ? "btn-success" : "btn-outline-secondary"}`}
-                          onClick={() => setForm((f) => ({ ...f, granja: g.key, galpon: "", lote: "" }))}>
-                          {g.label}
-                        </button>
-                      ))}
+                {/* Granja */}
+                <div className="mb-3">
+                  <label className="form-label fw-semibold">Granja <span className="text-danger">*</span></label>
+                  <div className="d-flex gap-2">
+                    {GRANJAS.map((g) => (
+                      <button key={g.key} type="button"
+                        className={`btn flex-grow-1 ${form.granja === g.key ? "btn-success" : "btn-outline-secondary"}`}
+                        onClick={() => setForm((f) => ({ ...f, granja: g.key, galpon: "", lote: "" }))}>
+                        {g.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Galpón */}
+                {granjaInfo && (
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold">Galpón</label>
+                    <div className="d-flex flex-wrap gap-2">
+                      {Array.from({ length: granjaInfo.galpones }, (_, i) => i + 1).map((n) => {
+                        const lg = lotes.find((l) => l.granja === form.granja && l.galpon === n);
+                        const disp = lg ? lg.cantidadActual - (lg.cantidadComprometida || 0) : null;
+                        return (
+                          <button key={n} type="button"
+                            disabled={!lg}
+                            onClick={() => handleSeleccionarGalpon(n)}
+                            className={`btn btn-sm ${form.galpon === String(n) ? "btn-success" : "btn-outline-secondary"}`}
+                            style={{ minWidth: "58px", opacity: lg ? 1 : 0.4 }}>
+                            <div className="fw-bold">{granjaInfo.prefix}{n}</div>
+                            {lg
+                              ? <div style={{ fontSize: "0.6rem" }}>{disp?.toLocaleString("es-AR")}</div>
+                              : <div><i className="bi bi-lock-fill" style={{ fontSize: "0.7rem" }}></i></div>
+                            }
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
-                  <div className="col-12">
-                    <label className="form-label fw-semibold">
-                      Galpón
-                      {!form.granja && <span className="text-muted fw-normal ms-1">(elegí la granja primero)</span>}
-                    </label>
-                    {granjaInfo ? (
-                      <div className="d-flex flex-wrap gap-2">
-                        {Array.from({ length: granjaInfo.galpones }, (_, i) => i + 1).map((n) => {
-                          const loteGalpon = lotes.find((l) => l.granja === form.granja && l.galpon === n);
-                          const seleccionado = form.galpon === String(n);
-                          return (
-                            <button
-                              key={n}
-                              type="button"
-                              disabled={!loteGalpon}
-                              title={!loteGalpon ? "Galpón vacío" : `${loteGalpon.cantidadActual?.toLocaleString("es-AR")} pollos${ultimoPeso(loteGalpon) ? ` · ${formatPeso(ultimoPeso(loteGalpon))}` : ""}`}
-                              onClick={() => handleSeleccionarGalpon(n)}
-                              className={`btn btn-sm ${seleccionado ? "btn-success" : "btn-outline-secondary"}`}
-                              style={{ minWidth: "54px", opacity: loteGalpon ? 1 : 0.45 }}
-                            >
-                              {loteGalpon ? (
-                                <>
-                                  <div className="fw-bold">{granjaInfo.prefix}{n}</div>
-                                  <div style={{ fontSize: "0.65rem" }}>{loteGalpon.cantidadActual?.toLocaleString("es-AR")}</div>
-                                </>
-                              ) : (
-                                <>
-                                  <div className="fw-bold">{granjaInfo.prefix}{n}</div>
-                                  <div><i className="bi bi-lock-fill" style={{ fontSize: "0.75rem" }}></i></div>
-                                </>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="text-muted small fst-italic">—</div>
-                    )}
-                    {loteSeleccionado && (
-                      <div className="form-text text-success mt-1">
-                        <i className="bi bi-check-circle me-1"></i>
-                        Stock: <strong>{loteSeleccionado.cantidadActual?.toLocaleString("es-AR")}</strong> pollos
-                        {ultimoPeso(loteSeleccionado) && <span className="ms-2">· {formatPeso(ultimoPeso(loteSeleccionado))}</span>}
-                      </div>
-                    )}
-                  </div>
+                )}
+
+                {/* Fecha */}
+                <div className="mb-3">
+                  <label className="form-label fw-semibold">Fecha emisión</label>
+                  <input type="date" className="form-control" value={form.fechaEmision}
+                    onChange={(e) => setForm({ ...form, fechaEmision: e.target.value })} required />
                 </div>
 
-                {/* Fecha + Cantidad + Peso */}
-                <div className="row g-3 mb-3">
-                  <div className="col-6 col-md-4">
-                    <label className="form-label fw-semibold">Fecha emisión</label>
-                    <input type="date" className="form-control" value={form.fechaEmision}
-                      onChange={(e) => setForm({ ...form, fechaEmision: e.target.value })} required />
+                {/* Composición */}
+                <div className="mb-3">
+                  <div className="fw-semibold mb-2 small text-uppercase text-muted" style={{ letterSpacing: "0.05em" }}>
+                    Composición estimada
                   </div>
-                  <div className="col-6 col-md-4">
-                    <label className="form-label fw-semibold">Cantidad estimada <span className="text-danger">*</span></label>
-                    <input type="number" className="form-control" placeholder="pollos"
-                      value={form.cantidadEstimada}
-                      onChange={(e) => setForm({ ...form, cantidadEstimada: e.target.value })}
-                      min="1" required />
-                    {loteSeleccionado && (
-                      <div className="form-text">
-                        Stock: {loteSeleccionado.cantidadActual?.toLocaleString("es-AR")} pollos
-                      </div>
-                    )}
-                  </div>
-                  <div className="col-6 col-md-4">
-                    <label className="form-label fw-semibold">Peso estimado (kg) <span className="text-danger">*</span></label>
-                    <input type="number" className="form-control" placeholder="0"
-                      value={form.pesoEstimadoKg}
-                      onChange={(e) => setForm({ ...form, pesoEstimadoKg: e.target.value })}
-                      min="0.01" step="0.01" required />
-                  </div>
+                  <table className="table table-sm table-bordered align-middle mb-2">
+                    <thead className="table-light">
+                      <tr>
+                        <th>Cantidad (pollos)</th>
+                        <th>Peso mín (kg) <span className="text-danger">*</span></th>
+                        <th>Peso máx (kg)</th>
+                        <th style={{ width: "2.5rem" }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lineas.map((linea, idx) => (
+                        <tr key={idx}>
+                          <td>
+                            <input type="number" className="form-control form-control-sm" min="1" placeholder="ej: 12000"
+                              value={linea.cantidad}
+                              onChange={(e) => actualizarLinea(idx, "cantidad", e.target.value)} />
+                          </td>
+                          <td>
+                            <input type="number" className="form-control form-control-sm" min="0.1" step="0.1" placeholder="ej: 3.6"
+                              value={linea.pesoMin}
+                              onChange={(e) => actualizarLinea(idx, "pesoMin", e.target.value)} />
+                          </td>
+                          <td>
+                            <input type="number" className="form-control form-control-sm" min="0.1" step="0.1" placeholder="ej: 3.9"
+                              value={linea.pesoMax}
+                              onChange={(e) => actualizarLinea(idx, "pesoMax", e.target.value)} />
+                          </td>
+                          <td className="text-center">
+                            {lineas.length > 1 && (
+                              <button type="button" className="btn btn-outline-danger btn-sm p-0 px-1" onClick={() => eliminarLinea(idx)}>
+                                <i className="bi bi-x-lg"></i>
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <button type="button" className="btn btn-outline-success btn-sm" onClick={agregarLinea}>
+                    <i className="bi bi-plus-circle me-1"></i>Agregar línea
+                  </button>
                 </div>
+
+                {/* Totales calculados */}
+                {totalPollos > 0 && (
+                  <div className="rounded px-3 py-2 mb-3 d-flex gap-4" style={{ background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
+                    <div>
+                      <div className="fw-bold fs-5 text-success">{totalPollos.toLocaleString("es-AR")}</div>
+                      <div className="text-muted small">pollos totales</div>
+                    </div>
+                    <div>
+                      <div className="fw-bold fs-5 text-success">{(Math.round(totalKg * 10) / 10).toLocaleString("es-AR")} kg</div>
+                      <div className="text-muted small">kg estimados (prom.)</div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Observaciones */}
-                <div className="mb-2">
+                <div className="mb-1">
                   <label className="form-label">Observaciones (opcional)</label>
                   <textarea className="form-control" rows={2} value={form.observaciones}
                     onChange={(e) => setForm({ ...form, observaciones: e.target.value })} />
@@ -398,6 +440,251 @@ const NuevoPedidoModal = ({ lotePresel, onClose, onCreado }) => {
   );
 };
 
+// ── Modal editar pedido ─────────────────────────────────────────────────────
+const EditarPedidoModal = ({ orden, onClose, onGuardado }) => {
+  const [lotes, setLotes]   = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    granja:        orden.granja || "",
+    galpon:        orden.galpon ? String(orden.galpon) : "",
+    lote:          orden.lote?._id || orden.lote || "",
+    fechaEmision:  orden.fechaEmision?.split("T")[0] || obtenerFechaHoy(),
+    observaciones: orden.observaciones || "",
+  });
+  const [lineas, setLineas] = useState(
+    orden.detalle?.length > 0
+      ? orden.detalle.map((l) => ({ cantidad: String(l.cantidad), pesoMin: String(l.pesoMin), pesoMax: l.pesoMax && Math.abs(l.pesoMax - l.pesoMin) > 0.01 ? String(l.pesoMax) : "" }))
+      : [{ cantidad: "", pesoMin: "", pesoMax: "" }]
+  );
+
+  useEffect(() => {
+    obtenerLotesGranja({ estado: "en_crianza" }).then(setLotes).catch(() => {});
+  }, []);
+
+  const granjaInfo       = GRANJAS.find((g) => g.key === form.granja) || null;
+  const loteSeleccionado = lotes.find((l) => l._id === form.lote) || null;
+
+  const totalPollos = lineas.reduce((s, l) => s + (Number(l.cantidad) || 0), 0);
+  const totalKg     = lineas.reduce((s, l) => {
+    const cant = Number(l.cantidad) || 0;
+    const pMin = Number(l.pesoMin)  || 0;
+    const pMax = Number(l.pesoMax)  || pMin;
+    return s + cant * ((pMin + pMax) / 2);
+  }, 0);
+
+  const actualizarLinea = (idx, campo, valor) =>
+    setLineas((prev) => prev.map((l, i) => i === idx ? { ...l, [campo]: valor } : l));
+  const agregarLinea  = () => setLineas((prev) => [...prev, { cantidad: "", pesoMin: "", pesoMax: "" }]);
+  const eliminarLinea = (idx) => setLineas((prev) => prev.filter((_, i) => i !== idx));
+
+  const handleSeleccionarGalpon = (n) => {
+    const loteAuto = lotes.find((l) => l.granja === form.granja && l.galpon === n)?._id || "";
+    setForm((f) => ({ ...f, galpon: String(n), lote: loteAuto }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const lineasValidas = lineas.filter((l) => Number(l.cantidad) > 0 && Number(l.pesoMin) > 0);
+    if (lineasValidas.length === 0) {
+      Swal.fire("Faltan datos", "Completá al menos una línea con cantidad y peso mínimo.", "warning"); return;
+    }
+    setSaving(true);
+    try {
+      await actualizarOrdenCarga(orden._id, {
+        granja:           form.granja,
+        galpon:           form.galpon ? Number(form.galpon) : undefined,
+        lote:             form.lote   || undefined,
+        fechaEmision:     ajustarFechaParaGuardar(form.fechaEmision),
+        cantidadEstimada: totalPollos,
+        pesoEstimadoKg:   Math.round(totalKg * 10) / 10,
+        detalle:          lineasValidas.map((l) => ({
+          cantidad: Number(l.cantidad),
+          pesoMin:  Number(l.pesoMin),
+          pesoMax:  l.pesoMax ? Number(l.pesoMax) : undefined,
+        })),
+        observaciones: form.observaciones || undefined,
+      });
+      onGuardado();
+      Swal.fire({ icon: "success", title: "Pedido actualizado", timer: 1500, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire("Error", err.message, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const granjaPrefix = (g) => GRANJAS.find((x) => x.key === g)?.prefix || "";
+
+  return (
+    <>
+      <div className="modal show d-block" tabIndex="-1">
+        <div className="modal-dialog modal-lg modal-dialog-scrollable">
+          <div className="modal-content">
+            <div className="modal-header bg-warning text-dark">
+              <h5 className="modal-title">
+                <i className="bi bi-pencil-square me-2"></i>Editar pedido — {orden.numero}
+              </h5>
+              <button className="btn-close" onClick={onClose} disabled={saving}></button>
+            </div>
+
+            <div className="modal-body">
+              {loteSeleccionado && (
+                <div className="card bg-light border-0 mb-3">
+                  <div className="card-body py-2 px-3">
+                    <div className="small text-muted fw-semibold mb-1 text-uppercase" style={{ letterSpacing: "0.05em" }}>Stock del galpón</div>
+                    <div className="d-flex flex-wrap gap-3 align-items-center">
+                      <div className="fw-bold fs-5">{granjaPrefix(loteSeleccionado.granja)}{loteSeleccionado.galpon}</div>
+                      <div>
+                        <span className="fw-bold text-success">{loteSeleccionado.cantidadActual?.toLocaleString("es-AR")}</span>
+                        <span className="text-muted small ms-1">totales</span>
+                      </div>
+                      {(loteSeleccionado.cantidadComprometida || 0) > 0 && (
+                        <div>
+                          <span className="fw-semibold text-warning">{loteSeleccionado.cantidadComprometida.toLocaleString("es-AR")}</span>
+                          <span className="text-muted small ms-1">comprometidos</span>
+                        </div>
+                      )}
+                      {ultimoPeso(loteSeleccionado) && (
+                        <div>
+                          <i className="bi bi-speedometer2 me-1 text-primary"></i>
+                          <span className="text-primary fw-semibold">{formatPeso(ultimoPeso(loteSeleccionado))}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <form id="form-editar-pedido" onSubmit={handleSubmit}>
+
+                {/* Granja */}
+                <div className="mb-3">
+                  <label className="form-label fw-semibold">Granja</label>
+                  <div className="d-flex gap-2">
+                    {GRANJAS.map((g) => (
+                      <button key={g.key} type="button"
+                        className={`btn flex-grow-1 ${form.granja === g.key ? "btn-success" : "btn-outline-secondary"}`}
+                        onClick={() => setForm((f) => ({ ...f, granja: g.key, galpon: "", lote: "" }))}>
+                        {g.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Galpón */}
+                {granjaInfo && (
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold">Galpón</label>
+                    <div className="d-flex flex-wrap gap-2">
+                      {Array.from({ length: granjaInfo.galpones }, (_, i) => i + 1).map((n) => {
+                        const lg = lotes.find((l) => l.granja === form.granja && l.galpon === n);
+                        const disp = lg ? lg.cantidadActual - (lg.cantidadComprometida || 0) : null;
+                        return (
+                          <button key={n} type="button"
+                            disabled={!lg}
+                            onClick={() => handleSeleccionarGalpon(n)}
+                            className={`btn btn-sm ${form.galpon === String(n) ? "btn-success" : "btn-outline-secondary"}`}
+                            style={{ minWidth: "58px", opacity: lg ? 1 : 0.4 }}>
+                            <div className="fw-bold">{granjaInfo.prefix}{n}</div>
+                            {lg
+                              ? <div style={{ fontSize: "0.6rem" }}>{disp?.toLocaleString("es-AR")}</div>
+                              : <div><i className="bi bi-lock-fill" style={{ fontSize: "0.7rem" }}></i></div>
+                            }
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Fecha */}
+                <div className="mb-3">
+                  <label className="form-label fw-semibold">Fecha emisión</label>
+                  <input type="date" className="form-control" value={form.fechaEmision}
+                    onChange={(e) => setForm({ ...form, fechaEmision: e.target.value })} />
+                </div>
+
+                {/* Composición */}
+                <div className="mb-3">
+                  <div className="fw-semibold mb-2 small text-uppercase text-muted" style={{ letterSpacing: "0.05em" }}>Composición estimada</div>
+                  <table className="table table-sm table-bordered align-middle mb-2">
+                    <thead className="table-light">
+                      <tr>
+                        <th>Cantidad (pollos)</th>
+                        <th>Peso mín (kg) <span className="text-danger">*</span></th>
+                        <th>Peso máx (kg)</th>
+                        <th style={{ width: "2.5rem" }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lineas.map((linea, idx) => (
+                        <tr key={idx}>
+                          <td>
+                            <input type="number" className="form-control form-control-sm" min="1" placeholder="ej: 12000"
+                              value={linea.cantidad} onChange={(e) => actualizarLinea(idx, "cantidad", e.target.value)} />
+                          </td>
+                          <td>
+                            <input type="number" className="form-control form-control-sm" min="0.1" step="0.1" placeholder="ej: 3.6"
+                              value={linea.pesoMin} onChange={(e) => actualizarLinea(idx, "pesoMin", e.target.value)} />
+                          </td>
+                          <td>
+                            <input type="number" className="form-control form-control-sm" min="0.1" step="0.1" placeholder="ej: 3.9"
+                              value={linea.pesoMax} onChange={(e) => actualizarLinea(idx, "pesoMax", e.target.value)} />
+                          </td>
+                          <td className="text-center">
+                            {lineas.length > 1 && (
+                              <button type="button" className="btn btn-outline-danger btn-sm p-0 px-1" onClick={() => eliminarLinea(idx)}>
+                                <i className="bi bi-x-lg"></i>
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <button type="button" className="btn btn-outline-success btn-sm" onClick={agregarLinea}>
+                    <i className="bi bi-plus-circle me-1"></i>Agregar línea
+                  </button>
+                </div>
+
+                {/* Totales */}
+                {totalPollos > 0 && (
+                  <div className="rounded px-3 py-2 mb-3 d-flex gap-4" style={{ background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
+                    <div>
+                      <div className="fw-bold fs-5 text-success">{totalPollos.toLocaleString("es-AR")}</div>
+                      <div className="text-muted small">pollos totales</div>
+                    </div>
+                    <div>
+                      <div className="fw-bold fs-5 text-success">{(Math.round(totalKg * 10) / 10).toLocaleString("es-AR")} kg</div>
+                      <div className="text-muted small">kg estimados (prom.)</div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Observaciones */}
+                <div className="mb-1">
+                  <label className="form-label">Observaciones (opcional)</label>
+                  <textarea className="form-control" rows={2} value={form.observaciones}
+                    onChange={(e) => setForm({ ...form, observaciones: e.target.value })} />
+                </div>
+              </form>
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn btn-outline-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
+              <button type="submit" form="form-editar-pedido" className="btn btn-warning" disabled={saving}>
+                {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
+                <i className="bi bi-check-circle me-1"></i>Guardar cambios
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="modal-backdrop show"></div>
+    </>
+  );
+};
+
 // ── Página principal ────────────────────────────────────────────────────────
 const PedidosGranjaPage = () => {
   const rolUsuario = localStorage.getItem("rolUsuario");
@@ -409,6 +696,7 @@ const PedidosGranjaPage = () => {
   const [showModal, setShowModal]       = useState(false);
   const [lotePresel, setLotePresel]     = useState(null);
   const [ordenRecepcion, setOrdenRecepcion] = useState(null);
+  const [ordenEditar, setOrdenEditar]   = useState(null);
   const [filtroPedido, setFiltroPedido] = useState("pendiente");
 
   const cargar = useCallback(async () => {
@@ -486,6 +774,11 @@ const PedidosGranjaPage = () => {
                       const dias   = lote ? diasDeVida(lote.fechaIngreso) : null;
                       const sem    = lote ? semanaActual(lote.fechaIngreso) : null;
                       const peso   = lote ? ultimoPeso(lote) : null;
+                      const comprometidos = lote?.cantidadComprometida || 0;
+                      const disponibles   = lote ? lote.cantidadActual - comprometidos : 0;
+                      const pedidosPendientes = pedidos.filter(
+                        (p) => p.estado === "pendiente" && p.granja === key && p.galpon === n
+                      ).length;
                       const barColor = !lote ? "#ced4da" : dias < 30 ? "#198754" : dias < 40 ? "#fd7e14" : "#dc3545";
 
                       return (
@@ -511,8 +804,26 @@ const PedidosGranjaPage = () => {
                                   <div className="small fw-semibold">
                                     {lote.cantidadActual?.toLocaleString("es-AR")} pollos
                                   </div>
+                                  {comprometidos > 0 && (
+                                    <>
+                                      <div className="small text-warning fw-semibold">
+                                        {comprometidos.toLocaleString("es-AR")} comprometidos
+                                      </div>
+                                      <div className="small fw-semibold" style={{ color: "#16a34a" }}>
+                                        {disponibles.toLocaleString("es-AR")} disponibles
+                                      </div>
+                                    </>
+                                  )}
                                   {peso && (
                                     <div className="small text-primary">{formatPeso(peso)}</div>
+                                  )}
+                                  {pedidosPendientes > 0 && (
+                                    <div className="mt-1">
+                                      <span className="badge bg-primary" style={{ fontSize: "0.6rem" }}>
+                                        <i className="bi bi-clipboard2-check me-1"></i>
+                                        {pedidosPendientes} pedido{pedidosPendientes > 1 ? "s" : ""} activo{pedidosPendientes > 1 ? "s" : ""}
+                                      </span>
+                                    </div>
                                   )}
                                   <div className="mt-1">
                                     <span className="badge bg-success bg-opacity-75" style={{ fontSize: "0.6rem" }}>
@@ -676,9 +987,14 @@ const PedidosGranjaPage = () => {
                             <td>{estadoBadgePedido(o)}</td>
                             <td>
                               {o.estado === "pendiente" && (
-                                <button className="btn btn-primary btn-sm" onClick={() => setOrdenRecepcion(o)}>
-                                  <i className="bi bi-box-arrow-in-down me-1"></i>Recepcionar
-                                </button>
+                                <div className="d-flex gap-1">
+                                  <button className="btn btn-outline-warning btn-sm" onClick={() => setOrdenEditar(o)}>
+                                    <i className="bi bi-pencil"></i>
+                                  </button>
+                                  <button className="btn btn-primary btn-sm" onClick={() => setOrdenRecepcion(o)}>
+                                    <i className="bi bi-box-arrow-in-down me-1"></i>Recepcionar
+                                  </button>
+                                </div>
                               )}
                               {o.estado === "entregada" && !o.loteAsociado && (
                                 <span className="badge bg-info text-dark">Pendiente faena</span>
@@ -714,6 +1030,14 @@ const PedidosGranjaPage = () => {
           orden={ordenRecepcion}
           onClose={() => setOrdenRecepcion(null)}
           onConfirmada={() => { setOrdenRecepcion(null); cargar(); }}
+        />
+      )}
+
+      {ordenEditar && (
+        <EditarPedidoModal
+          orden={ordenEditar}
+          onClose={() => setOrdenEditar(null)}
+          onGuardado={() => { setOrdenEditar(null); cargar(); }}
         />
       )}
     </Layout>

@@ -26,20 +26,15 @@ const TROZADO_TIPOS = [
 
 const TrozadoTable = ({ lineas, onChange, kgTrozadosTotal }) => {
   const set = (tipo, campo, valor) => {
-    const nuevas = lineas.map((l) =>
-      l.tipo === tipo ? { ...l, [campo]: valor } : l
-    );
-    onChange(nuevas);
+    onChange(lineas.map((l) => l.tipo === tipo ? { ...l, [campo]: valor } : l));
   };
 
-  const totalKg    = lineas.reduce((s, l) => s + (Number(l.kgTotal) || 0), 0);
-  const totalCajas = lineas.reduce((s, l) => {
-    const kg    = Number(l.kgTotal) || 0;
-    const kgCaj = Number(l.kgCaja)  || 1;
-    return s + Math.floor(kg / kgCaj);
+  const totalCajas = lineas.reduce((s, l) => s + (Number(l.cajas) || 0), 0);
+  const totalKg    = lineas.reduce((s, l) => {
+    return s + (Number(l.cajas) || 0) * (Number(l.kgCaja) || 1);
   }, 0);
 
-  const kgRef     = Number(kgTrozadosTotal) || 0;
+  const kgRef      = Number(kgTrozadosTotal) || 0;
   const diferencia = kgRef > 0 ? +(totalKg - kgRef).toFixed(2) : null;
 
   return (
@@ -50,15 +45,15 @@ const TrozadoTable = ({ lineas, onChange, kgTrozadosTotal }) => {
             <tr>
               <th style={{ width: 110 }}>Tipo</th>
               <th style={{ width: 90 }} className="text-center">Kg/caja</th>
-              <th style={{ width: 130 }}>Kg totales</th>
-              <th className="text-end">Cajas</th>
+              <th style={{ width: 130 }}>Cajas</th>
+              <th className="text-end">Kg calculados</th>
             </tr>
           </thead>
           <tbody>
             {lineas.map((l) => {
-              const kg    = Number(l.kgTotal) || 0;
-              const kgCaj = Number(l.kgCaja)  || 1;
-              const cajas = Math.floor(kg / kgCaj);
+              const cajas = Number(l.cajas) || 0;
+              const kgCaj = Number(l.kgCaja) || 1;
+              const kg    = cajas * kgCaj;
               return (
                 <tr key={l.tipo}>
                   <td className="fw-semibold small">{l.label}</td>
@@ -80,13 +75,15 @@ const TrozadoTable = ({ lineas, onChange, kgTrozadosTotal }) => {
                     <input
                       type="number"
                       className="form-control form-control-sm"
-                      value={l.kgTotal}
-                      onChange={(e) => set(l.tipo, "kgTotal", e.target.value)}
-                      min="0" step="0.1" placeholder="0"
+                      value={l.cajas}
+                      onChange={(e) => set(l.tipo, "cajas", e.target.value)}
+                      min="0" step="1" placeholder="0"
                     />
                   </td>
                   <td className="text-end fw-semibold">
-                    {cajas > 0 ? cajas : <span className="text-muted">—</span>}
+                    {kg > 0
+                      ? <span className="text-success">{fmtNum(kg)} kg</span>
+                      : <span className="text-muted">—</span>}
                   </td>
                 </tr>
               );
@@ -95,16 +92,16 @@ const TrozadoTable = ({ lineas, onChange, kgTrozadosTotal }) => {
           <tfoot className="table-light">
             <tr>
               <td colSpan={2} className="fw-semibold small">Total</td>
-              <td className="fw-semibold">
+              <td className="fw-semibold text-primary">
+                {totalCajas > 0 ? `${totalCajas} cajas` : "—"}
+              </td>
+              <td className="text-end fw-semibold">
                 {totalKg > 0 ? `${fmtNum(totalKg)} kg` : "—"}
                 {diferencia !== null && (
                   <span className={`ms-2 small ${Math.abs(diferencia) > 0.1 ? "text-danger" : "text-success"}`}>
-                    {diferencia === 0 ? "✓" : `(${diferencia > 0 ? "+" : ""}${diferencia} kg vs ingresado)`}
+                    {diferencia === 0 ? "✓" : `(${diferencia > 0 ? "+" : ""}${diferencia} kg)`}
                   </span>
                 )}
-              </td>
-              <td className="text-end fw-semibold text-primary">
-                {totalCajas > 0 ? `${totalCajas} cajas` : "—"}
               </td>
             </tr>
           </tfoot>
@@ -136,7 +133,7 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
   const [form, setForm]         = useState(FORM_VACIO);
   const [lineas, setLineas]     = useState([]);
   const [trozados, setTrozados] = useState(
-    TROZADO_TIPOS.map((t) => ({ ...t, kgCaja: t.kgCajaDefault, kgTotal: "" }))
+    TROZADO_TIPOS.map((t) => ({ ...t, kgCaja: t.kgCajaDefault, cajas: "" }))
   );
   const [saving, setSaving]     = useState(false);
   const calibreRef              = useRef(null);
@@ -205,8 +202,8 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
       if (recepcionSel)             payload.ordenCarga          = recepcionSel._id;
 
       const trozadosPayload = trozados
-        .filter((t) => Number(t.kgTotal) > 0)
-        .map((t) => ({ tipo: t.tipo, kgCaja: Number(t.kgCaja), kgTotal: Number(t.kgTotal) }));
+        .filter((t) => Number(t.cajas) > 0)
+        .map((t) => ({ tipo: t.tipo, kgCaja: Number(t.kgCaja), kgTotal: Number(t.cajas) * Number(t.kgCaja) }));
       if (trozadosPayload.length > 0) payload.trozados = trozadosPayload;
 
       const loteCreado = await crearLote(payload);

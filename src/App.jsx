@@ -13,12 +13,9 @@ import CajaPage from "./pages/CajaPage";
 import GranjaDashboardPage from "./pages/GranjaDashboardPage";
 import LoteCreatePage from "./pages/LoteCreatePage";
 import PedidosGranjaPage from "./pages/PedidosGranjaPage";
-import VentasPolloPage from "./pages/VentasPolloPage";
-import ListasPreciosPage from "./pages/ListasPreciosPage";
 import EnvioCamaraPage from "./pages/EnvioCamaraPage";
 import CamionesPage from "./pages/CamionesPage";
 import DecomisadosPage from "./pages/DecomisadosPage";
-import OrdenesRetiroPage from "./pages/OrdenesRetiroPage";
 import GranjaLotesPage from "./pages/GranjaLotesPage";
 import GranjaLoteNuevoPage from "./pages/GranjaLoteNuevoPage";
 import GranjaCargaDatosPage from "./pages/GranjaCargaDatosPage";
@@ -157,22 +154,6 @@ function App() {
           }
         />
         <Route
-          path="/frigorifico/ventas"
-          element={
-            <ProtectedRoute>
-              <VentasPolloPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/listas-precios"
-          element={
-            <ProtectedRoute>
-              <ListasPreciosPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
           path="/frigorifico/envios"
           element={
             <ProtectedRoute>
@@ -181,14 +162,6 @@ function App() {
           }
         />
 
-        <Route
-          path="/frigorifico/ordenes-retiro"
-          element={
-            <ProtectedRoute>
-              <OrdenesRetiroPage />
-            </ProtectedRoute>
-          }
-        />
         <Route
           path="/frigorifico/decomisados"
           element={
