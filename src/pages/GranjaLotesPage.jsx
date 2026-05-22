@@ -287,7 +287,7 @@ const EGRESO_CONFIG = {
 const GalponCard = ({ label, lote, onClick }) => {
   if (!lote) {
     return (
-      <div className="card border-0 text-center p-3" style={{ border: "1px dashed #ced4da", opacity: 0.5, minHeight: "110px" }}>
+      <div className="card border-0 text-center p-3" style={{ border: "1px dashed #ced4da", opacity: 0.5, minHeight: "140px" }}>
         <div className="fw-bold fs-4 text-muted">{label}</div>
         <i className="bi bi-dash-circle fs-4 text-muted mt-1"></i>
         <div className="text-muted small mt-1">Vacío</div>
@@ -311,7 +311,7 @@ const GalponCard = ({ label, lote, onClick }) => {
   return (
     <div
       className="card border-0 shadow-sm text-center"
-      style={{ cursor: "pointer", minHeight: "110px", background: bgColor, borderLeft: `4px solid ${barColor}`, overflow: "hidden", position: "relative" }}
+      style={{ cursor: "pointer", minHeight: "140px", background: bgColor, borderLeft: `4px solid ${barColor}`, overflow: "hidden", position: "relative" }}
       onClick={() => onClick(lote)}
     >
       <div className="p-3 pb-2">

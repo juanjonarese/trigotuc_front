@@ -11,7 +11,6 @@ const Layout = ({ children }) => {
   const [frigorificoOpen, setFrigorificoOpen] = useState(false);
   const [granjaOpen, setGranjaOpen] = useState(false);
   const [contableGranjaOpen, setContableGranjaOpen] = useState(false);
-  const [comercialOpen, setComercialOpen] = useState(false);
   const rolUsuario = localStorage.getItem("rolUsuario");
 
   // Helper function to check if a route is active
@@ -54,9 +53,8 @@ const Layout = ({ children }) => {
       setContableGranjaOpen(true);
     }
 
-    // Contable Frigorifico (top-level)
+    // Contable Clientes
     if (
-      path === "/frigorifico/ventas" ||
       path.startsWith("/cobros") ||
       path.startsWith("/cta-cte-clientes") ||
       path.startsWith("/facturacion")
@@ -65,7 +63,7 @@ const Layout = ({ children }) => {
     }
 
     // Frigorifico submenu
-    if (path.startsWith("/frigorifico") && path !== "/frigorifico/ventas" && path !== "/frigorifico/historial-accesos") {
+    if (path.startsWith("/frigorifico") && path !== "/frigorifico/historial-accesos") {
       setFrigorificoOpen(true);
     }
 
@@ -82,12 +80,8 @@ const Layout = ({ children }) => {
 
 
 
-    // Comercial submenu
-    if (path.startsWith("/listas-precios")) {
-      setComercialOpen(true);
-    }
 
-  }, [location.pathname]);
+}, [location.pathname]);
 
   return (
     <div className="dashboard-wrapper">
@@ -356,7 +350,7 @@ const Layout = ({ children }) => {
                       }}
                     >
                       <i className="bi bi-plus-circle"></i>
-                      <span>Nuevo Lote</span>
+                      <span>Faenar</span>
                     </a>
                     <a
                       href="#"
@@ -372,21 +366,6 @@ const Layout = ({ children }) => {
                       <span>Envío Cámara</span>
                     </a>
                   </>
-                )}
-                {(rolUsuario === "superadmin" || rolUsuario === "frigorifico" || rolUsuario === "camaras") && (
-                  <a
-                    href="#"
-                    className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
-                      isActive("/frigorifico/ordenes-retiro") ? "text-white" : "text-white-50"
-                    }`}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      navigate("/frigorifico/ordenes-retiro");
-                    }}
-                  >
-                    <i className="bi bi-box-arrow-right"></i>
-                    <span>Entregas</span>
-                  </a>
                 )}
 
                 {/* Decomisados — comentado temporalmente
@@ -405,45 +384,6 @@ const Layout = ({ children }) => {
             )}
           </div>
 
-          {/* Comercial - superadmin y administracion */}
-          {(rolUsuario === "superadmin" || rolUsuario === "administracion") && (
-            <div className="nav-section mb-2">
-              <a
-                href="#"
-                className="nav-link text-white-50 d-flex align-items-center justify-content-between rounded"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setComercialOpen(!comercialOpen);
-                }}
-              >
-                <div className="d-flex align-items-center gap-2">
-                  <i className="bi bi-shop fs-5"></i>
-                  <span>Comercial</span>
-                </div>
-                <i
-                  className={`bi bi-chevron-${comercialOpen ? "down" : "right"}`}
-                ></i>
-              </a>
-
-              {comercialOpen && (
-                <div className="ps-4 mt-2">
-                  <a
-                    href="#"
-                    className={`nav-link d-flex align-items-center gap-2 rounded ${
-                      isActive("/listas-precios") ? "text-white" : "text-white-50"
-                    }`}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      navigate("/listas-precios");
-                    }}
-                  >
-                    <i className="bi bi-tags"></i>
-                    <span>Listas de Precios</span>
-                  </a>
-                </div>
-              )}
-            </div>
-          )}
         </nav>
 
       </aside>
