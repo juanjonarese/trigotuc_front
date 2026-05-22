@@ -70,11 +70,15 @@ const NuevaOrdenModal = ({ onClose, onCreada, lotes }) => {
 
   const maxGalpones = form.granja ? (GALPONES_MAX[form.granja] || 8) : 0;
 
+  const loteGalpon = form.granja && form.galpon
+    ? lotes.find((l) => l.granja === form.granja && l.galpon === Number(form.galpon)) || null
+    : null;
+
   const sumLineas       = detalle.reduce((s, l) => s + (Number(l.cantidad) || 0), 0);
   const totalVerificado = Number(form.totalPollos) > 0 && sumLineas === Number(form.totalPollos);
 
   useEffect(() => {
-    if (busqueda.length < 2) { setResultados([]); return; }
+    if (busqueda.length < 2 || clienteSeleccionado) { setResultados([]); return; }
     const t = setTimeout(async () => {
       try {
         const data = await buscarClientes(busqueda);
@@ -82,7 +86,7 @@ const NuevaOrdenModal = ({ onClose, onCreada, lotes }) => {
       } catch { setResultados([]); }
     }, 300);
     return () => clearTimeout(t);
-  }, [busqueda]);
+  }, [busqueda, clienteSeleccionado]);
 
   const seleccionarCliente = (c) => {
     setClienteSeleccionado(c);
@@ -233,15 +237,43 @@ const NuevaOrdenModal = ({ onClose, onCreada, lotes }) => {
                 {form.granja && (
                   <div className="mb-3">
                     <label className="form-label fw-semibold">Galpón</label>
-                    <div className="d-flex flex-wrap gap-2">
-                      {Array.from({ length: maxGalpones }, (_, i) => i + 1).map((n) => (
-                        <button key={n} type="button"
-                          className={`btn ${form.galpon == n ? "btn-success" : "btn-outline-secondary"}`}
-                          style={{ minWidth: "3rem" }}
-                          onClick={() => setForm((f) => ({ ...f, galpon: n }))}>{n}
-                        </button>
-                      ))}
+                    <div className="d-flex flex-wrap gap-2 mb-2">
+                      {Array.from({ length: maxGalpones }, (_, i) => i + 1).map((n) => {
+                        const lt = lotes.find((l) => l.granja === form.granja && l.galpon === n);
+                        const disp = lt ? lt.cantidadActual - (lt.cantidadComprometida || 0) : null;
+                        return (
+                          <button key={n} type="button"
+                            className={`btn ${form.galpon == n ? "btn-success" : "btn-outline-secondary"}`}
+                            style={{ minWidth: "3.5rem" }}
+                            onClick={() => setForm((f) => ({ ...f, galpon: n }))}>
+                            <div>{n}</div>
+                            {disp !== null && (
+                              <div style={{ fontSize: "0.6rem", lineHeight: 1.2 }}>
+                                {disp.toLocaleString("es-AR")}
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
+                    {loteGalpon && (
+                      <div className="rounded px-3 py-2 small d-flex flex-wrap gap-3" style={{ background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
+                        <span className="text-muted">Lote #{loteGalpon.numeroLote}</span>
+                        <span><strong>{loteGalpon.cantidadActual.toLocaleString("es-AR")}</strong> totales</span>
+                        {(loteGalpon.cantidadComprometida || 0) > 0 && (
+                          <span className="text-warning fw-semibold">{loteGalpon.cantidadComprometida.toLocaleString("es-AR")} comprometidos</span>
+                        )}
+                        <span className="text-success fw-semibold">
+                          {(loteGalpon.cantidadActual - (loteGalpon.cantidadComprometida || 0)).toLocaleString("es-AR")} disponibles
+                        </span>
+                      </div>
+                    )}
+                    {form.galpon && !loteGalpon && (
+                      <div className="rounded px-3 py-2 small text-muted" style={{ background: "#fef9c3", border: "1px solid #fde68a" }}>
+                        <i className="bi bi-exclamation-triangle me-1 text-warning"></i>
+                        No hay lote activo en este galpón.
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -359,11 +391,13 @@ const generarPDF = (o) => {
   const doc = new jsPDF();
   const clienteNombre = o.cliente?.razonSocial || o.cliente?.nombre || "";
   const granjaStr = o.granja === "cañete" ? "Cañete" : "Los Pinos";
-  const fecha = new Date(o.fechaEmision).toLocaleDateString("es-AR");
-  const W = 210; // ancho A4
+  const galponStr = o.galpon ? `${granjaStr} — Galpón ${o.galpon}` : granjaStr;
+  const fecha     = new Date(o.fechaEmision).toLocaleDateString("es-AR");
+  const turnoStr  = o.turno === "mañana" ? "Mañana" : o.turno === "tarde" ? "Tarde" : "";
+  const W = 210;
 
-  // Header
-  doc.setFontSize(20); doc.setFont("helvetica", "bold");
+  // ── Header ──────────────────────────────────────────────────────────────────
+  doc.setFontSize(20); doc.setFont("helvetica", "bold"); doc.setTextColor(0);
   doc.text("Trigotuc Avícola", 14, 20);
   doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.setTextColor(100);
   doc.text("Orden de Retiro", 14, 27);
@@ -376,69 +410,117 @@ const generarPDF = (o) => {
   doc.setDrawColor(50); doc.setLineWidth(0.5);
   doc.line(14, 31, W - 14, 31);
 
-  // Código de retiro — destacado
+  let y = 35;
+
+  // ── Código de retiro ────────────────────────────────────────────────────────
   if (o.codigoRetiro) {
     doc.setFillColor(26, 122, 26);
-    doc.roundedRect(14, 35, W - 28, 16, 3, 3, "F");
+    doc.roundedRect(14, y, W - 28, 16, 3, 3, "F");
     doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(200, 255, 200);
-    doc.text("CÓDIGO DE RETIRO — presentar al momento de retirar", W / 2, 41, { align: "center" });
+    doc.text("CÓDIGO DE RETIRO — presentar al momento de retirar", W / 2, y + 6, { align: "center" });
     doc.setFontSize(18); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255);
-    doc.text(o.codigoRetiro, W / 2, 48, { align: "center" });
+    doc.text(o.codigoRetiro, W / 2, y + 13, { align: "center" });
+    y += 22;
   }
 
-  // Cliente
-  doc.setTextColor(0);
+  // ── Cliente ─────────────────────────────────────────────────────────────────
   doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.setTextColor(130);
-  doc.text("CLIENTE", 14, 59);
+  doc.text("CLIENTE", 14, y + 4);
   doc.setFontSize(12); doc.setFont("helvetica", "bold"); doc.setTextColor(0);
-  doc.text(clienteNombre, 14, 66);
+  doc.text(clienteNombre, 14, y + 11);
+  y += 18;
 
-  // Granja + Galpón
+  // ── Granja / Galpón / Turno ─────────────────────────────────────────────────
   doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.setTextColor(130);
-  doc.text("GRANJA / GALPÓN", 14, 76);
+  doc.text("GRANJA / GALPÓN", 14, y + 4);
+  if (turnoStr) doc.text("TURNO", W / 2, y + 4);
   doc.setFontSize(11); doc.setFont("helvetica", "normal"); doc.setTextColor(0);
-  const galponStr = o.galpon ? `${granjaStr} — Galpón ${o.galpon}` : granjaStr;
-  doc.text(galponStr, 14, 83);
+  doc.text(galponStr, 14, y + 11);
+  if (turnoStr) {
+    doc.setFont("helvetica", "bold");
+    doc.text(turnoStr, W / 2, y + 11);
+    doc.setFont("helvetica", "normal");
+  }
+  y += 18;
 
-  // Tabla
+  // ── Composición estimada ─────────────────────────────────────────────────────
   doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.setTextColor(130);
-  doc.text("DETALLE", 14, 92);
+  doc.text("COMPOSICIÓN ESTIMADA", 14, y + 4);
+  y += 7;
   doc.setDrawColor(200); doc.setLineWidth(0.3);
-  doc.line(14, 94, W - 14, 94);
+  doc.line(14, y, W - 14, y);
+  y += 2;
 
-  // Header tabla (sin precio ni total)
+  // Header columnas
   doc.setFillColor(245, 245, 245);
-  doc.rect(14, 96, W - 28, 8, "F");
+  doc.rect(14, y, W - 28, 8, "F");
   doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.setTextColor(80);
-  doc.text("Descripción", 16, 101);
-  doc.text("Cant. estimada (pollos)", 130, 101, { align: "right" });
-  doc.text("Peso estimado (kg)", W - 16, 101, { align: "right" });
+  doc.text("Cant. (pollos)", 16, y + 5.5);
+  doc.text("Peso mín / pollo (kg)", 95, y + 5.5, { align: "right" });
+  doc.text("Peso máx / pollo (kg)", 145, y + 5.5, { align: "right" });
+  doc.text("Kg estimados", W - 16, y + 5.5, { align: "right" });
+  y += 8;
 
-  // Fila datos (sin precio ni total)
-  doc.setFont("helvetica", "normal"); doc.setTextColor(0); doc.setFontSize(9);
-  doc.text(`Pollos gordos — ${galponStr}`, 16, 111);
-  doc.text(Number(o.cantidadEstimada).toLocaleString("es-AR"), 130, 111, { align: "right" });
-  doc.text(`${o.pesoEstimadoKg} kg`, W - 16, 111, { align: "right" });
+  const lineas = o.detalle?.filter((l) => Number(l.cantidad) > 0) || [];
+  let totalPollos = 0, totalKgMin = 0, totalKgMax = 0;
 
-  doc.setDrawColor(200); doc.line(14, 115, W - 14, 115);
+  lineas.forEach((l, i) => {
+    const cant = Number(l.cantidad) || 0;
+    const pMin = Number(l.pesoMin)  || 0;
+    const pMax = Number(l.pesoMax)  || pMin;
+    const kgMin = cant * pMin;
+    const kgMax = cant * pMax;
+    totalPollos += cant;
+    totalKgMin  += kgMin;
+    totalKgMax  += kgMax;
 
-  // Nota
+    if (i % 2 === 1) { doc.setFillColor(250, 250, 250); doc.rect(14, y, W - 28, 7, "F"); }
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(0);
+    doc.text(cant.toLocaleString("es-AR"), 16, y + 5);
+    doc.text(pMin.toLocaleString("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 2 }), 95, y + 5, { align: "right" });
+    doc.text(pMax !== pMin
+      ? pMax.toLocaleString("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 2 })
+      : "—", 145, y + 5, { align: "right" });
+    const kgStr = kgMax > kgMin
+      ? `${Math.round(kgMin).toLocaleString("es-AR")}–${Math.round(kgMax).toLocaleString("es-AR")} kg`
+      : `${Math.round(kgMin).toLocaleString("es-AR")} kg`;
+    doc.text(kgStr, W - 16, y + 5, { align: "right" });
+    y += 7;
+  });
+
+  // Fila de totales
+  doc.setDrawColor(180); doc.line(14, y, W - 14, y); y += 1;
+  doc.setFillColor(235, 247, 235);
+  doc.rect(14, y, W - 28, 8, "F");
+  doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(26, 122, 26);
+  doc.text(`TOTAL: ${totalPollos.toLocaleString("es-AR")} pollos`, 16, y + 5.5);
+  const kgTotalStr = totalKgMax > totalKgMin
+    ? `${Math.round(totalKgMin).toLocaleString("es-AR")}–${Math.round(totalKgMax).toLocaleString("es-AR")} kg est.`
+    : `${Math.round(totalKgMin).toLocaleString("es-AR")} kg est.`;
+  doc.text(kgTotalStr, W - 16, y + 5.5, { align: "right" });
+  y += 13;
+
+  // ── Nota ────────────────────────────────────────────────────────────────────
   doc.setFillColor(255, 251, 234);
   doc.setDrawColor(240, 230, 140); doc.setLineWidth(0.3);
-  doc.roundedRect(14, 118, W - 28, 10, 2, 2, "FD");
+  doc.roundedRect(14, y, W - 28, 10, 2, 2, "FD");
   doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(133, 100, 4);
-  doc.text("Los valores de cantidad y peso son estimados. Se confirmarán al momento de la entrega.", 17, 124);
+  doc.text("Los valores de cantidad y peso son estimados. Se confirmarán al momento de la entrega.", 17, y + 6);
+  y += 15;
 
-  // Observaciones
+  // ── Observaciones ───────────────────────────────────────────────────────────
   if (o.observaciones) {
-    doc.setTextColor(0); doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.setTextColor(130);
-    doc.text("OBSERVACIONES", 14, 135);
+    doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.setTextColor(130);
+    doc.text("OBSERVACIONES", 14, y);
+    y += 6;
     doc.setFont("helvetica", "normal"); doc.setTextColor(0);
-    doc.text(o.observaciones, 14, 141);
+    const obsLines = doc.splitTextToSize(o.observaciones, W - 28);
+    doc.text(obsLines, 14, y);
+    y += obsLines.length * 5 + 5;
   }
 
-  // Firmas
-  const yFirma = 230;
+  // ── Firmas ──────────────────────────────────────────────────────────────────
+  const yFirma = Math.max(y + 20, 230);
   doc.setDrawColor(80); doc.setLineWidth(0.4);
   doc.line(14, yFirma, 90, yFirma);
   doc.line(120, yFirma, W - 14, yFirma);
@@ -446,7 +528,7 @@ const generarPDF = (o) => {
   doc.text("Firma empresa", 52, yFirma + 5, { align: "center" });
   doc.text("Conformidad cliente", 155, yFirma + 5, { align: "center" });
 
-  // Footer
+  // ── Footer ──────────────────────────────────────────────────────────────────
   doc.setFontSize(8); doc.setTextColor(150);
   doc.text(`Trigotuc Avícola — ${o.numero} — Emitida: ${fecha}`, W / 2, 285, { align: "center" });
 
@@ -481,7 +563,7 @@ const EditarOrdenModal = ({ orden, lotes, onClose, onGuardado }) => {
     : `${Math.round(totales.pesoMin).toLocaleString("es-AR")} kg`;
 
   useEffect(() => {
-    if (busqueda.length < 2) { setResultados([]); return; }
+    if (busqueda.length < 2 || clienteSeleccionado) { setResultados([]); return; }
     const t = setTimeout(async () => {
       try {
         const data = await buscarClientes(busqueda);
@@ -489,7 +571,7 @@ const EditarOrdenModal = ({ orden, lotes, onClose, onGuardado }) => {
       } catch { setResultados([]); }
     }, 300);
     return () => clearTimeout(t);
-  }, [busqueda]);
+  }, [busqueda, clienteSeleccionado]);
 
   const seleccionarCliente = (c) => {
     setClienteSeleccionado(c);

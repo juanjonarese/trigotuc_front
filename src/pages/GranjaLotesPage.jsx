@@ -104,6 +104,9 @@ const GalponModal = ({ lote, galponLabel, onClose }) => {
               </h5>
               <div className="small mt-1 opacity-75">
                 Ingreso: {formatearFechaLocal(lote.fechaIngreso)} · Día {dias} / Semana {sem} · {lote.cantidadActual.toLocaleString("es-AR")} pollos
+                {(lote.cantidadComprometida || 0) > 0 && (
+                  <> · <span className="text-warning">{lote.cantidadComprometida.toLocaleString("es-AR")} comprometidos</span> · <span className="text-white fw-semibold">{(lote.cantidadActual - lote.cantidadComprometida).toLocaleString("es-AR")} disponibles</span></>
+                )}
                 {bajas > 0 && ` · ${bajas} bajas`}
               </div>
             </div>
@@ -315,6 +318,14 @@ const GalponCard = ({ label, lote, onClick }) => {
         <div className="fw-bold fs-4" style={{ color: barColor }}>{label}</div>
         <div className="fw-semibold small mt-1">Día {dias} — Sem. {sem}</div>
         <div className="text-muted small">{lote.cantidadActual.toLocaleString("es-AR")} pollos</div>
+        {(lote.cantidadComprometida || 0) > 0 ? (
+          <div className="small mt-1">
+            <span className="badge bg-warning text-dark">{lote.cantidadComprometida.toLocaleString("es-AR")} comprometidos</span>
+            <div className="fw-semibold" style={{ color: "#16a34a" }}>{(lote.cantidadActual - lote.cantidadComprometida).toLocaleString("es-AR")} disponibles</div>
+          </div>
+        ) : (
+          <div className="small fw-semibold" style={{ color: "#16a34a" }}>todos disponibles</div>
+        )}
         {lastPeso != null && (
           <div className="small mt-1" style={{ color: egreso ? cfg.text : "#0d6efd" }}>
             <i className="bi bi-speedometer2 me-1"></i>{formatPeso(lastPeso)}
