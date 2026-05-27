@@ -28,6 +28,7 @@ const CalibreTable = forwardRef(({
   showTotals = true,
   showPrecio = false,
   inputCajones = false,
+  showPollos = true,
   stockCalibres = null,
   preciosPorCalibre = null,
 }, ref) => {
@@ -255,6 +256,7 @@ const CalibreTable = forwardRef(({
             </div>
 
             {/* Preview del valor derivado — oculto en mobile */}
+            {(inputCajones ? showPollos : true) && (
             <div className={showPrecio ? "d-none d-sm-block col-sm-2 col-md-1" : "d-none d-sm-block col-sm-3 col-md-2"}>
               <label className="form-label form-label-sm mb-1 text-muted">
                 {inputCajones ? "Pollos" : "Cajones"}
@@ -272,6 +274,7 @@ const CalibreTable = forwardRef(({
                   : (draftCajones > 0 ? formatNum(draftCajones) : "—")}
               </div>
             </div>
+            )}
 
             {/* Precio por cajón (solo showPrecio) */}
             {showPrecio && (
@@ -325,7 +328,7 @@ const CalibreTable = forwardRef(({
                 {inputCajones ? (
                   <>
                     <th className="text-end">Cajones</th>
-                    <th className="text-end d-none d-md-table-cell">Pollos</th>
+                    {showPollos && <th className="text-end d-none d-md-table-cell">Pollos</th>}
                   </>
                 ) : (
                   <>
@@ -354,7 +357,7 @@ const CalibreTable = forwardRef(({
                   {inputCajones ? (
                     <>
                       <td className="text-end fw-semibold">{formatNum(l.cajones)}</td>
-                      <td className="text-end text-muted d-none d-md-table-cell">{formatNum(l.pollos)}</td>
+                      {showPollos && <td className="text-end text-muted d-none d-md-table-cell">{formatNum(l.pollos)}</td>}
                     </>
                   ) : (
                     <>
@@ -401,7 +404,7 @@ const CalibreTable = forwardRef(({
                   {inputCajones ? (
                     <>
                       <td className="text-end">{formatNum(totalCajones)} caj</td>
-                      <td className="text-end d-none d-md-table-cell">{formatNum(totalPollos)} pollos</td>
+                      {showPollos && <td className="text-end d-none d-md-table-cell">{formatNum(totalPollos)} pollos</td>}
                     </>
                   ) : (
                     <>

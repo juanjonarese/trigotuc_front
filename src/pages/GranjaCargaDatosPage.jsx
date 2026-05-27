@@ -140,12 +140,11 @@ const GranjaCargaDatosPage = () => {
         );
       }
       await Promise.all(promesas);
-      setForm({ fecha: obtenerFechaHoy(), pesoPromedio: "", mortandad: "", observaciones: "" });
       const actualizados = await obtenerLotesGranja({ estado: "en_crianza" });
       setLotes(actualizados);
-      const nuevo = actualizados.find((l) => l._id === loteSeleccionado._id);
-      if (nuevo) setLoteSeleccionado(nuevo);
-      Swal.fire({ icon: "success", title: "Datos guardados", timer: 1400, showConfirmButton: false });
+      await Swal.fire({ icon: "success", title: "Datos guardados", timer: 1400, showConfirmButton: false });
+      setLoteSeleccionado(null);
+      setForm({ fecha: obtenerFechaHoy(), pesoPromedio: "", mortandad: "", observaciones: "" });
     } catch (err) {
       Swal.fire("Error", err.message, "error");
     } finally {

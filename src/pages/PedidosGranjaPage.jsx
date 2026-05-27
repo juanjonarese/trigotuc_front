@@ -6,6 +6,7 @@ import {
   crearOrdenCarga,
   actualizarOrdenCarga,
   entregarOrdenCarga,
+  eliminarOrdenCarga,
 } from "../services/api";
 import { formatearFechaLocal, ajustarFechaParaGuardar, obtenerFechaHoy } from "../utils/dateUtils";
 import Swal from "sweetalert2";
@@ -376,12 +377,12 @@ const NuevoPedidoModal = ({ lotePresel, onClose, onCreado }) => {
                               onChange={(e) => actualizarLinea(idx, "cantidad", e.target.value)} />
                           </td>
                           <td>
-                            <input type="number" className="form-control form-control-sm" min="0.1" step="0.1" placeholder="ej: 3.6"
+                            <input type="number" className="form-control form-control-sm" min="0.1" step="0.01" placeholder="ej: 3.6"
                               value={linea.pesoMin}
                               onChange={(e) => actualizarLinea(idx, "pesoMin", e.target.value)} />
                           </td>
                           <td>
-                            <input type="number" className="form-control form-control-sm" min="0.1" step="0.1" placeholder="ej: 3.9"
+                            <input type="number" className="form-control form-control-sm" min="0.1" step="0.01" placeholder="ej: 3.9"
                               value={linea.pesoMax}
                               onChange={(e) => actualizarLinea(idx, "pesoMax", e.target.value)} />
                           </td>
@@ -624,11 +625,11 @@ const EditarPedidoModal = ({ orden, onClose, onGuardado }) => {
                               value={linea.cantidad} onChange={(e) => actualizarLinea(idx, "cantidad", e.target.value)} />
                           </td>
                           <td>
-                            <input type="number" className="form-control form-control-sm" min="0.1" step="0.1" placeholder="ej: 3.6"
+                            <input type="number" className="form-control form-control-sm" min="0.1" step="0.01" placeholder="ej: 3.6"
                               value={linea.pesoMin} onChange={(e) => actualizarLinea(idx, "pesoMin", e.target.value)} />
                           </td>
                           <td>
-                            <input type="number" className="form-control form-control-sm" min="0.1" step="0.1" placeholder="ej: 3.9"
+                            <input type="number" className="form-control form-control-sm" min="0.1" step="0.01" placeholder="ej: 3.9"
                               value={linea.pesoMax} onChange={(e) => actualizarLinea(idx, "pesoMax", e.target.value)} />
                           </td>
                           <td className="text-center">
@@ -720,6 +721,29 @@ const PedidosGranjaPage = () => {
   const abrirModal = (lote = null) => {
     setLotePresel(lote);
     setShowModal(true);
+  };
+
+  const handleEliminar = async (orden) => {
+    const esEntregada = orden.estado === "entregada";
+    const { isConfirmed } = await Swal.fire({
+      title: "¿Eliminar pedido?",
+      html: esEntregada
+        ? `<div>Se revertirá la recepción y se restaurarán <strong>${orden.cantidadReal?.toLocaleString("es-AR")} pollos</strong> al galpón.</div>`
+        : `<div>Se cancelará el pedido y se liberarán <strong>${orden.cantidadEstimada?.toLocaleString("es-AR")} pollos comprometidos</strong>.</div>`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#dc3545",
+      confirmButtonText: "Sí, eliminar",
+      cancelButtonText: "No",
+    });
+    if (!isConfirmed) return;
+    try {
+      await eliminarOrdenCarga(orden._id);
+      await cargar();
+      Swal.fire({ icon: "success", title: "Pedido eliminado", timer: 1500, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire("Error", err.message, "error");
+    }
   };
 
   const pedidosFiltrados = filtroPedido
@@ -986,22 +1010,33 @@ const PedidosGranjaPage = () => {
                             </td>
                             <td>{estadoBadgePedido(o)}</td>
                             <td>
-                              {o.estado === "pendiente" && (
-                                <div className="d-flex gap-1">
-                                  <button className="btn btn-outline-warning btn-sm" onClick={() => setOrdenEditar(o)}>
-                                    <i className="bi bi-pencil"></i>
+                              <div className="d-flex gap-1 align-items-center flex-wrap">
+                                {o.estado === "pendiente" && (
+                                  <>
+                                    <button className="btn btn-outline-warning btn-sm" onClick={() => setOrdenEditar(o)}>
+                                      <i className="bi bi-pencil"></i>
+                                    </button>
+                                    <button className="btn btn-primary btn-sm" onClick={() => setOrdenRecepcion(o)}>
+                                      <i className="bi bi-box-arrow-in-down me-1"></i>Recepcionar
+                                    </button>
+                                  </>
+                                )}
+                                {o.estado === "entregada" && !o.loteAsociado && (
+                                  <span className="badge bg-info text-dark">Pendiente faena</span>
+                                )}
+                                {o.loteAsociado && (
+                                  <span className="badge bg-success"><i className="bi bi-check2 me-1"></i>Faenado</span>
+                                )}
+                                {esAdmin && !o.loteAsociado && (
+                                  <button
+                                    className="btn btn-outline-danger btn-sm"
+                                    title="Eliminar pedido"
+                                    onClick={() => handleEliminar(o)}
+                                  >
+                                    <i className="bi bi-trash"></i>
                                   </button>
-                                  <button className="btn btn-primary btn-sm" onClick={() => setOrdenRecepcion(o)}>
-                                    <i className="bi bi-box-arrow-in-down me-1"></i>Recepcionar
-                                  </button>
-                                </div>
-                              )}
-                              {o.estado === "entregada" && !o.loteAsociado && (
-                                <span className="badge bg-info text-dark">Pendiente faena</span>
-                              )}
-                              {o.loteAsociado && (
-                                <span className="badge bg-success"><i className="bi bi-check2 me-1"></i>Faenado</span>
-                              )}
+                                )}
+                              </div>
                             </td>
                           </tr>
                           );

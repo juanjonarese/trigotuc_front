@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import * as XLSX from "xlsx";
-import { GiRoastChicken, GiChickenLeg } from "react-icons/gi";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
@@ -159,6 +158,8 @@ const GranjaDashboardPage = () => {
     porCalibre: [],
     stockCañete: [],
     stockTrigotuc: [],
+    trozadosCañete: [],
+    trozadosTrigotuc: [],
   });
   const [lotes, setLotes]         = useState([]);
   const [loading, setLoading]     = useState(true);
@@ -354,10 +355,19 @@ const GranjaDashboardPage = () => {
     XLSX.writeFile(wb, `Lote_${lote.numeroLote || lote._id}_${new Date().toISOString().split("T")[0]}.xlsx`);
   };
 
-  const totalPollosTrozados = lotes.reduce((acc, l) => acc + (l.unidadesTrozadas || 0), 0);
+const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a + c.cajones * 20, 0);
+  const totalTrigotucKg        = (resumen.stockTrigotuc || []).reduce((a, c) => a + c.cajones * 20, 0);
+  const totalCañeteTrozadosKg  = (resumen.trozadosCañete || []).reduce((a, t) => a + t.kgTotal, 0);
+  const totalTrigotucTrozadosKg = (resumen.trozadosTrigotuc || []).reduce((a, t) => a + t.kgTotal, 0);
+  const TIPOS_LABEL = { filet: "Filet", pata: "Pata/muslo", alita: "Alita", menudo: "Menudo", carcaza: "Carcaza" };
+  const TIPOS_ORDER = ["filet", "pata", "alita", "menudo", "carcaza"];
 
-  const totalCañeteKg   = (resumen.stockCañete || []).reduce((a, c) => a + c.cajones * 20, 0);
-  const totalTrigotucKg = (resumen.stockTrigotuc || []).reduce((a, c) => a + c.cajones * 20, 0);
+  const trozadosTotalesMap = {};
+  for (const t of [...(resumen.trozadosCañete || []), ...(resumen.trozadosTrigotuc || [])]) {
+    if (!trozadosTotalesMap[t.tipo]) trozadosTotalesMap[t.tipo] = { cajas: 0, kgTotal: 0 };
+    trozadosTotalesMap[t.tipo].cajas   += t.cajas;
+    trozadosTotalesMap[t.tipo].kgTotal += t.kgTotal;
+  }
 
   return (
     <Layout>
@@ -399,82 +409,78 @@ const GranjaDashboardPage = () => {
 
       {error && <div className="alert alert-danger">{error}</div>}
 
-      {/* ── Tarjetas resumen ── */}
-      <div className="row g-3 mb-4">
-        <div className="col-6 col-md-3">
-          <div className="card border-0 shadow-sm h-100 text-center">
-            <div className="card-body py-3 px-2">
-              <GiRoastChicken size={36} className="text-warning" />
-              <h3 className="mt-1 mb-0 fs-4">{formatNum(resumen.totalPollosVivos)}</h3>
-              <p className="text-muted mb-0 small">Pollos enteros</p>
-            </div>
-          </div>
+      {/* ── Stock total ── */}
+      <div className="card border-0 shadow-sm mb-2" style={{ background: "#f0f4f8" }}>
+        <div className="card-header border-0 py-2" style={{ background: "transparent" }}>
+          <h6 className="mb-0 text-secondary fw-semibold">
+            <i className="bi bi-layers me-2"></i>
+            Stock total — todas las cámaras
+          </h6>
         </div>
-        <div className="col-6 col-md-3">
-          <div className="card border-0 shadow-sm h-100 text-center">
-            <div className="card-body py-3 px-2">
-              <GiChickenLeg size={36} className="text-secondary" />
-              <h3 className="mt-1 mb-0 fs-4">{formatNum(totalPollosTrozados)}</h3>
-              <p className="text-muted mb-0 small">Pollos trozados</p>
-            </div>
-          </div>
-        </div>
-        <div className="col-6 col-md-3">
-          <div className="card border-0 shadow-sm h-100 text-center">
-            <div className="card-body py-3 px-2">
-              <i className="bi bi-graph-up fs-2 text-success"></i>
-              <h3 className="mt-1 mb-0 fs-4">{formatNum(resumen.totalKg)}</h3>
-              <p className="text-muted mb-0 small">Kg totales</p>
-            </div>
-          </div>
-        </div>
-        <div className="col-6 col-md-3">
-          <div className="card border-0 shadow-sm h-100 text-center">
-            <div className="card-body py-3 px-2">
-              <i className="bi bi-box-seam fs-2 text-primary"></i>
-              <h3 className="mt-1 mb-0 fs-4">{formatNum(resumen.cajonesDisponibles)}</h3>
-              <p className="text-muted mb-0 small">Cajones</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Cajones por calibre (total) ── */}
-      {resumen.porCalibre && resumen.porCalibre.length > 0 && (
-        <div className="card border-0 shadow-sm mb-4">
-          <div className="card-header bg-white py-2">
-            <h6 className="mb-0">
-              <i className="bi bi-box-seam me-2 text-primary"></i>
-              Cajones disponibles por calibre (total)
-            </h6>
-          </div>
-          <div className="card-body pb-2">
-            <div className="row g-2">
-              {resumen.porCalibre.map((c) => (
-                <div key={c.calibre} className="col-6 col-sm-4 col-md-3 col-lg-2">
-                  <div className="card border text-center h-100">
-                    <div className="card-body py-2 px-1">
-                      <span className="badge bg-primary mb-1">Cal. {c.calibre}</span>
-                      <div className="fs-5 fw-bold">{formatNum(c.cajones)}</div>
-                      <div className="text-muted" style={{ fontSize: "0.75rem" }}>cajones</div>
-                      <div className="text-muted" style={{ fontSize: "0.75rem" }}>
-                        {formatNum(c.pollos)} pollos
+        <div className="card-body py-3">
+          {resumen.cajonesDisponibles === 0 && Object.keys(trozadosTotalesMap).length === 0 ? (
+            <p className="text-muted small mb-0">Sin stock en cámara.</p>
+          ) : (
+            <div className="d-flex flex-wrap gap-4">
+              {/* Pollos faenados */}
+              {resumen.cajonesDisponibles > 0 && (
+                <div>
+                  <div className="text-muted small mb-2">Pollos faenados</div>
+                  <div className="d-flex flex-wrap gap-2">
+                    {(resumen.porCalibre || []).map((c) => (
+                      <div key={c.calibre} className="text-center border rounded px-2 py-1">
+                        <span className="badge bg-info text-dark d-block mb-1">Cal. {c.calibre}</span>
+                        <div className="fw-bold small">{formatNum(c.cajones)} caj</div>
+                        <div className="text-muted" style={{ fontSize: "0.72rem" }}>{formatNum(c.cajones * 20)} kg</div>
                       </div>
-                      <div className="text-muted" style={{ fontSize: "0.75rem" }}>
-                        {formatNum(c.cajones * 20)} kg
-                      </div>
+                    ))}
+                    <div className="d-flex flex-column justify-content-center ms-1 border-start ps-3">
+                      <div className="fw-bold">{formatNum(resumen.cajonesDisponibles)} caj</div>
+                      <div className="text-muted small">{formatNum(resumen.totalKg)} kg</div>
                     </div>
                   </div>
                 </div>
-              ))}
+              )}
+              {/* Trozados */}
+              {TIPOS_ORDER.some((tipo) => (trozadosTotalesMap[tipo]?.cajas || 0) > 0) && (
+                <div>
+                  <div className="text-muted small mb-2">Trozados</div>
+                  <div className="d-flex flex-wrap gap-2">
+                    {TIPOS_ORDER.filter((tipo) => (trozadosTotalesMap[tipo]?.cajas || 0) > 0).map((tipo) => {
+                      const t = trozadosTotalesMap[tipo];
+                      return (
+                        <div key={tipo} className="text-center border rounded px-2 py-1">
+                          <span className="badge bg-warning text-dark d-block mb-1">{TIPOS_LABEL[tipo]}</span>
+                          <div className="fw-bold small">{formatNum(t.cajas)} cajas</div>
+                          <div className="text-muted" style={{ fontSize: "0.72rem" }}>{formatNum(t.kgTotal)} kg</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Separador sección cámaras ── */}
+      {(totalCañeteKg > 0 || totalTrigotucKg > 0 || totalCañeteTrozadosKg > 0 || totalTrigotucTrozadosKg > 0) && (
+        <div className="d-flex align-items-center gap-2 mt-4 mb-3">
+          <hr className="flex-grow-1 m-0" />
+          <span className="text-muted fw-semibold text-uppercase px-2"
+            style={{ fontSize: "0.72rem", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
+            <i className="bi bi-snow me-1"></i>
+            Distribución por cámara
+          </span>
+          <hr className="flex-grow-1 m-0" />
         </div>
       )}
 
       {/* ── Stock por cámara ── */}
-      {(totalCañeteKg > 0 || totalTrigotucKg > 0) && (
+      {(totalCañeteKg > 0 || totalTrigotucKg > 0 || totalCañeteTrozadosKg > 0 || totalTrigotucTrozadosKg > 0) && (
         <div className="row g-3 mb-4">
+          {/* Cámara Cañete */}
           <div className="col-12 col-md-6">
             <div className="card border-0 shadow-sm h-100">
               <div className="card-header bg-white py-2">
@@ -484,25 +490,47 @@ const GranjaDashboardPage = () => {
                 </h6>
               </div>
               <div className="card-body py-2">
-                {(resumen.stockCañete || []).length === 0 ? (
+                {(resumen.stockCañete || []).length === 0 && (resumen.trozadosCañete || []).length === 0 ? (
                   <p className="text-muted small mb-0">Sin stock</p>
                 ) : (
-                  <div className="d-flex flex-wrap gap-2">
-                    {(resumen.stockCañete || []).map((c) => (
-                      <div key={c.calibre} className="text-center border rounded px-2 py-1">
-                        <span className="badge bg-info text-dark d-block mb-1">Cal. {c.calibre}</span>
-                        <div className="fw-bold small">{formatNum(c.cajones)} caj</div>
-                        <div className="text-muted" style={{ fontSize: "0.72rem" }}>{formatNum(c.cajones * 20)} kg</div>
-                      </div>
-                    ))}
-                  </div>
+                  <>
+                    {(resumen.stockCañete || []).length > 0 && (
+                      <>
+                        <div className="text-muted small mb-1">Pollos faenados</div>
+                        <div className="d-flex flex-wrap gap-2 mb-2">
+                          {(resumen.stockCañete || []).map((c) => (
+                            <div key={c.calibre} className="text-center border rounded px-2 py-1">
+                              <span className="badge bg-info text-dark d-block mb-1">Cal. {c.calibre}</span>
+                              <div className="fw-bold small">{formatNum(c.cajones)} caj</div>
+                              <div className="text-muted" style={{ fontSize: "0.72rem" }}>{formatNum(c.cajones * 20)} kg</div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                    {(resumen.trozadosCañete || []).filter((t) => t.cajas > 0).length > 0 && (
+                      <>
+                        <div className="text-muted small mb-1">Trozados</div>
+                        <div className="d-flex flex-wrap gap-2 mb-2">
+                          {(resumen.trozadosCañete || []).filter((t) => t.cajas > 0).map((t) => (
+                            <div key={t.tipo} className="text-center border rounded px-2 py-1">
+                              <span className="badge bg-warning text-dark d-block mb-1">{TIPOS_LABEL[t.tipo] || t.tipo}</span>
+                              <div className="fw-bold small">{formatNum(t.cajas)} caj</div>
+                              <div className="text-muted" style={{ fontSize: "0.72rem" }}>{formatNum(t.kgTotal)} kg</div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </>
                 )}
-                <div className="mt-2 text-muted small">
-                  Total: <strong>{formatNum(totalCañeteKg)} kg</strong>
+                <div className="mt-1 text-muted small">
+                  Total: <strong>{formatNum(totalCañeteKg + totalCañeteTrozadosKg)} kg</strong>
                 </div>
               </div>
             </div>
           </div>
+          {/* Cámara Trigotuc */}
           <div className="col-12 col-md-6">
             <div className="card border-0 shadow-sm h-100">
               <div className="card-header bg-white py-2">
@@ -512,89 +540,44 @@ const GranjaDashboardPage = () => {
                 </h6>
               </div>
               <div className="card-body py-2">
-                {(resumen.stockTrigotuc || []).length === 0 ? (
+                {(resumen.stockTrigotuc || []).length === 0 && (resumen.trozadosTrigotuc || []).length === 0 ? (
                   <p className="text-muted small mb-0">Sin stock</p>
                 ) : (
-                  <div className="d-flex flex-wrap gap-2">
-                    {(resumen.stockTrigotuc || []).map((c) => (
-                      <div key={c.calibre} className="text-center border rounded px-2 py-1">
-                        <span className="badge bg-primary d-block mb-1">Cal. {c.calibre}</span>
-                        <div className="fw-bold small">{formatNum(c.cajones)} caj</div>
-                        <div className="text-muted" style={{ fontSize: "0.72rem" }}>{formatNum(c.cajones * 20)} kg</div>
-                      </div>
-                    ))}
-                  </div>
+                  <>
+                    {(resumen.stockTrigotuc || []).length > 0 && (
+                      <>
+                        <div className="text-muted small mb-1">Pollos faenados</div>
+                        <div className="d-flex flex-wrap gap-2 mb-2">
+                          {(resumen.stockTrigotuc || []).map((c) => (
+                            <div key={c.calibre} className="text-center border rounded px-2 py-1">
+                              <span className="badge bg-primary d-block mb-1">Cal. {c.calibre}</span>
+                              <div className="fw-bold small">{formatNum(c.cajones)} caj</div>
+                              <div className="text-muted" style={{ fontSize: "0.72rem" }}>{formatNum(c.cajones * 20)} kg</div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                    {(resumen.trozadosTrigotuc || []).filter((t) => t.cajas > 0).length > 0 && (
+                      <>
+                        <div className="text-muted small mb-1">Trozados</div>
+                        <div className="d-flex flex-wrap gap-2 mb-2">
+                          {(resumen.trozadosTrigotuc || []).filter((t) => t.cajas > 0).map((t) => (
+                            <div key={t.tipo} className="text-center border rounded px-2 py-1">
+                              <span className="badge bg-warning text-dark d-block mb-1">{TIPOS_LABEL[t.tipo] || t.tipo}</span>
+                              <div className="fw-bold small">{formatNum(t.cajas)} caj</div>
+                              <div className="text-muted" style={{ fontSize: "0.72rem" }}>{formatNum(t.kgTotal)} kg</div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </>
                 )}
-                <div className="mt-2 text-muted small">
-                  Total: <strong>{formatNum(totalTrigotucKg)} kg</strong>
+                <div className="mt-1 text-muted small">
+                  Total: <strong>{formatNum(totalTrigotucKg + totalTrigotucTrozadosKg)} kg</strong>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Lotes de faena activos ── */}
-      {lotes.length > 0 && (
-        <div className="card border-0 shadow-sm mb-4">
-          <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
-            <h6 className="mb-0">
-              <i className="bi bi-list-check me-2 text-success"></i>
-              Lotes de faena activos
-            </h6>
-          </div>
-          <div className="card-body p-0">
-            <div className="table-responsive">
-              <table className="table table-hover align-middle mb-0">
-                <thead className="table-light">
-                  <tr>
-                    <th>Lote</th>
-                    <th>Fecha faena</th>
-                    <th className="text-end">Cajones</th>
-                    <th className="text-end">Kg cámara</th>
-                    <th className="text-end">Faenados</th>
-                    <th className="text-end">Kg vivos</th>
-                    <th className="text-end">Decomis.</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lotes.map((l) => {
-                    const totalCaj = (l.calibres || []).reduce((a, c) => a + c.cajones, 0);
-                    return (
-                      <tr key={l._id}>
-                        <td><span className="badge bg-dark">#{l.numeroLote}</span></td>
-                        <td className="text-muted small">{new Date(l.fechaIngreso).toLocaleDateString("es-AR")}</td>
-                        <td className="text-end">{formatNum(totalCaj)}</td>
-                        <td className="text-end">{formatNum(l.pesoTotal)} kg</td>
-                        <td className="text-end">{l.unidadesFaenadas != null ? formatNum(l.unidadesFaenadas) : "—"}</td>
-                        <td className="text-end">{l.kgVivos != null ? `${formatNum(l.kgVivos)} kg` : "—"}</td>
-                        <td className="text-end">
-                          {l.unidadesDecomisadas > 0
-                            ? <span className="text-danger fw-semibold">{formatNum(l.unidadesDecomisadas)}</span>
-                            : "—"}
-                        </td>
-                        <td>
-                          <div className="d-flex gap-1 justify-content-end">
-                            {puedeGestionar && (
-                              <button className="btn btn-outline-warning btn-sm" title="Editar"
-                                onClick={() => setLoteEditar(l)}>
-                                <i className="bi bi-pencil"></i>
-                              </button>
-                            )}
-                            {esSuperAdmin && (
-                              <button className="btn btn-outline-danger btn-sm" title="Eliminar"
-                                onClick={() => handleEliminarLote(l)}>
-                                <i className="bi bi-trash"></i>
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
             </div>
           </div>
         </div>
