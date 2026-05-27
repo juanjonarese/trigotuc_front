@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { obtenerClientes, crearCliente, actualizarCliente, eliminarCliente, obtenerListasPrecios } from "../services/api";
+import { obtenerClientes, crearCliente, actualizarCliente, eliminarCliente } from "../services/api";
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
 import Swal from "sweetalert2";
@@ -15,7 +15,6 @@ const ClientesPage = () => {
   const [editingCliente, setEditingCliente] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [listasPrecios, setListasPrecios] = useState([]);
   const ITEMS_PER_PAGE = 30;
 
   const [formData, setFormData] = useState({
@@ -25,7 +24,6 @@ const ClientesPage = () => {
     contacto: "",
     telefono: "",
     email: "",
-    listaPrecios: "",
   });
 
   useEffect(() => {
@@ -47,15 +45,7 @@ const ClientesPage = () => {
     }
   };
 
-  const handleOpenModal = async (cliente = null) => {
-    // Cargar listas de precios al abrir modal
-    try {
-      const data = await obtenerListasPrecios();
-      setListasPrecios((data.listas || []).filter((l) => l.activa));
-    } catch {
-      setListasPrecios([]);
-    }
-
+  const handleOpenModal = (cliente = null) => {
     if (cliente) {
       setEditingCliente(cliente);
       setFormData({
@@ -65,7 +55,6 @@ const ClientesPage = () => {
         contacto: cliente.contacto || "",
         telefono: cliente.telefono || "",
         email: cliente.email || "",
-        listaPrecios: cliente.listaPrecios?._id || cliente.listaPrecios || "",
       });
     } else {
       setEditingCliente(null);
@@ -76,8 +65,7 @@ const ClientesPage = () => {
         contacto: "",
         telefono: "",
         email: "",
-        listaPrecios: "",
-      });
+          });
     }
     setShowModal(true);
   };
@@ -92,8 +80,7 @@ const ClientesPage = () => {
       contacto: "",
       telefono: "",
       email: "",
-      listaPrecios: "",
-    });
+      });
   };
 
   const handleChange = (e) => {
@@ -459,27 +446,6 @@ const ClientesPage = () => {
                       </div>
                     </div>
 
-                    <div className="row">
-                      <div className="col-md-12 mb-1">
-                        <label htmlFor="listaPrecios" className="form-label">
-                          Lista de Precios
-                        </label>
-                        <select
-                          className="form-select"
-                          id="listaPrecios"
-                          name="listaPrecios"
-                          value={formData.listaPrecios}
-                          onChange={handleChange}
-                        >
-                          <option value="">— Sin lista —</option>
-                          {listasPrecios.map((l) => (
-                            <option key={l._id} value={l._id}>
-                              {l.nombre}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
                   </div>
                   <div className="modal-footer">
                     <button

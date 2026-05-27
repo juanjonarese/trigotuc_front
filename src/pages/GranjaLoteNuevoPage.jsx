@@ -507,9 +507,7 @@ const GranjaLoteNuevoPage = () => {
                         <div className="small">
                           {formatearFechaLocal(lote.fechaIngreso)} · {lote.cantidadIngreso.toLocaleString("es-AR")} ingresados
                           {lote.bajasIngreso > 0 && (
-                            <span className="text-danger"> · {lote.bajasIngreso.toLocaleString("es-AR")} bajas
-                              {lote.motivoBajas && <span className="text-muted"> ({lote.motivoBajas})</span>}
-                            </span>
+                            <span className="text-danger"> · {lote.bajasIngreso.toLocaleString("es-AR")} bajas</span>
                           )}
                         </div>
                         {lote.proveedor && <div className="small text-muted">{lote.proveedor}</div>}
@@ -543,12 +541,10 @@ const GranjaLoteNuevoPage = () => {
                           <td>{formatearFechaLocal(lote.fechaIngreso)}</td>
                           <td className="text-end">{lote.cantidadIngreso.toLocaleString("es-AR")}</td>
                           <td className="text-end">
-                            {lote.bajasIngreso > 0 ? (
-                              <>
-                                <span className="text-danger fw-semibold">{lote.bajasIngreso.toLocaleString("es-AR")}</span>
-                                {lote.motivoBajas && <div className="small text-muted">{lote.motivoBajas}</div>}
-                              </>
-                            ) : <span className="text-muted">—</span>}
+                            {lote.bajasIngreso > 0
+                            ? <span className="text-danger fw-semibold">{lote.bajasIngreso.toLocaleString("es-AR")}</span>
+                            : <span className="text-muted">—</span>
+                          }
                           </td>
                           <td className="text-muted small">{lote.proveedor || "—"}</td>
                           <td>

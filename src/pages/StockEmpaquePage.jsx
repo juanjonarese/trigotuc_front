@@ -27,14 +27,14 @@ const nivelStock = (a) => {
   return "ok";
 };
 
-const COLORES = {
-  ok:       { bg: "#f0fdf4", border: "#198754", text: "#198754" },
-  pedido:   { bg: "#fffbeb", border: "#fd7e14", text: "#fd7e14" },
-  critico:  { bg: "#fff5f5", border: "#dc3545", text: "#dc3545" },
-  sinstock: { bg: "#f8f8f8", border: "#6c757d", text: "#6c757d" },
+const NIVEL_CFG = {
+  ok:       { bg: "#f0fdf4", border: "#16a34a", numColor: "#15803d", icon: "bi-check-circle-fill",      iconColor: "#16a34a", badge: null },
+  pedido:   { bg: "#fff7ed", border: "#ea580c", numColor: "#c2410c", icon: "bi-exclamation-triangle-fill", iconColor: "#ea580c", badge: { text: "Hacer pedido",  cls: "bg-warning text-dark" } },
+  critico:  { bg: "#fef2f2", border: "#dc2626", numColor: "#b91c1c", icon: "bi-x-circle-fill",           iconColor: "#dc2626", badge: { text: "Stock crítico", cls: "bg-danger"             } },
+  sinstock: { bg: "#f3f4f6", border: "#6b7280", numColor: "#4b5563", icon: "bi-dash-circle-fill",         iconColor: "#6b7280", badge: { text: "Sin stock",     cls: "bg-secondary"          } },
 };
 
-const colorPorStock = (a) => COLORES[nivelStock(a)];
+const colorPorStock = (a) => NIVEL_CFG[nivelStock(a)];
 
 const badgeTipo = (tipo) => {
   if (tipo === "entrada")  return <span className="badge bg-success">Entrada</span>;
@@ -45,31 +45,35 @@ const badgeTipo = (tipo) => {
 
 // ── Tarjeta artículo ───────────────────────────────────────────────────────────
 const ArticuloCard = ({ articulo, onClick }) => {
-  const { bg, border, text } = colorPorStock(articulo);
   const nivel = nivelStock(articulo);
+  const cfg   = NIVEL_CFG[nivel];
 
   return (
     <div
-      className="card border-0 shadow-sm text-center"
-      style={{ cursor: "pointer", minHeight: "130px", background: bg, borderLeft: `4px solid ${border}` }}
+      className="card border-0 shadow-sm"
+      style={{ cursor: "pointer", background: cfg.bg, borderLeft: `5px solid ${cfg.border}` }}
       onClick={() => onClick(articulo)}
     >
       <div className="p-3">
-        <div className="fw-bold text-truncate mb-2 small" title={articulo.nombre}>
-          {articulo.nombre}
+        <div className="d-flex align-items-start justify-content-between gap-1 mb-2">
+          <div className="fw-semibold small lh-sm text-start" title={articulo.nombre} style={{ wordBreak: "break-word" }}>
+            {articulo.nombre}
+          </div>
+          <i className={`bi ${cfg.icon} flex-shrink-0`} style={{ color: cfg.iconColor, fontSize: "1.1rem" }}></i>
         </div>
-        <div className="fw-bold" style={{ fontSize: "2rem", color: text, lineHeight: 1 }}>
+        <div className="fw-bold text-center" style={{ fontSize: "2.2rem", color: cfg.numColor, lineHeight: 1 }}>
           {fmtNum(articulo.stockActual)}
         </div>
-        <div className="text-muted small mb-1">{articulo.unidad}</div>
-        {articulo.stockCritico > 0 && (
-          <div className="small text-muted">
-            pedido: {fmtNum(articulo.stockCritico)}
+        <div className="text-muted small text-center mt-1">{articulo.unidad}</div>
+        {cfg.badge ? (
+          <div className="text-center mt-2">
+            <span className={`badge ${cfg.badge.cls}`}>{cfg.badge.text}</span>
           </div>
-        )}
-        {nivel === "pedido"   && <div className="mt-1"><span className="badge bg-warning text-dark">Hacer pedido</span></div>}
-        {nivel === "critico"  && <div className="mt-1"><span className="badge bg-danger">Stock crítico</span></div>}
-        {nivel === "sinstock" && <div className="mt-1"><span className="badge bg-secondary">Sin stock</span></div>}
+        ) : articulo.stockCritico > 0 ? (
+          <div className="text-muted small text-center mt-2">
+            umbral pedido: {fmtNum(articulo.stockCritico)}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -138,7 +142,19 @@ const ArticuloModal = ({ articulo, onClose, onMovimiento, onEditar, onEliminar }
                 {articulo.descripcion && <> · {articulo.descripcion}</>}
               </div>
             </div>
-            <div className="d-flex gap-2 align-items-center">
+            <button className="btn-close" onClick={onClose}></button>
+          </div>
+
+          <div className="modal-body">
+            {/* Botón registrar movimiento + acciones */}
+            <div className="d-flex gap-2 mb-3">
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => setShowForm(!showForm)}
+              >
+                <i className={`bi bi-${showForm ? "dash" : "plus"}-circle me-1`}></i>
+                {showForm ? "Cancelar" : "Registrar movimiento"}
+              </button>
               {esAdmin() && (
                 <button className="btn btn-outline-secondary btn-sm" onClick={() => onEditar(articulo)} title="Editar">
                   <i className="bi bi-pencil"></i>
@@ -149,20 +165,6 @@ const ArticuloModal = ({ articulo, onClose, onMovimiento, onEditar, onEliminar }
                   <i className="bi bi-trash"></i>
                 </button>
               )}
-              <button className="btn-close" onClick={onClose}></button>
-            </div>
-          </div>
-
-          <div className="modal-body">
-            {/* Botón registrar movimiento */}
-            <div className="mb-3">
-              <button
-                className="btn btn-primary btn-sm"
-                onClick={() => setShowForm(!showForm)}
-              >
-                <i className={`bi bi-${showForm ? "dash" : "plus"}-circle me-1`}></i>
-                {showForm ? "Cancelar" : "Registrar movimiento"}
-              </button>
             </div>
 
             {/* Formulario movimiento */}
@@ -288,15 +290,14 @@ const ArticuloModal = ({ articulo, onClose, onMovimiento, onEditar, onEliminar }
 const ArticuloFormModal = ({ articulo, onClose, onGuardado }) => {
   const isEdit = !!articulo;
   const [form, setForm] = useState({
-    nombre:         articulo?.nombre         || "",
-    descripcion:    articulo?.descripcion    || "",
-    unidad:         articulo?.unidad         || "u",
-    stockActual:    articulo?.stockActual    ?? 0,
-    stockObjetivo:  articulo?.stockObjetivo  ?? 0,
-    stockCritico:   articulo?.stockCritico   ?? 0,
-    stockMinimo:    articulo?.stockMinimo    ?? 0,
-    tipoConsumo:    articulo?.tipoConsumo    || "ninguno",
-    consumoPorCajon:articulo?.consumoPorCajon ?? 0,
+    nombre:        articulo?.nombre        || "",
+    descripcion:   articulo?.descripcion   || "",
+    unidad:        articulo?.unidad        || "u",
+    stockActual:   articulo?.stockActual   ?? 0,
+    stockObjetivo: articulo?.stockObjetivo ?? 0,
+    stockCritico:  articulo?.stockCritico  ?? 0,
+    stockMinimo:   articulo?.stockMinimo   ?? 0,
+    tipo:          articulo?.tipo          || "otro",
   });
   const [saving, setSaving] = useState(false);
 
@@ -398,39 +399,46 @@ const ArticuloFormModal = ({ articulo, onClose, onGuardado }) => {
                     />
                     <div className="form-text">Alarma roja — nivel crítico</div>
                   </div>
-                  <div className="col-12"><hr className="my-1"/><p className="text-muted small mb-2 fw-semibold">Consumo en faena</p></div>
-                  <div className="col-12 col-sm-6">
-                    <label className="form-label fw-semibold">Tipo de consumo por cajón</label>
+                  <div className="col-12">
+                    <hr className="my-1"/>
+                    <label className="form-label fw-semibold">¿Qué artículo es este?</label>
                     <select
                       className="form-select"
-                      value={form.tipoConsumo}
-                      onChange={(e) => setForm({ ...form, tipoConsumo: e.target.value, consumoPorCajon: 0 })}
+                      value={form.tipo}
+                      onChange={(e) => setForm({ ...form, tipo: e.target.value })}
                     >
-                      <option value="ninguno">No aplica</option>
-                      <option value="fijo">Fijo por cajón (ej: cajones, etiquetas)</option>
-                      <option value="por_calibre">Por calibre (ej: bolsas individuales)</option>
+                      <option value="otro">Otro (sin descuento automático)</option>
+                      <optgroup label="Pollos enteros">
+                        <option value="bolsa_grande">Bolsa grande</option>
+                        <option value="etiqueta_pollo_entero">Etiqueta pollo entero</option>
+                        <option value="cajon_madera">Cajón de madera</option>
+                        <option value="bolsa_individual">Bolsas individuales</option>
+                      </optgroup>
+                      <optgroup label="Trozados">
+                        <option value="caja_carton">Caja de cartón</option>
+                        <option value="bolsa_5kg">Bolsa de 5 kg</option>
+                        <option value="etiqueta_pata_muslo">Etiqueta pata muslo</option>
+                        <option value="etiqueta_filet">Etiqueta filet</option>
+                        <option value="etiqueta_alita">Etiqueta alita</option>
+                      </optgroup>
                     </select>
-                    <div className="form-text">
-                      {form.tipoConsumo === "fijo"        && "Se descuenta X unidades por cada cajón faenado."}
-                      {form.tipoConsumo === "por_calibre" && "Se descuenta según el calibre: cal.5 = 5 u/cajón, cal.7 = 7 u/cajón, etc."}
-                      {form.tipoConsumo === "ninguno"     && "No se descuenta automáticamente al crear un lote."}
-                    </div>
+                    {form.tipo !== "otro" && (
+                      <div className="form-text text-success">
+                        <i className="bi bi-check-circle me-1"></i>
+                        {{
+                          bolsa_grande:          "1 por cajón de pollos enteros + 1 por caja de trozado",
+                          etiqueta_pollo_entero: "1 por cajón de pollos enteros",
+                          cajon_madera:          "1 por cajón de pollos enteros",
+                          bolsa_individual:      "1 por pollo en el cajón (cal.5 = 5 u, cal.7 = 7 u, etc.)",
+                          caja_carton:           "1 por caja de trozado",
+                          bolsa_5kg:             "3 por caja de trozado",
+                          etiqueta_pata_muslo:   "1 por caja de pata muslo",
+                          etiqueta_filet:        "1 por caja de filet",
+                          etiqueta_alita:        "1 por caja de alita",
+                        }[form.tipo]}
+                      </div>
+                    )}
                   </div>
-                  {form.tipoConsumo === "fijo" && (
-                    <div className="col-12 col-sm-6">
-                      <label className="form-label fw-semibold">Unidades por cajón</label>
-                      <input
-                        type="number"
-                        className="form-control"
-                        value={form.consumoPorCajon}
-                        onChange={(e) => setForm({ ...form, consumoPorCajon: e.target.value })}
-                        min="0"
-                        step="1"
-                        placeholder="1"
-                      />
-                      <div className="form-text">Ej: cajones = 1 · etiquetas = 1</div>
-                    </div>
-                  )}
                   {!isEdit && (
                     <div className="col-6">
                       <label className="form-label">Stock inicial</label>
@@ -995,12 +1003,11 @@ const TablaConsumo = ({ estadisticas, onClickArticulo }) => {
           <thead className="table-light">
             <tr>
               <th>Artículo</th>
-              <th className="text-end">Stock actual</th>
-              <th className="text-end">Consumo semanal</th>
-              <th className="text-end">Consumo mensual</th>
-              <th className="text-end">Días de stock</th>
-              <th>Última entrada</th>
-              <th>Estado</th>
+              <th className="text-center">Stock actual</th>
+              <th className="text-center">Consumo semanal</th>
+              <th className="text-center">Consumo mensual</th>
+              <th className="text-center">Última entrada</th>
+              <th className="text-center">Estado</th>
             </tr>
           </thead>
           <tbody>
@@ -1013,25 +1020,20 @@ const TablaConsumo = ({ estadisticas, onClickArticulo }) => {
                   onClick={() => onClickArticulo(e)}
                 >
                   <td className="fw-semibold">{e.nombre}</td>
-                  <td className="text-end">
+                  <td className="text-center">
                     {fmtNum(e.stockActual)}
                     <span className="text-muted small ms-1">{e.unidad}</span>
                   </td>
-                  <td className="text-end">
+                  <td className="text-center">
                     {e.consumoSemanal > 0 ? fmtNum(e.consumoSemanal) : <span className="text-muted">—</span>}
                   </td>
-                  <td className="text-end">
+                  <td className="text-center">
                     {e.consumoMensual > 0
-                      ? <>{fmtNum(e.consumoMensual)}{iconTendencia(e.tendencia)}</>
+                      ? <>{fmtNum(e.consumoMensual)}</>
                       : <span className="text-muted">—</span>}
                   </td>
-                  <td className="text-end">
-                    {e.diasStock !== null
-                      ? <span className={clsDias(e.diasStock)}>{e.diasStock} días</span>
-                      : <span className="text-muted small">sin datos</span>}
-                  </td>
-                  <td className="small text-muted">{fmtFecha(e.ultimaEntrada)}</td>
-                  <td>
+                  <td className="text-center small text-muted">{fmtFecha(e.ultimaEntrada)}</td>
+                  <td className="text-center">
                     {nivel === "ok"       && <span className="badge bg-success">OK</span>}
                     {nivel === "pedido"   && <span className="badge bg-warning text-dark">Hacer pedido</span>}
                     {nivel === "critico"  && <span className="badge bg-danger">Crítico</span>}
@@ -1042,12 +1044,6 @@ const TablaConsumo = ({ estadisticas, onClickArticulo }) => {
             })}
           </tbody>
         </table>
-      </div>
-      <div className="card-footer bg-white small text-muted d-flex gap-3 flex-wrap py-2">
-        <span><i className="bi bi-arrow-up-right text-danger me-1"></i>Consumo en alza vs mes anterior</span>
-        <span><i className="bi bi-arrow-down-right text-success me-1"></i>Consumo en baja</span>
-        <span><i className="bi bi-arrow-right text-muted me-1"></i>Estable</span>
-        <span className="ms-auto"><span className={`${clsDias(5)} me-1`}>■</span>≤ 7 días&nbsp;&nbsp;<span className={`${clsDias(10)} me-1`}>■</span>≤ 14 días&nbsp;&nbsp;<span className={`${clsDias(30)} me-1`}>■</span>&gt; 14 días</span>
       </div>
     </div>
   );

@@ -54,6 +54,7 @@ const calcTotales = (lineas) =>
 
 const NuevaOrdenModal = ({ onClose, onCreada, lotes }) => {
   const [saving, setSaving]   = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [busqueda, setBusqueda]     = useState("");
   const [resultados, setResultados] = useState([]);
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
@@ -61,9 +62,6 @@ const NuevaOrdenModal = ({ onClose, onCreada, lotes }) => {
     cliente: "", granja: "", galpon: "", lote: "",
     fechaEmision: obtenerFechaHoy(),
     turno: "",
-    totalPollos: "",
-    kgMin: "",
-    kgMax: "",
     observaciones: "",
   });
   const [detalle, setDetalle] = useState([{ cantidad: "", pesoMin: "", pesoMax: "" }]);
@@ -73,9 +71,6 @@ const NuevaOrdenModal = ({ onClose, onCreada, lotes }) => {
   const loteGalpon = form.granja && form.galpon
     ? lotes.find((l) => l.granja === form.granja && l.galpon === Number(form.galpon)) || null
     : null;
-
-  const sumLineas       = detalle.reduce((s, l) => s + (Number(l.cantidad) || 0), 0);
-  const totalVerificado = Number(form.totalPollos) > 0 && sumLineas === Number(form.totalPollos);
 
   useEffect(() => {
     if (busqueda.length < 2 || clienteSeleccionado) { setResultados([]); return; }
@@ -104,29 +99,20 @@ const NuevaOrdenModal = ({ onClose, onCreada, lotes }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.cliente)     { Swal.fire("Faltan datos", "Seleccioná un cliente.", "warning"); return; }
-    if (!form.granja)      { Swal.fire("Faltan datos", "Seleccioná la granja.", "warning"); return; }
-    if (!form.turno)       { Swal.fire("Faltan datos", "Indicá si la carga es por la mañana o por la tarde.", "warning"); return; }
-    if (!form.kgMin)       { Swal.fire("Faltan datos", "Ingresá los kg totales.", "warning"); return; }
-    if (!form.totalPollos) { Swal.fire("Faltan datos", "Ingresá el total de pollos.", "warning"); return; }
+    setSubmitted(true);
+    if (!form.cliente) { Swal.fire("Faltan datos", "Seleccioná un cliente de la lista.", "warning"); return; }
+    if (!form.granja)  { Swal.fire("Faltan datos", "Seleccioná la granja.", "warning"); return; }
+    if (!form.turno)   { Swal.fire("Faltan datos", "Indicá si la carga es por la mañana o por la tarde.", "warning"); return; }
 
-    const lineasValidas = detalle.filter((l) => Number(l.pesoMin) > 0);
+    const lineasValidas = detalle.filter((l) => Number(l.cantidad) > 0 && Number(l.pesoMin) > 0);
     if (lineasValidas.length === 0) {
       Swal.fire("Faltan datos", "Agregá al menos una línea de composición.", "warning");
       return;
     }
-    const sumEsp = lineasValidas.reduce((s, l) => s + (Number(l.cantidad) || 0), 0);
-    if (sumEsp !== Number(form.totalPollos)) {
-      const ok = await Swal.fire({
-        icon: "warning",
-        title: "La suma no coincide",
-        html: `Las líneas suman <strong>${sumEsp.toLocaleString("es-AR")}</strong> pollos pero el total es <strong>${Number(form.totalPollos).toLocaleString("es-AR")}</strong>.<br>¿Querés guardar igual?`,
-        showCancelButton: true,
-        confirmButtonText: "Sí, guardar",
-        cancelButtonText: "Corregir",
-      });
-      if (!ok.isConfirmed) return;
-    }
+
+    const { cant, pesoMin, pesoMax } = calcTotales(lineasValidas);
+    const pesoEstimadoKg  = +pesoMin.toFixed(3);
+    const pesoEstimadoMax = +pesoMax.toFixed(3);
 
     const detalleGuardar = lineasValidas.map((l) => ({
       cantidad: Number(l.cantidad),
@@ -144,10 +130,9 @@ const NuevaOrdenModal = ({ onClose, onCreada, lotes }) => {
         lote:             form.lote || undefined,
         fechaEmision:     ajustarFechaParaGuardar(form.fechaEmision),
         turno:            form.turno,
-        cantidadEstimada: Number(form.totalPollos),
-        pesoEstimadoKg:   Number(form.kgMin),
-        pesoEstimadoMax:  form.kgMax && Math.abs(Number(form.kgMax) - Number(form.kgMin)) > 0.5
-                            ? Number(form.kgMax) : undefined,
+        cantidadEstimada: cant,
+        pesoEstimadoKg,
+        pesoEstimadoMax:  Math.abs(pesoEstimadoMax - pesoEstimadoKg) > 0.001 ? pesoEstimadoMax : undefined,
         detalle:          detalleGuardar,
         observaciones:    form.observaciones || undefined,
       });
@@ -186,7 +171,7 @@ const NuevaOrdenModal = ({ onClose, onCreada, lotes }) => {
                     <label className="form-label fw-semibold">Cliente <span className="text-danger">*</span></label>
                     <div className="position-relative">
                       <input type="text"
-                        className={`form-control ${clienteSeleccionado ? "is-valid" : ""}`}
+                        className={`form-control ${clienteSeleccionado ? "is-valid" : submitted && !clienteSeleccionado ? "is-invalid" : ""}`}
                         placeholder="Escribí el nombre del cliente..."
                         value={busqueda}
                         onChange={(e) => { setBusqueda(e.target.value); setClienteSeleccionado(null); setForm((f) => ({ ...f, cliente: "" })); }}
@@ -199,6 +184,9 @@ const NuevaOrdenModal = ({ onClose, onCreada, lotes }) => {
                             </div>
                           ))}
                         </div>
+                      )}
+                      {submitted && !clienteSeleccionado && (
+                        <div className="invalid-feedback d-block">Seleccioná un cliente de la lista.</div>
                       )}
                     </div>
                   </div>
@@ -277,30 +265,6 @@ const NuevaOrdenModal = ({ onClose, onCreada, lotes }) => {
                   </div>
                 )}
 
-                {/* ── Cantidad total ── */}
-                <div className="p-3 rounded mb-3" style={{ background: "#f8f9fa", border: "1px solid #dee2e6" }}>
-                  <div className="fw-semibold mb-2 small text-uppercase text-muted" style={{ letterSpacing: "0.05em" }}>
-                    Cantidad total
-                  </div>
-                  <div className="row g-3">
-                    <div className="col-4">
-                      <label className="form-label fw-semibold">Total pollos <span className="text-danger">*</span></label>
-                      <input type="number" className="form-control" min="1" placeholder="ej: 500"
-                        value={form.totalPollos} onChange={(e) => setForm({ ...form, totalPollos: e.target.value })} />
-                    </div>
-                    <div className="col-4">
-                      <label className="form-label fw-semibold">Kg mín <span className="text-danger">*</span></label>
-                      <input type="number" className="form-control" min="1" step="1" placeholder="ej: 1800"
-                        value={form.kgMin} onChange={(e) => setForm({ ...form, kgMin: e.target.value })} />
-                    </div>
-                    <div className="col-4">
-                      <label className="form-label fw-semibold">Kg máx <span className="text-muted fw-normal">(opcional)</span></label>
-                      <input type="number" className="form-control" min="1" step="1" placeholder="ej: 1900"
-                        value={form.kgMax} onChange={(e) => setForm({ ...form, kgMax: e.target.value })} />
-                    </div>
-                  </div>
-                </div>
-
                 {/* ── Composición ── */}
                 <div className="mb-3">
                   <div className="fw-semibold mb-2 small text-uppercase text-muted" style={{ letterSpacing: "0.05em" }}>
@@ -346,19 +310,10 @@ const NuevaOrdenModal = ({ onClose, onCreada, lotes }) => {
                       </tbody>
                     </table>
                   </div>
-                  <div className="d-flex align-items-center justify-content-between">
+                  <div>
                     <button type="button" className="btn btn-outline-success btn-sm" onClick={agregarLinea}>
                       <i className="bi bi-plus-circle me-1"></i>Agregar línea
                     </button>
-                    {Number(form.totalPollos) > 0 && sumLineas > 0 && (
-                      <span className={`small fw-semibold ${totalVerificado ? "text-success" : "text-warning"}`}>
-                        {totalVerificado
-                          ? <><i className="bi bi-check-circle me-1"></i>Composición verificada</>
-                          : <><i className="bi bi-exclamation-triangle me-1"></i>
-                              {sumLineas.toLocaleString("es-AR")} de {Number(form.totalPollos).toLocaleString("es-AR")}</>
-                        }
-                      </span>
-                    )}
                   </div>
                 </div>
 
@@ -537,6 +492,7 @@ const generarPDF = (o) => {
 
 const EditarOrdenModal = ({ orden, lotes, onClose, onGuardado }) => {
   const [saving, setSaving]     = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [busqueda, setBusqueda] = useState(orden.cliente?.razonSocial || orden.cliente?.nombre || "");
   const [resultados, setResultados]         = useState([]);
   const [clienteSeleccionado, setClienteSeleccionado] = useState(orden.cliente);
@@ -587,6 +543,10 @@ const EditarOrdenModal = ({ orden, lotes, onClose, onGuardado }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitted(true);
+    if (!form.cliente) { Swal.fire("Faltan datos", "Seleccioná un cliente de la lista.", "warning"); return; }
+    if (!form.granja)  { Swal.fire("Faltan datos", "Seleccioná la granja.", "warning"); return; }
+    if (!form.turno)   { Swal.fire("Faltan datos", "Indicá si la carga es por la mañana o por la tarde.", "warning"); return; }
     const lineasValidas = detalle.filter((l) => Number(l.cantidad) > 0 && Number(l.pesoMin) > 0);
     if (lineasValidas.length === 0) {
       Swal.fire("Faltan datos", "Agregá al menos una línea con cantidad y peso.", "warning");
@@ -635,7 +595,8 @@ const EditarOrdenModal = ({ orden, lotes, onClose, onGuardado }) => {
                   <div className="col-12">
                     <label className="form-label fw-semibold">Cliente</label>
                     <div className="position-relative">
-                      <input type="text" className={`form-control ${clienteSeleccionado ? "is-valid" : ""}`}
+                      <input type="text"
+                        className={`form-control ${clienteSeleccionado ? "is-valid" : submitted && !clienteSeleccionado ? "is-invalid" : ""}`}
                         placeholder="Escribí el nombre del cliente..." value={busqueda} autoComplete="off"
                         onChange={(e) => { setBusqueda(e.target.value); setClienteSeleccionado(null); setForm((f) => ({ ...f, cliente: "" })); }} />
                       {resultados.length > 0 && (
@@ -646,6 +607,9 @@ const EditarOrdenModal = ({ orden, lotes, onClose, onGuardado }) => {
                             </div>
                           ))}
                         </div>
+                      )}
+                      {submitted && !clienteSeleccionado && (
+                        <div className="invalid-feedback d-block">Seleccioná un cliente de la lista.</div>
                       )}
                     </div>
                   </div>

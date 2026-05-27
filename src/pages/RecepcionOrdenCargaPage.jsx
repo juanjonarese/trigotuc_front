@@ -71,7 +71,7 @@ const imprimirComprobanteEntrega = (orden, datosReales) => {
         </div>
         <div class="firma-box">
           <div class="firma-linea"></div>
-          <div class="firma-lbl">Firma del empleado de granja</div>
+          <div class="firma-lbl">Firma del encargado de granja</div>
         </div>
       </div>
     </div>`;
@@ -149,6 +149,10 @@ const ConfirmarModal = ({ orden, onClose, onConfirmada, saltarCodigo = false }) 
     e.preventDefault();
     if (!form.cantidadReal || !form.pesoRealKg) {
       Swal.fire("Faltan datos", "Ingresá cantidad y peso real.", "warning");
+      return;
+    }
+    if (form.fechaEntrega !== obtenerFechaHoy()) {
+      Swal.fire("Fecha inválida", "La fecha de entrega debe ser el día de hoy.", "warning");
       return;
     }
     const difCant = Number(form.cantidadReal) - orden.cantidadEstimada;
@@ -282,7 +286,7 @@ const ConfirmarModal = ({ orden, onClose, onConfirmada, saltarCodigo = false }) 
                     <div className="row g-3">
                       <div className="col-6">
                         <label className="form-label fw-semibold">
-                          Cantidad recibida <span className="text-danger">*</span>
+                          Cantidad entregada <span className="text-danger">*</span>
                         </label>
                         <input
                           type="number" min="1"
@@ -308,7 +312,7 @@ const ConfirmarModal = ({ orden, onClose, onConfirmada, saltarCodigo = false }) 
                       </div>
                       <div className="col-6">
                         <label className="form-label fw-semibold">
-                          Peso recibido (kg) <span className="text-danger">*</span>
+                          Peso total (kg) <span className="text-danger">*</span>
                         </label>
                         <input
                           type="number" min="0.01" step="0.01"
@@ -334,11 +338,13 @@ const ConfirmarModal = ({ orden, onClose, onConfirmada, saltarCodigo = false }) 
                       </div>
                       <div className="col-12">
                         <label className="form-label fw-semibold">
-                          Fecha de recepción
+                          Fecha de entrega
                         </label>
                         <input
                           type="date" className="form-control"
                           value={form.fechaEntrega}
+                          min={obtenerFechaHoy()}
+                          max={obtenerFechaHoy()}
                           onChange={(e) => setForm({ ...form, fechaEntrega: e.target.value })}
                         />
                       </div>
@@ -594,6 +600,7 @@ const RecepcionOrdenCargaPage = () => {
                       <th className="text-end">Peso rec.</th>
                       <th>Fecha entrega</th>
                       <th>Estado</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -643,6 +650,17 @@ const RecepcionOrdenCargaPage = () => {
                                 ? <span className="badge bg-warning text-dark">Liberada</span>
                                 : <span className="badge bg-warning text-dark">Pendiente</span>
                             }
+                          </td>
+                          <td>
+                            {entregada && (
+                              <button
+                                className="btn btn-outline-secondary btn-sm"
+                                title="Reimprimir comprobante"
+                                onClick={() => imprimirComprobanteEntrega(o, o)}
+                              >
+                                <i className="bi bi-printer"></i>
+                              </button>
+                            )}
                           </td>
                         </tr>
                       );

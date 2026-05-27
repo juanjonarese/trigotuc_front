@@ -731,6 +731,39 @@ export const eliminarEnvioCamara = async (id) => {
   return handleResponse(response);
 };
 
+// ── DESPACHOS FRIGORIFICO ────────────────────────────────────────────────────
+export const obtenerDespachosFrigorifico = async () => {
+  const response = await fetch(`${API_URL}/despachos-frigorifico`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const crearDespachoFrigorifico = async (data) => {
+  const response = await fetch(`${API_URL}/despachos-frigorifico`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const completarDespachoFrigorifico = async (id) => {
+  const response = await fetch(`${API_URL}/despachos-frigorifico/${id}/completar`, {
+    method: "PATCH",
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const eliminarDespachoFrigorifico = async (id) => {
+  const response = await fetch(`${API_URL}/despachos-frigorifico/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
 export const obtenerAuditLog = async (filtros = {}) => {
   const params = new URLSearchParams();
   if (filtros.entidad)    params.append("entidad",    filtros.entidad);

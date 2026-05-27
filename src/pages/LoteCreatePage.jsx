@@ -7,7 +7,6 @@ import {
   obtenerOrdenesCarga,
   obtenerLotes,
   eliminarLote,
-  consumirStockLote,
 } from "../services/api";
 import { obtenerFechaHoy } from "../utils/dateUtils";
 import Swal from "sweetalert2";
@@ -165,9 +164,13 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
   };
 
   // Totales para preview en el modal (sin incluir draft)
-  const totalCajones = lineas.reduce((acc, l) => acc + calcularCajones(l.pollos, l.calibre), 0);
-  const totalPollos  = lineas.reduce((acc, l) => acc + Number(l.pollos || 0), 0);
-  const totalKg      = totalCajones * 20;
+  const totalCajones  = lineas.reduce((acc, l) => acc + calcularCajones(l.pollos, l.calibre), 0);
+  const totalPollos   = lineas.reduce((acc, l) => acc + Number(l.pollos || 0), 0);
+  const totalKg       = totalCajones * 20;
+  const kgMenudo      = trozados
+    .filter((t) => t.tipo === "menudo")
+    .reduce((s, t) => s + (Number(t.cajas) || 0) * (Number(t.kgCaja) || 0), 0);
+  const kgTotalCamara = totalKg + (Number(form.kgTrozados) || 0) + kgMenudo;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -203,49 +206,18 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
 
       const trozadosPayload = trozados
         .filter((t) => Number(t.cajas) > 0)
-        .map((t) => ({ tipo: t.tipo, kgCaja: Number(t.kgCaja), kgTotal: Number(t.cajas) * Number(t.kgCaja) }));
+        .map((t) => ({ tipo: t.tipo, kgCaja: Number(t.kgCaja), cajas: Number(t.cajas), kgTotal: Number(t.cajas) * Number(t.kgCaja) }));
       if (trozadosPayload.length > 0) payload.trozados = trozadosPayload;
 
-      const loteCreado = await crearLote(payload);
-
-      // Descontar stock de empaque automáticamente
-      let consumoHtml = "";
-      let alertaHtml  = "";
-      try {
-        const { consumidos, alertas } = await consumirStockLote({
-          calibres:   calibresPayload,
-          loteId:     loteCreado._id,
-          loteNumero: loteCreado.numeroLote,
-        });
-        if (consumidos.length > 0) {
-          consumoHtml = `<div class="mt-2 text-start small">
-            <strong>Stock descontado:</strong><br>
-            ${consumidos.map((c) => `· ${fmtNum(c.cantidad)} ${c.unidad} de <em>${c.nombre}</em>`).join("<br>")}
-          </div>`;
-        } else {
-          consumoHtml = `<div class="mt-2 text-start small text-muted">
-            Sin artículos de empaque configurados para consumo automático.
-          </div>`;
-        }
-        if (alertas.length > 0) {
-          alertaHtml = `<div class="mt-2 text-start small text-danger">
-            <strong>⚠ Stock insuficiente:</strong><br>
-            ${alertas.map((a) => `· ${a.nombre}: tenía ${fmtNum(a.stockActual)}, necesitaba ${fmtNum(a.requerido)}`).join("<br>")}
-          </div>`;
-        }
-      } catch (err) {
-        alertaHtml = `<div class="mt-2 small text-danger">
-          <strong>Error al descontar stock:</strong> ${err.message || "Error desconocido"}
-        </div>`;
-      }
+      const { lote: loteCreado } = await crearLote(payload);
 
       onCreado();
       Swal.fire({
-        icon:  alertaHtml ? "warning" : "success",
+        icon:  "success",
         title: `Lote #${loteCreado.numeroLote} creado`,
-        html:  `${fmtNum(totalPollosF)} pollos · ${fmtNum(totalCajonesF)} cajones · ${fmtNum(totalKgF)} kg
-                ${consumoHtml}${alertaHtml}`,
-        confirmButtonText: "OK",
+        text:  `${fmtNum(totalPollosF)} pollos · ${fmtNum(totalCajonesF)} cajones · ${fmtNum(totalKgF)} kg`,
+        timer: 2000,
+        showConfirmButton: false,
       });
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudo crear el lote.", "error");
@@ -415,40 +387,49 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
                 <CalibreTable ref={calibreRef} lineas={lineas} onChange={setLineas} />
 
                 {totalCajones > 0 && (
-                  <div className="alert alert-info py-2 mt-3 mb-0">
-                    <div className="row text-center g-0">
-                      <div className="col border-end">
-                        <div className="text-muted small">Pollos calibres</div>
-                        <div className="fw-bold">{fmtNum(totalPollos)}</div>
-                      </div>
-                      <div className="col border-end">
-                        <div className="text-muted small">Cajones</div>
-                        <div className="fw-bold">{fmtNum(totalCajones)}</div>
-                      </div>
-                      <div className="col border-end">
-                        <div className="text-muted small">Kg calibres</div>
-                        <div className="fw-bold">{fmtNum(totalKg)}</div>
-                      </div>
-                      {form.unidadesTrozadas && (
+                  <>
+                    <div className="alert alert-info py-2 mt-3 mb-2">
+                      <div className="row text-center g-0">
                         <div className="col border-end">
-                          <div className="text-muted small">Trozados (u)</div>
-                          <div className="fw-bold">{fmtNum(Number(form.unidadesTrozadas))}</div>
+                          <div className="text-muted small">Pollos calibres</div>
+                          <div className="fw-bold">{fmtNum(totalPollos)}</div>
                         </div>
-                      )}
-                      {form.kgTrozados && (
                         <div className="col border-end">
-                          <div className="text-muted small">Trozados (kg)</div>
-                          <div className="fw-bold">{fmtNum(Number(form.kgTrozados))}</div>
+                          <div className="text-muted small">Cajones</div>
+                          <div className="fw-bold">{fmtNum(totalCajones)}</div>
                         </div>
-                      )}
-                      <div className="col">
-                        <div className="text-muted small fw-semibold">Total pollos</div>
-                        <div className="fw-bold text-primary">
-                          {fmtNum(totalPollos + (Number(form.unidadesTrozadas) || 0))}
+                        <div className="col border-end">
+                          <div className="text-muted small">Kg calibres</div>
+                          <div className="fw-bold">{fmtNum(totalKg)}</div>
+                        </div>
+                        {form.unidadesTrozadas && (
+                          <div className="col border-end">
+                            <div className="text-muted small">Trozados (u)</div>
+                            <div className="fw-bold">{fmtNum(Number(form.unidadesTrozadas))}</div>
+                          </div>
+                        )}
+                        {form.kgTrozados && (
+                          <div className="col border-end">
+                            <div className="text-muted small">Trozados (kg)</div>
+                            <div className="fw-bold">{fmtNum(Number(form.kgTrozados))}</div>
+                          </div>
+                        )}
+                        <div className="col">
+                          <div className="text-muted small fw-semibold">Total pollos</div>
+                          <div className="fw-bold text-primary">
+                            {fmtNum(totalPollos + (Number(form.unidadesTrozadas) || 0))}
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
+                    <div className="rounded px-3 py-2 d-flex justify-content-between align-items-center"
+                      style={{ background: "#f0fdf4", border: "2px solid #86efac" }}>
+                      <div className="fw-semibold text-success">
+                        <i className="bi bi-snow me-2"></i>Kg totales ingreso a cámara
+                      </div>
+                      <div className="fw-bold fs-5 text-success">{fmtNum(kgTotalCamara)} kg</div>
+                    </div>
+                  </>
                 )}
               </form>
             </div>
