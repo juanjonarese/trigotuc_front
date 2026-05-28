@@ -8,7 +8,10 @@ import {
   eliminarStockArticulo,
   registrarStockMovimiento,
   obtenerStockMovimientos,
-  enviarPedidoStock,
+  obtenerProveedoresEmpaque,
+  crearProveedorEmpaque,
+  actualizarProveedorEmpaque,
+  eliminarProveedorEmpaque,
 } from "../services/api";
 import { obtenerFechaHoy } from "../utils/dateUtils";
 import Swal from "sweetalert2";
@@ -469,53 +472,121 @@ const ArticuloFormModal = ({ articulo, onClose, onGuardado }) => {
   );
 };
 
-// ── Modal hacer pedido ────────────────────────────────────────────────────────
-const PedidoModal = ({ articulos, estadisticas, onClose }) => {
-  const emailDefault = "";
-  const [destinatario, setDestinatario] = useState(emailDefault);
-  const [enviando, setEnviando]         = useState(false);
+// ── Normalizar número WhatsApp argentino ──────────────────────────────────────
+const normalizarWhatsapp = (num) => {
+  // Elimina todo lo que no sea dígito
+  let n = num.replace(/\D/g, "");
+  // Si empieza con +, ya está eliminado. Si empieza con 54, OK.
+  // Si empieza con 0, quitar el 0 inicial y agregar 54
+  if (n.startsWith("0")) n = "54" + n.slice(1);
+  // Si no empieza con 54, agregar prefijo
+  if (!n.startsWith("54")) n = "54" + n;
+  return n;
+};
 
-  // Armar items a pedir: stockObjetivo > 0 && stockActual < stockObjetivo
-  const statsMap = Object.fromEntries((estadisticas || []).map((e) => [e._id.toString(), e]));
+// ── Modal hacer pedido por WhatsApp ──────────────────────────────────────────
+const PedidoWhatsAppModal = ({ articulos, onClose }) => {
+  const [tab, setTab]                     = useState("presupuesto"); // "presupuesto" | "pedido"
+  const [proveedores, setProveedores]     = useState([]);
+  const [proveedorId, setProveedorId]     = useState("");
+  const [loadingProv, setLoadingProv]     = useState(true);
 
-  const items = articulos
-    .filter((a) => a.stockObjetivo > 0 && a.stockActual < a.stockObjetivo)
-    .map((a) => {
-      const st = statsMap[a._id] || {};
-      return {
-        _id:            a._id,
-        nombre:         a.nombre,
-        unidad:         a.unidad,
-        stockActual:    a.stockActual,
-        stockObjetivo:  a.stockObjetivo,
-        cantidadPedido: a.stockObjetivo - a.stockActual,
-        consumoSemanal: st.consumoSemanal || 0,
-        consumoMensual: st.consumoMensual || 0,
-      };
-    });
+  // — tab presupuesto —
+  const [seleccionados, setSeleccionados] = useState({});
 
-  const handleEnviar = async () => {
-    if (!destinatario.trim()) {
-      Swal.fire("Email requerido", "Ingresá el email del destinatario.", "warning");
-      return;
-    }
-    setEnviando(true);
-    try {
-      await enviarPedidoStock({ destinatario: destinatario.trim(), items });
-      onClose();
-      Swal.fire({
-        icon: "success",
-        title: "Pedido enviado",
-        text: `Mail enviado a ${destinatario}`,
-        timer: 2500,
-        showConfirmButton: false,
-      });
-    } catch (err) {
-      Swal.fire("Error", err.message, "error");
-    } finally {
-      setEnviando(false);
-    }
+  // — tab pedido —
+  const [cantidades, setCantidades]       = useState({});
+
+  useEffect(() => {
+    obtenerProveedoresEmpaque()
+      .then((data) => {
+        setProveedores(data);
+        if (data.length === 1) setProveedorId(data[0]._id);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingProv(false));
+  }, []);
+
+  // Pre-tilda artículos con stock bajo para el tab presupuesto
+  useEffect(() => {
+    const init = {};
+    articulos.forEach((a) => { init[a._id] = nivelStock(a) !== "ok"; });
+    setSeleccionados(init);
+  }, [articulos]);
+
+  const proveedor = proveedores.find((p) => p._id === proveedorId);
+
+  // — Presupuesto —
+  const toggleArticulo = (id) =>
+    setSeleccionados((prev) => ({ ...prev, [id]: !prev[id] }));
+  const marcarTodos = (val) => {
+    const nuevo = {};
+    articulos.forEach((a) => { nuevo[a._id] = val; });
+    setSeleccionados(nuevo);
   };
+  const seleccionadosList = articulos.filter((a) => seleccionados[a._id]);
+
+  const abrirWAPresupuesto = () => {
+    if (!proveedor) { Swal.fire("Seleccioná un proveedor", "", "warning"); return; }
+    if (seleccionadosList.length === 0) { Swal.fire("Tildá al menos un artículo", "", "warning"); return; }
+    const lista = seleccionadosList.map((a) => `• ${a.nombre}`).join("\n");
+    const msg =
+      `Hola ${proveedor.nombre}! 👋 Soy Trigotuc Avícola.\n` +
+      `Quisiera consultar precios de los siguientes artículos:\n\n${lista}\n\nMuchas gracias!`;
+    window.open(`https://wa.me/${normalizarWhatsapp(proveedor.whatsapp)}?text=${encodeURIComponent(msg)}`, "_blank");
+  };
+
+  // — Pedido —
+  const setCantidad = (id, val) =>
+    setCantidades((prev) => ({ ...prev, [id]: val }));
+
+  const autocompletarPedido = () => {
+    const nuevo = {};
+    articulos.forEach((a) => {
+      const falta = (a.stockObjetivo || 0) - a.stockActual;
+      nuevo[a._id] = falta > 0 ? String(falta) : (cantidades[a._id] || "");
+    });
+    setCantidades(nuevo);
+  };
+
+  const lineasPedido = articulos.filter((a) => Number(cantidades[a._id]) > 0);
+
+  const abrirWAPedido = () => {
+    if (!proveedor) { Swal.fire("Seleccioná un proveedor", "", "warning"); return; }
+    if (lineasPedido.length === 0) { Swal.fire("Ingresá al menos una cantidad", "", "warning"); return; }
+    const lista = lineasPedido
+      .map((a) => `• ${a.nombre}: ${fmtNum(Number(cantidades[a._id]))} ${a.unidad}`)
+      .join("\n");
+    const msg =
+      `Hola ${proveedor.nombre}! 👋 Soy Trigotuc Avícola.\n` +
+      `Quisiera hacer el siguiente pedido:\n\n${lista}\n\nMuchas gracias!`;
+    window.open(`https://wa.me/${normalizarWhatsapp(proveedor.whatsapp)}?text=${encodeURIComponent(msg)}`, "_blank");
+  };
+
+  const selectorProveedor = (
+    <div className="mb-3">
+      <label className="form-label fw-semibold">Proveedor</label>
+      {loadingProv ? (
+        <div className="text-muted small">Cargando proveedores...</div>
+      ) : proveedores.length === 0 ? (
+        <div className="alert alert-warning py-2 small mb-0">
+          <i className="bi bi-exclamation-triangle me-1"></i>
+          No hay proveedores cargados. Cerrá este modal y usá "Gestionar proveedores".
+        </div>
+      ) : (
+        <select
+          className="form-select"
+          value={proveedorId}
+          onChange={(e) => setProveedorId(e.target.value)}
+        >
+          <option value="">— Seleccionar proveedor —</option>
+          {proveedores.map((p) => (
+            <option key={p._id} value={p._id}>{p.nombre} — {p.whatsapp}</option>
+          ))}
+        </select>
+      )}
+    </div>
+  );
 
   return (
     <div
@@ -526,91 +597,360 @@ const PedidoModal = ({ articulos, estadisticas, onClose }) => {
     >
       <div className="modal-dialog modal-lg modal-dialog-scrollable">
         <div className="modal-content">
-          <div className="modal-header" style={{ borderTop: "4px solid #1d4ed8" }}>
-            <div>
-              <h5 className="modal-title mb-0">
-                <i className="bi bi-envelope-check me-2 text-primary"></i>Hacer pedido
-              </h5>
-              <div className="small text-muted mt-1">
-                Artículos por debajo del stock objetivo — se enviará un mail de reposición
-              </div>
-            </div>
-            <button className="btn-close" onClick={onClose} disabled={enviando}></button>
+          <div className="modal-header" style={{ borderTop: "4px solid #25d366" }}>
+            <h5 className="modal-title mb-0">
+              <i className="bi bi-whatsapp me-2" style={{ color: "#25d366" }}></i>
+              WhatsApp — Empaque
+            </h5>
+            <button className="btn-close" onClick={onClose}></button>
+          </div>
+
+          {/* Tabs */}
+          <div className="px-3 pt-3 pb-0 border-bottom">
+            <ul className="nav nav-tabs border-0">
+              <li className="nav-item">
+                <button
+                  className={`nav-link ${tab === "presupuesto" ? "active fw-semibold" : "text-muted"}`}
+                  onClick={() => setTab("presupuesto")}
+                >
+                  <i className="bi bi-tag me-1"></i>Pedir precios
+                </button>
+              </li>
+              <li className="nav-item">
+                <button
+                  className={`nav-link ${tab === "pedido" ? "active fw-semibold" : "text-muted"}`}
+                  onClick={() => setTab("pedido")}
+                >
+                  <i className="bi bi-cart me-1"></i>Hacer pedido
+                </button>
+              </li>
+            </ul>
           </div>
 
           <div className="modal-body">
-            {items.length === 0 ? (
-              <div className="text-center py-4 text-muted">
-                <i className="bi bi-check-circle fs-2 text-success d-block mb-2"></i>
-                Todos los artículos tienen stock objetivo configurado y están en nivel correcto.
-                <div className="small mt-1">
-                  Configurá el <strong>stock objetivo</strong> en cada artículo para usar esta función.
-                </div>
-              </div>
-            ) : (
+            {selectorProveedor}
+
+            {/* ── Tab: Presupuesto ── */}
+            {tab === "presupuesto" && (
               <>
-                <div className="table-responsive mb-3">
-                  <table className="table table-sm align-middle mb-0">
-                    <thead className="table-light">
-                      <tr>
-                        <th>Artículo</th>
-                        <th className="text-center">Stock actual</th>
-                        <th className="text-center">Objetivo</th>
-                        <th className="text-center text-muted small">Cons. semanal</th>
-                        <th className="text-center text-muted small">Cons. mensual</th>
-                        <th className="text-center text-primary fw-bold">A pedir</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.map((i) => (
-                        <tr key={i._id}>
-                          <td className="fw-semibold">{i.nombre}</td>
-                          <td className="text-center text-danger fw-semibold">
-                            {fmtNum(i.stockActual)} <span className="text-muted fw-normal small">{i.unidad}</span>
-                          </td>
-                          <td className="text-center text-muted">{fmtNum(i.stockObjetivo)}</td>
-                          <td className="text-center text-muted small">{i.consumoSemanal > 0 ? fmtNum(i.consumoSemanal) : "—"}</td>
-                          <td className="text-center text-muted small">{i.consumoMensual > 0 ? fmtNum(i.consumoMensual) : "—"}</td>
-                          <td className="text-center fw-bold text-primary fs-6">{fmtNum(i.cantidadPedido)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <label className="form-label fw-semibold mb-0">Artículos a consultar</label>
+                  <div className="d-flex gap-2">
+                    <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => marcarTodos(true)}>
+                      Todos
+                    </button>
+                    <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => marcarTodos(false)}>
+                      Ninguno
+                    </button>
+                  </div>
                 </div>
 
-                <div className="mb-3">
-                  <label className="form-label fw-semibold">Email destinatario</label>
-                  <input
-                    type="email"
-                    className="form-control"
-                    value={destinatario}
-                    onChange={(e) => setDestinatario(e.target.value)}
-                    placeholder="proveedor@ejemplo.com"
-                    autoFocus
-                  />
-                  <div className="form-text">El pedido se enviará a esta dirección.</div>
+                {articulos.length === 0 ? (
+                  <p className="text-muted text-center py-3 small">No hay artículos cargados.</p>
+                ) : (
+                  <div className="list-group list-group-flush border rounded">
+                    {articulos.map((a) => {
+                      const cfg = NIVEL_CFG[nivelStock(a)];
+                      return (
+                        <label
+                          key={a._id}
+                          className="list-group-item list-group-item-action d-flex align-items-center gap-3 py-2 px-3"
+                          style={{ cursor: "pointer" }}
+                        >
+                          <input
+                            type="checkbox"
+                            className="form-check-input flex-shrink-0 mt-0"
+                            checked={!!seleccionados[a._id]}
+                            onChange={() => toggleArticulo(a._id)}
+                          />
+                          <span className="flex-grow-1 fw-semibold small">{a.nombre}</span>
+                          <span className="text-muted small">{fmtNum(a.stockActual)} {a.unidad}</span>
+                          {cfg.badge
+                            ? <span className={`badge ${cfg.badge.cls}`} style={{ fontSize: "0.7rem" }}>{cfg.badge.text}</span>
+                            : <span className="badge bg-success" style={{ fontSize: "0.7rem" }}>OK</span>}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {seleccionadosList.length > 0 && proveedor && (
+                  <div className="alert alert-success mt-3 py-2 small mb-0">
+                    <i className="bi bi-check-circle me-1"></i>
+                    Se consultará a <strong>{proveedor.nombre}</strong> por {seleccionadosList.length} artículo{seleccionadosList.length !== 1 ? "s" : ""}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* ── Tab: Pedido ── */}
+            {tab === "pedido" && (
+              <>
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <label className="form-label fw-semibold mb-0">Cantidades a pedir</label>
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary btn-sm"
+                    onClick={autocompletarPedido}
+                    title="Completa con la cantidad necesaria para llegar al stock objetivo"
+                  >
+                    <i className="bi bi-lightning-charge me-1"></i>Auto según objetivo
+                  </button>
                 </div>
+
+                {articulos.length === 0 ? (
+                  <p className="text-muted text-center py-3 small">No hay artículos cargados.</p>
+                ) : (
+                  <div className="list-group list-group-flush border rounded">
+                    {articulos.map((a) => {
+                      const cfg       = NIVEL_CFG[nivelStock(a)];
+                      const cantidad  = cantidades[a._id] || "";
+                      const conCant   = Number(cantidad) > 0;
+                      return (
+                        <div
+                          key={a._id}
+                          className={`list-group-item d-flex align-items-center gap-3 py-2 px-3 ${conCant ? "list-group-item-success" : ""}`}
+                        >
+                          <div className="flex-grow-1">
+                            <div className="fw-semibold small">{a.nombre}</div>
+                            <div className="text-muted" style={{ fontSize: "0.75rem" }}>
+                              Stock actual: {fmtNum(a.stockActual)} {a.unidad}
+                              {a.stockObjetivo > 0 && ` · objetivo: ${fmtNum(a.stockObjetivo)}`}
+                            </div>
+                          </div>
+                          {cfg.badge
+                            ? <span className={`badge ${cfg.badge.cls} d-none d-sm-inline`} style={{ fontSize: "0.7rem" }}>{cfg.badge.text}</span>
+                            : null}
+                          <div className="d-flex align-items-center gap-1" style={{ minWidth: 110 }}>
+                            <input
+                              type="number"
+                              className="form-control form-control-sm text-end"
+                              style={{ width: 80 }}
+                              value={cantidad}
+                              onChange={(e) => setCantidad(a._id, e.target.value)}
+                              min="0"
+                              placeholder="0"
+                            />
+                            <span className="text-muted small">{a.unidad}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {lineasPedido.length > 0 && proveedor && (
+                  <div className="alert alert-success mt-3 py-2 small mb-0">
+                    <i className="bi bi-check-circle me-1"></i>
+                    Se pedirá a <strong>{proveedor.nombre}</strong>:{" "}
+                    {lineasPedido.map((a) => `${fmtNum(Number(cantidades[a._id]))} ${a.unidad} de ${a.nombre}`).join(" · ")}
+                  </div>
+                )}
               </>
             )}
           </div>
 
           <div className="modal-footer">
-            <button className="btn btn-outline-secondary" onClick={onClose} disabled={enviando}>Cerrar</button>
-            {items.length > 0 && (
+            <button className="btn btn-outline-secondary" onClick={onClose}>Cerrar</button>
+            {tab === "presupuesto" ? (
               <button
-                className="btn btn-primary"
-                onClick={handleEnviar}
-                disabled={enviando || !destinatario.trim()}
+                className="btn fw-semibold"
+                style={{ background: "#25d366", color: "#fff", borderColor: "#25d366" }}
+                onClick={abrirWAPresupuesto}
+                disabled={!proveedorId || seleccionadosList.length === 0}
               >
-                {enviando
-                  ? <><span className="spinner-border spinner-border-sm me-1"></span>Enviando...</>
-                  : <><i className="bi bi-send me-1"></i>Enviar pedido ({items.length})</>}
+                <i className="bi bi-whatsapp me-1"></i>
+                Consultar precios{seleccionadosList.length > 0 ? ` (${seleccionadosList.length})` : ""}
+              </button>
+            ) : (
+              <button
+                className="btn fw-semibold"
+                style={{ background: "#25d366", color: "#fff", borderColor: "#25d366" }}
+                onClick={abrirWAPedido}
+                disabled={!proveedorId || lineasPedido.length === 0}
+              >
+                <i className="bi bi-whatsapp me-1"></i>
+                Enviar pedido{lineasPedido.length > 0 ? ` (${lineasPedido.length})` : ""}
               </button>
             )}
           </div>
         </div>
       </div>
     </div>
+  );
+};
+
+// ── Modal ABM proveedores ─────────────────────────────────────────────────────
+const ProveedoresModal = ({ onClose }) => {
+  const [proveedores, setProveedores] = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [form, setForm]               = useState(null); // null = cerrado, {} = nuevo, {...} = editar
+  const [saving, setSaving]           = useState(false);
+
+  const cargar = useCallback(async () => {
+    try {
+      const data = await obtenerProveedoresEmpaque();
+      setProveedores(data);
+    } catch {
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  const handleGuardar = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      if (form._id) {
+        await actualizarProveedorEmpaque(form._id, { nombre: form.nombre, whatsapp: form.whatsapp });
+      } else {
+        await crearProveedorEmpaque({ nombre: form.nombre, whatsapp: form.whatsapp });
+      }
+      setForm(null);
+      await cargar();
+    } catch (err) {
+      Swal.fire("Error", err.message, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleEliminar = async (p) => {
+    const ok = await Swal.fire({
+      title: `¿Eliminar "${p.nombre}"?`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#dc3545",
+      confirmButtonText: "Eliminar",
+      cancelButtonText: "Cancelar",
+    });
+    if (!ok.isConfirmed) return;
+    try {
+      await eliminarProveedorEmpaque(p._id);
+      await cargar();
+    } catch (err) {
+      Swal.fire("Error", err.message, "error");
+    }
+  };
+
+  return (
+    <>
+      <div
+        className="modal fade show d-block"
+        tabIndex="-1"
+        style={{ backgroundColor: "rgba(0,0,0,0.55)", zIndex: 1060 }}
+        onClick={(e) => e.target === e.currentTarget && !form && onClose()}
+      >
+        <div className="modal-dialog">
+          <div className="modal-content">
+            <div className="modal-header" style={{ borderTop: "4px solid #25d366" }}>
+              <h5 className="modal-title mb-0">
+                <i className="bi bi-person-lines-fill me-2" style={{ color: "#25d366" }}></i>
+                Proveedores de empaque
+              </h5>
+              <button className="btn-close" onClick={onClose}></button>
+            </div>
+
+            <div className="modal-body">
+              {/* Formulario inline */}
+              {form && (
+                <div className="card border-primary mb-3">
+                  <div className="card-body py-3">
+                    <h6 className="fw-semibold mb-3">{form._id ? "Editar proveedor" : "Nuevo proveedor"}</h6>
+                    <form onSubmit={handleGuardar}>
+                      <div className="mb-2">
+                        <label className="form-label fw-semibold small">Nombre</label>
+                        <input
+                          type="text"
+                          className="form-control form-control-sm"
+                          value={form.nombre || ""}
+                          onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+                          placeholder="Nombre del proveedor"
+                          required
+                          autoFocus
+                        />
+                      </div>
+                      <div className="mb-3">
+                        <label className="form-label fw-semibold small">Número WhatsApp</label>
+                        <input
+                          type="text"
+                          className="form-control form-control-sm"
+                          value={form.whatsapp || ""}
+                          onChange={(e) => setForm({ ...form, whatsapp: e.target.value })}
+                          placeholder="Ej: 3412345678 o 549XXXXXXXXXX"
+                          required
+                        />
+                        <div className="form-text">
+                          Ingresá el número sin espacios. Ej: <code>3412345678</code> (Rosario) o <code>1155556666</code> (CABA)
+                        </div>
+                      </div>
+                      <div className="d-flex gap-2">
+                        <button type="submit" className="btn btn-primary btn-sm" disabled={saving}>
+                          {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
+                          {form._id ? "Guardar cambios" : "Crear proveedor"}
+                        </button>
+                        <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setForm(null)} disabled={saving}>
+                          Cancelar
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* Lista */}
+              {loading ? (
+                <div className="text-center py-3">
+                  <div className="spinner-border spinner-border-sm text-primary"></div>
+                </div>
+              ) : proveedores.length === 0 ? (
+                <p className="text-muted text-center py-3 small mb-0">No hay proveedores cargados.</p>
+              ) : (
+                <ul className="list-group list-group-flush">
+                  {proveedores.map((p) => (
+                    <li key={p._id} className="list-group-item d-flex justify-content-between align-items-center px-0">
+                      <div>
+                        <div className="fw-semibold small">{p.nombre}</div>
+                        <div className="text-muted small">
+                          <i className="bi bi-whatsapp me-1" style={{ color: "#25d366" }}></i>
+                          {p.whatsapp}
+                        </div>
+                      </div>
+                      {esAdmin() && (
+                        <div className="d-flex gap-1">
+                          <button
+                            className="btn btn-outline-secondary btn-sm"
+                            onClick={() => setForm({ _id: p._id, nombre: p.nombre, whatsapp: p.whatsapp })}
+                          >
+                            <i className="bi bi-pencil"></i>
+                          </button>
+                          {esSuperAdmin() && (
+                            <button className="btn btn-outline-danger btn-sm" onClick={() => handleEliminar(p)}>
+                              <i className="bi bi-trash"></i>
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              {esAdmin() && !form && (
+                <button className="btn btn-primary btn-sm me-auto" onClick={() => setForm({ nombre: "", whatsapp: "" })}>
+                  <i className="bi bi-plus-circle me-1"></i>Agregar proveedor
+                </button>
+              )}
+              <button className="btn btn-secondary" onClick={onClose}>Cerrar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
   );
 };
 
@@ -1054,11 +1394,12 @@ const StockEmpaquePage = () => {
   const [articulos, setArticulos]         = useState([]);
   const [estadisticas, setEstadisticas]   = useState([]);
   const [loading, setLoading]             = useState(true);
-  const [modalArticulo, setModalArticulo] = useState(null);
-  const [formArticulo, setFormArticulo]   = useState(null);
-  const [showDescarte, setShowDescarte]     = useState(false);
-  const [showPedido, setShowPedido]         = useState(false);
-  const [showCargaMasiva, setShowCargaMasiva] = useState(false);
+  const [modalArticulo, setModalArticulo]       = useState(null);
+  const [formArticulo, setFormArticulo]         = useState(null);
+  const [showDescarte, setShowDescarte]         = useState(false);
+  const [showPedido, setShowPedido]             = useState(false);
+  const [showCargaMasiva, setShowCargaMasiva]   = useState(false);
+  const [showProveedores, setShowProveedores]   = useState(false);
 
   const cargar = useCallback(async () => {
     try {
@@ -1145,11 +1486,18 @@ const StockEmpaquePage = () => {
           </div>
           {esAdmin() && (
             <div className="d-flex gap-2 flex-wrap">
+              <button className="btn btn-outline-secondary btn-sm" onClick={() => setShowProveedores(true)}>
+                <i className="bi bi-person-lines-fill me-1"></i>Proveedores
+              </button>
               <button className="btn btn-outline-success btn-sm" onClick={() => setShowCargaMasiva(true)}>
                 <i className="bi bi-box-arrow-in-down me-1"></i>Carga masiva
               </button>
-              <button className="btn btn-outline-primary btn-sm" onClick={() => setShowPedido(true)}>
-                <i className="bi bi-envelope-check me-1"></i>Hacer pedido
+              <button
+                className="btn btn-sm fw-semibold"
+                style={{ background: "#25d366", color: "#fff", borderColor: "#25d366" }}
+                onClick={() => setShowPedido(true)}
+              >
+                <i className="bi bi-whatsapp me-1"></i>Pedir precios
               </button>
               <button className="btn btn-primary btn-sm" onClick={() => setFormArticulo("nuevo")}>
                 <i className="bi bi-plus-circle me-1"></i>Nuevo artículo
@@ -1228,13 +1576,17 @@ const StockEmpaquePage = () => {
         />
       )}
 
-      {/* Modal pedido */}
+      {/* Modal pedido WhatsApp */}
       {showPedido && (
-        <PedidoModal
+        <PedidoWhatsAppModal
           articulos={articulos}
-          estadisticas={estadisticas}
           onClose={() => setShowPedido(false)}
         />
+      )}
+
+      {/* Modal proveedores */}
+      {showProveedores && (
+        <ProveedoresModal onClose={() => setShowProveedores(false)} />
       )}
 
       {/* Modal descarte */}
