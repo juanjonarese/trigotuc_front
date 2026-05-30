@@ -87,10 +87,6 @@ const NuevaOrdenModal = ({ clientes, resumen, onClose, onCreada }) => {
   const [saving, setSaving] = useState(false);
   const calibreRef          = useRef(null);
 
-  const clienteSeleccionado = clientes.find((c) => c._id === form.cliente) || null;
-  const preciosPorCalibre   = clienteSeleccionado?.listaPrecios?.precios
-    ? Object.fromEntries(clienteSeleccionado.listaPrecios.precios.map((p) => [p.calibre, p.precioPorCajon]))
-    : null;
 
   const stockCamara = resumen
     ? (form.camara === "cañete" ? resumen.stockCañete : resumen.stockTrigotuc)
@@ -175,7 +171,6 @@ const NuevaOrdenModal = ({ clientes, resumen, onClose, onCreada }) => {
                       {clientes.map((c) => (
                         <option key={c._id} value={c._id}>
                           {c.razonSocial || c.nombre}
-                          {c.listaPrecios ? ` (${c.listaPrecios.nombre})` : ""}
                         </option>
                       ))}
                     </select>
@@ -233,7 +228,6 @@ const NuevaOrdenModal = ({ clientes, resumen, onClose, onCreada }) => {
                   inputCajones={true}
                   showPrecio={true}
                   stockCalibres={stockCamara}
-                  preciosPorCalibre={preciosPorCalibre}
                 />
 
                 {subtotalBruto > 0 && (

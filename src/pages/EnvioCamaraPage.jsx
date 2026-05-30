@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
-import { crearEnvioCamara, obtenerEnviosCamara, obtenerCamiones, eliminarEnvioCamara } from "../services/api";
+import { crearEnvioCamara, obtenerEnviosCamara, obtenerCamiones, eliminarEnvioCamara, obtenerResumenStock } from "../services/api";
 import Swal from "sweetalert2";
 
 const CAMARAS = [
@@ -23,22 +23,26 @@ const EnvioCamaraPage = () => {
   const rolUsuario   = localStorage.getItem("rolUsuario");
   const esSuperAdmin = rolUsuario === "superadmin";
 
-  const [camiones, setCamiones] = useState([]);
-  const [envios, setEnvios]     = useState([]);
-  const [loading, setLoading]   = useState(true);
+  const [camiones, setCamiones]     = useState([]);
+  const [envios, setEnvios]         = useState([]);
+  const [loading, setLoading]       = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [resumen, setResumen]       = useState(null);
 
-  const [form, setForm]     = useState(FORM_INICIAL);
-  const [lineas, setLineas] = useState([]);
+  const [form, setForm]             = useState(FORM_INICIAL);
+  const [lineas, setLineas]         = useState([]);
+  const [trozadosLineas, setTrozadosLineas] = useState([]);
 
   const cargarDatos = async () => {
     try {
-      const [camionesData, enviosData] = await Promise.all([
+      const [camionesData, enviosData, resumenData] = await Promise.all([
         obtenerCamiones(),
         obtenerEnviosCamara(),
+        obtenerResumenStock(),
       ]);
       setCamiones(camionesData.camiones || []);
       setEnvios(enviosData);
+      setResumen(resumenData);
     } catch {
       Swal.fire("Error", "No se pudieron cargar los datos.", "error");
     } finally {
@@ -76,12 +80,23 @@ const EnvioCamaraPage = () => {
   const totalCajones = lineasCalculadas.reduce((acc, l) => acc + l.cajones, 0);
   const totalKg      = totalCajones * 20;
 
+  const stockCalibresOrigen = form.camaraOrigen === "cañete"
+    ? (resumen?.stockCañete   || [])
+    : form.camaraOrigen === "trigotuc"
+    ? (resumen?.stockTrigotuc || [])
+    : null;
+
   const formatNum   = (n) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n);
   const formatFecha = (f) => new Date(f).toLocaleDateString("es-AR");
   const camaraLabel = (v) => CAMARAS.find((c) => c.value === v)?.label || v;
 
   const handleChange = (e) => {
-    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    if (name === "camaraOrigen") {
+      setLineas([]);
+      setTrozadosLineas([]);
+    }
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
@@ -94,9 +109,23 @@ const EnvioCamaraPage = () => {
       Swal.fire("Error", "La cámara de origen y destino no pueden ser la misma.", "error");
       return;
     }
-    const lineasValidas = lineasCalculadas.filter((l) => l.cajones > 0);
-    if (lineasValidas.length === 0) {
-      Swal.fire("Error", "Ingresá al menos un calibre con cajones.", "error");
+    const lineasValidas    = lineasCalculadas.filter((l) => l.cajones > 0);
+    const trozadosValidos  = trozadosLineas.filter((t) => Number(t.cajas) > 0 && Number(t.kgCaja) > 0);
+
+    // Validar stock de trozados
+    const trozadosDisp = form.camaraOrigen === "cañete"
+      ? (resumen?.trozadosCañete   || [])
+      : (resumen?.trozadosTrigotuc || []);
+    for (const t of trozadosValidos) {
+      const disponible = trozadosDisp.find((d) => d.tipo === t.tipo)?.cajas || 0;
+      if (Number(t.cajas) > disponible) {
+        Swal.fire("Error", `Stock insuficiente de ${t.tipo}. Disponible: ${disponible} cajas.`, "error");
+        return;
+      }
+    }
+
+    if (lineasValidas.length === 0 && trozadosValidos.length === 0) {
+      Swal.fire("Error", "Ingresá al menos un calibre o un trozado.", "error");
       return;
     }
 
@@ -108,19 +137,21 @@ const EnvioCamaraPage = () => {
         camaraOrigen:  form.camaraOrigen,
         camaraDestino: form.camaraDestino,
         calibres:      lineasValidas.map(({ calibre, pollos, cajones }) => ({
-          calibre: Number(calibre),
-          pollos:  Number(pollos),
-          cajones,
+          calibre: Number(calibre), pollos: Number(pollos), cajones,
+        })),
+        trozados:      trozadosValidos.map((t) => ({
+          tipo: t.tipo, kgCaja: Number(t.kgCaja), cajas: Number(t.cajas),
         })),
         observaciones: form.observaciones,
       });
       Swal.fire(
         `Envío ${envio.numeroEnvio} registrado`,
-        `${camaraLabel(form.camaraOrigen)} → ${camaraLabel(form.camaraDestino)} · ${totalCajones} cajones · ${totalKg} kg`,
+        `${camaraLabel(form.camaraOrigen)} → ${camaraLabel(form.camaraDestino)}`,
         "success"
       );
       setForm(FORM_INICIAL);
       setLineas([]);
+      setTrozadosLineas([]);
       cargarDatos();
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudo registrar el envío.", "error");
@@ -233,10 +264,69 @@ const EnvioCamaraPage = () => {
               </div>
 
               {/* Calibres */}
-              <div className="mb-3">
-                <label className="form-label fw-semibold">Cajones por calibre</label>
-                <CalibreTable lineas={lineas} onChange={setLineas} inputCajones />
-              </div>
+              {!form.camaraOrigen ? (
+                <div className="alert alert-secondary py-2 mb-3">
+                  <i className="bi bi-info-circle me-2"></i>
+                  Seleccioná la cámara de origen para cargar el stock disponible.
+                </div>
+              ) : (
+                <div className="mb-3">
+                  <label className="form-label fw-semibold">Cajones por calibre</label>
+                  <CalibreTable lineas={lineas} onChange={setLineas} inputCajones showPollos={false} stockCalibres={stockCalibresOrigen} />
+                </div>
+              )}
+
+              {/* Trozados */}
+              {(() => {
+                const disponibles = form.camaraOrigen === "cañete"
+                  ? (resumen?.trozadosCañete   || []).filter((t) => t.cajas > 0)
+                  : (resumen?.trozadosTrigotuc || []).filter((t) => t.cajas > 0);
+                if (!form.camaraOrigen || disponibles.length === 0) return null;
+                return (
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold">Trozados</label>
+                    <table className="table table-sm table-bordered align-middle mb-0">
+                      <thead className="table-light">
+                        <tr>
+                          <th>Tipo</th>
+                          <th className="text-end">Disponible (cajas)</th>
+                          <th style={{ width: "9rem" }}>Cajas a enviar</th>
+                          <th className="text-muted small">kg/caja</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {disponibles.map((t) => {
+                          const linea = trozadosLineas.find((l) => l.tipo === t.tipo) || { tipo: t.tipo, cajas: "", kgCaja: t.kgCaja };
+                          return (
+                            <tr key={t.tipo}>
+                              <td className="text-capitalize fw-semibold">{t.tipo}</td>
+                              <td className="text-end text-muted">{formatNum(t.cajas)}</td>
+                              <td>
+                                <input
+                                  type="number" min="0" max={t.cajas} step="1"
+                                  className="form-control form-control-sm text-center"
+                                  placeholder="0"
+                                  value={linea.cajas}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setTrozadosLineas((prev) => {
+                                      const idx = prev.findIndex((l) => l.tipo === t.tipo);
+                                      const nueva = { tipo: t.tipo, cajas: val, kgCaja: t.kgCaja };
+                                      if (idx === -1) return [...prev, nueva];
+                                      return prev.map((l, i) => i === idx ? nueva : l);
+                                    });
+                                  }}
+                                />
+                              </td>
+                              <td className="text-muted small">{t.kgCaja} kg</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
 
               <button type="submit" className="btn btn-primary" disabled={submitting}>
                 {submitting && (
@@ -300,6 +390,11 @@ const EnvioCamaraPage = () => {
                               Cal.{c.calibre}: {formatNum(c.cajones)} caj
                             </span>
                           ))}
+                          {(e.trozados || []).map((t, i) => (
+                            <span key={`t${i}`} className="badge bg-warning text-dark text-capitalize">
+                              {t.tipo}: {formatNum(t.cajas)} caj
+                            </span>
+                          ))}
                         </div>
                         <div className="row g-0 text-center mb-2">
                           <div className="col-4 border-end">
@@ -360,6 +455,11 @@ const EnvioCamaraPage = () => {
                               {e.calibres.map((c, i) => (
                                 <span key={i} className="badge bg-info text-dark">
                                   Cal.{c.calibre}: {formatNum(c.cajones)} caj
+                                </span>
+                              ))}
+                              {(e.trozados || []).map((t, i) => (
+                                <span key={`t${i}`} className="badge bg-warning text-dark text-capitalize">
+                                  {t.tipo}: {formatNum(t.cajas)} caj
                                 </span>
                               ))}
                             </div>

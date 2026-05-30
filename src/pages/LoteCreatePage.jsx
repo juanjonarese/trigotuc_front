@@ -4,10 +4,10 @@ import Layout from "../components/Layout";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
 import {
   crearLote,
+  actualizarLote,
   obtenerOrdenesCarga,
   obtenerLotes,
   eliminarLote,
-  consumirStockLote,
 } from "../services/api";
 import { obtenerFechaHoy } from "../utils/dateUtils";
 import Swal from "sweetalert2";
@@ -115,9 +115,11 @@ const GRANJA_LABEL  = { cañete: "Cañete", los_pinos: "Los Pinos" };
 const GRANJA_PREFIX = { cañete: "C", los_pinos: "P" };
 
 const FORM_VACIO = {
-  fechaIngreso:     obtenerFechaHoy(),
+  fechaIngreso:        obtenerFechaHoy(),
   unidadesFaenadas:    "",
   kgVivos:             "",
+  muertos:             "",
+  kgMuertos:           "",
   unidadesDecomisadas: "",
   kgDecomisados:       "",
   unidadesTrozadas:    "",
@@ -165,9 +167,13 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
   };
 
   // Totales para preview en el modal (sin incluir draft)
-  const totalCajones = lineas.reduce((acc, l) => acc + calcularCajones(l.pollos, l.calibre), 0);
-  const totalPollos  = lineas.reduce((acc, l) => acc + Number(l.pollos || 0), 0);
-  const totalKg      = totalCajones * 20;
+  const totalCajones  = lineas.reduce((acc, l) => acc + calcularCajones(l.pollos, l.calibre), 0);
+  const totalPollos   = lineas.reduce((acc, l) => acc + Number(l.pollos || 0), 0);
+  const totalKg       = totalCajones * 20;
+  const kgMenudo      = trozados
+    .filter((t) => t.tipo === "menudo")
+    .reduce((s, t) => s + (Number(t.cajas) || 0) * (Number(t.kgCaja) || 0), 0);
+  const kgTotalCamara = totalKg + (Number(form.kgTrozados) || 0) + kgMenudo;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -195,6 +201,8 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
       };
       if (form.kgVivos)             payload.kgVivos             = Number(form.kgVivos);
       if (form.unidadesFaenadas)    payload.unidadesFaenadas    = Number(form.unidadesFaenadas);
+      if (form.muertos)             payload.muertos             = Number(form.muertos);
+      if (form.kgMuertos)           payload.kgMuertos           = Number(form.kgMuertos);
       if (form.unidadesDecomisadas) payload.unidadesDecomisadas = Number(form.unidadesDecomisadas);
       if (form.kgDecomisados)       payload.kgDecomisados       = Number(form.kgDecomisados);
       if (form.unidadesTrozadas)    payload.unidadesTrozadas    = Number(form.unidadesTrozadas);
@@ -203,49 +211,18 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
 
       const trozadosPayload = trozados
         .filter((t) => Number(t.cajas) > 0)
-        .map((t) => ({ tipo: t.tipo, kgCaja: Number(t.kgCaja), kgTotal: Number(t.cajas) * Number(t.kgCaja) }));
+        .map((t) => ({ tipo: t.tipo, kgCaja: Number(t.kgCaja), cajas: Number(t.cajas), kgTotal: Number(t.cajas) * Number(t.kgCaja) }));
       if (trozadosPayload.length > 0) payload.trozados = trozadosPayload;
 
-      const loteCreado = await crearLote(payload);
-
-      // Descontar stock de empaque automáticamente
-      let consumoHtml = "";
-      let alertaHtml  = "";
-      try {
-        const { consumidos, alertas } = await consumirStockLote({
-          calibres:   calibresPayload,
-          loteId:     loteCreado._id,
-          loteNumero: loteCreado.numeroLote,
-        });
-        if (consumidos.length > 0) {
-          consumoHtml = `<div class="mt-2 text-start small">
-            <strong>Stock descontado:</strong><br>
-            ${consumidos.map((c) => `· ${fmtNum(c.cantidad)} ${c.unidad} de <em>${c.nombre}</em>`).join("<br>")}
-          </div>`;
-        } else {
-          consumoHtml = `<div class="mt-2 text-start small text-muted">
-            Sin artículos de empaque configurados para consumo automático.
-          </div>`;
-        }
-        if (alertas.length > 0) {
-          alertaHtml = `<div class="mt-2 text-start small text-danger">
-            <strong>⚠ Stock insuficiente:</strong><br>
-            ${alertas.map((a) => `· ${a.nombre}: tenía ${fmtNum(a.stockActual)}, necesitaba ${fmtNum(a.requerido)}`).join("<br>")}
-          </div>`;
-        }
-      } catch (err) {
-        alertaHtml = `<div class="mt-2 small text-danger">
-          <strong>Error al descontar stock:</strong> ${err.message || "Error desconocido"}
-        </div>`;
-      }
+      const { lote: loteCreado } = await crearLote(payload);
 
       onCreado();
       Swal.fire({
-        icon:  alertaHtml ? "warning" : "success",
+        icon:  "success",
         title: `Lote #${loteCreado.numeroLote} creado`,
-        html:  `${fmtNum(totalPollosF)} pollos · ${fmtNum(totalCajonesF)} cajones · ${fmtNum(totalKgF)} kg
-                ${consumoHtml}${alertaHtml}`,
-        confirmButtonText: "OK",
+        text:  `${fmtNum(totalPollosF)} pollos · ${fmtNum(totalCajonesF)} cajones · ${fmtNum(totalKgF)} kg`,
+        timer: 2000,
+        showConfirmButton: false,
       });
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudo crear el lote.", "error");
@@ -354,6 +331,20 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
                       min="0" step="0.01" placeholder={recepcionSel ? recepcionSel.pesoRealKg : "0"} />
                   </div>
                   <div className="col-6 col-md-3">
+                    <label className="form-label">Muertos (u)</label>
+                    <input type="number" className="form-control"
+                      value={form.muertos}
+                      onChange={(e) => setForm({ ...form, muertos: e.target.value })}
+                      min="0" placeholder="0" />
+                  </div>
+                  <div className="col-6 col-md-3">
+                    <label className="form-label">Muertos (kg)</label>
+                    <input type="number" className="form-control"
+                      value={form.kgMuertos}
+                      onChange={(e) => setForm({ ...form, kgMuertos: e.target.value })}
+                      min="0" step="0.01" placeholder="0" />
+                  </div>
+                  <div className="col-6 col-md-3">
                     <label className="form-label">Decomisados (u)</label>
                     <input type="number" className="form-control"
                       value={form.unidadesDecomisadas}
@@ -415,40 +406,49 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
                 <CalibreTable ref={calibreRef} lineas={lineas} onChange={setLineas} />
 
                 {totalCajones > 0 && (
-                  <div className="alert alert-info py-2 mt-3 mb-0">
-                    <div className="row text-center g-0">
-                      <div className="col border-end">
-                        <div className="text-muted small">Pollos calibres</div>
-                        <div className="fw-bold">{fmtNum(totalPollos)}</div>
-                      </div>
-                      <div className="col border-end">
-                        <div className="text-muted small">Cajones</div>
-                        <div className="fw-bold">{fmtNum(totalCajones)}</div>
-                      </div>
-                      <div className="col border-end">
-                        <div className="text-muted small">Kg calibres</div>
-                        <div className="fw-bold">{fmtNum(totalKg)}</div>
-                      </div>
-                      {form.unidadesTrozadas && (
+                  <>
+                    <div className="alert alert-info py-2 mt-3 mb-2">
+                      <div className="row text-center g-0">
                         <div className="col border-end">
-                          <div className="text-muted small">Trozados (u)</div>
-                          <div className="fw-bold">{fmtNum(Number(form.unidadesTrozadas))}</div>
+                          <div className="text-muted small">Pollos calibres</div>
+                          <div className="fw-bold">{fmtNum(totalPollos)}</div>
                         </div>
-                      )}
-                      {form.kgTrozados && (
                         <div className="col border-end">
-                          <div className="text-muted small">Trozados (kg)</div>
-                          <div className="fw-bold">{fmtNum(Number(form.kgTrozados))}</div>
+                          <div className="text-muted small">Cajones</div>
+                          <div className="fw-bold">{fmtNum(totalCajones)}</div>
                         </div>
-                      )}
-                      <div className="col">
-                        <div className="text-muted small fw-semibold">Total pollos</div>
-                        <div className="fw-bold text-primary">
-                          {fmtNum(totalPollos + (Number(form.unidadesTrozadas) || 0))}
+                        <div className="col border-end">
+                          <div className="text-muted small">Kg calibres</div>
+                          <div className="fw-bold">{fmtNum(totalKg)}</div>
+                        </div>
+                        {form.unidadesTrozadas && (
+                          <div className="col border-end">
+                            <div className="text-muted small">Trozados (u)</div>
+                            <div className="fw-bold">{fmtNum(Number(form.unidadesTrozadas))}</div>
+                          </div>
+                        )}
+                        {form.kgTrozados && (
+                          <div className="col border-end">
+                            <div className="text-muted small">Trozados (kg)</div>
+                            <div className="fw-bold">{fmtNum(Number(form.kgTrozados))}</div>
+                          </div>
+                        )}
+                        <div className="col">
+                          <div className="text-muted small fw-semibold">Total pollos</div>
+                          <div className="fw-bold text-primary">
+                            {fmtNum(totalPollos + (Number(form.unidadesTrozadas) || 0))}
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
+                    <div className="rounded px-3 py-2 d-flex justify-content-between align-items-center"
+                      style={{ background: "#f0fdf4", border: "2px solid #86efac" }}>
+                      <div className="fw-semibold text-success">
+                        <i className="bi bi-snow me-2"></i>Kg totales ingreso a cámara
+                      </div>
+                      <div className="fw-bold fs-5 text-success">{fmtNum(kgTotalCamara)} kg</div>
+                    </div>
+                  </>
                 )}
               </form>
             </div>
@@ -470,6 +470,143 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
   );
 };
 
+// ── Modal editar lote ───────────────────────────────────────────────────────
+const EditarLoteModal = ({ lote, onClose, onGuardado }) => {
+  const [form, setForm] = useState({
+    fechaIngreso:        lote.fechaIngreso?.slice(0, 10) ?? obtenerFechaHoy(),
+    unidadesFaenadas:    lote.unidadesFaenadas    != null ? String(lote.unidadesFaenadas)    : "",
+    kgVivos:             lote.kgVivos             != null ? String(lote.kgVivos)             : "",
+    muertos:             lote.muertos             != null ? String(lote.muertos)             : "",
+    kgMuertos:           lote.kgMuertos           != null ? String(lote.kgMuertos)           : "",
+    unidadesDecomisadas: lote.unidadesDecomisadas != null ? String(lote.unidadesDecomisadas) : "",
+    kgDecomisados:       lote.kgDecomisados       != null ? String(lote.kgDecomisados)       : "",
+    unidadesTrozadas:    lote.unidadesTrozadas    != null ? String(lote.unidadesTrozadas)    : "",
+    kgTrozados:          lote.kgTrozados          != null ? String(lote.kgTrozados)          : "",
+    observaciones:       lote.observaciones ?? "",
+  });
+  const [lineas, setLineas]   = useState(
+    (lote.calibres || []).map((c) => ({ calibre: c.calibre, pollos: c.pollos }))
+  );
+  const [saving, setSaving]   = useState(false);
+  const calibreRef            = useRef(null);
+
+  const f = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const lineasFinales = calibreRef.current?.getLineas() ?? lineas;
+    const calibresPayload = lineasFinales
+      .map((l) => ({ calibre: Number(l.calibre), pollos: Number(l.pollos), cajones: calcularCajones(l.pollos, l.calibre) }))
+      .filter((l) => l.cajones > 0);
+    if (calibresPayload.length === 0) {
+      Swal.fire("Error", "Agregá al menos un calibre con pollos.", "error");
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload = {
+        fechaIngreso: form.fechaIngreso,
+        calibres:     calibresPayload,
+        observaciones: form.observaciones || undefined,
+      };
+      if (form.unidadesFaenadas)    payload.unidadesFaenadas    = Number(form.unidadesFaenadas);
+      if (form.kgVivos)             payload.kgVivos             = Number(form.kgVivos);
+      if (form.muertos)             payload.muertos             = Number(form.muertos);
+      if (form.kgMuertos)           payload.kgMuertos           = Number(form.kgMuertos);
+      if (form.unidadesDecomisadas) payload.unidadesDecomisadas = Number(form.unidadesDecomisadas);
+      if (form.kgDecomisados)       payload.kgDecomisados       = Number(form.kgDecomisados);
+      if (form.unidadesTrozadas)    payload.unidadesTrozadas    = Number(form.unidadesTrozadas);
+      if (form.kgTrozados)          payload.kgTrozados          = Number(form.kgTrozados);
+
+      await actualizarLote(lote._id, payload);
+      onGuardado();
+      Swal.fire({ icon: "success", title: "Lote actualizado", timer: 1500, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire("Error", err.message || "No se pudo actualizar el lote.", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="modal show d-block" tabIndex="-1">
+        <div className="modal-dialog modal-lg modal-dialog-scrollable">
+          <div className="modal-content">
+            <div className="modal-header bg-primary text-white">
+              <h5 className="modal-title">
+                <i className="bi bi-pencil-square me-2"></i>
+                Editar Lote {lote.numeroLote ? `#${lote.numeroLote}` : ""}
+              </h5>
+              <button className="btn-close btn-close-white" onClick={onClose} disabled={saving}></button>
+            </div>
+
+            <div className="modal-body">
+              <form id="form-editar-lote" onSubmit={handleSubmit}>
+                <div className="row g-3 mb-3">
+                  <div className="col-6 col-md-3">
+                    <label className="form-label fw-semibold">Fecha de faena</label>
+                    <input type="date" className="form-control" value={form.fechaIngreso} onChange={f("fechaIngreso")} required />
+                  </div>
+                  <div className="col-6 col-md-3">
+                    <label className="form-label fw-semibold">Unidades faenadas</label>
+                    <input type="number" className="form-control" value={form.unidadesFaenadas} onChange={f("unidadesFaenadas")} min="0" placeholder="0" />
+                  </div>
+                  <div className="col-6 col-md-3">
+                    <label className="form-label fw-semibold">Kg vivos</label>
+                    <input type="number" className="form-control" value={form.kgVivos} onChange={f("kgVivos")} min="0" step="0.01" placeholder="0" />
+                  </div>
+                  <div className="col-6 col-md-3">
+                    <label className="form-label">Muertos (u)</label>
+                    <input type="number" className="form-control" value={form.muertos} onChange={f("muertos")} min="0" placeholder="0" />
+                  </div>
+                  <div className="col-6 col-md-3">
+                    <label className="form-label">Muertos (kg)</label>
+                    <input type="number" className="form-control" value={form.kgMuertos} onChange={f("kgMuertos")} min="0" step="0.01" placeholder="0" />
+                  </div>
+                  <div className="col-6 col-md-3">
+                    <label className="form-label">Decomisados (u)</label>
+                    <input type="number" className="form-control" value={form.unidadesDecomisadas} onChange={f("unidadesDecomisadas")} min="0" placeholder="0" />
+                  </div>
+                  <div className="col-6 col-md-3">
+                    <label className="form-label">Decomisados (kg)</label>
+                    <input type="number" className="form-control" value={form.kgDecomisados} onChange={f("kgDecomisados")} min="0" step="0.01" placeholder="0" />
+                  </div>
+                  <div className="col-6 col-md-3">
+                    <label className="form-label">Trozados (u)</label>
+                    <input type="number" className="form-control" value={form.unidadesTrozadas} onChange={f("unidadesTrozadas")} min="0" placeholder="0" />
+                  </div>
+                  <div className="col-6 col-md-3">
+                    <label className="form-label">Trozados (kg)</label>
+                    <input type="number" className="form-control" value={form.kgTrozados} onChange={f("kgTrozados")} min="0" step="0.01" placeholder="0" />
+                  </div>
+                  <div className="col-12 col-md-9">
+                    <label className="form-label">Observaciones</label>
+                    <input type="text" className="form-control" value={form.observaciones} onChange={f("observaciones")} />
+                  </div>
+                </div>
+
+                <label className="form-label fw-semibold">Calibres</label>
+                <p className="text-muted small mb-2">El calibre indica cuántos pollos entran en un cajón de 20 kg.</p>
+                <CalibreTable ref={calibreRef} lineas={lineas} onChange={setLineas} />
+              </form>
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn btn-outline-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
+              <button type="submit" form="form-editar-lote" className="btn btn-primary" disabled={saving}>
+                {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
+                <i className="bi bi-floppy me-1"></i>Guardar cambios
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="modal-backdrop show"></div>
+    </>
+  );
+};
+
 // ── Página principal ────────────────────────────────────────────────────────
 const LoteCreatePage = () => {
   const navigate = useNavigate();
@@ -480,7 +617,8 @@ const LoteCreatePage = () => {
 
   const [lotes, setLotes]         = useState([]);
   const [loading, setLoading]     = useState(true);
-  const [showModal, setShowModal] = useState(false);
+  const [showModal, setShowModal]     = useState(false);
+  const [loteEditando, setLoteEditando] = useState(null);
   const [filtroEstado, setFiltroEstado] = useState("activo");
 
   const cargarLotes = useCallback(async () => {
@@ -549,168 +687,202 @@ const LoteCreatePage = () => {
           </div>
         </div>
 
-        {/* Tabla */}
-        <div className="card border-0 shadow-sm">
-          <div className="card-body p-0">
-            {loading ? (
-              <div className="text-center py-5"><div className="spinner-border text-success"></div></div>
-            ) : lotesFiltrados.length === 0 ? (
-              <p className="text-center text-muted p-4 mb-0">No hay lotes registrados.</p>
-            ) : (
-              <>
-                {/* Mobile */}
-                <div className="d-md-none p-3">
-                  {lotesFiltrados.map((lote) => {
-                    const totalCajones = (lote.calibres || []).reduce((a, c) => a + c.cajones, 0);
-                    return (
-                      <div key={lote._id} className="card border mb-3">
-                        <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
-                          <div>
-                            {lote.numeroLote && <span className="badge bg-dark me-2">#{lote.numeroLote}</span>}
-                            <span className="fw-semibold small">
-                              {new Date(lote.fechaIngreso).toLocaleDateString("es-AR")}
-                            </span>
-                            <span className={`badge ms-2 ${lote.estado === "activo" ? "bg-success" : "bg-secondary"}`}>
-                              {lote.estado === "activo" ? "Activo" : "Cerrado"}
-                            </span>
-                          </div>
-                          <div className="d-flex gap-1">
-                            {esSuperAdmin && (
-                              <button className="btn btn-outline-danger btn-sm" onClick={() => handleEliminar(lote)}>
-                                <i className="bi bi-trash"></i>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        <div className="card-body py-2 px-3 small">
-                          <div className="d-flex flex-wrap gap-1 mb-1">
-                            {(lote.calibres || []).map((c) => (
-                              <span key={c.calibre} className="badge bg-primary">Cal.{c.calibre}: {fmtNum(c.cajones)} caj</span>
-                            ))}
-                          </div>
-                          <div className="text-muted">
-                            <strong className="text-dark">{fmtNum(totalCajones)}</strong> cajones ·{" "}
-                            <strong className="text-dark">{fmtNum(lote.pesoTotal)}</strong> kg
-                          </div>
-                          {(lote.trozados || []).length > 0 && (
-                            <div className="d-flex flex-wrap gap-1 mt-1">
-                              {lote.trozados.map((t) => (
-                                <span key={t.tipo} className="badge bg-warning text-dark">
-                                  {t.tipo.charAt(0).toUpperCase() + t.tipo.slice(1)}: {t.cajas} caj
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                          {lote.rendimientoFaena != null && (
-                            <div className="text-muted mt-1">Rendimiento: <strong className="text-dark">{fmtNum(lote.rendimientoFaena)}%</strong></div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+        {/* Lista de lotes */}
+        {loading ? (
+          <div className="text-center py-5"><div className="spinner-border text-success"></div></div>
+        ) : lotesFiltrados.length === 0 ? (
+          <p className="text-center text-muted py-5 mb-0">No hay lotes registrados.</p>
+        ) : (
+          <div className="d-flex flex-column gap-3">
+            {lotesFiltrados.map((lote) => {
+              const totalCajones     = (lote.calibres || []).reduce((a, c) => a + c.cajones, 0);
+              const tieneMuertos     = lote.muertos || lote.kgMuertos;
+              const tieneDecomisados = lote.unidadesDecomisadas || lote.kgDecomisados;
+              const tieneTrozados    = (lote.trozados || []).length > 0 || lote.kgTrozados;
+              const kgCalibes        = totalCajones * 20;
+              const kgTrozadosReal   = (lote.trozados || []).reduce((s, t) => s + (t.kgTotal || 0), 0) || Number(lote.kgTrozados) || 0;
+              const kgTotalCamara    = kgCalibes + kgTrozadosReal;
+              const base             = Number(lote.unidadesFaenadas) || 0;
+              const pctMuertos       = base > 0 && lote.muertos       ? +(lote.muertos / base * 100).toFixed(1) : null;
+              const pctDecomisados   = base > 0 && lote.unidadesDecomisadas ? +(lote.unidadesDecomisadas / base * 100).toFixed(1) : null;
+              const pctTrozadosU     = base > 0 && lote.unidadesTrozadas    ? +(lote.unidadesTrozadas / base * 100).toFixed(1) : null;
+              const tienePorcentajes = pctMuertos != null || pctDecomisados != null || pctTrozadosU != null;
+              return (
+                <div key={lote._id} className="card border-0 shadow-sm"
+                  style={{ borderLeft: "4px solid #198754" }}>
 
-                {/* Desktop */}
-                <div className="d-none d-md-block table-responsive">
-                  <table className="table table-hover align-middle mb-0">
-                    <thead className="table-light">
-                      <tr>
-                        <th>#Lote</th>
-                        <th>Fecha faena</th>
-                        <th>Estado</th>
-                        <th>Calibres / Stock</th>
-                        <th className="text-end">Cajones</th>
-                        <th className="text-end">Kg totales</th>
-                        <th className="text-end">Decomisados</th>
-                        <th className="text-end">Kg decomis.</th>
-                        <th>Trozados</th>
-                        <th className="text-end">Rendimiento</th>
-                        {esSuperAdmin && <th></th>}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {lotesFiltrados.map((lote) => {
-                        const totalCajones = (lote.calibres || []).reduce((a, c) => a + c.cajones, 0);
-                        return (
-                          <tr key={lote._id}>
-                            <td>
-                              {lote.numeroLote
-                                ? <span className="badge bg-dark">#{lote.numeroLote}</span>
-                                : <span className="text-muted">—</span>
-                              }
-                            </td>
-                            <td className="text-muted small">
-                              {new Date(lote.fechaIngreso).toLocaleDateString("es-AR")}
-                            </td>
-                            <td>
-                              <span className={`badge ${lote.estado === "activo" ? "bg-success" : "bg-secondary"}`}>
-                                {lote.estado === "activo" ? "Activo" : "Cerrado"}
-                              </span>
-                            </td>
-                            <td>
-                              <div className="d-flex flex-wrap gap-1">
-                                {(lote.calibres || []).map((c) => (
-                                  <span key={c.calibre} className="badge bg-primary">
-                                    Cal.{c.calibre}: {fmtNum(c.cajones)}
-                                  </span>
-                                ))}
-                              </div>
-                            </td>
-                            <td className="text-end fw-semibold">{fmtNum(totalCajones)}</td>
-                            <td className="text-end">{fmtNum(lote.pesoTotal)} kg</td>
-                            <td className="text-end">
-                              {lote.unidadesDecomisadas
-                                ? <span className="text-danger">{fmtNum(lote.unidadesDecomisadas)}</span>
-                                : <span className="text-muted">—</span>
-                              }
-                            </td>
-                            <td className="text-end">
-                              {lote.kgDecomisados
-                                ? <span className="text-danger">{fmtNum(lote.kgDecomisados)} kg</span>
-                                : <span className="text-muted">—</span>
-                              }
-                            </td>
-                            <td>
-                              {(lote.trozados || []).length > 0 ? (
-                                <div className="d-flex flex-wrap gap-1">
-                                  {lote.trozados.map((t) => (
-                                    <span key={t.tipo} className="badge bg-warning text-dark" title={`${fmtNum(t.kgTotal)} kg · ${t.kgCaja} kg/caja`}>
-                                      {t.tipo.charAt(0).toUpperCase() + t.tipo.slice(1)}: {t.cajas}
-                                    </span>
-                                  ))}
-                                  <span className="badge bg-secondary">
-                                    {fmtNum(lote.trozados.reduce((s, t) => s + t.kgTotal, 0))} kg
-                                  </span>
+                  {/* Encabezado */}
+                  <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div className="d-flex align-items-center gap-2 flex-wrap">
+                      {lote.numeroLote && (
+                        <span className="badge bg-dark fs-6 px-3">#{lote.numeroLote}</span>
+                      )}
+                      <span className="text-muted small">
+                        <i className="bi bi-calendar3 me-1"></i>
+                        {new Date(lote.fechaIngreso).toLocaleDateString("es-AR")}
+                      </span>
+                      <span className={`badge ${lote.estado === "activo" ? "bg-success" : "bg-secondary"}`}>
+                        {lote.estado === "activo" ? "Activo" : "Cerrado"}
+                      </span>
+                    </div>
+                    <div className="d-flex gap-1">
+                      {puedeCrear && (
+                        <button className="btn btn-outline-primary btn-sm" onClick={() => setLoteEditando(lote)}>
+                          <i className="bi bi-pencil"></i>
+                        </button>
+                      )}
+                      {esSuperAdmin && (
+                        <button className="btn btn-outline-danger btn-sm" onClick={() => handleEliminar(lote)}>
+                          <i className="bi bi-trash"></i>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="card-body py-2 px-3">
+
+                    {/* ── Resumen ── */}
+                    <div className="row g-0 text-center mb-2 pb-2" style={{ borderBottom: "1px solid #e9ecef" }}>
+                      <div className="col border-end py-1">
+                        <div className="text-muted text-uppercase" style={{ fontSize: "0.6rem", letterSpacing: "0.05em" }}>Cajones</div>
+                        <div className="fw-bold text-primary" style={{ fontSize: "1rem" }}>{fmtNum(totalCajones)}</div>
+                      </div>
+                      <div className="col border-end py-1">
+                        <div className="text-muted text-uppercase" style={{ fontSize: "0.6rem", letterSpacing: "0.05em" }}>Kg cámara</div>
+                        <div className="fw-bold" style={{ fontSize: "1rem" }}>{fmtNum(kgTotalCamara || lote.pesoTotal)}</div>
+                      </div>
+                      {lote.unidadesFaenadas && (
+                        <div className="col border-end py-1">
+                          <div className="text-muted text-uppercase" style={{ fontSize: "0.6rem", letterSpacing: "0.05em" }}>Faenados</div>
+                          <div className="fw-bold" style={{ fontSize: "1rem" }}>{fmtNum(lote.unidadesFaenadas)}</div>
+                        </div>
+                      )}
+                      {lote.rendimientoFaena != null && (
+                        <div className={`col py-1 ${tieneDecomisados ? "border-end" : ""}`}>
+                          <div className="text-muted text-uppercase" style={{ fontSize: "0.6rem", letterSpacing: "0.05em" }}>Rendimiento</div>
+                          <div className="fw-bold text-success" style={{ fontSize: "1rem" }}>{fmtNum(lote.rendimientoFaena)}%</div>
+                        </div>
+                      )}
+                      {tieneMuertos && (
+                        <div className={`col py-1 ${tieneDecomisados ? "border-end" : ""}`}>
+                          <div className="text-muted text-uppercase" style={{ fontSize: "0.6rem", letterSpacing: "0.05em" }}>Muertos</div>
+                          <div className="fw-bold text-secondary" style={{ fontSize: "1rem" }}>
+                            {lote.muertos ? `${fmtNum(lote.muertos)} u` : `${fmtNum(lote.kgMuertos)} kg`}
+                          </div>
+                          {lote.muertos && lote.kgMuertos ? (
+                            <div className="text-muted" style={{ fontSize: "0.6rem" }}>{fmtNum(lote.kgMuertos)} kg</div>
+                          ) : null}
+                        </div>
+                      )}
+                      {tieneDecomisados && (
+                        <div className="col py-1">
+                          <div className="text-muted text-uppercase" style={{ fontSize: "0.6rem", letterSpacing: "0.05em" }}>Decomisados</div>
+                          <div className="fw-bold text-danger" style={{ fontSize: "1rem" }}>
+                            {lote.kgDecomisados ? `${fmtNum(lote.kgDecomisados)} kg` : `${fmtNum(lote.unidadesDecomisadas)} u`}
+                          </div>
+                          {lote.unidadesDecomisadas && lote.kgDecomisados ? (
+                            <div className="text-muted" style={{ fontSize: "0.6rem" }}>{fmtNum(lote.unidadesDecomisadas)} u</div>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ── Porcentajes sobre faenados ── */}
+                    {tienePorcentajes && (
+                      <div className="d-flex flex-wrap gap-2 mb-2 pb-2" style={{ borderBottom: "1px solid #e9ecef" }}>
+                        {pctMuertos != null && (
+                          <span className="badge rounded-pill" style={{ background: "#e2e8f0", color: "#475569", fontSize: "0.7rem" }}>
+                            <i className="bi bi-heartbreak me-1"></i>Muertos {pctMuertos}%
+                          </span>
+                        )}
+                        {pctDecomisados != null && (
+                          <span className="badge rounded-pill bg-danger-subtle text-danger" style={{ fontSize: "0.7rem" }}>
+                            <i className="bi bi-x-circle me-1"></i>Decomisados {pctDecomisados}%
+                          </span>
+                        )}
+                        {pctTrozadosU != null && (
+                          <span className="badge rounded-pill bg-warning-subtle text-warning-emphasis" style={{ fontSize: "0.7rem" }}>
+                            <i className="bi bi-scissors me-1"></i>Trozados {pctTrozadosU}%
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ── Calibres + Trozados a la misma altura ── */}
+                    <div className="row g-3">
+                      {(lote.calibres || []).length > 0 && (
+                        <div className={tieneTrozados ? "col-12 col-sm-7" : "col-12"}>
+                          <div className="text-muted text-uppercase fw-semibold mb-2" style={{ fontSize: "0.65rem", letterSpacing: "0.05em" }}>
+                            <i className="bi bi-grid-3x3-gap me-1"></i>Calibres
+                          </div>
+                          <div className="d-flex flex-wrap gap-2">
+                            {lote.calibres.map((c) => {
+                              const pct = totalCajones > 0 ? Math.round(c.cajones / totalCajones * 100) : null;
+                              return (
+                                <div key={c.calibre}
+                                  className="d-flex flex-column align-items-center rounded px-3 py-2"
+                                  style={{ background: "#eff6ff", border: "1px solid #bfdbfe", minWidth: 72 }}>
+                                  <span className="fw-bold text-primary" style={{ fontSize: "0.75rem" }}>Cal. {c.calibre}</span>
+                                  <span className="fw-semibold text-dark">{fmtNum(c.cajones)} caj</span>
+                                  <span className="text-muted" style={{ fontSize: "0.7rem" }}>{fmtNum(c.cajones * 20)} kg</span>
+                                  {pct != null && (
+                                    <span className="text-primary fw-semibold" style={{ fontSize: "0.7rem" }}>{pct}%</span>
+                                  )}
                                 </div>
-                              ) : (
-                                lote.kgTrozados
-                                  ? <span className="text-muted small">{fmtNum(lote.kgTrozados)} kg</span>
-                                  : <span className="text-muted">—</span>
-                              )}
-                            </td>
-                            <td className="text-end">
-                              {lote.rendimientoFaena != null
-                                ? <span className="fw-semibold text-success">{fmtNum(lote.rendimientoFaena)}%</span>
-                                : <span className="text-muted">—</span>
-                              }
-                            </td>
-                            {esSuperAdmin && (
-                              <td>
-                                <button className="btn btn-outline-danger btn-sm" onClick={() => handleEliminar(lote)}>
-                                  <i className="bi bi-trash"></i>
-                                </button>
-                              </td>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {tieneTrozados && (
+                        <div className={(lote.calibres || []).length > 0 ? "col-12 col-sm-5" : "col-12"}>
+                          <div className="text-muted text-uppercase fw-semibold mb-2" style={{ fontSize: "0.65rem", letterSpacing: "0.05em" }}>
+                            <i className="bi bi-scissors me-1"></i>Trozados
+                          </div>
+                          <div className="d-flex flex-wrap gap-2">
+                            {(lote.trozados || []).map((t) => {
+                              const pct = kgTrozadosReal > 0 ? Math.round(t.kgTotal / kgTrozadosReal * 100) : null;
+                              return (
+                                <div key={t.tipo}
+                                  className="d-flex flex-column align-items-center rounded px-3 py-2"
+                                  style={{ background: "#fffbeb", border: "1px solid #fde68a", minWidth: 72 }}>
+                                  <span className="fw-bold" style={{ fontSize: "0.75rem", color: "#b45309" }}>
+                                    {t.tipo.charAt(0).toUpperCase() + t.tipo.slice(1)}
+                                  </span>
+                                  <span className="fw-semibold text-dark">{fmtNum(t.cajas)} caj</span>
+                                  <span className="text-muted" style={{ fontSize: "0.7rem" }}>{fmtNum(t.kgTotal)} kg</span>
+                                  {pct != null && (
+                                    <span className="fw-semibold" style={{ fontSize: "0.7rem", color: "#b45309" }}>{pct}%</span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                            {lote.kgTrozados && !(lote.trozados || []).length && (
+                              <div className="d-flex flex-column align-items-center rounded px-3 py-2"
+                                style={{ background: "#fffbeb", border: "1px solid #fde68a", minWidth: 72 }}>
+                                <span className="fw-bold" style={{ fontSize: "0.75rem", color: "#b45309" }}>Trozados</span>
+                                <span className="fw-semibold text-dark">{fmtNum(lote.kgTrozados)} kg</span>
+                              </div>
                             )}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {lote.observaciones && (
+                      <div className="mt-3 p-2 rounded small"
+                        style={{ background: "#fffbeb", border: "1px solid #fde68a" }}>
+                        <i className="bi bi-info-circle me-1 text-warning"></i>{lote.observaciones}
+                      </div>
+                    )}
+
+                  </div>
                 </div>
-              </>
-            )}
+              );
+            })}
           </div>
-        </div>
+        )}
 
       </div>
 
@@ -718,6 +890,14 @@ const LoteCreatePage = () => {
         <NuevoLoteModal
           onClose={() => { setShowModal(false); navigate("/frigorifico/lotes/nuevo", { replace: true }); }}
           onCreado={() => { setShowModal(false); cargarLotes(); navigate("/frigorifico/lotes/nuevo", { replace: true }); }}
+        />
+      )}
+
+      {loteEditando && (
+        <EditarLoteModal
+          lote={loteEditando}
+          onClose={() => setLoteEditando(null)}
+          onGuardado={() => { setLoteEditando(null); cargarLotes(); }}
         />
       )}
     </Layout>

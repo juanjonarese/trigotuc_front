@@ -731,6 +731,39 @@ export const eliminarEnvioCamara = async (id) => {
   return handleResponse(response);
 };
 
+// ── DESPACHOS FRIGORIFICO ────────────────────────────────────────────────────
+export const obtenerDespachosFrigorifico = async () => {
+  const response = await fetch(`${API_URL}/despachos-frigorifico`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const crearDespachoFrigorifico = async (data) => {
+  const response = await fetch(`${API_URL}/despachos-frigorifico`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const completarDespachoFrigorifico = async (id) => {
+  const response = await fetch(`${API_URL}/despachos-frigorifico/${id}/completar`, {
+    method: "PATCH",
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const eliminarDespachoFrigorifico = async (id) => {
+  const response = await fetch(`${API_URL}/despachos-frigorifico/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
 export const obtenerAuditLog = async (filtros = {}) => {
   const params = new URLSearchParams();
   if (filtros.entidad)    params.append("entidad",    filtros.entidad);
@@ -920,6 +953,42 @@ export const actualizarLoteGranja = async (id, data) => {
 export const eliminarLoteGranja = async (id) => {
   const response = await fetch(`${API_URL}/lotes-granja/${id}`, {
     method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+// ============= PEDIDOS INGRESO POLLITOS =============
+
+export const listarPedidosIngresoPollitos = async (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  const response = await fetch(`${API_URL}/pedidos-ingreso-pollitos${qs ? `?${qs}` : ""}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const crearPedidoIngresoPollitos = async (data) => {
+  const response = await fetch(`${API_URL}/pedidos-ingreso-pollitos`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const confirmarPedidoIngresoPollitos = async (id, data) => {
+  const response = await fetch(`${API_URL}/pedidos-ingreso-pollitos/${id}/confirmar`, {
+    method: "PATCH",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const cancelarPedidoIngresoPollitos = async (id) => {
+  const response = await fetch(`${API_URL}/pedidos-ingreso-pollitos/${id}/cancelar`, {
+    method: "PATCH",
     headers: getAuthHeaders(),
   });
   return handleResponse(response);
@@ -1153,6 +1222,32 @@ export const enviarPedidoStock = async (data) => {
 export const registrarStockMovimiento = async (data) => {
   const response = await fetch(`${API_URL}/stock-empaque/movimientos`, {
     method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const obtenerProveedoresEmpaque = async () => {
+  const response = await fetch(`${API_URL}/stock-empaque/proveedores`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+export const crearProveedorEmpaque = async (data) => {
+  const response = await fetch(`${API_URL}/stock-empaque/proveedores`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const actualizarProveedorEmpaque = async (id, data) => {
+  const response = await fetch(`${API_URL}/stock-empaque/proveedores/${id}`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const eliminarProveedorEmpaque = async (id) => {
+  const response = await fetch(`${API_URL}/stock-empaque/proveedores/${id}`, {
+    method: "DELETE", headers: getAuthHeaders(),
   });
   return handleResponse(response);
 };

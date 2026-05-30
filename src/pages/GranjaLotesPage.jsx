@@ -230,11 +230,6 @@ const GalponModal = ({ lote, galponLabel, onClose }) => {
                     {lote.pesajes.length === 0 && (
                       <div className="text-center text-muted py-3 small">Sin pesajes registrados todavía</div>
                     )}
-                    <div className="d-flex gap-3 flex-wrap pt-2 pb-1 px-1 small text-muted border-top mt-1">
-                      <span><span className="text-success fw-bold me-1">●</span>Dentro del rango</span>
-                      <span><span className="text-warning fw-bold me-1">●</span>Hasta ±10% del rango</span>
-                      <span><span className="text-danger fw-bold me-1">●</span>Más de ±10% del rango</span>
-                    </div>
                   </div>
                 );
               })()}
@@ -335,7 +330,7 @@ const GalponCard = ({ label, lote, onClick }) => {
         {bajas > 0 && <div className="mt-1"><span className="badge bg-danger bg-opacity-75">{bajas} bajas</span></div>}
         {egreso && cfg.badge && (
           <div className="mt-1">
-            <span className={`badge ${cfg.badge}`}>
+            <span className={`badge ${cfg.badge}`} style={{ whiteSpace: "normal" }}>
               {cfg.icono && <i className={`bi ${cfg.icono} me-1`}></i>}
               {cfg.label}
             </span>
@@ -623,11 +618,6 @@ const GranjaLotesPage = () => {
                     })}
                   </tbody>
                 </table>
-              </div>
-              <div className="card-footer bg-white small text-muted d-flex gap-3 flex-wrap py-2">
-                <span><span className="text-success fw-bold me-1">●</span>Dentro del rango</span>
-                <span><span className="text-warning fw-bold me-1">●</span>Hasta ±10% del rango</span>
-                <span><span className="text-danger fw-bold me-1">●</span>Más de ±10% del rango</span>
               </div>
             </div>
           );
