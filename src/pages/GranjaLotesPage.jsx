@@ -504,14 +504,11 @@ const GranjaLotesPage = () => {
       <div className="container-fluid">
 
         {/* Encabezado */}
-        <div className="d-flex align-items-center justify-content-between mb-4">
+        <div className="mb-4">
           <h1 className="h3 mb-0">
             <i className="bi bi-house-door me-2 text-success"></i>
             Galpones
           </h1>
-          <button className="btn btn-outline-primary btn-sm" onClick={() => navigate("/granja/cargar-datos")}>
-            <i className="bi bi-pencil-square me-1"></i>Datos Semanales
-          </button>
         </div>
 
         {/* Grid de galpones por granja */}

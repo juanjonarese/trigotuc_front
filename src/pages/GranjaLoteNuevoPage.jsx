@@ -306,7 +306,7 @@ const TarjetaPedidoPendiente = ({ pedido, onConfirmado, onCancelado }) => {
           {bajasNum > 0 && (
             <div className="mt-2">
               <label className="form-label small mb-1">
-                Motivo de las bajas <span className="text-danger">*</span>
+                Motivo de las bajas <span className="text-muted">(opcional)</span>
               </label>
               <input
                 type="text"
@@ -352,7 +352,8 @@ const EditarIngresoModal = ({ lote, onClose, onGuardado }) => {
     galpon:          lote.galpon,
     fechaIngreso:    lote.fechaIngreso?.split("T")[0] ?? "",
     cantidadIngreso: lote.cantidadIngreso,
-    proveedor:       lote.proveedor || "",
+    bajasIngreso:    lote.bajasIngreso || 0,
+    motivoBajas:     lote.motivoBajas || "",
     observaciones:   lote.observaciones || "",
   });
   const [saving, setSaving] = useState(false);
@@ -366,6 +367,8 @@ const EditarIngresoModal = ({ lote, onClose, onGuardado }) => {
         ...form,
         galpon:          Number(form.galpon),
         cantidadIngreso: Number(form.cantidadIngreso),
+        bajasIngreso:    Number(form.bajasIngreso),
+        motivoBajas:     form.motivoBajas || undefined,
       });
       onGuardado();
       Swal.fire({ icon: "success", title: "Ingreso actualizado", timer: 1500, showConfirmButton: false });
@@ -407,17 +410,25 @@ const EditarIngresoModal = ({ lote, onClose, onGuardado }) => {
                       onChange={(e) => setForm({ ...form, fechaIngreso: e.target.value })} required />
                   </div>
                   <div className="col-6">
-                    <label className="form-label fw-semibold">Cantidad</label>
+                    <label className="form-label fw-semibold">Cantidad enviada</label>
                     <input type="number" className="form-control" value={form.cantidadIngreso}
                       onChange={(e) => setForm({ ...form, cantidadIngreso: e.target.value })}
                       min="1" required />
-                    <div className="form-text">Actual: {lote.cantidadIngreso}</div>
                   </div>
-                  <div className="col-12">
-                    <label className="form-label">Enviado por (opcional)</label>
-                    <input type="text" className="form-control" value={form.proveedor}
-                      onChange={(e) => setForm({ ...form, proveedor: e.target.value })} />
+                  <div className="col-6">
+                    <label className="form-label fw-semibold">Bajas al ingreso</label>
+                    <input type="number" className="form-control" value={form.bajasIngreso}
+                      onChange={(e) => setForm({ ...form, bajasIngreso: e.target.value })}
+                      min="0" />
                   </div>
+                  {Number(form.bajasIngreso) > 0 && (
+                    <div className="col-12">
+                      <label className="form-label">Motivo de las bajas <span className="text-muted">(opcional)</span></label>
+                      <input type="text" className="form-control" value={form.motivoBajas}
+                        onChange={(e) => setForm({ ...form, motivoBajas: e.target.value })}
+                        placeholder="Ej: muertos en transporte, aplaste..." />
+                    </div>
+                  )}
                   <div className="col-12">
                     <label className="form-label">Observaciones (opcional)</label>
                     <textarea className="form-control" rows={2} value={form.observaciones}
@@ -656,9 +667,9 @@ const GranjaLoteNuevoPage = () => {
                           {GRANJAS_LABEL[lote.granja]} — Galpón {GRANJAS_PREFIX[lote.granja]}{lote.galpon}
                         </div>
                         <div className="small">
-                          {formatearFechaLocal(lote.fechaIngreso)} · {lote.cantidadIngreso.toLocaleString("es-AR")} ingresados
+                          {formatearFechaLocal(lote.fechaIngreso)} · {(lote.cantidadIngreso - (lote.bajasIngreso || 0)).toLocaleString("es-AR")} ingresados
                           {lote.bajasIngreso > 0 && (
-                            <span className="text-danger"> · {lote.bajasIngreso.toLocaleString("es-AR")} bajas</span>
+                            <span className="text-danger"> · {lote.bajasIngreso.toLocaleString("es-AR")} bajas{lote.motivoBajas ? ` (${lote.motivoBajas})` : ""}</span>
                           )}
                         </div>
                         {lote.registradoPor?.nombreUsuario && <div className="small text-muted"><i className="bi bi-person me-1"></i>{lote.registradoPor.nombreUsuario}</div>}
@@ -689,12 +700,18 @@ const GranjaLoteNuevoPage = () => {
                           <td className="text-center">{GRANJAS_LABEL[lote.granja] || lote.granja}</td>
                           <td className="text-center fw-semibold">{GRANJAS_PREFIX[lote.granja]}{lote.galpon}</td>
                           <td className="text-center">{formatearFechaLocal(lote.fechaIngreso)}</td>
-                          <td className="text-center">{lote.cantidadIngreso.toLocaleString("es-AR")}</td>
+                          <td className="text-center">{(lote.cantidadIngreso - (lote.bajasIngreso || 0)).toLocaleString("es-AR")}</td>
                           <td className="text-center">
-                            {lote.bajasIngreso > 0
-                              ? <span className="text-danger fw-semibold">{lote.bajasIngreso.toLocaleString("es-AR")}</span>
-                              : <span className="text-muted">—</span>
-                            }
+                            {lote.bajasIngreso > 0 ? (
+                              <>
+                                <span className="text-danger fw-semibold">{lote.bajasIngreso.toLocaleString("es-AR")}</span>
+                                {lote.motivoBajas && (
+                                  <div className="text-danger small">{lote.motivoBajas}</div>
+                                )}
+                              </>
+                            ) : (
+                              <span className="text-muted">—</span>
+                            )}
                           </td>
                           <td className="text-center text-muted small">{lote.registradoPor?.nombreUsuario || "—"}</td>
                           <td className="text-center">

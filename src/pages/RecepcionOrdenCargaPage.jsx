@@ -114,10 +114,11 @@ const imprimirComprobanteEntrega = (orden, datosReales) => {
   win.document.close();
 };
 
-const ConfirmarModal = ({ orden, onClose, onConfirmada, saltarCodigo = false }) => {
-  const [paso, setPaso]   = useState(saltarCodigo ? 2 : 1);
+const ConfirmarModal = ({ orden, onClose, onConfirmada, esAdmin = false, sinCodigo = false }) => {
+  const [paso, setPaso]   = useState(sinCodigo ? 2 : 1);
   const [codigo, setCodigo] = useState("");
   const [codigoError, setCodigoError] = useState("");
+  const [liberadaSinCodigo, setLiberadaSinCodigo] = useState(sinCodigo);
   const [form, setForm] = useState({
     cantidadReal: "",
     pesoRealKg: "",
@@ -134,6 +135,11 @@ const ConfirmarModal = ({ orden, onClose, onConfirmada, saltarCodigo = false }) 
     } else {
       setCodigoError("Código incorrecto. Verificá con el cliente.");
     }
+  };
+
+  const liberarSinCodigo = () => {
+    setLiberadaSinCodigo(true);
+    setPaso(2);
   };
 
   const hayDiferencia = () => {
@@ -175,7 +181,7 @@ const ConfirmarModal = ({ orden, onClose, onConfirmada, saltarCodigo = false }) 
     setSaving(true);
     try {
       await entregarOrdenCarga(orden._id, {
-        ...(saltarCodigo ? {} : { codigoRetiro: codigo.trim().toUpperCase() }),
+        ...(!liberadaSinCodigo && codigo ? { codigoRetiro: codigo.trim().toUpperCase() } : {}),
         cantidadReal:         Number(form.cantidadReal),
         pesoRealKg:           Number(form.pesoRealKg),
         observacionesEntrega: form.observacionesEntrega || undefined,
@@ -238,10 +244,15 @@ const ConfirmarModal = ({ orden, onClose, onConfirmada, saltarCodigo = false }) 
                     />
                     {codigoError && <div className="invalid-feedback text-center">{codigoError}</div>}
                   </div>
-                  <div className="d-grid">
+                  <div className="d-grid gap-2">
                     <button type="submit" className="btn btn-success btn-lg">
                       <i className="bi bi-arrow-right-circle me-1"></i>Verificar código
                     </button>
+                    {esAdmin && (
+                      <button type="button" className="btn btn-outline-warning" onClick={liberarSinCodigo}>
+                        <i className="bi bi-unlock me-1"></i>Liberar sin código
+                      </button>
+                    )}
                   </div>
                 </form>
               )}
@@ -249,7 +260,12 @@ const ConfirmarModal = ({ orden, onClose, onConfirmada, saltarCodigo = false }) 
               {/* PASO 2 — detalle del pedido + datos reales */}
               {paso === 2 && (
                 <>
-                  {!saltarCodigo && (
+                  {liberadaSinCodigo ? (
+                    <div className="alert alert-warning py-2 mb-3 d-flex align-items-center gap-2">
+                      <i className="bi bi-unlock-fill"></i>
+                      <span>Liberada sin código por administración</span>
+                    </div>
+                  ) : (
                     <div className="alert alert-success py-2 mb-3 d-flex align-items-center gap-2">
                       <i className="bi bi-check-circle-fill"></i>
                       <span>Código verificado correctamente</span>
@@ -392,6 +408,14 @@ const RecepcionOrdenCargaPage = () => {
   const [busqueda, setBusqueda]         = useState("");
   const [filtroEstado, setFiltroEstado] = useState("pendiente");
   const [ordenModal, setOrdenModal]     = useState(null);
+  const [modalSinCodigo, setModalSinCodigo] = useState(false);
+
+  const esAdmin = rolUsuario === "superadmin" || rolUsuario === "administracion";
+
+  const abrirModal = (orden, sinCodigo = false) => {
+    setOrdenModal(orden);
+    setModalSinCodigo(sinCodigo);
+  };
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -570,9 +594,16 @@ const RecepcionOrdenCargaPage = () => {
                           Preparar para el frigorifico — la recepción la confirma frigorifico
                         </div>
                       ) : (
-                        <button className="btn btn-success w-100" onClick={() => setOrdenModal(o)}>
-                          <i className="bi bi-check2-circle me-1"></i>Confirmar entrega
-                        </button>
+                        <div className="d-grid gap-2">
+                          <button className="btn btn-success" onClick={() => abrirModal(o)}>
+                            <i className="bi bi-key me-1"></i>Ingresar código y confirmar
+                          </button>
+                          {esAdmin && (
+                            <button className="btn btn-outline-warning btn-sm" onClick={() => abrirModal(o, true)}>
+                              <i className="bi bi-unlock me-1"></i>Liberar sin código
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -678,9 +709,10 @@ const RecepcionOrdenCargaPage = () => {
       {ordenModal && (
         <ConfirmarModal
           orden={ordenModal}
-          saltarCodigo={true}
-          onClose={() => setOrdenModal(null)}
-          onConfirmada={() => { setOrdenModal(null); cargar(); }}
+          esAdmin={esAdmin}
+          sinCodigo={modalSinCodigo}
+          onClose={() => { setOrdenModal(null); setModalSinCodigo(false); }}
+          onConfirmada={() => { setOrdenModal(null); setModalSinCodigo(false); cargar(); }}
         />
       )}
     </Layout>
