@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Layout from "../components/Layout";
-import { obtenerOrdenesCarga, entregarOrdenCarga } from "../services/api";
+import { obtenerOrdenesCarga, entregarOrdenCarga, liberarOrdenCarga } from "../services/api";
 import { formatearFechaLocal, obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
 import Swal from "sweetalert2";
 
@@ -114,11 +114,12 @@ const imprimirComprobanteEntrega = (orden, datosReales) => {
   win.document.close();
 };
 
-const ConfirmarModal = ({ orden, onClose, onConfirmada, esAdmin = false, sinCodigo = false }) => {
-  const [paso, setPaso]   = useState(sinCodigo ? 2 : 1);
+const ConfirmarModal = ({ orden, onClose, onConfirmada, esAdmin = false }) => {
+  const yaLiberada = !!orden.liberada;
+  const [paso, setPaso]   = useState(yaLiberada ? 2 : 1);
   const [codigo, setCodigo] = useState("");
   const [codigoError, setCodigoError] = useState("");
-  const [liberadaSinCodigo, setLiberadaSinCodigo] = useState(sinCodigo);
+  const [liberadaSinCodigo, setLiberadaSinCodigo] = useState(yaLiberada);
   const [form, setForm] = useState({
     cantidadReal: "",
     pesoRealKg: "",
@@ -181,7 +182,7 @@ const ConfirmarModal = ({ orden, onClose, onConfirmada, esAdmin = false, sinCodi
     setSaving(true);
     try {
       await entregarOrdenCarga(orden._id, {
-        ...(!liberadaSinCodigo && codigo ? { codigoRetiro: codigo.trim().toUpperCase() } : {}),
+        ...(codigo && !liberadaSinCodigo ? { codigoRetiro: codigo.trim().toUpperCase() } : {}),
         cantidadReal:         Number(form.cantidadReal),
         pesoRealKg:           Number(form.pesoRealKg),
         observacionesEntrega: form.observacionesEntrega || undefined,
@@ -408,13 +409,31 @@ const RecepcionOrdenCargaPage = () => {
   const [busqueda, setBusqueda]         = useState("");
   const [filtroEstado, setFiltroEstado] = useState("pendiente");
   const [ordenModal, setOrdenModal]     = useState(null);
-  const [modalSinCodigo, setModalSinCodigo] = useState(false);
 
   const esAdmin = rolUsuario === "superadmin" || rolUsuario === "administracion";
 
-  const abrirModal = (orden, sinCodigo = false) => {
+  const abrirModal = (orden) => {
     setOrdenModal(orden);
-    setModalSinCodigo(sinCodigo);
+  };
+
+  const handleLiberar = async (orden) => {
+    const ok = await Swal.fire({
+      title: "¿Liberar orden sin código?",
+      html: `La granja podrá confirmar la entrega <strong>sin pedir el código</strong> al cliente.<br><br>Usá esto solo cuando hayas verificado la identidad del cliente por otro medio.`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#f59e0b",
+      confirmButtonText: "Sí, liberar",
+      cancelButtonText: "Cancelar",
+    });
+    if (!ok.isConfirmed) return;
+    try {
+      await liberarOrdenCarga(orden._id);
+      await cargar();
+      Swal.fire({ icon: "success", title: "Orden liberada", text: "La granja puede confirmar la entrega sin código.", timer: 2000, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire("Error", err.message, "error");
+    }
   };
 
   const cargar = useCallback(async () => {
@@ -595,11 +614,16 @@ const RecepcionOrdenCargaPage = () => {
                         </div>
                       ) : (
                         <div className="d-grid gap-2">
+                          {o.liberada && (
+                            <div className="alert alert-warning py-1 px-2 mb-0 small text-center">
+                              <i className="bi bi-unlock-fill me-1"></i>Liberada por administración — sin código
+                            </div>
+                          )}
                           <button className="btn btn-success" onClick={() => abrirModal(o)}>
-                            <i className="bi bi-key me-1"></i>Ingresar código y confirmar
+                            <i className="bi bi-check2-circle me-1"></i>Confirmar entrega
                           </button>
-                          {esAdmin && (
-                            <button className="btn btn-outline-warning btn-sm" onClick={() => abrirModal(o, true)}>
+                          {esAdmin && !o.liberada && (
+                            <button className="btn btn-outline-warning btn-sm" onClick={() => handleLiberar(o)}>
                               <i className="bi bi-unlock me-1"></i>Liberar sin código
                             </button>
                           )}
@@ -710,9 +734,8 @@ const RecepcionOrdenCargaPage = () => {
         <ConfirmarModal
           orden={ordenModal}
           esAdmin={esAdmin}
-          sinCodigo={modalSinCodigo}
-          onClose={() => { setOrdenModal(null); setModalSinCodigo(false); }}
-          onConfirmada={() => { setOrdenModal(null); setModalSinCodigo(false); cargar(); }}
+          onClose={() => setOrdenModal(null)}
+          onConfirmada={() => { setOrdenModal(null); cargar(); }}
         />
       )}
     </Layout>
