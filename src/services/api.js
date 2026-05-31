@@ -932,6 +932,40 @@ export const registrarMortandadGranja = async (id, data) => {
   return handleResponse(response);
 };
 
+export const editarPesajeGranja = async (id, pesajeId, data) => {
+  const response = await fetch(`${API_URL}/lotes-granja/${id}/pesaje/${pesajeId}`, {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const eliminarPesajeGranja = async (id, pesajeId) => {
+  const response = await fetch(`${API_URL}/lotes-granja/${id}/pesaje/${pesajeId}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const editarMortandadGranja = async (id, mortandadId, data) => {
+  const response = await fetch(`${API_URL}/lotes-granja/${id}/mortandad/${mortandadId}`, {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const eliminarMortandadGranja = async (id, mortandadId) => {
+  const response = await fetch(`${API_URL}/lotes-granja/${id}/mortandad/${mortandadId}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
 export const registrarEgresoGranja = async (id, data) => {
   const response = await fetch(`${API_URL}/lotes-granja/${id}/egreso`, {
     method: "POST",

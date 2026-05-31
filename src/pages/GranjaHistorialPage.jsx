@@ -21,7 +21,8 @@ const EditarIngresoModal = ({ lote, onClose, onGuardado }) => {
     galpon:          lote.galpon,
     fechaIngreso:    lote.fechaIngreso?.split("T")[0] ?? "",
     cantidadIngreso: lote.cantidadIngreso,
-    proveedor:       lote.proveedor || "",
+    bajasIngreso:    lote.bajasIngreso || 0,
+    motivoBajas:     lote.motivoBajas || "",
     observaciones:   lote.observaciones || "",
   });
   const [saving, setSaving] = useState(false);
@@ -35,6 +36,8 @@ const EditarIngresoModal = ({ lote, onClose, onGuardado }) => {
         ...form,
         galpon:          Number(form.galpon),
         cantidadIngreso: Number(form.cantidadIngreso),
+        bajasIngreso:    Number(form.bajasIngreso),
+        motivoBajas:     form.motivoBajas || undefined,
       });
       onGuardado();
       Swal.fire({ icon: "success", title: "Ingreso actualizado", timer: 1500, showConfirmButton: false });
@@ -87,23 +90,34 @@ const EditarIngresoModal = ({ lote, onClose, onGuardado }) => {
                     />
                   </div>
                   <div className="col-6">
-                    <label className="form-label fw-semibold">Cantidad</label>
+                    <label className="form-label fw-semibold">Cantidad enviada</label>
                     <input
                       type="number" className="form-control"
                       value={form.cantidadIngreso}
                       onChange={(e) => setForm({ ...form, cantidadIngreso: e.target.value })}
                       min="1" required
                     />
-                    <div className="form-text">Actual: {lote.cantidadIngreso}</div>
                   </div>
-                  <div className="col-12">
-                    <label className="form-label">Enviado por (opcional)</label>
+                  <div className="col-6">
+                    <label className="form-label fw-semibold">Bajas al ingreso</label>
                     <input
-                      type="text" className="form-control"
-                      value={form.proveedor}
-                      onChange={(e) => setForm({ ...form, proveedor: e.target.value })}
+                      type="number" className="form-control"
+                      value={form.bajasIngreso}
+                      onChange={(e) => setForm({ ...form, bajasIngreso: e.target.value })}
+                      min="0"
                     />
                   </div>
+                  {Number(form.bajasIngreso) > 0 && (
+                    <div className="col-12">
+                      <label className="form-label">Motivo de las bajas <span className="text-muted">(opcional)</span></label>
+                      <input
+                        type="text" className="form-control"
+                        value={form.motivoBajas}
+                        onChange={(e) => setForm({ ...form, motivoBajas: e.target.value })}
+                        placeholder="Ej: muertos en transporte, aplaste..."
+                      />
+                    </div>
+                  )}
                   <div className="col-12">
                     <label className="form-label">Observaciones (opcional)</label>
                     <textarea
