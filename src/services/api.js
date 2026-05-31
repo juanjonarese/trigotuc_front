@@ -748,9 +748,18 @@ export const crearDespachoFrigorifico = async (data) => {
   return handleResponse(response);
 };
 
-export const completarDespachoFrigorifico = async (id) => {
+export const completarDespachoFrigorifico = async (id, data = {}) => {
   const response = await fetch(`${API_URL}/despachos-frigorifico/${id}/completar`, {
     method: "PATCH",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const liberarDespachoFrigorifico = async (id) => {
+  const response = await fetch(`${API_URL}/despachos-frigorifico/${id}/liberar`, {
+    method: "POST",
     headers: getAuthHeaders(),
   });
   return handleResponse(response);
@@ -766,10 +775,13 @@ export const eliminarDespachoFrigorifico = async (id) => {
 
 export const obtenerAuditLog = async (filtros = {}) => {
   const params = new URLSearchParams();
-  if (filtros.entidad)    params.append("entidad",    filtros.entidad);
-  if (filtros.accion)     params.append("accion",     filtros.accion);
-  if (filtros.fechaDesde) params.append("fechaDesde", filtros.fechaDesde);
-  if (filtros.fechaHasta) params.append("fechaHasta", filtros.fechaHasta);
+  if (filtros.area)          params.append("area",          filtros.area);
+  if (filtros.entidad)       params.append("entidad",       filtros.entidad);
+  if (filtros.accion)        params.append("accion",        filtros.accion);
+  if (filtros.nombreUsuario) params.append("nombreUsuario", filtros.nombreUsuario);
+  if (filtros.rolUsuario)    params.append("rolUsuario",    filtros.rolUsuario);
+  if (filtros.fechaDesde)    params.append("fechaDesde",    filtros.fechaDesde);
+  if (filtros.fechaHasta)    params.append("fechaHasta",    filtros.fechaHasta);
   const response = await fetch(`${API_URL}/audit-log?${params.toString()}`, {
     headers: getAuthHeaders(),
   });
@@ -966,6 +978,15 @@ export const eliminarMortandadGranja = async (id, mortandadId) => {
   return handleResponse(response);
 };
 
+export const mudarPollosGranja = async (data) => {
+  const response = await fetch(`${API_URL}/lotes-granja/mudar`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
 export const registrarEgresoGranja = async (id, data) => {
   const response = await fetch(`${API_URL}/lotes-granja/${id}/egreso`, {
     method: "POST",
@@ -1113,6 +1134,13 @@ export const crearOrdenCarga = async (data) => {
 export const actualizarOrdenCarga = async (id, data) => {
   const response = await fetch(`${API_URL}/ordenes-carga/${id}`, {
     method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const enviarOrdenCarga = async (id) => {
+  const response = await fetch(`${API_URL}/ordenes-carga/${id}/enviar`, {
+    method: "PUT", headers: getAuthHeaders(),
   });
   return handleResponse(response);
 };

@@ -98,7 +98,7 @@ const Layout = ({ children }) => {
         </div>
 
         <nav className="sidebar-nav flex-grow-1 p-3">
-          {rolUsuario !== "frigorifico" && (
+          {rolUsuario !== "frigorifico" && rolUsuario !== "granja" && (
             <a
               href="#"
               className={`nav-link d-flex align-items-center gap-2 mb-2 rounded ${
@@ -198,8 +198,7 @@ const Layout = ({ children }) => {
           )}
           */}
 
-          {/* Historial de Accesos — comentado temporalmente
-          {rolUsuario === "superadmin" && (
+          {(rolUsuario === "superadmin" || rolUsuario === "administracion") && (
             <a
               href="#"
               className={`nav-link d-flex align-items-center gap-2 mb-2 rounded ${
@@ -207,15 +206,14 @@ const Layout = ({ children }) => {
               }`}
               onClick={(e) => { e.preventDefault(); navigate("/frigorifico/historial-accesos"); }}
             >
-              <i className="bi bi-shield-lock fs-5"></i>
-              <span>Historial de Accesos</span>
+              <i className="bi bi-clock-history fs-5"></i>
+              <span>Actividad</span>
             </a>
           )}
-          */}
 
 
           {/* Granja (crianza) */}
-          {(rolUsuario === "superadmin" || rolUsuario === "frigorifico" || rolUsuario === "administracion") && (
+          {(rolUsuario === "superadmin" || rolUsuario === "administracion" || rolUsuario === "granja") && (
           <div className="nav-section mb-2">
             <a
               href="#"
@@ -264,8 +262,11 @@ const Layout = ({ children }) => {
                     className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/granja/ordenes-carga") ? "text-white" : "text-white-50"}`}
                     onClick={(e) => { e.preventDefault(); navigate("/granja/ordenes-carga"); }}
                   >
-                    <i className="bi bi-file-earmark-text"></i>
-                    <span>Órdenes de Carga</span>
+                    <i className="bi bi-file-earmark-text align-self-start mt-1"></i>
+                    <span className="d-flex flex-column" style={{ lineHeight: 1.3 }}>
+                      <span>Órdenes de Carga</span>
+                      <span className="text-center">(Venta)</span>
+                    </span>
                   </a>
                 )}
                 {/* 5 — Recepción de Órdenes */}
@@ -274,7 +275,7 @@ const Layout = ({ children }) => {
                   className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/granja/recepcion-ordenes") ? "text-white" : "text-white-50"}`}
                   onClick={(e) => { e.preventDefault(); navigate("/granja/recepcion-ordenes"); }}
                 >
-                  <i className="bi bi-box-arrow-in-down"></i>
+                  <i className="bi bi-box-arrow-in-down align-self-start mt-1"></i>
                   <span>Recepción de Órdenes</span>
                 </a>
               </div>
@@ -282,7 +283,8 @@ const Layout = ({ children }) => {
           </div>
           )}
 
-          {/* Frigorifico - visible para todos */}
+          {/* Frigorifico */}
+          {rolUsuario !== "granja" && (
           <div className="nav-section mb-2">
             <a
               href="#"
@@ -342,7 +344,7 @@ const Layout = ({ children }) => {
                   <i className="bi bi-bar-chart"></i>
                   <span>Stock</span>
                 </a>
-                {/* 4 — Órdenes de Carga (administración emite) */}
+                {/* 4 — Órdenes de Carga - Venta (administración emite) */}
                 {(rolUsuario === "superadmin" || rolUsuario === "administracion") && (
                   <a
                     href="#"
@@ -351,8 +353,11 @@ const Layout = ({ children }) => {
                     }`}
                     onClick={(e) => { e.preventDefault(); navigate("/frigorifico/ordenes-carga"); }}
                   >
-                    <i className="bi bi-clipboard2-check"></i>
-                    <span>Órdenes de Carga</span>
+                    <i className="bi bi-clipboard2-check align-self-start mt-1"></i>
+                    <span className="d-flex flex-column" style={{ lineHeight: 1.3 }}>
+                      <span>Órdenes de Carga</span>
+                      <span className="text-center">(Venta)</span>
+                    </span>
                   </a>
                 )}
                 {/* 5 — Recepción de Órdenes (frigorifico confirma) */}
@@ -364,7 +369,7 @@ const Layout = ({ children }) => {
                     }`}
                     onClick={(e) => { e.preventDefault(); navigate("/frigorifico/recepcion"); }}
                   >
-                    <i className="bi bi-box-arrow-in-down"></i>
+                    <i className="bi bi-box-arrow-in-down align-self-start mt-1"></i>
                     <span>Recepción de Órdenes</span>
                   </a>
                 )}
@@ -382,7 +387,7 @@ const Layout = ({ children }) => {
                   </a>
                 )}
                 {/* 7 — Stock Empaque */}
-                {(rolUsuario === "superadmin" || rolUsuario === "frigorifico" || rolUsuario === "administracion") && (
+                {(rolUsuario === "superadmin" || rolUsuario === "administracion") && (
                   <a
                     href="#"
                     className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
@@ -410,6 +415,7 @@ const Layout = ({ children }) => {
               </div>
             )}
           </div>
+          )}
 
         </nav>
 

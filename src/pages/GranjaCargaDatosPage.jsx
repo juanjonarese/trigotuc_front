@@ -8,6 +8,7 @@ import {
   eliminarPesajeGranja,
   editarMortandadGranja,
   eliminarMortandadGranja,
+  mudarPollosGranja,
 } from "../services/api";
 import { formatearFechaLocal, ajustarFechaParaGuardar, obtenerFechaHoy } from "../utils/dateUtils";
 import Swal from "sweetalert2";
@@ -72,7 +73,7 @@ const buildSemanas = (lote) => {
 };
 
 // ── Modal editar semana ────────────────────────────────────────────────────
-const EditarSemanaModal = ({ lote, fila, onClose, onGuardado }) => {
+const EditarSemanaModal = ({ lote, fila, onClose, onGuardado, puedeEliminar = true }) => {
   const pesoInicial = fila.pesaje
     ? (fila.pesaje.pesoPromedio / 1000).toFixed(3)
     : "";
@@ -188,9 +189,12 @@ const EditarSemanaModal = ({ lote, fila, onClose, onGuardado }) => {
               </div>
             </div>
             <div className="modal-footer py-2 d-flex justify-content-between">
-              <button className="btn btn-outline-danger btn-sm" onClick={handleEliminarSemana} disabled={saving}>
-                <i className="bi bi-trash me-1"></i>Eliminar semana
-              </button>
+              {puedeEliminar && (
+                <button className="btn btn-outline-danger btn-sm" onClick={handleEliminarSemana} disabled={saving}>
+                  <i className="bi bi-trash me-1"></i>Eliminar semana
+                </button>
+              )}
+              {!puedeEliminar && <div></div>}
               <div className="d-flex gap-2">
                 <button className="btn btn-outline-secondary btn-sm" onClick={onClose} disabled={saving}>Cancelar</button>
                 <button className="btn btn-primary btn-sm" onClick={handleGuardar} disabled={saving}>
@@ -207,14 +211,227 @@ const EditarSemanaModal = ({ lote, fila, onClose, onGuardado }) => {
   );
 };
 
+// ── Modal mudar pollos ─────────────────────────────────────────────────────
+const MudarPollosModal = ({ lotes, lotePresel, onClose, onGuardado }) => {
+  const GRANJAS_OPT = [
+    { key: "cañete",    label: "Cañete",    prefix: "C", galpones: 6 },
+    { key: "los_pinos", label: "Los Pinos", prefix: "P", galpones: 8 },
+  ];
+
+  const [form, setForm] = useState({
+    granjaOrigen:  lotePresel?.granja  || "",
+    galponOrigen:  lotePresel?.galpon  ? String(lotePresel.galpon) : "",
+    granjaDestino: "",
+    galponDestino: "",
+    cantidad:      "",
+    pesoPromedio:  "",
+    fecha:         obtenerFechaHoy(),
+    observaciones: "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  const loteOrigen  = lotes.find((l) => l.granja === form.granjaOrigen  && l.galpon === Number(form.galponOrigen)  && l.cantidadActual > 0);
+  const loteDestino = lotes.find((l) => l.granja === form.granjaDestino && l.galpon === Number(form.galponDestino));
+  const disponible  = loteOrigen ? loteOrigen.cantidadActual - (loteOrigen.cantidadComprometida || 0) : null;
+
+  const prefixG = (g) => GRANJAS_OPT.find((x) => x.key === g)?.prefix || "";
+
+  const galponesDisp = (granja) =>
+    GRANJAS_OPT.find((x) => x.key === granja)?.galpones || 0;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.granjaOrigen || !form.galponOrigen || !form.granjaDestino || !form.galponDestino) {
+      Swal.fire("Faltan datos", "Seleccioná galpón de origen y destino.", "warning"); return;
+    }
+    if (form.granjaOrigen === form.granjaDestino && form.galponOrigen === form.galponDestino) {
+      Swal.fire("Error", "El galpón de origen y destino no pueden ser el mismo.", "warning"); return;
+    }
+    if (!form.cantidad || Number(form.cantidad) <= 0) {
+      Swal.fire("Faltan datos", "Ingresá la cantidad de pollos a mudar.", "warning"); return;
+    }
+    setSaving(true);
+    try {
+      await mudarPollosGranja({
+        granjaOrigen:  form.granjaOrigen,
+        galponOrigen:  Number(form.galponOrigen),
+        granjaDestino: form.granjaDestino,
+        galponDestino: Number(form.galponDestino),
+        cantidad:      Number(form.cantidad),
+        pesoPromedio:  form.pesoPromedio ? Number(form.pesoPromedio) : undefined,
+        fecha:         form.fecha,
+        observaciones: form.observaciones || undefined,
+      });
+      onGuardado();
+      Swal.fire({
+        icon: "success",
+        title: "Mudanza registrada",
+        html: `<strong>${Number(form.cantidad).toLocaleString("es-AR")} pollos</strong> mudados de ${prefixG(form.granjaOrigen)}${form.galponOrigen} a ${prefixG(form.granjaDestino)}${form.galponDestino}`,
+        timer: 2000, showConfirmButton: false,
+      });
+    } catch (err) {
+      Swal.fire("Error", err.message, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="modal show d-block" tabIndex="-1">
+        <div className="modal-dialog modal-dialog-scrollable">
+          <div className="modal-content">
+            <div className="modal-header bg-warning text-dark">
+              <h5 className="modal-title">
+                <i className="bi bi-arrow-left-right me-2"></i>Mudar pollos entre galpones
+              </h5>
+              <button className="btn-close" onClick={onClose} disabled={saving}></button>
+            </div>
+            <div className="modal-body">
+              <form id="form-mudar" onSubmit={handleSubmit}>
+                <div className="row g-3">
+
+                  {/* Galpón origen */}
+                  <div className="col-12">
+                    <div className="fw-semibold small text-uppercase text-muted mb-2" style={{ letterSpacing: "0.05em" }}>Origen</div>
+                    <div className="row g-2">
+                      <div className="col-6">
+                        <label className="form-label fw-semibold small">Granja <span className="text-danger">*</span></label>
+                        <select className="form-select form-select-sm" value={form.granjaOrigen}
+                          onChange={(e) => setForm({ ...form, granjaOrigen: e.target.value, galponOrigen: "" })} required>
+                          <option value="">— Seleccionar —</option>
+                          {GRANJAS_OPT.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
+                        </select>
+                      </div>
+                      <div className="col-6">
+                        <label className="form-label fw-semibold small">Galpón <span className="text-danger">*</span></label>
+                        <select className="form-select form-select-sm" value={form.galponOrigen}
+                          onChange={(e) => setForm({ ...form, galponOrigen: e.target.value })}
+                          disabled={!form.granjaOrigen} required>
+                          <option value="">— —</option>
+                          {Array.from({ length: galponesDisp(form.granjaOrigen) }, (_, i) => i + 1).map((n) => {
+                            const lote = lotes.find((l) => l.granja === form.granjaOrigen && l.galpon === n && l.cantidadActual > 0);
+                            return (
+                              <option key={n} value={String(n)} disabled={!lote}>
+                                {prefixG(form.granjaOrigen)}{n}{lote ? ` — ${(lote.cantidadActual - (lote.cantidadComprometida || 0)).toLocaleString("es-AR")} disp.` : " (vacío)"}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+                    </div>
+                    {loteOrigen && (
+                      <div className="mt-2 rounded px-3 py-2 small" style={{ background: "#fff7ed", border: "1px solid #fed7aa" }}>
+                        <span className="fw-semibold text-warning">{loteOrigen.cantidadActual.toLocaleString("es-AR")}</span> pollos totales ·{" "}
+                        <span className="fw-semibold text-success">{disponible.toLocaleString("es-AR")}</span> disponibles
+                        {(loteOrigen.cantidadComprometida || 0) > 0 && <> · <span className="text-muted">{loteOrigen.cantidadComprometida.toLocaleString("es-AR")} comprometidos</span></>}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Galpón destino */}
+                  <div className="col-12">
+                    <div className="fw-semibold small text-uppercase text-muted mb-2" style={{ letterSpacing: "0.05em" }}>Destino</div>
+                    <div className="row g-2">
+                      <div className="col-6">
+                        <label className="form-label fw-semibold small">Granja <span className="text-danger">*</span></label>
+                        <select className="form-select form-select-sm" value={form.granjaDestino}
+                          onChange={(e) => setForm({ ...form, granjaDestino: e.target.value, galponDestino: "" })} required>
+                          <option value="">— Seleccionar —</option>
+                          {GRANJAS_OPT.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
+                        </select>
+                      </div>
+                      <div className="col-6">
+                        <label className="form-label fw-semibold small">Galpón <span className="text-danger">*</span></label>
+                        <select className="form-select form-select-sm" value={form.galponDestino}
+                          onChange={(e) => setForm({ ...form, galponDestino: e.target.value })}
+                          disabled={!form.granjaDestino} required>
+                          <option value="">— —</option>
+                          {Array.from({ length: galponesDisp(form.granjaDestino) }, (_, i) => i + 1).map((n) => {
+                            const lote = lotes.find((l) => l.granja === form.granjaDestino && l.galpon === n);
+                            return (
+                              <option key={n} value={String(n)}>
+                                {prefixG(form.granjaDestino)}{n}{lote ? ` — ${lote.cantidadActual.toLocaleString("es-AR")} pollos` : " — vacío (nuevo lote)"}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+                    </div>
+                    {loteDestino && (
+                      <div className="mt-2 rounded px-3 py-2 small" style={{ background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
+                        <span className="fw-semibold text-success">{loteDestino.cantidadActual.toLocaleString("es-AR")}</span> pollos actuales
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Cantidad + Peso */}
+                  <div className="col-6">
+                    <label className="form-label fw-semibold small">Cantidad de pollos <span className="text-danger">*</span></label>
+                    <input type="number" className="form-control form-control-sm" min="1"
+                      max={disponible ?? undefined}
+                      value={form.cantidad}
+                      onChange={(e) => setForm({ ...form, cantidad: e.target.value })}
+                      placeholder="0" required />
+                    {disponible != null && form.cantidad && Number(form.cantidad) > disponible && (
+                      <div className="form-text text-danger">Supera los disponibles ({disponible.toLocaleString("es-AR")})</div>
+                    )}
+                  </div>
+                  <div className="col-6">
+                    <label className="form-label fw-semibold small">Peso promedio (kg) <span className="text-muted fw-normal">opcional</span></label>
+                    <input type="number" className="form-control form-control-sm" min="0.1" step="0.001"
+                      value={form.pesoPromedio}
+                      onChange={(e) => setForm({ ...form, pesoPromedio: e.target.value })}
+                      placeholder="ej: 2.500" />
+                  </div>
+
+                  {/* Fecha */}
+                  <div className="col-6">
+                    <label className="form-label fw-semibold small">Fecha</label>
+                    <input type="date" className="form-control form-control-sm" value={form.fecha}
+                      onChange={(e) => setForm({ ...form, fecha: e.target.value })} required />
+                  </div>
+
+                  {/* Observaciones */}
+                  <div className="col-12">
+                    <label className="form-label small">Observaciones <span className="text-muted">(opcional)</span></label>
+                    <input type="text" className="form-control form-control-sm"
+                      value={form.observaciones}
+                      onChange={(e) => setForm({ ...form, observaciones: e.target.value })}
+                      placeholder="Motivo de la mudanza..." />
+                  </div>
+
+                </div>
+              </form>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-outline-secondary btn-sm" onClick={onClose} disabled={saving}>Cancelar</button>
+              <button type="submit" form="form-mudar" className="btn btn-warning btn-sm px-4" disabled={saving}>
+                {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
+                <i className="bi bi-arrow-left-right me-1"></i>Confirmar mudanza
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="modal-backdrop show"></div>
+    </>
+  );
+};
+
 // ── Página principal ───────────────────────────────────────────────────────
 const GranjaCargaDatosPage = () => {
+  const rolUsuario  = localStorage.getItem("rolUsuario");
+  const puedeEliminar = rolUsuario === "superadmin" || rolUsuario === "administracion";
+
   const [lotes, setLotes]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [loteSeleccionado, setLoteSeleccionado] = useState(null);
   // modo: null = elegir acción | "cargar" | "editar"
-  const [modo, setModo]     = useState(null);
+  const [modo, setModo]         = useState(null);
   const [editFila, setEditFila] = useState(null);
+  const [showMudar, setShowMudar]         = useState(false);
+  const [lotePreselMudar, setLotePreselMudar] = useState(null);
 
   const [form, setForm] = useState({ fecha: obtenerFechaHoy(), pesoPromedio: "", mortandad: "", observaciones: "" });
   const [saving, setSaving] = useState(false);
@@ -314,20 +531,28 @@ const GranjaCargaDatosPage = () => {
 
         <div className="d-flex align-items-center justify-content-between mb-4">
           <h1 className="h3 mb-0">Datos semanales</h1>
-          <button
-            className="btn btn-success btn-sm"
-            onClick={() => {
-              if (!loteSeleccionado) {
-                Swal.fire({ icon: "info", title: "Seleccioná un galpón", text: "Hacé click en el galpón al que querés cargarle datos.", timer: 2000, showConfirmButton: false });
-                return;
-              }
-              setModo("cargar");
-              setForm({ fecha: obtenerFechaHoy(), pesoPromedio: "", mortandad: "", observaciones: "" });
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-          >
-            <i className="bi bi-plus-circle me-1"></i>Cargar datos
-          </button>
+          <div className="d-flex gap-2">
+            <button
+              className="btn btn-outline-warning btn-sm"
+              onClick={() => { setLotePreselMudar(null); setShowMudar(true); }}
+            >
+              <i className="bi bi-arrow-left-right me-1"></i>Mudar pollos
+            </button>
+            <button
+              className="btn btn-success btn-sm"
+              onClick={() => {
+                if (!loteSeleccionado) {
+                  Swal.fire({ icon: "info", title: "Seleccioná un galpón", text: "Hacé click en el galpón al que querés cargarle datos.", timer: 2000, showConfirmButton: false });
+                  return;
+                }
+                setModo("cargar");
+                setForm({ fecha: obtenerFechaHoy(), pesoPromedio: "", mortandad: "", observaciones: "" });
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+            >
+              <i className="bi bi-plus-circle me-1"></i>Cargar datos
+            </button>
+          </div>
         </div>
 
         {/* Panel del galpón seleccionado */}
@@ -361,10 +586,10 @@ const GranjaCargaDatosPage = () => {
 
                 {/* ── Elegir acción ── */}
                 {modo === null && (
-                  <div className="d-flex gap-3 justify-content-center py-2">
+                  <div className="d-flex gap-3 justify-content-center py-2 flex-wrap">
                     <button
                       className="btn btn-success px-4 py-3"
-                      style={{ minWidth: "160px" }}
+                      style={{ minWidth: "150px" }}
                       onClick={() => setModo("cargar")}
                     >
                       <i className="bi bi-plus-circle fs-4 d-block mb-1"></i>
@@ -372,12 +597,20 @@ const GranjaCargaDatosPage = () => {
                     </button>
                     <button
                       className="btn btn-outline-primary px-4 py-3"
-                      style={{ minWidth: "160px" }}
+                      style={{ minWidth: "150px" }}
                       onClick={() => setModo("editar")}
                       disabled={buildSemanas(loteSeleccionado).length === 0}
                     >
                       <i className="bi bi-pencil-square fs-4 d-block mb-1"></i>
                       Editar datos
+                    </button>
+                    <button
+                      className="btn btn-outline-warning px-4 py-3"
+                      style={{ minWidth: "150px" }}
+                      onClick={() => { setLotePreselMudar(loteSeleccionado); setShowMudar(true); }}
+                    >
+                      <i className="bi bi-arrow-left-right fs-4 d-block mb-1"></i>
+                      Mudar pollos
                     </button>
                   </div>
                 )}
@@ -592,6 +825,17 @@ const GranjaCargaDatosPage = () => {
           fila={editFila}
           onClose={() => setEditFila(null)}
           onGuardado={() => { setEditFila(null); recargarYSincronizar(); }}
+          puedeEliminar={puedeEliminar}
+        />
+      )}
+
+      {/* Modal mudar pollos */}
+      {showMudar && (
+        <MudarPollosModal
+          lotes={lotes}
+          lotePresel={lotePreselMudar}
+          onClose={() => { setShowMudar(false); setLotePreselMudar(null); }}
+          onGuardado={() => { setShowMudar(false); setLotePreselMudar(null); recargarYSincronizar(); }}
         />
       )}
     </Layout>

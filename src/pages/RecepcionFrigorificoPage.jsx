@@ -3,6 +3,7 @@ import Layout from "../components/Layout";
 import {
   obtenerDespachosFrigorifico,
   completarDespachoFrigorifico,
+  liberarDespachoFrigorifico,
 } from "../services/api";
 import Swal from "sweetalert2";
 
@@ -92,6 +93,7 @@ const imprimirRemito = (despacho) => {
           <div class="firma-lbl">Firma del encargado de frigorifico</div>
         </div>
       </div>
+      <div class="no-factura">Documento no válido como factura</div>
     </div>`;
 
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
@@ -117,6 +119,7 @@ const imprimirRemito = (despacho) => {
       .firma-box { text-align: center; }
       .firma-linea { border-top: 1.5px solid #222; margin-bottom: 5px; }
       .firma-lbl { font-size: 10px; color: #555; }
+      .no-factura { text-align: center; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #6b7280; border-top: 1px dashed #d1d5db; margin-top: 20px; padding-top: 10px; }
       @media print { body { padding: 0; } }
     </style></head><body>
     ${bloque("Original — Cliente")}
@@ -132,22 +135,43 @@ const imprimirRemito = (despacho) => {
 };
 
 // ── Modal confirmar entrega ───────────────────────────────────────────────────
-const ConfirmarModal = ({ despacho, onClose, onConfirmado }) => {
-  const [saving, setSaving] = useState(false);
+const ConfirmarModal = ({ despacho, onClose, onConfirmado, esAdmin }) => {
+  const yaLiberada = !!despacho.liberada;
+  const [paso, setPaso]         = useState(yaLiberada ? 2 : 1);
+  const [codigo, setCodigo]     = useState("");
+  const [codigoError, setCodigoError] = useState("");
+  const [liberadaSinCodigo, setLiberadaSinCodigo] = useState(yaLiberada);
+  const [saving, setSaving]     = useState(false);
+
+  const verificarCodigo = (e) => {
+    e.preventDefault();
+    if (codigo.trim().toUpperCase() === despacho.codigoRetiro) {
+      setCodigoError("");
+      setPaso(2);
+    } else {
+      setCodigoError("Código incorrecto. Verificá con el cliente.");
+    }
+  };
+
+  const liberarSinCodigo = async () => {
+    try {
+      await liberarDespachoFrigorifico(despacho._id);
+      setLiberadaSinCodigo(true);
+      setPaso(2);
+    } catch (err) {
+      Swal.fire("Error", err.message, "error");
+    }
+  };
 
   const handleConfirmar = async () => {
     setSaving(true);
     try {
-      await completarDespachoFrigorifico(despacho._id);
+      await completarDespachoFrigorifico(despacho._id, {
+        ...(codigo && !liberadaSinCodigo ? { codigoRetiro: codigo.trim().toUpperCase() } : {}),
+      });
       imprimirRemito(despacho);
       onConfirmado();
-      Swal.fire({
-        icon: "success",
-        title: "Entrega confirmada",
-        text: `Orden ${despacho.numeroOrden} cerrada correctamente.`,
-        timer: 2000,
-        showConfirmButton: false,
-      });
+      Swal.fire({ icon: "success", title: "Entrega confirmada", text: `Orden ${despacho.numeroOrden} cerrada.`, timer: 2000, showConfirmButton: false });
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudo confirmar la entrega.", "error");
     } finally {
@@ -160,7 +184,6 @@ const ConfirmarModal = ({ despacho, onClose, onConfirmado }) => {
       <div className="modal show d-block" tabIndex="-1">
         <div className="modal-dialog modal-dialog-scrollable">
           <div className="modal-content">
-
             <div className="modal-header bg-success text-white">
               <div>
                 <h5 className="modal-title mb-0">
@@ -175,114 +198,128 @@ const ConfirmarModal = ({ despacho, onClose, onConfirmado }) => {
 
             <div className="modal-body">
 
-              {/* Datos generales */}
-              <div className="card border-0 bg-light mb-3">
-                <div className="card-body py-2 px-3">
-                  <div className="row g-2 small">
-                    <div className="col-6">
-                      <div className="text-muted fw-semibold text-uppercase" style={{ fontSize: "0.7rem", letterSpacing: "0.05em" }}>Cámara</div>
-                      <div className="fw-semibold">{camaraLbl(despacho.camara)}</div>
-                    </div>
-                    <div className="col-6">
-                      <div className="text-muted fw-semibold text-uppercase" style={{ fontSize: "0.7rem", letterSpacing: "0.05em" }}>Turno</div>
-                      <div className="fw-semibold">{despacho.turno || "—"}</div>
-                    </div>
-                    <div className="col-6">
-                      <div className="text-muted fw-semibold text-uppercase" style={{ fontSize: "0.7rem", letterSpacing: "0.05em" }}>Fecha</div>
-                      <div>{fmtFecha(despacho.fecha)}</div>
-                    </div>
-                    <div className="col-6">
-                      <div className="text-muted fw-semibold text-uppercase" style={{ fontSize: "0.7rem", letterSpacing: "0.05em" }}>Registrado por</div>
-                      <div>{despacho.registradoPor?.nombreUsuario || "—"}</div>
-                    </div>
+              {/* PASO 1 — verificar código */}
+              {paso === 1 && (
+                <form onSubmit={verificarCodigo}>
+                  <div className="text-center mb-4 mt-2">
+                    <i className="bi bi-key fs-1 text-success"></i>
+                    <h5 className="mt-2 mb-1">Verificación de código</h5>
+                    <p className="text-muted small mb-0">
+                      Pedile al cliente el código de retiro que figura en su orden.
+                    </p>
                   </div>
-                </div>
-              </div>
-
-              {/* Calibres */}
-              {despacho.calibres?.length > 0 && (
-                <div className="mb-3">
-                  <div className="small text-muted fw-semibold text-uppercase mb-2" style={{ letterSpacing: "0.05em" }}>
-                    Pollos faenados
+                  <div className="mb-3">
+                    <input
+                      type="text"
+                      className={`form-control form-control-lg text-center fw-bold ${codigoError ? "is-invalid" : ""}`}
+                      placeholder="XXXXXX"
+                      value={codigo}
+                      onChange={(e) => { setCodigo(e.target.value.toUpperCase()); setCodigoError(""); }}
+                      maxLength={6}
+                      style={{ letterSpacing: "0.3em", fontSize: "1.5rem" }}
+                      autoFocus
+                    />
+                    {codigoError && <div className="invalid-feedback text-center">{codigoError}</div>}
                   </div>
-                  <table className="table table-sm table-bordered align-middle mb-0">
-                    <thead className="table-light">
-                      <tr>
-                        <th>Calibre</th>
-                        <th className="text-end">Cajones</th>
-                        <th className="text-end">Kg total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {despacho.calibres.map((c, i) => (
-                        <tr key={i}>
-                          <td><span className="badge bg-primary">Cal. {c.calibre}</span></td>
-                          <td className="text-end fw-semibold">{fmt(c.cajones)}</td>
-                          <td className="text-end text-muted">{fmt(c.cajones * 20)} kg</td>
-                        </tr>
-                      ))}
-                      <tr className="table-light fw-semibold">
-                        <td>Total</td>
-                        <td className="text-end">{fmt(despacho.totalCajones)}</td>
-                        <td className="text-end">{fmt(despacho.pesoTotalKg)} kg</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                  <div className="d-grid gap-2">
+                    <button type="submit" className="btn btn-success btn-lg">
+                      <i className="bi bi-arrow-right-circle me-1"></i>Verificar código
+                    </button>
+                    {esAdmin && (
+                      <button type="button" className="btn btn-outline-warning" onClick={liberarSinCodigo}>
+                        <i className="bi bi-unlock me-1"></i>Liberar sin código
+                      </button>
+                    )}
+                  </div>
+                </form>
               )}
 
-              {/* Trozados */}
-              {despacho.trozados?.length > 0 && (
-                <div className="mb-3">
-                  <div className="small text-muted fw-semibold text-uppercase mb-2" style={{ letterSpacing: "0.05em" }}>
-                    Trozados
+              {/* PASO 2 — resumen + confirmar */}
+              {paso === 2 && (
+                <>
+                  {liberadaSinCodigo ? (
+                    <div className="alert alert-warning py-2 mb-3 d-flex align-items-center gap-2">
+                      <i className="bi bi-unlock-fill"></i>
+                      <span>Liberada sin código por administración</span>
+                    </div>
+                  ) : (
+                    <div className="alert alert-success py-2 mb-3 d-flex align-items-center gap-2">
+                      <i className="bi bi-check-circle-fill"></i>
+                      <span>Código verificado correctamente</span>
+                    </div>
+                  )}
+
+                  {/* Calibres */}
+                  {despacho.calibres?.length > 0 && (
+                    <div className="mb-3">
+                      <div className="small text-muted fw-semibold text-uppercase mb-2" style={{ letterSpacing: "0.05em" }}>Pollos faenados</div>
+                      <table className="table table-sm table-bordered align-middle mb-0">
+                        <thead className="table-light">
+                          <tr><th>Calibre</th><th className="text-end">Cajones</th><th className="text-end">Kg</th></tr>
+                        </thead>
+                        <tbody>
+                          {despacho.calibres.map((c, i) => (
+                            <tr key={i}>
+                              <td><span className="badge bg-primary">Cal. {c.calibre}</span></td>
+                              <td className="text-end fw-semibold">{fmt(c.cajones)}</td>
+                              <td className="text-end text-muted">{fmt(c.cajones * 20)} kg</td>
+                            </tr>
+                          ))}
+                          <tr className="table-light fw-semibold">
+                            <td>Total</td>
+                            <td className="text-end">{fmt(despacho.totalCajones)}</td>
+                            <td className="text-end">{fmt(despacho.pesoTotalKg)} kg</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {/* Trozados */}
+                  {despacho.trozados?.length > 0 && (
+                    <div className="mb-3">
+                      <div className="small text-muted fw-semibold text-uppercase mb-2" style={{ letterSpacing: "0.05em" }}>Trozados</div>
+                      <table className="table table-sm table-bordered align-middle mb-0">
+                        <thead className="table-light">
+                          <tr><th>Tipo</th><th className="text-end">Cajas</th><th className="text-end">Kg</th></tr>
+                        </thead>
+                        <tbody>
+                          {despacho.trozados.map((t, i) => (
+                            <tr key={i}>
+                              <td className="fw-semibold">{tipoLbl(t.tipo)}</td>
+                              <td className="text-end">{fmt(t.cajas)}</td>
+                              <td className="text-end text-muted">{fmt(t.kgTotal)} kg</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {despacho.observaciones && (
+                    <div className="p-2 rounded small mb-3" style={{ background: "#fffbeb", border: "1px solid #fde68a" }}>
+                      <i className="bi bi-info-circle me-1 text-warning"></i>{despacho.observaciones}
+                    </div>
+                  )}
+
+                  <div className="alert alert-info py-2 mb-0 small">
+                    <i className="bi bi-printer me-1"></i>
+                    Al confirmar se imprimirá el remito para que firme el cliente.
                   </div>
-                  <table className="table table-sm table-bordered align-middle mb-0">
-                    <thead className="table-light">
-                      <tr>
-                        <th>Tipo</th>
-                        <th className="text-end">Cajas</th>
-                        <th className="text-end">Kg total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {despacho.trozados.map((t, i) => (
-                        <tr key={i}>
-                          <td className="fw-semibold">{tipoLbl(t.tipo)}</td>
-                          <td className="text-end">{fmt(t.cajas)}</td>
-                          <td className="text-end text-muted">{fmt(t.kgTotal)} kg</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                </>
               )}
-
-              {despacho.observaciones && (
-                <div className="p-2 rounded small"
-                  style={{ background: "#fffbeb", border: "1px solid #fde68a" }}>
-                  <i className="bi bi-info-circle me-1 text-warning"></i>
-                  {despacho.observaciones}
-                </div>
-              )}
-
-              <div className="alert alert-info py-2 mb-0 mt-3 small">
-                <i className="bi bi-printer me-1"></i>
-                Al confirmar se imprimirá el remito para que firme el cliente.
-              </div>
 
             </div>
 
             <div className="modal-footer">
-              <button className="btn btn-outline-secondary" onClick={onClose} disabled={saving}>
-                Cancelar
-              </button>
-              <button className="btn btn-success btn-lg px-4" onClick={handleConfirmar} disabled={saving}>
-                {saving && <span className="spinner-border spinner-border-sm me-2"></span>}
-                <i className="bi bi-check-circle me-1"></i>Confirmar entrega
-              </button>
+              <button className="btn btn-outline-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
+              {paso === 2 && (
+                <button className="btn btn-success btn-lg px-4" onClick={handleConfirmar} disabled={saving}>
+                  {saving && <span className="spinner-border spinner-border-sm me-2"></span>}
+                  <i className="bi bi-check-circle me-1"></i>Confirmar entrega
+                </button>
+              )}
             </div>
-
           </div>
         </div>
       </div>
@@ -293,6 +330,9 @@ const ConfirmarModal = ({ despacho, onClose, onConfirmado }) => {
 
 // ── Página principal ─────────────────────────────────────────────────────────
 const RecepcionFrigorificoPage = () => {
+  const rolUsuario = localStorage.getItem("rolUsuario");
+  const esAdmin    = rolUsuario === "superadmin" || rolUsuario === "administracion";
+
   const [despachos, setDespachos]     = useState([]);
   const [loading, setLoading]         = useState(true);
   const [filtroEstado, setFiltroEstado] = useState("pendiente");
@@ -312,6 +352,26 @@ const RecepcionFrigorificoPage = () => {
   }, []);
 
   useEffect(() => { cargar(); }, [cargar]);
+
+  const handleLiberar = async (d) => {
+    const { isConfirmed } = await Swal.fire({
+      title: "¿Liberar orden sin código?",
+      html: `La orden <strong>${d.numeroOrden}</strong> podrá ser confirmada sin pedir el código al cliente.`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#f59e0b",
+      confirmButtonText: "Sí, liberar",
+      cancelButtonText: "Cancelar",
+    });
+    if (!isConfirmed) return;
+    try {
+      await liberarDespachoFrigorifico(d._id);
+      await cargar();
+      Swal.fire({ icon: "success", title: "Orden liberada", timer: 1800, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire("Error", err.message, "error");
+    }
+  };
 
   const despachosVisibles = despachos
     .filter((d) => filtroEstado === "" || d.estado === filtroEstado)
@@ -467,9 +527,19 @@ const RecepcionFrigorificoPage = () => {
                   </div>
 
                   <div className="card-footer bg-transparent border-top-0 pt-0 pb-3 px-3">
-                    <button className="btn btn-success w-100" onClick={() => setDespachoModal(d)}>
+                    {d.liberada && (
+                      <div className="alert alert-warning py-1 px-2 mb-2 small text-center">
+                        <i className="bi bi-unlock-fill me-1"></i>Liberada por administración — sin código
+                      </div>
+                    )}
+                    <button className="btn btn-success w-100 mb-2" onClick={() => setDespachoModal(d)}>
                       <i className="bi bi-check2-circle me-1"></i>Confirmar entrega
                     </button>
+                    {esAdmin && !d.liberada && (
+                      <button className="btn btn-outline-warning btn-sm w-100" onClick={() => handleLiberar(d)}>
+                        <i className="bi bi-unlock me-1"></i>Liberar sin código
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -541,6 +611,7 @@ const RecepcionFrigorificoPage = () => {
       {despachoModal && (
         <ConfirmarModal
           despacho={despachoModal}
+          esAdmin={esAdmin}
           onClose={() => setDespachoModal(null)}
           onConfirmado={() => { setDespachoModal(null); cargar(); }}
         />

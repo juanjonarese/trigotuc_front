@@ -466,7 +466,7 @@ const EditarIngresoModal = ({ lote, onClose, onGuardado }) => {
 const GranjaLotesPage = () => {
   const navigate    = useNavigate();
   const rolUsuario  = localStorage.getItem("rolUsuario");
-  const puedeEditar  = rolUsuario === "superadmin" || rolUsuario === "frigorifico";
+  const puedeEditar  = rolUsuario === "superadmin" || rolUsuario === "frigorifico" || rolUsuario === "granja";
   const esSuperAdmin = rolUsuario === "superadmin";
 
   const [lotes, setLotes]         = useState([]);
@@ -487,7 +487,7 @@ const GranjaLotesPage = () => {
   useEffect(() => { cargarLotes(); }, [cargarLotes]);
 
   const loteDeGalpon = (granja, galpon) =>
-    lotes.find((l) => l.granja === granja && l.galpon === galpon) || null;
+    lotes.find((l) => l.granja === granja && l.galpon === galpon && l.cantidadActual > 0) || null;
 
   if (loading) {
     return (

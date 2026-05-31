@@ -456,7 +456,7 @@ const EditarIngresoModal = ({ lote, onClose, onGuardado }) => {
 const GranjaLoteNuevoPage = () => {
   const rolUsuario   = localStorage.getItem("rolUsuario");
   const puedeCrear   = rolUsuario === "superadmin" || rolUsuario === "administracion";
-  const puedeEditar  = rolUsuario === "superadmin" || rolUsuario === "frigorifico";
+  const puedeEditar  = rolUsuario === "superadmin" || rolUsuario === "frigorifico" || rolUsuario === "granja";
   const esSuperAdmin = rolUsuario === "superadmin";
 
   const [lotes, setLotes]         = useState([]);

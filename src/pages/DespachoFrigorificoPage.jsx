@@ -23,6 +23,103 @@ const fmtFecha  = (f) => f ? new Date(f).toLocaleDateString("es-AR") : "—";
 const camaraLbl = (v) => v === "cañete" ? "Cañete" : v === "trigotuc" ? "Trigotuc" : v;
 const tipoLbl   = (tipo) => TIPOS_TROZADO.find((x) => x.tipo === tipo)?.label || tipo;
 
+const imprimirOrdenConCodigo = (d) => {
+  const cliente = d.cliente?.razonSocial || "—";
+  const camara  = camaraLbl(d.camara);
+  const fecha   = fmtFecha(d.fecha);
+  const filasCalibres = (d.calibres || []).map((c) => `
+    <tr>
+      <td style="padding:6px 12px;border:1px solid #dee2e6">Cal. ${c.calibre}</td>
+      <td style="padding:6px 12px;border:1px solid #dee2e6;text-align:right">${fmt(c.cajones)} cajones</td>
+      <td style="padding:6px 12px;border:1px solid #dee2e6;text-align:right">${fmt(c.cajones * 20)} kg</td>
+    </tr>`).join("");
+  const filasTrozados = (d.trozados || []).map((t) => `
+    <tr>
+      <td style="padding:6px 12px;border:1px solid #dee2e6">${tipoLbl(t.tipo)}</td>
+      <td style="padding:6px 12px;border:1px solid #dee2e6;text-align:right">${fmt(t.cajas)} cajas</td>
+      <td style="padding:6px 12px;border:1px solid #dee2e6;text-align:right">${fmt(t.kgTotal)} kg</td>
+    </tr>`).join("");
+
+  const bloque = (copia) => `
+    <div class="copia">
+      <div class="copia-label">${copia}</div>
+      <div class="logo">Trigotuc <span>Avícola</span></div>
+      <div class="subtitulo">Orden de Carga — Frigorifico</div>
+      <h2>Datos de la orden</h2>
+      <div class="grid">
+        <div class="fila"><span class="lbl">N° Orden</span><span class="val">${d.numeroOrden}</span></div>
+        <div class="fila"><span class="lbl">Fecha</span><span class="val">${fecha}</span></div>
+        <div class="fila"><span class="lbl">Cliente</span><span class="val">${cliente}</span></div>
+        <div class="fila"><span class="lbl">Cámara / Turno</span><span class="val">${camara}${d.turno ? ` — ${d.turno}` : ""}</span></div>
+      </div>
+      ${filasCalibres ? `<h2>Pollos faenados (por calibre)</h2>
+        <table><thead><tr>
+          <th>Calibre</th><th style="text-align:right">Cajones</th><th style="text-align:right">Kg total</th>
+        </tr></thead><tbody>${filasCalibres}</tbody></table>` : ""}
+      ${filasTrozados ? `<h2>Trozados</h2>
+        <table><thead><tr>
+          <th>Tipo</th><th style="text-align:right">Cajas</th><th style="text-align:right">Kg total</th>
+        </tr></thead><tbody>${filasTrozados}</tbody></table>` : ""}
+      ${d.observaciones ? `<div class="obs"><strong>Observaciones:</strong> ${d.observaciones}</div>` : ""}
+      <div class="estado-equipo">
+        <div class="estado-titulo">Estado del equipo</div>
+        <div class="estado-opciones">
+          <label class="estado-item"><span class="chk"></span>Seco</label>
+          <label class="estado-item"><span class="chk"></span>Limpio</label>
+          <label class="estado-item"><span class="chk"></span>Ausencia de olores extraños</label>
+        </div>
+      </div>
+      <div class="codigo-box">
+        <div class="codigo-titulo">Código de retiro</div>
+        <div class="codigo-valor">${d.codigoRetiro || "—"}</div>
+        <div class="codigo-instruccion">Presentá este código en el frigorifico para retirar tu pedido</div>
+      </div>
+      <div class="no-factura">Documento no válido como factura</div>
+    </div>`;
+
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
+    <title>Orden ${d.numeroOrden}</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { font-family: Arial, sans-serif; padding: 20px; color: #222; margin: 0; }
+      .copia { max-width: 640px; margin: 0 auto; padding: 20px 30px; }
+      .separador { border: none; border-top: 2px dashed #aaa; margin: 12px auto; max-width: 640px; }
+      .copia-label { float: right; font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 1px; border: 1px solid #ccc; padding: 2px 8px; border-radius: 4px; margin-bottom: 4px; }
+      .logo { font-size: 20px; font-weight: bold; margin-bottom: 2px; }
+      .logo span { color: #f59e0b; }
+      .subtitulo { font-size: 12px; color: #666; margin-bottom: 16px; }
+      h2 { font-size: 13px; border-bottom: 2px solid #222; padding-bottom: 5px; margin: 16px 0 10px; text-transform: uppercase; letter-spacing: .5px; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 20px; margin-bottom: 14px; }
+      .fila { display: flex; flex-direction: column; }
+      .lbl { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: .5px; }
+      .val { font-size: 13px; font-weight: 600; }
+      table { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 12px; }
+      th { background: #f3f4f6; text-align: left; padding: 6px 12px; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: #555; border: 1px solid #dee2e6; }
+      .obs { background: #fffbeb; border: 1px solid #fde68a; border-radius: 4px; padding: 8px 12px; font-size: 11px; color: #78350f; margin: 10px 0; }
+      .estado-equipo { margin-top: 20px; border: 1.5px solid #d1d5db; border-radius: 8px; padding: 14px 18px; }
+      .estado-titulo { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #374151; margin-bottom: 10px; }
+      .estado-opciones { display: flex; gap: 28px; flex-wrap: wrap; }
+      .estado-item { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: #111; cursor: default; }
+      .chk { display: inline-block; width: 16px; height: 16px; border: 2px solid #374151; border-radius: 3px; flex-shrink: 0; }
+      .codigo-box { margin-top: 16px; text-align: center; border: 3px solid #1d4ed8; border-radius: 12px; padding: 20px; background: #eff6ff; }
+      .codigo-titulo { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; color: #1d4ed8; margin-bottom: 8px; }
+      .codigo-valor { font-size: 3rem; font-weight: 900; letter-spacing: 0.4em; color: #1e3a8a; font-family: monospace; }
+      .codigo-instruccion { font-size: 11px; color: #374151; margin-top: 8px; }
+      .no-factura { text-align: center; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #6b7280; border-top: 1px dashed #d1d5db; margin-top: 20px; padding-top: 10px; }
+      @media print { body { padding: 0; } }
+    </style></head><body>
+    ${bloque("Original — Cliente")}
+    <hr class="separador"/>
+    ${bloque("Duplicado — Frigorifico")}
+    <script>window.onload=()=>{window.print();}<\/script>
+  </body></html>`;
+
+  const win = window.open("", "_blank", "width=720,height=700");
+  if (!win) return;
+  win.document.write(html);
+  win.document.close();
+};
+
 // ── Modal nueva orden ────────────────────────────────────────────────────────
 const NuevaOrdenModal = ({ onClose, onCreada, resumen }) => {
   const [saving, setSaving]                 = useState(false);
@@ -101,7 +198,7 @@ const NuevaOrdenModal = ({ onClose, onCreada, resumen }) => {
 
     setSaving(true);
     try {
-      await crearDespachoFrigorifico({
+      const despacho = await crearDespachoFrigorifico({
         fecha:         form.fecha,
         camara,
         turno,
@@ -110,7 +207,7 @@ const NuevaOrdenModal = ({ onClose, onCreada, resumen }) => {
         trozados:      trozadosValidos.map((t) => ({ tipo: t.tipo, kgCaja: Number(t.kgCaja), cajas: Number(t.cajas) })),
         observaciones: form.observaciones || undefined,
       });
-      onCreada();
+      onCreada(despacho);
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudo crear la orden.", "error");
     } finally {
@@ -370,10 +467,20 @@ const DespachoFrigorificoPage = () => {
 
   useEffect(() => { cargarDatos(); }, [cargarDatos]);
 
-  const handleCreada = () => {
+  const handleCreada = async (despacho) => {
     setModalAbierto(false);
-    Swal.fire({ icon: "success", title: "Orden creada", timer: 1800, showConfirmButton: false });
     cargarDatos();
+    const { isConfirmed } = await Swal.fire({
+      icon: "success",
+      title: "Orden creada",
+      html: `<div>Orden <strong>${despacho.numeroOrden}</strong> generada con código <strong style="letter-spacing:0.2em">${despacho.codigoRetiro}</strong>.</div>
+             <div class="mt-2 text-muted" style="font-size:0.9rem">¿Querés descargar el PDF para enviárselo al cliente?</div>`,
+      showCancelButton: true,
+      confirmButtonText: '<i class="bi bi-printer me-1"></i>Sí, descargar PDF',
+      cancelButtonText: "Ahora no",
+      confirmButtonColor: "#0d6efd",
+    });
+    if (isConfirmed) imprimirOrdenConCodigo(despacho);
   };
 
   const handleEliminar = async (id) => {
@@ -476,12 +583,20 @@ const DespachoFrigorificoPage = () => {
                         </td>
                         <td className="small text-muted">{d.registradoPor?.nombreUsuario || "—"}</td>
                         <td>
-                          {esSuperAdmin && d.estado === "pendiente" && (
-                            <button className="btn btn-outline-danger btn-sm"
-                              onClick={() => handleEliminar(d._id)}>
-                              <i className="bi bi-trash"></i>
-                            </button>
-                          )}
+                          <div className="d-flex gap-1">
+                            {d.estado === "pendiente" && (
+                              <button className="btn btn-outline-primary btn-sm" title="Imprimir orden con código"
+                                onClick={() => imprimirOrdenConCodigo(d)}>
+                                <i className="bi bi-printer"></i>
+                              </button>
+                            )}
+                            {esSuperAdmin && d.estado === "pendiente" && (
+                              <button className="btn btn-outline-danger btn-sm"
+                                onClick={() => handleEliminar(d._id)}>
+                                <i className="bi bi-trash"></i>
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}

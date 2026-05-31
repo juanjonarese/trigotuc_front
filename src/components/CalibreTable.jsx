@@ -231,7 +231,7 @@ const CalibreTable = forwardRef(({
             </div>
 
             {/* Campo principal: cajones o pollos */}
-            <div className={showPrecio ? "col-12 col-sm-3 col-md-2" : "col-12 col-sm-4 col-md-4"}>
+            <div className={showPrecio ? "col-12 col-sm-3 col-md-2" : "col-12 col-sm-4 col-md-3"}>
               <label className="form-label form-label-sm mb-1 fw-semibold">
                 {inputCajones ? "Cajones" : "Pollos"}
               </label>
@@ -303,7 +303,7 @@ const CalibreTable = forwardRef(({
             )}
 
             {/* Botón Aceptar */}
-            <div className={showPrecio ? "col-12 col-md-3" : "col-12 col-sm-12 col-md-2"}>
+            <div className={showPrecio ? "col-12 col-md-3" : "col-12 col-sm-12 col-md-3"}>
               <button
                 type="button"
                 className="btn btn-success w-100"

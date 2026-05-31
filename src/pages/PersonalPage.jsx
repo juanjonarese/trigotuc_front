@@ -359,7 +359,8 @@ const PersonalPage = () => {
                             usuario.rolUsuario === 'superadmin' ? 'bg-danger' :
                             usuario.rolUsuario === 'administracion' ? 'bg-primary' :
                             usuario.rolUsuario === 'frigorifico' ? 'bg-info text-dark' :
-                            usuario.rolUsuario === 'camaras' ? 'bg-success' :
+                            usuario.rolUsuario === 'granja' ? 'bg-success' :
+                            usuario.rolUsuario === 'camaras' ? 'bg-warning text-dark' :
                             'bg-secondary'
                           }`}>
                             {usuario.rolUsuario}
@@ -607,6 +608,7 @@ const PersonalPage = () => {
                           >
                             <option value="administracion">Administración (Todo menos usuarios)</option>
                             <option value="frigorifico">Frigorífico (Lotes y envíos cámara)</option>
+                            <option value="granja">Granja (Ingreso pollitos, galpones, datos semanales)</option>
                             <option value="camaras">Cámaras (Entregas)</option>
                             <option value="superadmin">Super Admin (Acceso total)</option>
                           </select>

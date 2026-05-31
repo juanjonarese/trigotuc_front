@@ -62,7 +62,9 @@ const LoginScreen = () => {
 
         // Redirigir según rol
         if (data.rolUsuario === "frigorifico") {
-          navigate("/frigorifico/lotes/nuevo");
+          navigate("/frigorifico/pedidos-granja");
+        } else if (data.rolUsuario === "granja") {
+          navigate("/granja/galpones");
         } else {
           navigate("/dashboard");
         }

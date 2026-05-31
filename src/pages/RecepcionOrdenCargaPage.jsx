@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Layout from "../components/Layout";
-import { obtenerOrdenesCarga, entregarOrdenCarga, liberarOrdenCarga } from "../services/api";
+import { obtenerOrdenesCarga, enviarOrdenCarga, entregarOrdenCarga, liberarOrdenCarga } from "../services/api";
 import { formatearFechaLocal, obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
 import Swal from "sweetalert2";
 
@@ -416,6 +416,30 @@ const RecepcionOrdenCargaPage = () => {
     setOrdenModal(orden);
   };
 
+  const handleEnviar = async (orden) => {
+    const ok = await Swal.fire({
+      title: "¿Enviar pedido al frigorifico?",
+      html: `<div style="text-align:left;font-size:14px">
+        <div><strong>Orden:</strong> ${orden.numero}</div>
+        <div style="margin-top:6px"><strong>Pollos:</strong> ${Number(orden.cantidadEstimada).toLocaleString("es-AR")} — ${orden.pesoEstimadoKg} kg est.</div>
+        <div style="margin-top:6px;color:#6b7280">El frigorifico podrá recepcionar el pedido.</div>
+      </div>`,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonColor: "#2563eb",
+      confirmButtonText: "Sí, enviar",
+      cancelButtonText: "Cancelar",
+    });
+    if (!ok.isConfirmed) return;
+    try {
+      await enviarOrdenCarga(orden._id);
+      await cargar();
+      Swal.fire({ icon: "success", title: "Pedido enviado", text: "El frigorifico puede recepcionar el pedido.", timer: 2000, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire("Error", err.message, "error");
+    }
+  };
+
   const handleLiberar = async (orden) => {
     const ok = await Swal.fire({
       title: "¿Liberar orden sin código?",
@@ -608,9 +632,10 @@ const RecepcionOrdenCargaPage = () => {
 
                     <div className="card-footer bg-transparent border-top-0 pt-0 pb-3 px-3">
                       {esPedidoFrigo ? (
-                        <div className="rounded px-3 py-2 text-center small" style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1d4ed8" }}>
-                          <i className="bi bi-info-circle me-1"></i>
-                          Preparar para el frigorifico — la recepción la confirma frigorifico
+                        <div className="d-grid">
+                          <button className="btn btn-primary" onClick={() => handleEnviar(o)}>
+                            <i className="bi bi-truck me-1"></i>Enviar al frigorifico
+                          </button>
                         </div>
                       ) : (
                         <div className="d-grid gap-2">
@@ -701,9 +726,11 @@ const RecepcionOrdenCargaPage = () => {
                           <td>
                             {entregada
                               ? <span className="badge bg-success">Entregada</span>
-                              : o.liberada
-                                ? <span className="badge bg-warning text-dark">Liberada</span>
-                                : <span className="badge bg-warning text-dark">Pendiente</span>
+                              : o.estado === "enviada"
+                                ? <span className="badge bg-primary">En camino</span>
+                                : o.liberada
+                                  ? <span className="badge bg-warning text-dark">Liberada</span>
+                                  : <span className="badge bg-warning text-dark">Pendiente</span>
                             }
                           </td>
                           <td>
