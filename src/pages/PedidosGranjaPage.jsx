@@ -32,6 +32,8 @@ const ultimoPeso = (lote) =>
 const estadoBadgePedido = (o) => {
   if (o.estado === "entregada")
     return <span className="badge bg-success">Recibido</span>;
+  if (o.estado === "enviada")
+    return <span className="badge bg-primary"><i className="bi bi-truck me-1"></i>En camino</span>;
   if (o.liberada)
     return <span className="badge bg-warning text-dark"><i className="bi bi-unlock me-1"></i>Liberado</span>;
   return <span className="badge bg-warning text-dark">Pendiente</span>;
@@ -327,7 +329,7 @@ const NuevoPedidoModal = ({ lotePresel, onClose, onCreado }) => {
                     <label className="form-label fw-semibold">Galpón</label>
                     <div className="d-flex flex-wrap gap-2">
                       {Array.from({ length: granjaInfo.galpones }, (_, i) => i + 1).map((n) => {
-                        const lg = lotes.find((l) => l.granja === form.granja && l.galpon === n);
+                        const lg = lotes.find((l) => l.granja === form.granja && l.galpon === n && l.cantidadActual > 0);
                         const disp = lg ? lg.cantidadActual - (lg.cantidadComprometida || 0) : null;
                         return (
                           <button key={n} type="button"
@@ -578,7 +580,7 @@ const EditarPedidoModal = ({ orden, onClose, onGuardado }) => {
                     <label className="form-label fw-semibold">Galpón</label>
                     <div className="d-flex flex-wrap gap-2">
                       {Array.from({ length: granjaInfo.galpones }, (_, i) => i + 1).map((n) => {
-                        const lg = lotes.find((l) => l.granja === form.granja && l.galpon === n);
+                        const lg = lotes.find((l) => l.granja === form.granja && l.galpon === n && l.cantidadActual > 0);
                         const disp = lg ? lg.cantidadActual - (lg.cantidadComprometida || 0) : null;
                         return (
                           <button key={n} type="button"
@@ -794,14 +796,14 @@ const PedidosGranjaPage = () => {
                   </h6>
                   <div className="row g-2">
                     {Array.from({ length: galpones }, (_, i) => i + 1).map((n) => {
-                      const lote = lotesGranja.find((l) => l.galpon === n);
+                      const lote = lotesGranja.find((l) => l.galpon === n && l.cantidadActual > 0);
                       const dias   = lote ? diasDeVida(lote.fechaIngreso) : null;
                       const sem    = lote ? semanaActual(lote.fechaIngreso) : null;
                       const peso   = lote ? ultimoPeso(lote) : null;
                       const comprometidos = lote?.cantidadComprometida || 0;
                       const disponibles   = lote ? lote.cantidadActual - comprometidos : 0;
                       const pedidosPendientes = pedidos.filter(
-                        (p) => p.estado === "pendiente" && p.granja === key && p.galpon === n
+                        (p) => (p.estado === "pendiente" || p.estado === "enviada") && p.granja === key && p.galpon === n
                       ).length;
                       const barColor = !lote ? "#ced4da" : dias < 30 ? "#198754" : dias < 40 ? "#fd7e14" : "#dc3545";
 
@@ -942,6 +944,7 @@ const PedidosGranjaPage = () => {
               <div className="d-flex gap-1">
                 {[
                   { v: "pendiente", l: "Pendientes" },
+                  { v: "enviada",   l: <><i className="bi bi-truck me-1"></i>En camino</> },
                   { v: "entregada", l: "Recibidos" },
                   { v: "",          l: "Todos" },
                 ].map(({ v, l }) => (
@@ -954,99 +957,179 @@ const PedidosGranjaPage = () => {
               </div>
             </div>
 
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-0">
-                {pedidosFiltrados.length === 0 ? (
-                  <p className="text-center text-muted py-4 mb-0">No hay pedidos en este estado.</p>
-                ) : (
-                  <div className="table-responsive">
-                    <table className="table table-hover align-middle mb-0">
-                      <thead className="table-light">
-                        <tr>
-                          <th>N° Pedido</th>
-                          <th>Granja / Galpón</th>
-                          <th>Fecha</th>
-                          <th className="text-end">Cant. pedida</th>
-                          <th className="text-end">Recibido</th>
-                          <th className="text-end">Kg pedidos</th>
-                          <th className="text-end">Kg recibidos</th>
-                          <th>Estado</th>
-                          <th></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {pedidosFiltrados.map((o) => {
-                          const entregada = o.estado === "entregada";
-                          const dcant = o.cantidadReal != null ? (o.diferenciaCantidad ?? (o.cantidadReal - o.cantidadEstimada)) : null;
-                          const dkg   = o.pesoRealKg  != null ? (o.diferenciaKg      ?? (o.pesoRealKg  - o.pesoEstimadoKg))   : null;
-                          return (
-                          <tr key={o._id}>
-                            <td><span className="badge bg-dark">{o.numero}</span></td>
-                            <td className="text-muted small">
-                              {(o.granja === "cañete" ? "C" : "P")}{o.galpon || ""}
-                            </td>
-                            <td className="text-muted small">{formatearFechaLocal(o.fechaEmision)}</td>
-                            <td className="text-end">{o.cantidadEstimada?.toLocaleString("es-AR")}</td>
-                            <td className={`text-end fw-semibold ${entregada && dcant !== 0 ? "text-warning" : ""}`}>
-                              {o.cantidadReal != null ? (
-                                <>
-                                  {o.cantidadReal.toLocaleString("es-AR")}
-                                  <span className={`ms-1 small ${dcant === 0 ? "text-success" : "text-warning"}`}>
-                                    ({dcant > 0 ? "+" : ""}{dcant})
-                                  </span>
-                                </>
-                              ) : "—"}
-                            </td>
-                            <td className="text-end">{o.pesoEstimadoKg} kg</td>
-                            <td className={`text-end fw-semibold ${entregada && Math.abs(dkg) > 0.01 ? "text-warning" : ""}`}>
-                              {o.pesoRealKg != null ? (
-                                <>
-                                  {o.pesoRealKg} kg
-                                  <span className={`ms-1 small ${Math.abs(dkg) <= 0.01 ? "text-success" : "text-warning"}`}>
-                                    ({dkg > 0 ? "+" : ""}{dkg?.toFixed(1)})
-                                  </span>
-                                </>
-                              ) : "—"}
-                            </td>
-                            <td>{estadoBadgePedido(o)}</td>
-                            <td>
-                              <div className="d-flex gap-1 align-items-center flex-wrap">
-                                {o.estado === "pendiente" && (
-                                  <>
-                                    <button className="btn btn-outline-warning btn-sm" onClick={() => setOrdenEditar(o)}>
-                                      <i className="bi bi-pencil"></i>
-                                    </button>
-                                    <button className="btn btn-primary btn-sm" onClick={() => setOrdenRecepcion(o)}>
-                                      <i className="bi bi-box-arrow-in-down me-1"></i>Recepcionar
-                                    </button>
-                                  </>
-                                )}
-                                {o.estado === "entregada" && !o.loteAsociado && (
-                                  <span className="badge bg-info text-dark">Pendiente faena</span>
-                                )}
-                                {o.loteAsociado && (
-                                  <span className="badge bg-success"><i className="bi bi-check2 me-1"></i>Faenado</span>
-                                )}
-                                {esAdmin && !o.loteAsociado && (
-                                  <button
-                                    className="btn btn-outline-danger btn-sm"
-                                    title="Eliminar pedido"
-                                    onClick={() => handleEliminar(o)}
-                                  >
-                                    <i className="bi bi-trash"></i>
-                                  </button>
-                                )}
+            {pedidosFiltrados.length === 0 ? (
+              <p className="text-center text-muted py-4 mb-0">No hay pedidos en este estado.</p>
+            ) : (
+              <>
+                {/* ── TARJETAS — mobile ── */}
+                <div className="d-md-none row g-2">
+                  {pedidosFiltrados.map((o) => {
+                    const entregada = o.estado === "entregada";
+                    const dcant = o.cantidadReal != null ? (o.diferenciaCantidad ?? (o.cantidadReal - o.cantidadEstimada)) : null;
+                    const dkg   = o.pesoRealKg  != null ? (o.diferenciaKg      ?? (o.pesoRealKg  - o.pesoEstimadoKg))   : null;
+                    const granja = o.granja === "cañete" ? "Cañete" : "Los Pinos";
+                    return (
+                      <div key={o._id} className="col-12">
+                        <div className="card border-0 shadow-sm">
+                          <div className="card-body py-2 px-3">
+                            <div className="d-flex justify-content-between align-items-center mb-2">
+                              <span className="badge bg-dark">{o.numero}</span>
+                              {estadoBadgePedido(o)}
+                            </div>
+                            <div className="d-flex justify-content-between align-items-center mb-1">
+                              <span className="fw-semibold">{granja}{o.galpon ? ` — Galpón ${o.galpon}` : ""}</span>
+                              <span className="text-muted small">{formatearFechaLocal(o.fechaEmision)}</span>
+                            </div>
+                            <div className="row g-2 text-center mb-2">
+                              <div className="col-6">
+                                <div className="rounded p-2" style={{ background: "#f8f9fa" }}>
+                                  <div className="small text-muted">Pedido</div>
+                                  <div className="fw-bold">{o.cantidadEstimada?.toLocaleString("es-AR")} pol.</div>
+                                  <div className="small text-muted">{o.pesoEstimadoKg} kg</div>
+                                </div>
                               </div>
-                            </td>
+                              {entregada ? (
+                                <div className="col-6">
+                                  <div className="rounded p-2" style={{ background: "#f0fdf4" }}>
+                                    <div className="small text-muted">Recibido</div>
+                                    <div className={`fw-bold ${dcant !== 0 ? "text-warning" : "text-success"}`}>
+                                      {o.cantidadReal?.toLocaleString("es-AR")} pol.
+                                      {dcant !== 0 && <span className="ms-1 small">({dcant > 0 ? "+" : ""}{dcant})</span>}
+                                    </div>
+                                    <div className={`small ${Math.abs(dkg) > 0.01 ? "text-warning" : "text-success"}`}>
+                                      {o.pesoRealKg} kg
+                                      {Math.abs(dkg) > 0.01 && <span className="ms-1">({dkg > 0 ? "+" : ""}{dkg?.toFixed(1)})</span>}
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="col-6 d-flex align-items-center justify-content-center">
+                                  <span className="text-muted small fst-italic">Sin datos de recepción</span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="d-flex gap-2 flex-wrap">
+                              {o.estado === "pendiente" && (
+                                <button className="btn btn-outline-warning btn-sm" onClick={() => setOrdenEditar(o)}>
+                                  <i className="bi bi-pencil me-1"></i>Editar
+                                </button>
+                              )}
+                              {o.estado === "enviada" && (
+                                <button className="btn btn-primary btn-sm flex-grow-1" onClick={() => setOrdenRecepcion(o)}>
+                                  <i className="bi bi-box-arrow-in-down me-1"></i>Recepcionar
+                                </button>
+                              )}
+                              {o.estado === "entregada" && !o.loteAsociado && (
+                                <span className="badge bg-info text-dark align-self-center">Pendiente faena</span>
+                              )}
+                              {o.loteAsociado && (
+                                <span className="badge bg-success align-self-center"><i className="bi bi-check2 me-1"></i>Faenado</span>
+                              )}
+                              {esAdmin && !o.loteAsociado && (
+                                <button className="btn btn-outline-danger btn-sm ms-auto" onClick={() => handleEliminar(o)}>
+                                  <i className="bi bi-trash"></i>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* ── TABLA — desktop ── */}
+                <div className="d-none d-md-block card border-0 shadow-sm">
+                  <div className="card-body p-0">
+                    <div className="table-responsive">
+                      <table className="table table-hover align-middle mb-0">
+                        <thead className="table-light">
+                          <tr>
+                            <th>N° Pedido</th>
+                            <th>Granja / Galpón</th>
+                            <th>Fecha</th>
+                            <th className="text-end">Cant. pedida</th>
+                            <th className="text-end">Recibido</th>
+                            <th className="text-end">Kg pedidos</th>
+                            <th className="text-end">Kg recibidos</th>
+                            <th>Estado</th>
+                            <th></th>
                           </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {pedidosFiltrados.map((o) => {
+                            const entregada = o.estado === "entregada";
+                            const dcant = o.cantidadReal != null ? (o.diferenciaCantidad ?? (o.cantidadReal - o.cantidadEstimada)) : null;
+                            const dkg   = o.pesoRealKg  != null ? (o.diferenciaKg      ?? (o.pesoRealKg  - o.pesoEstimadoKg))   : null;
+                            return (
+                              <tr key={o._id}>
+                                <td><span className="badge bg-dark">{o.numero}</span></td>
+                                <td className="text-muted small">
+                                  {(o.granja === "cañete" ? "C" : "P")}{o.galpon || ""}
+                                </td>
+                                <td className="text-muted small">{formatearFechaLocal(o.fechaEmision)}</td>
+                                <td className="text-end">{o.cantidadEstimada?.toLocaleString("es-AR")}</td>
+                                <td className={`text-end fw-semibold ${entregada && dcant !== 0 ? "text-warning" : ""}`}>
+                                  {o.cantidadReal != null ? (
+                                    <>
+                                      {o.cantidadReal.toLocaleString("es-AR")}
+                                      <span className={`ms-1 small ${dcant === 0 ? "text-success" : "text-warning"}`}>
+                                        ({dcant > 0 ? "+" : ""}{dcant})
+                                      </span>
+                                    </>
+                                  ) : "—"}
+                                </td>
+                                <td className="text-end">{o.pesoEstimadoKg} kg</td>
+                                <td className={`text-end fw-semibold ${entregada && Math.abs(dkg) > 0.01 ? "text-warning" : ""}`}>
+                                  {o.pesoRealKg != null ? (
+                                    <>
+                                      {o.pesoRealKg} kg
+                                      <span className={`ms-1 small ${Math.abs(dkg) <= 0.01 ? "text-success" : "text-warning"}`}>
+                                        ({dkg > 0 ? "+" : ""}{dkg?.toFixed(1)})
+                                      </span>
+                                    </>
+                                  ) : "—"}
+                                </td>
+                                <td>{estadoBadgePedido(o)}</td>
+                                <td>
+                                  <div className="d-flex gap-1 align-items-center flex-wrap">
+                                    {o.estado === "pendiente" && (
+                                      <button className="btn btn-outline-warning btn-sm" onClick={() => setOrdenEditar(o)}>
+                                        <i className="bi bi-pencil"></i>
+                                      </button>
+                                    )}
+                                    {o.estado === "enviada" && (
+                                      <button className="btn btn-primary btn-sm" onClick={() => setOrdenRecepcion(o)}>
+                                        <i className="bi bi-box-arrow-in-down me-1"></i>Recepcionar
+                                      </button>
+                                    )}
+                                    {o.estado === "entregada" && !o.loteAsociado && (
+                                      <span className="badge bg-info text-dark">Pendiente faena</span>
+                                    )}
+                                    {o.loteAsociado && (
+                                      <span className="badge bg-success"><i className="bi bi-check2 me-1"></i>Faenado</span>
+                                    )}
+                                    {esAdmin && !o.loteAsociado && (
+                                      <button
+                                        className="btn btn-outline-danger btn-sm"
+                                        title="Eliminar pedido"
+                                        onClick={() => handleEliminar(o)}
+                                      >
+                                        <i className="bi bi-trash"></i>
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                )}
-              </div>
-            </div>
+                </div>
+              </>
+            )}
           </>
         )}
 

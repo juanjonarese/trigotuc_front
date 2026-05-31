@@ -24,17 +24,15 @@ const fmtNum   = (n) => n != null ? new Intl.NumberFormat("es-AR").format(n) : "
 const fmtFecha = (f) => f ? new Date(f).toLocaleDateString("es-AR") : "—";
 
 const nivelStock = (a) => {
-  if (a.stockActual <= 0)                                                    return "sinstock";
-  if (a.stockMinimo  > 0 && a.stockActual <= a.stockMinimo)                  return "critico";
-  if (a.stockCritico > 0 && a.stockActual <= a.stockCritico)                 return "pedido";
+  if (a.stockActual <= 0)                                    return "sinstock";
+  if (a.stockCritico > 0 && a.stockActual <= a.stockCritico) return "critico";
   return "ok";
 };
 
 const NIVEL_CFG = {
-  ok:       { bg: "#f0fdf4", border: "#16a34a", numColor: "#15803d", icon: "bi-check-circle-fill",      iconColor: "#16a34a", badge: null },
-  pedido:   { bg: "#fff7ed", border: "#ea580c", numColor: "#c2410c", icon: "bi-exclamation-triangle-fill", iconColor: "#ea580c", badge: { text: "Hacer pedido",  cls: "bg-warning text-dark" } },
-  critico:  { bg: "#fef2f2", border: "#dc2626", numColor: "#b91c1c", icon: "bi-x-circle-fill",           iconColor: "#dc2626", badge: { text: "Stock crítico", cls: "bg-danger"             } },
-  sinstock: { bg: "#f3f4f6", border: "#6b7280", numColor: "#4b5563", icon: "bi-dash-circle-fill",         iconColor: "#6b7280", badge: { text: "Sin stock",     cls: "bg-secondary"          } },
+  ok:       { bg: "#f0fdf4", border: "#16a34a", numColor: "#15803d", icon: "bi-check-circle-fill",  iconColor: "#16a34a", badge: null },
+  critico:  { bg: "#fef2f2", border: "#dc2626", numColor: "#b91c1c", icon: "bi-exclamation-triangle-fill", iconColor: "#dc2626", badge: { text: "Hacer pedido", cls: "bg-danger" } },
+  sinstock: { bg: "#f3f4f6", border: "#6b7280", numColor: "#4b5563", icon: "bi-dash-circle-fill",   iconColor: "#6b7280", badge: { text: "Sin stock",    cls: "bg-secondary"    } },
 };
 
 const colorPorStock = (a) => NIVEL_CFG[nivelStock(a)];
@@ -68,15 +66,11 @@ const ArticuloCard = ({ articulo, onClick }) => {
           {fmtNum(articulo.stockActual)}
         </div>
         <div className="text-muted small text-center mt-1">{articulo.unidad}</div>
-        {cfg.badge ? (
+        {cfg.badge && (
           <div className="text-center mt-2">
             <span className={`badge ${cfg.badge.cls}`}>{cfg.badge.text}</span>
           </div>
-        ) : articulo.stockCritico > 0 ? (
-          <div className="text-muted small text-center mt-2">
-            umbral pedido: {fmtNum(articulo.stockCritico)}
-          </div>
-        ) : null}
+        )}
       </div>
     </div>
   );
@@ -140,8 +134,7 @@ const ArticuloModal = ({ articulo, onClose, onMovimiento, onEditar, onEliminar }
               <h5 className="modal-title mb-0">{articulo.nombre}</h5>
               <div className="small text-muted mt-1">
                 Stock actual: <strong>{fmtNum(articulo.stockActual)} {articulo.unidad}</strong>
-                {articulo.stockCritico > 0 && ` · pedido en: ${fmtNum(articulo.stockCritico)}`}
-                {articulo.stockMinimo  > 0 && ` · mín: ${fmtNum(articulo.stockMinimo)}`}
+                {articulo.stockCritico > 0 && ` · stock crítico: ${fmtNum(articulo.stockCritico)}`}
                 {articulo.descripcion && <> · {articulo.descripcion}</>}
               </div>
             </div>
@@ -293,14 +286,11 @@ const ArticuloModal = ({ articulo, onClose, onMovimiento, onEditar, onEliminar }
 const ArticuloFormModal = ({ articulo, onClose, onGuardado }) => {
   const isEdit = !!articulo;
   const [form, setForm] = useState({
-    nombre:        articulo?.nombre        || "",
-    descripcion:   articulo?.descripcion   || "",
-    unidad:        articulo?.unidad        || "u",
-    stockActual:   articulo?.stockActual   ?? 0,
-    stockObjetivo: articulo?.stockObjetivo ?? 0,
-    stockCritico:  articulo?.stockCritico  ?? 0,
-    stockMinimo:   articulo?.stockMinimo   ?? 0,
-    tipo:          articulo?.tipo          || "otro",
+    nombre:       articulo?.nombre       || "",
+    descripcion:  articulo?.descripcion  || "",
+    unidad:       articulo?.unidad       || "u",
+    stockActual:  articulo?.stockActual  ?? 0,
+    stockCritico: articulo?.stockCritico ?? 0,
   });
   const [saving, setSaving] = useState(false);
 
@@ -337,7 +327,7 @@ const ArticuloFormModal = ({ articulo, onClose, onGuardado }) => {
               <form id="form-articulo-stock" onSubmit={handleSubmit}>
                 <div className="row g-3">
                   <div className="col-12">
-                    <label className="form-label fw-semibold">Nombre</label>
+                    <label className="form-label fw-semibold">Nombre <span className="text-danger">*</span></label>
                     <input
                       type="text"
                       className="form-control"
@@ -355,10 +345,11 @@ const ArticuloFormModal = ({ articulo, onClose, onGuardado }) => {
                       className="form-control"
                       value={form.descripcion}
                       onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
+                      placeholder="Detalle adicional..."
                     />
                   </div>
                   <div className="col-6">
-                    <label className="form-label fw-semibold">Unidad</label>
+                    <label className="form-label fw-semibold">Unidad <span className="text-danger">*</span></label>
                     <input
                       type="text"
                       className="form-control"
@@ -367,90 +358,30 @@ const ArticuloFormModal = ({ articulo, onClose, onGuardado }) => {
                       placeholder="u, kg, paq, rollo..."
                       required
                     />
-                    <div className="form-text">u = unidades, paq = paquetes, rollo...</div>
+                    <div className="form-text">u = unidades, paq = paquetes...</div>
                   </div>
                   <div className="col-6">
-                    <label className="form-label fw-semibold">Stock objetivo <span className="text-muted">(para pedido)</span></label>
-                    <input
-                      type="number"
-                      className="form-control"
-                      value={form.stockObjetivo}
-                      onChange={(e) => setForm({ ...form, stockObjetivo: e.target.value })}
-                      min="0"
-                    />
-                    <div className="form-text">Nivel al que se repone con "Hacer pedido"</div>
-                  </div>
-                  <div className="col-6">
-                    <label className="form-label">Stock crítico <span className="text-muted">(hacer pedido)</span></label>
+                    <label className="form-label fw-semibold">Stock crítico</label>
                     <input
                       type="number"
                       className="form-control"
                       value={form.stockCritico}
                       onChange={(e) => setForm({ ...form, stockCritico: e.target.value })}
                       min="0"
+                      placeholder="0"
                     />
-                    <div className="form-text">Alarma amarilla — pedir reposición</div>
-                  </div>
-                  <div className="col-6">
-                    <label className="form-label">Stock mínimo <span className="text-muted">(urgente)</span></label>
-                    <input
-                      type="number"
-                      className="form-control"
-                      value={form.stockMinimo}
-                      onChange={(e) => setForm({ ...form, stockMinimo: e.target.value })}
-                      min="0"
-                    />
-                    <div className="form-text">Alarma roja — nivel crítico</div>
-                  </div>
-                  <div className="col-12">
-                    <hr className="my-1"/>
-                    <label className="form-label fw-semibold">¿Qué artículo es este?</label>
-                    <select
-                      className="form-select"
-                      value={form.tipo}
-                      onChange={(e) => setForm({ ...form, tipo: e.target.value })}
-                    >
-                      <option value="otro">Otro (sin descuento automático)</option>
-                      <optgroup label="Pollos enteros">
-                        <option value="bolsa_grande">Bolsa grande</option>
-                        <option value="etiqueta_pollo_entero">Etiqueta pollo entero</option>
-                        <option value="cajon_madera">Cajón de madera</option>
-                        <option value="bolsa_individual">Bolsas individuales</option>
-                      </optgroup>
-                      <optgroup label="Trozados">
-                        <option value="caja_carton">Caja de cartón</option>
-                        <option value="bolsa_5kg">Bolsa de 5 kg</option>
-                        <option value="etiqueta_pata_muslo">Etiqueta pata muslo</option>
-                        <option value="etiqueta_filet">Etiqueta filet</option>
-                        <option value="etiqueta_alita">Etiqueta alita</option>
-                      </optgroup>
-                    </select>
-                    {form.tipo !== "otro" && (
-                      <div className="form-text text-success">
-                        <i className="bi bi-check-circle me-1"></i>
-                        {{
-                          bolsa_grande:          "1 por cajón de pollos enteros + 1 por caja de trozado",
-                          etiqueta_pollo_entero: "1 por cajón de pollos enteros",
-                          cajon_madera:          "1 por cajón de pollos enteros",
-                          bolsa_individual:      "1 por pollo en el cajón (cal.5 = 5 u, cal.7 = 7 u, etc.)",
-                          caja_carton:           "1 por caja de trozado",
-                          bolsa_5kg:             "3 por caja de trozado",
-                          etiqueta_pata_muslo:   "1 por caja de pata muslo",
-                          etiqueta_filet:        "1 por caja de filet",
-                          etiqueta_alita:        "1 por caja de alita",
-                        }[form.tipo]}
-                      </div>
-                    )}
+                    <div className="form-text">La tarjeta se pone roja cuando el stock llega a este valor</div>
                   </div>
                   {!isEdit && (
                     <div className="col-6">
-                      <label className="form-label">Stock inicial</label>
+                      <label className="form-label fw-semibold">Stock inicial</label>
                       <input
                         type="number"
                         className="form-control"
                         value={form.stockActual}
                         onChange={(e) => setForm({ ...form, stockActual: e.target.value })}
                         min="0"
+                        placeholder="0"
                       />
                     </div>
                   )}
@@ -1053,24 +984,12 @@ const CargaMasivaModal = ({ articulos, onClose, onGuardado }) => {
                 </div>
               </div>
 
-              <div className="d-flex justify-content-end mb-2">
-                <button
-                  type="button"
-                  className="btn btn-outline-primary btn-sm"
-                  onClick={autocompletar}
-                  title="Completa automáticamente con la cantidad necesaria para llegar al stock objetivo"
-                >
-                  <i className="bi bi-lightning-charge me-1"></i>Auto-completar según objetivo
-                </button>
-              </div>
-
               <div className="table-responsive">
                 <table className="table table-sm align-middle mb-0">
                   <thead className="table-light">
                     <tr>
                       <th>Artículo</th>
                       <th className="text-center">Stock actual</th>
-                      <th className="text-center text-muted small">Objetivo</th>
                       <th style={{ minWidth: 110 }}>Cant. recibida</th>
                       <th style={{ minWidth: 160 }}>Motivo <span className="text-muted fw-normal">(opc.)</span></th>
                     </tr>
@@ -1080,13 +999,8 @@ const CargaMasivaModal = ({ articulos, onClose, onGuardado }) => {
                       <tr key={l._id} className={Number(l.cantidad) > 0 ? "table-success table-success-subtle" : ""}>
                         <td className="fw-semibold small">{l.nombre}</td>
                         <td className="text-center small">
-                          <span className={l.stockObjetivo > 0 && l.stockActual < l.stockObjetivo ? "text-danger fw-semibold" : "text-muted"}>
-                            {fmtNum(l.stockActual)}
-                          </span>
+                          <span className="text-muted">{fmtNum(l.stockActual)}</span>
                           <span className="text-muted small ms-1">{l.unidad}</span>
-                        </td>
-                        <td className="text-center small text-muted">
-                          {l.stockObjetivo > 0 ? fmtNum(l.stockObjetivo) : "—"}
                         </td>
                         <td>
                           <input
@@ -1539,8 +1453,7 @@ const StockEmpaquePage = () => {
         {articulos.length > 0 && (
           <div className="d-flex gap-3 flex-wrap mt-4 small text-muted">
             <span><span className="text-success fw-bold me-1">●</span>Stock OK</span>
-            <span><span className="text-warning fw-bold me-1">●</span>Hacer pedido</span>
-            <span><span className="text-danger fw-bold me-1">●</span>Stock crítico</span>
+            <span><span className="text-danger fw-bold me-1">●</span>Hacer pedido</span>
             <span><span className="text-secondary fw-bold me-1">●</span>Sin stock</span>
           </div>
         )}
