@@ -696,7 +696,11 @@ const RecepcionOrdenCargaPage = () => {
                       return (
                         <tr key={o._id}>
                           <td><span className="badge bg-dark">{o.numero}</span></td>
-                          <td className="fw-semibold">{o.cliente?.razonSocial || o.cliente?.nombre}</td>
+                          <td className="fw-semibold">
+                            {o.tipo === "pedido_frigorifico"
+                              ? o.registradoPor?.nombreUsuario || "—"
+                              : o.cliente?.razonSocial || o.cliente?.nombre || "—"}
+                          </td>
                           <td className="text-muted small">
                             {(o.granja === "cañete" ? "C" : "P")}{o.galpon || ""}
                           </td>
