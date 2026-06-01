@@ -110,6 +110,7 @@ const imprimirComprobanteEntrega = (orden, datosReales) => {
   </body></html>`;
 
   const win = window.open("", "_blank", "width=720,height=700");
+  if (!win) return;
   win.document.write(html);
   win.document.close();
 };
