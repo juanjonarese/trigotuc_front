@@ -234,7 +234,7 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
   return (
     <>
       <div className="modal show d-block" tabIndex="-1">
-        <div className="modal-dialog modal-lg modal-dialog-scrollable">
+        <div className="modal-dialog modal-lg modal-dialog-scrollable modal-fullscreen-sm-down">
           <div className="modal-content">
             <div className="modal-header bg-success text-white">
               <h5 className="modal-title">
@@ -408,32 +408,32 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
                 {totalCajones > 0 && (
                   <>
                     <div className="alert alert-info py-2 mt-3 mb-2">
-                      <div className="row text-center g-0">
-                        <div className="col border-end">
+                      <div className="row text-center gx-0 gy-2">
+                        <div className="col-6 col-md border-end">
                           <div className="text-muted small">Pollos calibres</div>
                           <div className="fw-bold">{fmtNum(totalPollos)}</div>
                         </div>
-                        <div className="col border-end">
+                        <div className="col-6 col-md border-end">
                           <div className="text-muted small">Cajones</div>
                           <div className="fw-bold">{fmtNum(totalCajones)}</div>
                         </div>
-                        <div className="col border-end">
+                        <div className="col-6 col-md border-end">
                           <div className="text-muted small">Kg calibres</div>
                           <div className="fw-bold">{fmtNum(totalKg)}</div>
                         </div>
                         {form.unidadesTrozadas && (
-                          <div className="col border-end">
+                          <div className="col-6 col-md border-end">
                             <div className="text-muted small">Trozados (u)</div>
                             <div className="fw-bold">{fmtNum(Number(form.unidadesTrozadas))}</div>
                           </div>
                         )}
                         {form.kgTrozados && (
-                          <div className="col border-end">
+                          <div className="col-6 col-md border-end">
                             <div className="text-muted small">Trozados (kg)</div>
                             <div className="fw-bold">{fmtNum(Number(form.kgTrozados))}</div>
                           </div>
                         )}
-                        <div className="col">
+                        <div className="col-6 col-md">
                           <div className="text-muted small fw-semibold">Total pollos</div>
                           <div className="fw-bold text-primary">
                             {fmtNum(totalPollos + (Number(form.unidadesTrozadas) || 0))}
@@ -531,7 +531,7 @@ const EditarLoteModal = ({ lote, onClose, onGuardado }) => {
   return (
     <>
       <div className="modal show d-block" tabIndex="-1">
-        <div className="modal-dialog modal-lg modal-dialog-scrollable">
+        <div className="modal-dialog modal-lg modal-dialog-scrollable modal-fullscreen-sm-down">
           <div className="modal-content">
             <div className="modal-header bg-primary text-white">
               <h5 className="modal-title">
