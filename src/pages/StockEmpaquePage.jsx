@@ -24,15 +24,17 @@ const fmtNum   = (n) => n != null ? new Intl.NumberFormat("es-AR").format(n) : "
 const fmtFecha = (f) => f ? new Date(f).toLocaleDateString("es-AR") : "—";
 
 const nivelStock = (a) => {
-  if (a.stockActual <= 0)                                    return "sinstock";
+  if (a.stockActual < 0)                                     return "negativo";
+  if (a.stockActual === 0)                                   return "sinstock";
   if (a.stockCritico > 0 && a.stockActual <= a.stockCritico) return "critico";
   return "ok";
 };
 
 const NIVEL_CFG = {
-  ok:       { bg: "#f0fdf4", border: "#16a34a", numColor: "#15803d", icon: "bi-check-circle-fill",  iconColor: "#16a34a", badge: null },
-  critico:  { bg: "#fef2f2", border: "#dc2626", numColor: "#b91c1c", icon: "bi-exclamation-triangle-fill", iconColor: "#dc2626", badge: { text: "Hacer pedido", cls: "bg-danger" } },
-  sinstock: { bg: "#f3f4f6", border: "#6b7280", numColor: "#4b5563", icon: "bi-dash-circle-fill",   iconColor: "#6b7280", badge: { text: "Sin stock",    cls: "bg-secondary"    } },
+  ok:       { bg: "#f0fdf4", border: "#16a34a", numColor: "#15803d", icon: "bi-check-circle-fill",        iconColor: "#16a34a", badge: null },
+  critico:  { bg: "#fef2f2", border: "#dc2626", numColor: "#b91c1c", icon: "bi-exclamation-triangle-fill", iconColor: "#dc2626", badge: { text: "Hacer pedido",   cls: "bg-danger"    } },
+  sinstock: { bg: "#f3f4f6", border: "#6b7280", numColor: "#4b5563", icon: "bi-dash-circle-fill",          iconColor: "#6b7280", badge: { text: "Sin stock",      cls: "bg-secondary" } },
+  negativo: { bg: "#fff1f2", border: "#be123c", numColor: "#be123c", icon: "bi-exclamation-octagon-fill",  iconColor: "#be123c", badge: { text: "Stock negativo", cls: "bg-danger"    } },
 };
 
 const colorPorStock = (a) => NIVEL_CFG[nivelStock(a)];
@@ -1455,6 +1457,7 @@ const StockEmpaquePage = () => {
             <span><span className="text-success fw-bold me-1">●</span>Stock OK</span>
             <span><span className="text-danger fw-bold me-1">●</span>Hacer pedido</span>
             <span><span className="text-secondary fw-bold me-1">●</span>Sin stock</span>
+            <span><span style={{ color: "#be123c" }} className="fw-bold me-1">●</span>Stock negativo</span>
           </div>
         )}
 
