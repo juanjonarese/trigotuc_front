@@ -1,25 +1,26 @@
 import React, { useState, useEffect } from "react";
-import { obtenerCamiones, crearCamion, actualizarCamion, eliminarCamion } from "../services/api";
+import { obtenerCamiones, crearCamion, actualizarCamion, eliminarCamion, obtenerUsuarios } from "../services/api";
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
 import Swal from "sweetalert2";
 import "../css/Tablas.css";
 
-const FORM_INICIAL = { marca: "", patente: "" };
+const FORM_INICIAL = { marca: "", patente: "", chofer: "" };
 const ITEMS_PER_PAGE = 30;
 
 const CamionesPage = () => {
-  const [camiones, setCamiones] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [showModal, setShowModal] = useState(false);
+  const [camiones, setCamiones]     = useState([]);
+  const [choferes, setChoferes]     = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState("");
+  const [showModal, setShowModal]   = useState(false);
   const [editingCamion, setEditingCamion] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [formData, setFormData] = useState(FORM_INICIAL);
+  const [formData, setFormData]     = useState(FORM_INICIAL);
 
-  const rolUsuario = localStorage.getItem("rolUsuario");
-  const puedeEditar = rolUsuario === "admin" || rolUsuario === "personal";
+  const rolUsuario  = localStorage.getItem("rolUsuario");
+  const puedeEditar = rolUsuario === "superadmin" || rolUsuario === "administracion";
 
   const cargarCamiones = async () => {
     try {
@@ -38,12 +39,15 @@ const CamionesPage = () => {
 
   useEffect(() => {
     cargarCamiones();
+    obtenerUsuarios()
+      .then((data) => setChoferes((data.usuarios || data || []).filter((u) => u.rolUsuario === "chofer")))
+      .catch(() => {});
   }, []);
 
   const handleOpenModal = (camion = null) => {
     if (camion) {
       setEditingCamion(camion);
-      setFormData({ marca: camion.marca, patente: camion.patente });
+      setFormData({ marca: camion.marca, patente: camion.patente, chofer: camion.chofer?._id || "" });
     } else {
       setEditingCamion(null);
       setFormData(FORM_INICIAL);
@@ -206,6 +210,11 @@ const CamionesPage = () => {
                             <div>
                               <span className="fw-semibold d-block">{c.marca}</span>
                               <small className="text-muted">{c.patente}</small>
+                              {c.chofer && (
+                                <small className="text-primary d-block">
+                                  <i className="bi bi-person-fill me-1"></i>{c.chofer.nombreUsuario}
+                                </small>
+                              )}
                             </div>
                             {puedeEditar && (
                               <div className="d-flex gap-2">
@@ -236,6 +245,7 @@ const CamionesPage = () => {
                         <tr>
                           <th>Marca</th>
                           <th>Patente</th>
+                          <th>Chofer</th>
                           {puedeEditar && <th>Acciones</th>}
                         </tr>
                       </thead>
@@ -244,6 +254,11 @@ const CamionesPage = () => {
                           <tr key={c._id}>
                             <td>{c.marca}</td>
                             <td>{c.patente}</td>
+                            <td>
+                              {c.chofer
+                                ? <span className="badge bg-primary">{c.chofer.nombreUsuario}</span>
+                                : <span className="text-muted small">—</span>}
+                            </td>
                             {puedeEditar && (
                               <td>
                                 <button
@@ -324,6 +339,26 @@ const CamionesPage = () => {
                           placeholder="Ej: AB123CD"
                           required
                         />
+                      </div>
+                      <div className="mb-3">
+                        <label htmlFor="chofer" className="form-label">
+                          Chofer asignado
+                        </label>
+                        <select
+                          className="form-select"
+                          id="chofer"
+                          name="chofer"
+                          value={formData.chofer}
+                          onChange={handleChange}
+                        >
+                          <option value="">— Sin chofer —</option>
+                          {choferes.map((c) => (
+                            <option key={c._id} value={c._id}>{c.nombreUsuario}</option>
+                          ))}
+                        </select>
+                        {choferes.length === 0 && (
+                          <div className="form-text text-muted">No hay usuarios con rol chofer cargados aún.</div>
+                        )}
                       </div>
                     </div>
                     <div className="modal-footer">

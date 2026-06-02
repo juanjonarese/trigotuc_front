@@ -182,6 +182,7 @@ const OrdenesRetiroPage = () => {
           ["", "— Sin chofer (retiro directo) —"],
           ...choferes.map((c) => [c._id, c.nombreUsuario]),
         ]);
+    // Nota: el camión se deriva automáticamente del chofer en el backend
     const { value } = await Swal.fire({
       title: "Asignar chofer",
       input: "select",
@@ -258,11 +259,18 @@ const OrdenesRetiroPage = () => {
                       </div>
                       <div className="fw-bold mb-1">{o.cliente?.razonSocial}</div>
                       {o.modalidadEntrega === "delivery_chofer" && (
-                        <div className="small mb-1">
-                          <i className="bi bi-person-fill me-1 text-primary"></i>
-                          {o.chofer ? <span className="fw-semibold">{o.chofer.nombreUsuario}</span> : <span className="text-muted">Sin chofer asignado</span>}
+                        <div className="small mb-1 d-flex flex-wrap align-items-center gap-2">
+                          <span>
+                            <i className="bi bi-person-fill me-1 text-primary"></i>
+                            {o.chofer ? <span className="fw-semibold">{o.chofer.nombreUsuario}</span> : <span className="text-muted">Sin chofer</span>}
+                          </span>
+                          {o.camion && (
+                            <span className="text-muted">
+                              <i className="bi bi-truck me-1"></i>{o.camion.marca} · {o.camion.patente}
+                            </span>
+                          )}
                           {o.confirmadaCarga && (
-                            <span className="badge bg-success ms-2" style={{ fontSize: "0.7rem" }}>
+                            <span className="badge bg-success" style={{ fontSize: "0.7rem" }}>
                               <i className="bi bi-check2 me-1"></i>Carga OK
                             </span>
                           )}

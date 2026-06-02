@@ -35,12 +35,18 @@ const OrdenCard = ({ orden, onConfirmarCarga, onConfirmarEntrega }) => {
         {/* Cliente */}
         <div className="fw-bold fs-5 mb-1">{orden.cliente?.razonSocial}</div>
 
-        {/* Cámara */}
+        {/* Cámara + camión */}
         <div className="text-muted small mb-3">
           <i className="bi bi-snow me-1"></i>{CAMARAS[orden.camara] || orden.camara}
           &nbsp;·&nbsp;
           <i className="bi bi-box-seam me-1"></i>{fmtNum(orden.totalCajones)} cajones
           &nbsp;·&nbsp;{fmtNum(orden.pesoTotalKg)} kg
+          {orden.camion && (
+            <span className="d-block mt-1">
+              <i className="bi bi-truck me-1"></i>
+              {orden.camion.marca} · <span className="fw-semibold">{orden.camion.patente}</span>
+            </span>
+          )}
         </div>
 
         {/* Calibres */}
