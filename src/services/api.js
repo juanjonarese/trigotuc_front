@@ -823,6 +823,27 @@ export const liberarOrdenRetiro = async (id) => {
   return handleResponse(response);
 };
 
+export const asignarChoferOrdenRetiro = async (id, choferId) => {
+  const response = await fetch(`${API_URL}/ordenes-retiro/${id}/asignar-chofer`, {
+    method: "PATCH", headers: getAuthHeaders(), body: JSON.stringify({ choferId }),
+  });
+  return handleResponse(response);
+};
+
+export const confirmarCargaOrdenRetiro = async (id) => {
+  const response = await fetch(`${API_URL}/ordenes-retiro/${id}/confirmar-carga`, {
+    method: "PATCH", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const confirmarEntregaChofer = async (id) => {
+  const response = await fetch(`${API_URL}/ordenes-retiro/${id}/confirmar-entrega`, {
+    method: "PATCH", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
 // ============= DECOMISADOS (GRANJA) =============
 
 export const obtenerDecomisados = async (filtros = {}) => {

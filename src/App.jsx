@@ -31,6 +31,7 @@ import HistorialAccesosPage from "./pages/HistorialAccesosPage";
 import StockEmpaquePage from "./pages/StockEmpaquePage";
 import DespachoFrigorificoPage from "./pages/DespachoFrigorificoPage";
 import RecepcionFrigorificoPage from "./pages/RecepcionFrigorificoPage";
+import ChoferPage from "./pages/ChoferPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
@@ -255,6 +256,9 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* Chofer */}
+        <Route path="/chofer" element={<ProtectedRoute><ChoferPage /></ProtectedRoute>} />
 
         {/* Redirección por defecto */}
         <Route path="/" element={<Navigate to="/login" replace />} />

@@ -417,6 +417,22 @@ const Layout = ({ children }) => {
           </div>
           )}
 
+          {/* Chofer */}
+          {(rolUsuario === "chofer" || rolUsuario === "superadmin") && (
+          <div className="nav-section mb-2">
+            <a
+              href="#"
+              className={`nav-link d-flex align-items-center gap-2 mb-1 rounded ${
+                isActive("/chofer") ? "text-white" : "text-white-50"
+              }`}
+              onClick={(e) => { e.preventDefault(); navigate("/chofer"); }}
+            >
+              <i className="bi bi-truck fs-5"></i>
+              <span>Mis Entregas</span>
+            </a>
+          </div>
+          )}
+
         </nav>
 
       </aside>

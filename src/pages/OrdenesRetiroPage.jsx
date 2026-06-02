@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Layout from "../components/Layout";
-import { obtenerOrdenesRetiro, marcarOrdenEntregada, liberarOrdenRetiro } from "../services/api";
+import { obtenerOrdenesRetiro, marcarOrdenEntregada, liberarOrdenRetiro, asignarChoferOrdenRetiro, obtenerUsuarios } from "../services/api";
 import { formatearFechaLocal, obtenerFechaHoy } from "../utils/dateUtils";
 import Swal from "sweetalert2";
 
@@ -125,11 +125,22 @@ const ConfirmarModal = ({ orden, saltarCodigo = false, onClose, onConfirmada }) 
 const OrdenesRetiroPage = () => {
   const rolUsuario   = localStorage.getItem("rolUsuario");
   const puedeLiberar = rolUsuario === "superadmin" || rolUsuario === "administracion";
+  const esAdmin      = rolUsuario === "superadmin" || rolUsuario === "administracion";
 
-  const [ordenes, setOrdenes]         = useState([]);
-  const [loading, setLoading]         = useState(true);
+  const [ordenes, setOrdenes]           = useState([]);
+  const [loading, setLoading]           = useState(true);
   const [filtroEstado, setFiltroEstado] = useState("pendiente");
-  const [ordenModal, setOrdenModal]   = useState(null);
+  const [ordenModal, setOrdenModal]     = useState(null);
+  const [choferes, setChoferes]         = useState([]);
+
+  useEffect(() => {
+    if (esAdmin) {
+      obtenerUsuarios().then((data) => {
+        const lista = (data.usuarios || data || []).filter((u) => u.rolUsuario === "chofer");
+        setChoferes(lista);
+      }).catch(() => {});
+    }
+  }, [esAdmin]);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -158,6 +169,34 @@ const OrdenesRetiroPage = () => {
       await liberarOrdenRetiro(orden._id);
       await cargar();
       Swal.fire({ icon: "success", title: "Orden liberada", timer: 1500, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire("Error", err.message, "error");
+    }
+  };
+
+  const handleAsignarChofer = async (e, orden) => {
+    e.stopPropagation();
+    const opciones = choferes.length === 0
+      ? { "": "— Sin chofer (retiro directo) —" }
+      : Object.fromEntries([
+          ["", "— Sin chofer (retiro directo) —"],
+          ...choferes.map((c) => [c._id, c.nombreUsuario]),
+        ]);
+    const { value } = await Swal.fire({
+      title: "Asignar chofer",
+      input: "select",
+      inputOptions: opciones,
+      inputValue: orden.chofer?._id || "",
+      showCancelButton: true,
+      confirmButtonText: "Asignar",
+      cancelButtonText: "Cancelar",
+      inputPlaceholder: "Seleccioná un chofer",
+    });
+    if (value === undefined) return;
+    try {
+      await asignarChoferOrdenRetiro(orden._id, value || null);
+      await cargar();
+      Swal.fire({ icon: "success", title: value ? "Chofer asignado" : "Orden sin chofer", timer: 1500, showConfirmButton: false });
     } catch (err) {
       Swal.fire("Error", err.message, "error");
     }
@@ -205,14 +244,30 @@ const OrdenesRetiroPage = () => {
                 <div key={o._id} className="col-12 col-md-6 col-lg-4">
                   <div className="card border-0 shadow-sm h-100" style={{ borderLeft: `4px solid ${barColor}` }}>
                     <div className="card-body">
-                      <div className="d-flex justify-content-between align-items-start mb-2">
+                      <div className="d-flex justify-content-between align-items-start mb-2 flex-wrap gap-1">
                         <span className="badge bg-dark fs-6">{o.numeroOrden}</span>
-                        {o.liberada
-                          ? <span className="badge bg-warning text-dark"><i className="bi bi-unlock me-1"></i>Liberada</span>
-                          : <span className="badge bg-warning text-dark"><i className="bi bi-hourglass-split me-1"></i>Pendiente</span>
-                        }
+                        <div className="d-flex gap-1 flex-wrap justify-content-end">
+                          {o.modalidadEntrega === "delivery_chofer" && (
+                            <span className="badge bg-primary"><i className="bi bi-truck me-1"></i>Chofer</span>
+                          )}
+                          {o.liberada
+                            ? <span className="badge bg-warning text-dark"><i className="bi bi-unlock me-1"></i>Liberada</span>
+                            : <span className="badge bg-warning text-dark"><i className="bi bi-hourglass-split me-1"></i>Pendiente</span>
+                          }
+                        </div>
                       </div>
                       <div className="fw-bold mb-1">{o.cliente?.razonSocial}</div>
+                      {o.modalidadEntrega === "delivery_chofer" && (
+                        <div className="small mb-1">
+                          <i className="bi bi-person-fill me-1 text-primary"></i>
+                          {o.chofer ? <span className="fw-semibold">{o.chofer.nombreUsuario}</span> : <span className="text-muted">Sin chofer asignado</span>}
+                          {o.confirmadaCarga && (
+                            <span className="badge bg-success ms-2" style={{ fontSize: "0.7rem" }}>
+                              <i className="bi bi-check2 me-1"></i>Carga OK
+                            </span>
+                          )}
+                        </div>
+                      )}
                       <div className="small text-muted mb-2">
                         <i className="bi bi-snow me-1"></i>{CAMARAS[o.camara]}
                         &nbsp;·&nbsp;
@@ -243,9 +298,15 @@ const OrdenesRetiroPage = () => {
                       <button className="btn btn-success w-100" onClick={() => setOrdenModal(o)}>
                         <i className="bi bi-check2-circle me-1"></i>Confirmar entrega
                       </button>
-                      {puedeLiberar && !o.liberada && (
+                      {puedeLiberar && !o.liberada && o.modalidadEntrega !== "delivery_chofer" && (
                         <button className="btn btn-outline-warning btn-sm w-100" onClick={(e) => handleLiberar(e, o)}>
                           <i className="bi bi-unlock me-1"></i>Liberar (sin código)
+                        </button>
+                      )}
+                      {esAdmin && (
+                        <button className="btn btn-outline-primary btn-sm w-100" onClick={(e) => handleAsignarChofer(e, o)}>
+                          <i className="bi bi-truck me-1"></i>
+                          {o.chofer ? "Cambiar chofer" : "Asignar chofer"}
                         </button>
                       )}
                     </div>
