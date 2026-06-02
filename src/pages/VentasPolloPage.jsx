@@ -7,6 +7,7 @@ import {
   eliminarPedidoFrigorifico,
   obtenerClientes,
   obtenerResumenStock,
+  obtenerCamiones,
 } from "../services/api";
 import { formatearFechaLocal, obtenerFechaHoy } from "../utils/dateUtils";
 import Swal from "sweetalert2";
@@ -81,11 +82,16 @@ const imprimirOrdenRetiro = ({ numeroOrden, codigoRetiro }, pedido) => {
 };
 
 // ── Modal nueva orden ──────────────────────────────────────────────────────────
-const NuevaOrdenModal = ({ clientes, resumen, onClose, onCreada }) => {
-  const [form, setForm]     = useState({ cliente: "", camara: "cañete", descuento: "0", fecha: obtenerFechaHoy(), observaciones: "" });
-  const [lineas, setLineas] = useState([]);
-  const [saving, setSaving] = useState(false);
-  const calibreRef          = useRef(null);
+const NuevaOrdenModal = ({ clientes, resumen, camiones, onClose, onCreada }) => {
+  const [form, setForm]         = useState({ cliente: "", camara: "cañete", descuento: "0", fecha: obtenerFechaHoy(), observaciones: "" });
+  const [lineas, setLineas]     = useState([]);
+  const [saving, setSaving]     = useState(false);
+  const [esDelivery, setEsDelivery] = useState(false);
+  const [choferId, setChoferId] = useState("");
+  const calibreRef              = useRef(null);
+
+  // Camiones que tienen chofer asignado
+  const choferesDisponibles = camiones.filter((c) => c.chofer);
 
 
   const stockCamara = resumen
@@ -106,8 +112,12 @@ const NuevaOrdenModal = ({ clientes, resumen, onClose, onCreada }) => {
     if (!form.cliente) {
       Swal.fire("Falta el cliente", "Seleccioná el cliente.", "warning"); return;
     }
+    if (esDelivery && !choferId) {
+      Swal.fire("Falta el chofer", "Seleccioná un chofer para la entrega.", "warning"); return;
+    }
     setSaving(true);
     try {
+
       const resultado = await crearPedidoFrigorifico({
         cliente:       form.cliente,
         camara:        form.camara,
@@ -119,6 +129,7 @@ const NuevaOrdenModal = ({ clientes, resumen, onClose, onCreada }) => {
         descuento:     descuentoNum,
         fechaPedido:   form.fecha,
         observaciones: form.observaciones || undefined,
+        choferId:      esDelivery ? choferId : undefined,
       });
 
       const ordenRetiro = resultado?._ordenRetiro;
@@ -202,6 +213,39 @@ const NuevaOrdenModal = ({ clientes, resumen, onClose, onCreada }) => {
                     <input type="text" className="form-control" value={form.observaciones}
                       onChange={(e) => setForm({ ...form, observaciones: e.target.value })} />
                   </div>
+
+                  {/* Modalidad de entrega */}
+                  <div className="col-12">
+                    <div className="form-check form-switch">
+                      <input className="form-check-input" type="checkbox" id="chkDelivery"
+                        checked={esDelivery}
+                        onChange={(e) => { setEsDelivery(e.target.checked); setChoferId(""); }} />
+                      <label className="form-check-label fw-semibold" htmlFor="chkDelivery">
+                        <i className="bi bi-truck me-1 text-primary"></i>Entrega con camión de Trigotuc
+                      </label>
+                    </div>
+                  </div>
+
+                  {esDelivery && (
+                    <div className="col-12 col-md-6">
+                      <label className="form-label fw-semibold">Chofer <span className="text-danger">*</span></label>
+                      {choferesDisponibles.length === 0 ? (
+                        <div className="alert alert-warning py-2 mb-0 small">
+                          No hay camiones con chofer asignado. Configurá los camiones primero.
+                        </div>
+                      ) : (
+                        <select className="form-select" value={choferId}
+                          onChange={(e) => setChoferId(e.target.value)} required={esDelivery}>
+                          <option value="">— Seleccioná el chofer —</option>
+                          {choferesDisponibles.map((c) => (
+                            <option key={c.chofer._id} value={c.chofer._id}>
+                              {c.chofer.nombreUsuario} — {c.marca} {c.patente}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Stock disponible */}
@@ -266,6 +310,7 @@ const VentasPolloPage = () => {
   const [pedidos, setPedidos]     = useState([]);
   const [clientes, setClientes]   = useState([]);
   const [resumen, setResumen]     = useState(null);
+  const [camiones, setCamiones]   = useState([]);
   const [loading, setLoading]     = useState(true);
   const [showNueva, setShowNueva] = useState(false);
   const [filtroPedido, setFiltroPedido] = useState("pendiente");
@@ -273,14 +318,16 @@ const VentasPolloPage = () => {
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
-      const [p, c, r] = await Promise.all([
+      const [p, c, r, cam] = await Promise.all([
         obtenerPedidosFrigorifico(),
         obtenerClientes(),
         obtenerResumenStock(),
+        obtenerCamiones(),
       ]);
       setPedidos(p);
       setClientes(c.clientes || c);
       setResumen(r);
+      setCamiones(cam.camiones || cam);
     } catch (e) {
       Swal.fire("Error", e.message, "error");
     } finally {
@@ -476,6 +523,7 @@ const VentasPolloPage = () => {
         <NuevaOrdenModal
           clientes={clientes}
           resumen={resumen}
+          camiones={camiones}
           onClose={() => setShowNueva(false)}
           onCreada={() => { setShowNueva(false); cargar(); }}
         />
