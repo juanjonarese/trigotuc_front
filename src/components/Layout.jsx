@@ -426,14 +426,6 @@ const Layout = ({ children }) => {
         </nav>
 
         <div className="border-top border-secondary p-3">
-          <div className="d-flex align-items-center gap-2 mb-2">
-            <div className="user-avatar bg-success rounded-circle d-flex align-items-center justify-content-center flex-shrink-0">
-              <i className="bi bi-person-fill text-white"></i>
-            </div>
-            <span className="text-white-50 small text-truncate">
-              {localStorage.getItem("nombreUsuario") || localStorage.getItem("emailUsuario") || "Usuario"}
-            </span>
-          </div>
           <button
             onClick={handleLogout}
             className="btn btn-outline-danger btn-sm w-100 d-flex align-items-center justify-content-center gap-2"
@@ -473,9 +465,14 @@ const Layout = ({ children }) => {
                 </button>
               </div>
               <div className="col-auto">
-                <span className="fw-semibold text-truncate d-none d-sm-inline" style={{ maxWidth: "180px" }}>
-                  {localStorage.getItem("nombreUsuario") || localStorage.getItem("emailUsuario") || "Usuario"}
-                </span>
+                <div className="d-flex align-items-center gap-2">
+                  <div className="user-avatar bg-success rounded-circle d-flex align-items-center justify-content-center flex-shrink-0">
+                    <i className="bi bi-person-fill text-white"></i>
+                  </div>
+                  <span className="fw-semibold text-truncate d-none d-sm-inline" style={{ maxWidth: "180px" }}>
+                    {localStorage.getItem("nombreUsuario") || localStorage.getItem("emailUsuario") || "Usuario"}
+                  </span>
+                </div>
               </div>
             </div>
           </div>

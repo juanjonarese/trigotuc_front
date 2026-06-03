@@ -139,6 +139,7 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
   );
   const [saving, setSaving]     = useState(false);
   const calibreRef              = useRef(null);
+  const recepcionRef            = useRef(null);
 
   useEffect(() => {
     setLoadingRec(true);
@@ -147,6 +148,12 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
       .catch(() => {})
       .finally(() => setLoadingRec(false));
   }, []);
+
+  useEffect(() => {
+    if (!loadingRec && recepcionRef.current) {
+      recepcionRef.current.focus();
+    }
+  }, [loadingRec]);
 
   const handleSeleccionarRecepcion = (e) => {
     const id = e.target.value;
@@ -257,7 +264,7 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
                 ) : recepciones.length === 0 ? (
                   <p className="text-muted small mb-0">No hay recepciones pendientes de faena.</p>
                 ) : (
-                  <select className="form-select" value={recepcionSel?._id || ""} onChange={handleSeleccionarRecepcion}>
+                  <select className="form-select" ref={recepcionRef} value={recepcionSel?._id || ""} onChange={handleSeleccionarRecepcion}>
                     <option value="">— Sin vincular —</option>
                     {recepciones.map((o) => (
                       <option key={o._id} value={o._id}>
