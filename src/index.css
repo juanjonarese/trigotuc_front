@@ -25,3 +25,10 @@ body.modal-open,
 body.swal2-shown {
   padding-right: 0 !important;
 }
+
+/* Los modales React (sin Bootstrap JS) no agregan overflow:hidden al body.
+   :has() lo hace automáticamente cuando hay un .modal.show en el DOM. */
+body:has(.modal.show) {
+  overflow: hidden;
+  padding-right: 0 !important;
+}
