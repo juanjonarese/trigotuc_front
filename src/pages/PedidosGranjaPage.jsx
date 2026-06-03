@@ -701,6 +701,7 @@ const PedidosGranjaPage = () => {
   const [ordenRecepcion, setOrdenRecepcion] = useState(null);
   const [ordenEditar, setOrdenEditar]   = useState(null);
   const [filtroPedido, setFiltroPedido] = useState("pendiente");
+  const [tab, setTab]                   = useState("granja");
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -752,382 +753,415 @@ const PedidosGranjaPage = () => {
     ? pedidos.filter((p) => p.estado === filtroPedido)
     : pedidos;
 
+  const pendientesCount = pedidos.filter((p) => p.estado === "pendiente" || p.estado === "enviada").length;
+
   return (
     <Layout>
       <div className="container-fluid">
 
         {/* Encabezado */}
-        <div className="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
-          <h1 className="h3 mb-0">
-            <i className="bi bi-clipboard2-check me-2 text-success"></i>
-            Pedidos a Granja
-          </h1>
-          <span title={lotes.length === 0 ? "No hay galpones con pollos en crianza" : ""}>
+        <h1 className="h3 mb-3">
+          <i className="bi bi-clipboard2-check me-2 text-success"></i>
+          Pedidos a Granja
+        </h1>
+
+        {/* Solapas */}
+        <ul className="nav nav-tabs mb-4">
+          <li className="nav-item">
             <button
-              className="btn btn-success"
-              onClick={() => abrirModal()}
-              disabled={lotes.length === 0}
+              className={`nav-link ${tab === "granja" ? "active" : ""}`}
+              onClick={() => setTab("granja")}
             >
-              {lotes.length === 0
-                ? <><i className="bi bi-lock me-1"></i>Sin stock en granja</>
-                : <><i className="bi bi-plus-circle me-1"></i>Nuevo pedido</>
-              }
+              <i className="bi bi-house-door me-1"></i>Granja
             </button>
-          </span>
-        </div>
+          </li>
+          <li className="nav-item">
+            <button
+              className={`nav-link ${tab === "pedidos" ? "active" : ""}`}
+              onClick={() => setTab("pedidos")}
+            >
+              <i className="bi bi-list-check me-1"></i>
+              Mis Pedidos
+              {pendientesCount > 0 && (
+                <span className="badge bg-primary ms-2" style={{ fontSize: "0.65rem" }}>
+                  {pendientesCount}
+                </span>
+              )}
+            </button>
+          </li>
+        </ul>
 
         {loading ? (
           <div className="text-center py-5"><div className="spinner-border text-success"></div></div>
         ) : (
           <>
-            {/* ── Stock por galpón ── */}
-            <h6 className="text-muted fw-semibold mb-2 text-uppercase" style={{ fontSize: "0.75rem", letterSpacing: "0.06em" }}>
-              Stock actual — click para hacer pedido
-            </h6>
-            {GRANJAS.map(({ key, label, prefix, galpones }) => {
-              const lotesGranja = lotes.filter((l) => l.granja === key);
-              return (
-                <div key={key} className="mb-4">
-                  <h6 className="fw-bold text-secondary mb-2">
-                    <i className="bi bi-geo-alt me-1"></i>{label}
-                    <span className="fw-normal text-muted ms-2 small">
-                      {lotesGranja.length}/{galpones} galpones activos
-                    </span>
-                  </h6>
-                  <div className="row g-2">
-                    {Array.from({ length: galpones }, (_, i) => i + 1).map((n) => {
-                      const lote = lotesGranja.find((l) => l.galpon === n && l.cantidadActual > 0);
-                      const dias   = lote ? diasDeVida(lote.fechaIngreso) : null;
-                      const sem    = lote ? semanaActual(lote.fechaIngreso) : null;
-                      const peso   = lote ? ultimoPeso(lote) : null;
-                      const comprometidos = lote?.cantidadComprometida || 0;
-                      const disponibles   = lote ? lote.cantidadActual - comprometidos : 0;
-                      const pedidosPendientes = pedidos.filter(
-                        (p) => (p.estado === "pendiente" || p.estado === "enviada") && p.granja === key && p.galpon === n
-                      ).length;
-                      const barColor = !lote ? "#ced4da" : dias < 30 ? "#198754" : dias < 40 ? "#fd7e14" : "#dc3545";
-
-                      return (
-                        <div key={n} className="col-6 col-sm-4 col-md-3 col-lg-2">
-                          <div
-                            className={`card border-0 text-center ${lote ? "shadow-sm" : ""}`}
-                            style={{
-                              borderLeft: `4px solid ${barColor}`,
-                              background: lote ? "#f8f9fa" : "#f0f0f0",
-                              cursor: lote ? "pointer" : "default",
-                              opacity: lote ? 1 : 0.5,
-                              minHeight: "100px",
-                            }}
-                            onClick={() => lote && abrirModal(lote)}
-                          >
-                            <div className="p-2">
-                              <div className="fw-bold fs-5" style={{ color: barColor }}>
-                                {prefix}{n}
-                              </div>
-                              {lote ? (
-                                <>
-                                  <div className="small text-muted">Día {dias} / Sem. {sem}</div>
-                                  <div className="small fw-semibold">
-                                    {lote.cantidadActual?.toLocaleString("es-AR")} pollos
-                                  </div>
-                                  {comprometidos > 0 && (
-                                    <>
-                                      <div className="small text-warning fw-semibold">
-                                        {comprometidos.toLocaleString("es-AR")} comprometidos
-                                      </div>
-                                      <div className="small fw-semibold" style={{ color: "#16a34a" }}>
-                                        {disponibles.toLocaleString("es-AR")} disponibles
-                                      </div>
-                                    </>
-                                  )}
-                                  {peso && (
-                                    <div className="small text-primary">{formatPeso(peso)}</div>
-                                  )}
-                                  {pedidosPendientes > 0 && (
-                                    <div className="mt-1">
-                                      <span className="badge bg-primary" style={{ fontSize: "0.6rem" }}>
-                                        <i className="bi bi-clipboard2-check me-1"></i>
-                                        {pedidosPendientes} pedido{pedidosPendientes > 1 ? "s" : ""} activo{pedidosPendientes > 1 ? "s" : ""}
-                                      </span>
-                                    </div>
-                                  )}
-                                  <div className="mt-1">
-                                    <span className="badge bg-success bg-opacity-75" style={{ fontSize: "0.6rem" }}>
-                                      <i className="bi bi-plus me-1"></i>Pedir
-                                    </span>
-                                  </div>
-                                </>
-                              ) : (
-                                <>
-                                  <i className="bi bi-lock-fill text-secondary mt-1" style={{ fontSize: "1.4rem" }}></i>
-                                  <div className="small text-muted mt-1">Vacío</div>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* ── Alertas de diferencias (solo admin) ── */}
-            {esAdmin && (() => {
-              const conDif = pedidos.filter((o) =>
-                o.estado === "entregada" && (
-                  (o.diferenciaCantidad != null && o.diferenciaCantidad !== 0) ||
-                  (o.diferenciaKg != null && Math.abs(o.diferenciaKg) > 0.01)
-                )
-              );
-              if (conDif.length === 0) return null;
-              return (
-                <div className="mb-4">
-                  <h6 className="fw-semibold mb-2" style={{ color: "#b45309" }}>
-                    <i className="bi bi-exclamation-triangle-fill me-2 text-warning"></i>
-                    Diferencias en recepciones ({conDif.length})
-                  </h6>
-                  <div className="card border-warning border-0 shadow-sm">
-                    <div className="card-body p-0">
-                      <div className="table-responsive">
-                        <table className="table table-sm align-middle mb-0">
-                          <thead style={{ background: "#fef9c3" }}>
-                            <tr>
-                              <th>N° Pedido</th>
-                              <th>Granja / Galpón</th>
-                              <th>Fecha recepción</th>
-                              <th className="text-end">Cant. pedida</th>
-                              <th className="text-end">Cant. recibida</th>
-                              <th className="text-end">Dif. unidades</th>
-                              <th className="text-end">Kg pedidos</th>
-                              <th className="text-end">Kg recibidos</th>
-                              <th className="text-end">Dif. kg</th>
-                              <th>Motivo</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {conDif.map((o) => (
-                              <tr key={o._id} style={{ background: "#fffbeb" }}>
-                                <td><span className="badge bg-warning text-dark">{o.numero}</span></td>
-                                <td className="small">
-                                  {(o.granja === "cañete" ? "C" : "P")}{o.galpon || ""}
-                                </td>
-                                <td className="small text-muted">{formatearFechaLocal(o.fechaEntrega)}</td>
-                                <td className="text-end">{o.cantidadEstimada?.toLocaleString("es-AR")}</td>
-                                <td className="text-end fw-semibold">{o.cantidadReal?.toLocaleString("es-AR")}</td>
-                                <td className="text-end fw-bold" style={{ color: o.diferenciaCantidad < 0 ? "#dc2626" : "#16a34a" }}>
-                                  {o.diferenciaCantidad > 0 ? "+" : ""}{o.diferenciaCantidad}
-                                </td>
-                                <td className="text-end">{o.pesoEstimadoKg} kg</td>
-                                <td className="text-end fw-semibold">{o.pesoRealKg} kg</td>
-                                <td className="text-end fw-bold" style={{ color: o.diferenciaKg < 0 ? "#dc2626" : "#16a34a" }}>
-                                  {o.diferenciaKg > 0 ? "+" : ""}{o.diferenciaKg?.toFixed(1)} kg
-                                </td>
-                                <td className="small text-muted" style={{ maxWidth: "180px" }}>
-                                  {o.observacionesEntrega || <span className="text-muted fst-italic">Sin motivo</span>}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* ── Mis pedidos ── */}
-            <div className="d-flex align-items-center justify-content-between mb-2 mt-2">
-              <h6 className="fw-bold mb-0">Mis pedidos</h6>
-              <div className="d-flex gap-1">
-                {[
-                  { v: "pendiente", l: "Pendientes" },
-                  { v: "enviada",   l: <><i className="bi bi-truck me-1"></i>En camino</> },
-                  { v: "entregada", l: "Recibidos" },
-                  { v: "",          l: "Todos" },
-                ].map(({ v, l }) => (
-                  <button key={v}
-                    className={`btn btn-sm ${filtroPedido === v ? "btn-dark" : "btn-outline-secondary"}`}
-                    onClick={() => setFiltroPedido(v)}>
-                    {l}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {pedidosFiltrados.length === 0 ? (
-              <p className="text-center text-muted py-4 mb-0">No hay pedidos en este estado.</p>
-            ) : (
+            {/* ══ SOLAPA GRANJA ══ */}
+            {tab === "granja" && (
               <>
-                {/* ── TARJETAS — mobile ── */}
-                <div className="d-md-none row g-2">
-                  {pedidosFiltrados.map((o) => {
-                    const entregada = o.estado === "entregada";
-                    const dcant = o.cantidadReal != null ? (o.diferenciaCantidad ?? (o.cantidadReal - o.cantidadEstimada)) : null;
-                    const dkg   = o.pesoRealKg  != null ? (o.diferenciaKg      ?? (o.pesoRealKg  - o.pesoEstimadoKg))   : null;
-                    const granja = o.granja === "cañete" ? "Cañete" : "Los Pinos";
-                    return (
-                      <div key={o._id} className="col-12">
-                        <div className="card border-0 shadow-sm">
-                          <div className="card-body py-2 px-3">
-                            <div className="d-flex justify-content-between align-items-center mb-2">
-                              <span className="badge bg-dark">{o.numero}</span>
-                              {estadoBadgePedido(o)}
-                            </div>
-                            <div className="d-flex justify-content-between align-items-center mb-1">
-                              <span className="fw-semibold">{granja}{o.galpon ? ` — Galpón ${o.galpon}` : ""}</span>
-                              <span className="text-muted small">{formatearFechaLocal(o.fechaEmision)}</span>
-                            </div>
-                            <div className="row g-2 text-center mb-2">
-                              <div className="col-6">
-                                <div className="rounded p-2" style={{ background: "#f8f9fa" }}>
-                                  <div className="small text-muted">Pedido</div>
-                                  <div className="fw-bold">{o.cantidadEstimada?.toLocaleString("es-AR")} pol.</div>
-                                  <div className="small text-muted">{o.pesoEstimadoKg} kg</div>
+                <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                  <p className="text-muted mb-0 small">Tocá un galpón para hacer un pedido.</p>
+                  <span title={lotes.length === 0 ? "No hay galpones con pollos en crianza" : ""}>
+                    <button
+                      className="btn btn-success btn-sm"
+                      onClick={() => abrirModal()}
+                      disabled={lotes.length === 0}
+                    >
+                      {lotes.length === 0
+                        ? <><i className="bi bi-lock me-1"></i>Sin stock en granja</>
+                        : <><i className="bi bi-plus-circle me-1"></i>Nuevo pedido</>
+                      }
+                    </button>
+                  </span>
+                </div>
+
+                {GRANJAS.map(({ key, label, prefix, galpones }) => {
+                  const lotesGranja = lotes.filter((l) => l.granja === key);
+                  return (
+                    <div key={key} className="mb-4">
+                      <h6 className="fw-bold text-secondary mb-2">
+                        <i className="bi bi-geo-alt me-1"></i>{label}
+                        <span className="fw-normal text-muted ms-2 small">
+                          {lotesGranja.length}/{galpones} galpones activos
+                        </span>
+                      </h6>
+                      <div className="row g-2">
+                        {Array.from({ length: galpones }, (_, i) => i + 1).map((n) => {
+                          const lote = lotesGranja.find((l) => l.galpon === n && l.cantidadActual > 0);
+                          const dias   = lote ? diasDeVida(lote.fechaIngreso) : null;
+                          const sem    = lote ? semanaActual(lote.fechaIngreso) : null;
+                          const peso   = lote ? ultimoPeso(lote) : null;
+                          const comprometidos = lote?.cantidadComprometida || 0;
+                          const disponibles   = lote ? lote.cantidadActual - comprometidos : 0;
+                          const pedidosPendientes = pedidos.filter(
+                            (p) => (p.estado === "pendiente" || p.estado === "enviada") && p.granja === key && p.galpon === n
+                          ).length;
+                          const barColor = !lote ? "#ced4da" : dias < 30 ? "#198754" : dias < 40 ? "#fd7e14" : "#dc3545";
+
+                          return (
+                            <div key={n} className="col-6 col-sm-4 col-md-3 col-lg-2">
+                              <div
+                                className={`card border-0 text-center ${lote ? "shadow-sm" : ""}`}
+                                style={{
+                                  borderLeft: `4px solid ${barColor}`,
+                                  background: lote ? "#f8f9fa" : "#f0f0f0",
+                                  cursor: lote ? "pointer" : "default",
+                                  opacity: lote ? 1 : 0.5,
+                                  minHeight: "100px",
+                                }}
+                                onClick={() => lote && abrirModal(lote)}
+                              >
+                                <div className="p-2">
+                                  <div className="fw-bold fs-5" style={{ color: barColor }}>
+                                    {prefix}{n}
+                                  </div>
+                                  {lote ? (
+                                    <>
+                                      <div className="small text-muted">Día {dias} / Sem. {sem}</div>
+                                      <div className="small fw-semibold">
+                                        {lote.cantidadActual?.toLocaleString("es-AR")} pollos
+                                      </div>
+                                      {comprometidos > 0 && (
+                                        <>
+                                          <div className="small text-warning fw-semibold">
+                                            {comprometidos.toLocaleString("es-AR")} comprometidos
+                                          </div>
+                                          <div className="small fw-semibold" style={{ color: "#16a34a" }}>
+                                            {disponibles.toLocaleString("es-AR")} disponibles
+                                          </div>
+                                        </>
+                                      )}
+                                      {peso && (
+                                        <div className="small text-primary">{formatPeso(peso)}</div>
+                                      )}
+                                      {pedidosPendientes > 0 && (
+                                        <div className="mt-1">
+                                          <span className="badge bg-primary" style={{ fontSize: "0.6rem" }}>
+                                            <i className="bi bi-clipboard2-check me-1"></i>
+                                            {pedidosPendientes} pedido{pedidosPendientes > 1 ? "s" : ""} activo{pedidosPendientes > 1 ? "s" : ""}
+                                          </span>
+                                        </div>
+                                      )}
+                                      <div className="mt-1">
+                                        <span className="badge bg-success bg-opacity-75" style={{ fontSize: "0.6rem" }}>
+                                          <i className="bi bi-plus me-1"></i>Pedir
+                                        </span>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <i className="bi bi-lock-fill text-secondary mt-1" style={{ fontSize: "1.4rem" }}></i>
+                                      <div className="small text-muted mt-1">Vacío</div>
+                                    </>
+                                  )}
                                 </div>
                               </div>
-                              {entregada ? (
-                                <div className="col-6">
-                                  <div className="rounded p-2" style={{ background: "#f0fdf4" }}>
-                                    <div className="small text-muted">Recibido</div>
-                                    <div className={`fw-bold ${dcant !== 0 ? "text-warning" : "text-success"}`}>
-                                      {o.cantidadReal?.toLocaleString("es-AR")} pol.
-                                      {dcant !== 0 && <span className="ms-1 small">({dcant > 0 ? "+" : ""}{dcant})</span>}
-                                    </div>
-                                    <div className={`small ${Math.abs(dkg) > 0.01 ? "text-warning" : "text-success"}`}>
-                                      {o.pesoRealKg} kg
-                                      {Math.abs(dkg) > 0.01 && <span className="ms-1">({dkg > 0 ? "+" : ""}{dkg?.toFixed(1)})</span>}
-                                    </div>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="col-6 d-flex align-items-center justify-content-center">
-                                  <span className="text-muted small fst-italic">Sin datos de recepción</span>
-                                </div>
-                              )}
                             </div>
-                            <div className="d-flex gap-2 flex-wrap">
-                              {o.estado === "pendiente" && (
-                                <button className="btn btn-outline-warning btn-sm" onClick={() => setOrdenEditar(o)}>
-                                  <i className="bi bi-pencil me-1"></i>Editar
-                                </button>
-                              )}
-                              {o.estado === "enviada" && (
-                                <button className="btn btn-primary btn-sm flex-grow-1" onClick={() => setOrdenRecepcion(o)}>
-                                  <i className="bi bi-box-arrow-in-down me-1"></i>Recepcionar
-                                </button>
-                              )}
-                              {o.estado === "entregada" && !o.loteAsociado && (
-                                <span className="badge bg-info text-dark align-self-center">Pendiente faena</span>
-                              )}
-                              {o.loteAsociado && (
-                                <span className="badge bg-success align-self-center"><i className="bi bi-check2 me-1"></i>Faenado</span>
-                              )}
-                              {esAdmin && !o.loteAsociado && (
-                                <button className="btn btn-outline-danger btn-sm ms-auto" onClick={() => handleEliminar(o)}>
-                                  <i className="bi bi-trash"></i>
-                                </button>
-                              )}
-                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+
+            {/* ══ SOLAPA MIS PEDIDOS ══ */}
+            {tab === "pedidos" && (
+              <>
+                {/* Alertas de diferencias (solo admin) */}
+                {esAdmin && (() => {
+                  const conDif = pedidos.filter((o) =>
+                    o.estado === "entregada" && (
+                      (o.diferenciaCantidad != null && o.diferenciaCantidad !== 0) ||
+                      (o.diferenciaKg != null && Math.abs(o.diferenciaKg) > 0.01)
+                    )
+                  );
+                  if (conDif.length === 0) return null;
+                  return (
+                    <div className="mb-4">
+                      <h6 className="fw-semibold mb-2" style={{ color: "#b45309" }}>
+                        <i className="bi bi-exclamation-triangle-fill me-2 text-warning"></i>
+                        Diferencias en recepciones ({conDif.length})
+                      </h6>
+                      <div className="card border-warning border-0 shadow-sm">
+                        <div className="card-body p-0">
+                          <div className="table-responsive">
+                            <table className="table table-sm align-middle mb-0">
+                              <thead style={{ background: "#fef9c3" }}>
+                                <tr>
+                                  <th>N° Pedido</th>
+                                  <th>Granja / Galpón</th>
+                                  <th>Fecha recepción</th>
+                                  <th className="text-end">Cant. pedida</th>
+                                  <th className="text-end">Cant. recibida</th>
+                                  <th className="text-end">Dif. unidades</th>
+                                  <th className="text-end">Kg pedidos</th>
+                                  <th className="text-end">Kg recibidos</th>
+                                  <th className="text-end">Dif. kg</th>
+                                  <th>Motivo</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {conDif.map((o) => (
+                                  <tr key={o._id} style={{ background: "#fffbeb" }}>
+                                    <td><span className="badge bg-warning text-dark">{o.numero}</span></td>
+                                    <td className="small">{(o.granja === "cañete" ? "C" : "P")}{o.galpon || ""}</td>
+                                    <td className="small text-muted">{formatearFechaLocal(o.fechaEntrega)}</td>
+                                    <td className="text-end">{o.cantidadEstimada?.toLocaleString("es-AR")}</td>
+                                    <td className="text-end fw-semibold">{o.cantidadReal?.toLocaleString("es-AR")}</td>
+                                    <td className="text-end fw-bold" style={{ color: o.diferenciaCantidad < 0 ? "#dc2626" : "#16a34a" }}>
+                                      {o.diferenciaCantidad > 0 ? "+" : ""}{o.diferenciaCantidad}
+                                    </td>
+                                    <td className="text-end">{o.pesoEstimadoKg} kg</td>
+                                    <td className="text-end fw-semibold">{o.pesoRealKg} kg</td>
+                                    <td className="text-end fw-bold" style={{ color: o.diferenciaKg < 0 ? "#dc2626" : "#16a34a" }}>
+                                      {o.diferenciaKg > 0 ? "+" : ""}{o.diferenciaKg?.toFixed(1)} kg
+                                    </td>
+                                    <td className="small text-muted" style={{ maxWidth: "180px" }}>
+                                      {o.observacionesEntrega || <span className="fst-italic">Sin motivo</span>}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
                           </div>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-
-                {/* ── TABLA — desktop ── */}
-                <div className="d-none d-md-block card border-0 shadow-sm">
-                  <div className="card-body p-0">
-                    <div className="table-responsive">
-                      <table className="table table-hover align-middle mb-0">
-                        <thead className="table-light">
-                          <tr>
-                            <th>N° Pedido</th>
-                            <th>Granja / Galpón</th>
-                            <th>Fecha</th>
-                            <th className="text-end">Cant. pedida</th>
-                            <th className="text-end">Recibido</th>
-                            <th className="text-end">Kg pedidos</th>
-                            <th className="text-end">Kg recibidos</th>
-                            <th>Estado</th>
-                            <th></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {pedidosFiltrados.map((o) => {
-                            const entregada = o.estado === "entregada";
-                            const dcant = o.cantidadReal != null ? (o.diferenciaCantidad ?? (o.cantidadReal - o.cantidadEstimada)) : null;
-                            const dkg   = o.pesoRealKg  != null ? (o.diferenciaKg      ?? (o.pesoRealKg  - o.pesoEstimadoKg))   : null;
-                            return (
-                              <tr key={o._id}>
-                                <td><span className="badge bg-dark">{o.numero}</span></td>
-                                <td className="text-muted small">
-                                  {(o.granja === "cañete" ? "C" : "P")}{o.galpon || ""}
-                                </td>
-                                <td className="text-muted small">{formatearFechaLocal(o.fechaEmision)}</td>
-                                <td className="text-end">{o.cantidadEstimada?.toLocaleString("es-AR")}</td>
-                                <td className={`text-end fw-semibold ${entregada && dcant !== 0 ? "text-warning" : ""}`}>
-                                  {o.cantidadReal != null ? (
-                                    <>
-                                      {o.cantidadReal.toLocaleString("es-AR")}
-                                      <span className={`ms-1 small ${dcant === 0 ? "text-success" : "text-warning"}`}>
-                                        ({dcant > 0 ? "+" : ""}{dcant})
-                                      </span>
-                                    </>
-                                  ) : "—"}
-                                </td>
-                                <td className="text-end">{o.pesoEstimadoKg} kg</td>
-                                <td className={`text-end fw-semibold ${entregada && Math.abs(dkg) > 0.01 ? "text-warning" : ""}`}>
-                                  {o.pesoRealKg != null ? (
-                                    <>
-                                      {o.pesoRealKg} kg
-                                      <span className={`ms-1 small ${Math.abs(dkg) <= 0.01 ? "text-success" : "text-warning"}`}>
-                                        ({dkg > 0 ? "+" : ""}{dkg?.toFixed(1)})
-                                      </span>
-                                    </>
-                                  ) : "—"}
-                                </td>
-                                <td>{estadoBadgePedido(o)}</td>
-                                <td>
-                                  <div className="d-flex gap-1 align-items-center flex-wrap">
-                                    {o.estado === "pendiente" && (
-                                      <button className="btn btn-outline-warning btn-sm" onClick={() => setOrdenEditar(o)}>
-                                        <i className="bi bi-pencil"></i>
-                                      </button>
-                                    )}
-                                    {o.estado === "enviada" && (
-                                      <button className="btn btn-primary btn-sm" onClick={() => setOrdenRecepcion(o)}>
-                                        <i className="bi bi-box-arrow-in-down me-1"></i>Recepcionar
-                                      </button>
-                                    )}
-                                    {o.estado === "entregada" && !o.loteAsociado && (
-                                      <span className="badge bg-info text-dark">Pendiente faena</span>
-                                    )}
-                                    {o.loteAsociado && (
-                                      <span className="badge bg-success"><i className="bi bi-check2 me-1"></i>Faenado</span>
-                                    )}
-                                    {esAdmin && !o.loteAsociado && (
-                                      <button
-                                        className="btn btn-outline-danger btn-sm"
-                                        title="Eliminar pedido"
-                                        onClick={() => handleEliminar(o)}
-                                      >
-                                        <i className="bi bi-trash"></i>
-                                      </button>
-                                    )}
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
                     </div>
+                  );
+                })()}
+
+                {/* Filtros */}
+                <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                  <div className="d-flex gap-1 flex-wrap">
+                    {[
+                      { v: "pendiente", l: "Pendientes" },
+                      { v: "enviada",   l: <><i className="bi bi-truck me-1"></i>En camino</> },
+                      { v: "entregada", l: "Recibidos" },
+                      { v: "",          l: "Todos" },
+                    ].map(({ v, l }) => (
+                      <button key={v}
+                        className={`btn btn-sm ${filtroPedido === v ? "btn-dark" : "btn-outline-secondary"}`}
+                        onClick={() => setFiltroPedido(v)}>
+                        {l}
+                      </button>
+                    ))}
                   </div>
                 </div>
+
+                {pedidosFiltrados.length === 0 ? (
+                  <p className="text-center text-muted py-4 mb-0">No hay pedidos en este estado.</p>
+                ) : (
+                  <>
+                    {/* TARJETAS — mobile */}
+                    <div className="d-md-none row g-2">
+                      {pedidosFiltrados.map((o) => {
+                        const entregada = o.estado === "entregada";
+                        const dcant = o.cantidadReal != null ? (o.diferenciaCantidad ?? (o.cantidadReal - o.cantidadEstimada)) : null;
+                        const dkg   = o.pesoRealKg  != null ? (o.diferenciaKg      ?? (o.pesoRealKg  - o.pesoEstimadoKg))   : null;
+                        const granja = o.granja === "cañete" ? "Cañete" : "Los Pinos";
+                        return (
+                          <div key={o._id} className="col-12">
+                            <div className="card border-0 shadow-sm">
+                              <div className="card-body py-2 px-3">
+                                <div className="d-flex justify-content-between align-items-center mb-2">
+                                  <span className="badge bg-dark">{o.numero}</span>
+                                  {estadoBadgePedido(o)}
+                                </div>
+                                <div className="d-flex justify-content-between align-items-center mb-1">
+                                  <span className="fw-semibold">{granja}{o.galpon ? ` — Galpón ${o.galpon}` : ""}</span>
+                                  <span className="text-muted small">{formatearFechaLocal(o.fechaEmision)}</span>
+                                </div>
+                                <div className="row g-2 text-center mb-2">
+                                  <div className="col-6">
+                                    <div className="rounded p-2" style={{ background: "#f8f9fa" }}>
+                                      <div className="small text-muted">Pedido</div>
+                                      <div className="fw-bold">{o.cantidadEstimada?.toLocaleString("es-AR")} pol.</div>
+                                      <div className="small text-muted">{o.pesoEstimadoKg} kg</div>
+                                    </div>
+                                  </div>
+                                  {entregada ? (
+                                    <div className="col-6">
+                                      <div className="rounded p-2" style={{ background: "#f0fdf4" }}>
+                                        <div className="small text-muted">Recibido</div>
+                                        <div className={`fw-bold ${dcant !== 0 ? "text-warning" : "text-success"}`}>
+                                          {o.cantidadReal?.toLocaleString("es-AR")} pol.
+                                          {dcant !== 0 && <span className="ms-1 small">({dcant > 0 ? "+" : ""}{dcant})</span>}
+                                        </div>
+                                        <div className={`small ${Math.abs(dkg) > 0.01 ? "text-warning" : "text-success"}`}>
+                                          {o.pesoRealKg} kg
+                                          {Math.abs(dkg) > 0.01 && <span className="ms-1">({dkg > 0 ? "+" : ""}{dkg?.toFixed(1)})</span>}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="col-6 d-flex align-items-center justify-content-center">
+                                      <span className="text-muted small fst-italic">Sin datos de recepción</span>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="d-flex gap-2 flex-wrap">
+                                  {o.estado === "pendiente" && (
+                                    <button className="btn btn-outline-warning btn-sm" onClick={() => setOrdenEditar(o)}>
+                                      <i className="bi bi-pencil me-1"></i>Editar
+                                    </button>
+                                  )}
+                                  {o.estado === "enviada" && (
+                                    <button className="btn btn-primary btn-sm flex-grow-1" onClick={() => setOrdenRecepcion(o)}>
+                                      <i className="bi bi-box-arrow-in-down me-1"></i>Recepcionar
+                                    </button>
+                                  )}
+                                  {o.estado === "entregada" && !o.loteAsociado && (
+                                    <span className="badge bg-info text-dark align-self-center">Pendiente faena</span>
+                                  )}
+                                  {o.loteAsociado && (
+                                    <span className="badge bg-success align-self-center"><i className="bi bi-check2 me-1"></i>Faenado</span>
+                                  )}
+                                  {esAdmin && !o.loteAsociado && (
+                                    <button className="btn btn-outline-danger btn-sm ms-auto" onClick={() => handleEliminar(o)}>
+                                      <i className="bi bi-trash"></i>
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* TABLA — desktop */}
+                    <div className="d-none d-md-block card border-0 shadow-sm">
+                      <div className="card-body p-0">
+                        <div className="table-responsive">
+                          <table className="table table-hover align-middle mb-0">
+                            <thead className="table-light">
+                              <tr>
+                                <th>N° Pedido</th>
+                                <th>Granja / Galpón</th>
+                                <th>Fecha</th>
+                                <th className="text-end">Cant. pedida</th>
+                                <th className="text-end">Recibido</th>
+                                <th className="text-end">Kg pedidos</th>
+                                <th className="text-end">Kg recibidos</th>
+                                <th>Estado</th>
+                                <th></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {pedidosFiltrados.map((o) => {
+                                const entregada = o.estado === "entregada";
+                                const dcant = o.cantidadReal != null ? (o.diferenciaCantidad ?? (o.cantidadReal - o.cantidadEstimada)) : null;
+                                const dkg   = o.pesoRealKg  != null ? (o.diferenciaKg      ?? (o.pesoRealKg  - o.pesoEstimadoKg))   : null;
+                                return (
+                                  <tr key={o._id}>
+                                    <td><span className="badge bg-dark">{o.numero}</span></td>
+                                    <td className="text-muted small">
+                                      {(o.granja === "cañete" ? "C" : "P")}{o.galpon || ""}
+                                    </td>
+                                    <td className="text-muted small">{formatearFechaLocal(o.fechaEmision)}</td>
+                                    <td className="text-end">{o.cantidadEstimada?.toLocaleString("es-AR")}</td>
+                                    <td className={`text-end fw-semibold ${entregada && dcant !== 0 ? "text-warning" : ""}`}>
+                                      {o.cantidadReal != null ? (
+                                        <>
+                                          {o.cantidadReal.toLocaleString("es-AR")}
+                                          <span className={`ms-1 small ${dcant === 0 ? "text-success" : "text-warning"}`}>
+                                            ({dcant > 0 ? "+" : ""}{dcant})
+                                          </span>
+                                        </>
+                                      ) : "—"}
+                                    </td>
+                                    <td className="text-end">{o.pesoEstimadoKg} kg</td>
+                                    <td className={`text-end fw-semibold ${entregada && Math.abs(dkg) > 0.01 ? "text-warning" : ""}`}>
+                                      {o.pesoRealKg != null ? (
+                                        <>
+                                          {o.pesoRealKg} kg
+                                          <span className={`ms-1 small ${Math.abs(dkg) <= 0.01 ? "text-success" : "text-warning"}`}>
+                                            ({dkg > 0 ? "+" : ""}{dkg?.toFixed(1)})
+                                          </span>
+                                        </>
+                                      ) : "—"}
+                                    </td>
+                                    <td>{estadoBadgePedido(o)}</td>
+                                    <td>
+                                      <div className="d-flex gap-1 align-items-center flex-wrap">
+                                        {o.estado === "pendiente" && (
+                                          <button className="btn btn-outline-warning btn-sm" onClick={() => setOrdenEditar(o)}>
+                                            <i className="bi bi-pencil"></i>
+                                          </button>
+                                        )}
+                                        {o.estado === "enviada" && (
+                                          <button className="btn btn-primary btn-sm" onClick={() => setOrdenRecepcion(o)}>
+                                            <i className="bi bi-box-arrow-in-down me-1"></i>Recepcionar
+                                          </button>
+                                        )}
+                                        {o.estado === "entregada" && !o.loteAsociado && (
+                                          <span className="badge bg-info text-dark">Pendiente faena</span>
+                                        )}
+                                        {o.loteAsociado && (
+                                          <span className="badge bg-success"><i className="bi bi-check2 me-1"></i>Faenado</span>
+                                        )}
+                                        {esAdmin && !o.loteAsociado && (
+                                          <button
+                                            className="btn btn-outline-danger btn-sm"
+                                            title="Eliminar pedido"
+                                            onClick={() => handleEliminar(o)}
+                                          >
+                                            <i className="bi bi-trash"></i>
+                                          </button>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </>
             )}
           </>

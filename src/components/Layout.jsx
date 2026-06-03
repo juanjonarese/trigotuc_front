@@ -425,6 +425,24 @@ const Layout = ({ children }) => {
 
         </nav>
 
+        <div className="border-top border-secondary p-3">
+          <div className="d-flex align-items-center gap-2 mb-2">
+            <div className="user-avatar bg-success rounded-circle d-flex align-items-center justify-content-center flex-shrink-0">
+              <i className="bi bi-person-fill text-white"></i>
+            </div>
+            <span className="text-white-50 small text-truncate">
+              {localStorage.getItem("nombreUsuario") || localStorage.getItem("emailUsuario") || "Usuario"}
+            </span>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="btn btn-outline-danger btn-sm w-100 d-flex align-items-center justify-content-center gap-2"
+          >
+            <i className="bi bi-box-arrow-right"></i>
+            Cerrar sesión
+          </button>
+        </div>
+
       </aside>
 
       {/* Overlay para mobile */}
@@ -438,33 +456,26 @@ const Layout = ({ children }) => {
         <header className="main-header bg-white shadow-sm sticky-top">
           <div className="container-fluid">
             <div className="row align-items-center py-2">
-              <div className="col">
+              <div className="col d-flex align-items-center gap-2">
                 <button
                   className="btn btn-link d-lg-none p-0 text-dark"
                   onClick={toggleSidebar}
                 >
                   <i className="bi bi-list fs-3"></i>
                 </button>
+                <button
+                  className="btn btn-link p-0 text-secondary"
+                  title="Actualizar"
+                  onClick={() => window.location.reload()}
+                  style={{ lineHeight: 1 }}
+                >
+                  <i className="bi bi-arrow-clockwise fs-5"></i>
+                </button>
               </div>
               <div className="col-auto">
-                <div className="d-flex align-items-center gap-3">
-                  <div className="d-flex align-items-center gap-2">
-                    <div className="user-avatar bg-success rounded-circle d-flex align-items-center justify-content-center flex-shrink-0">
-                      <i className="bi bi-person-fill text-white"></i>
-                    </div>
-                    <span className="d-none d-sm-inline fw-semibold text-truncate" style={{ maxWidth: "180px" }}>
-                      {localStorage.getItem("nombreUsuario") || localStorage.getItem("emailUsuario") || "Usuario"}
-                    </span>
-                  </div>
-                  <button
-                    onClick={handleLogout}
-                    className="btn btn-danger btn-sm d-flex align-items-center gap-1"
-                    title="Cerrar sesión"
-                  >
-                    <i className="bi bi-box-arrow-right"></i>
-                    <span className="d-none d-sm-inline">Salir</span>
-                  </button>
-                </div>
+                <span className="fw-semibold text-truncate d-none d-sm-inline" style={{ maxWidth: "180px" }}>
+                  {localStorage.getItem("nombreUsuario") || localStorage.getItem("emailUsuario") || "Usuario"}
+                </span>
               </div>
             </div>
           </div>
