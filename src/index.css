@@ -12,7 +12,16 @@ body {
   margin: 0;
   min-height: 100vh;
   overflow-x: hidden;
+  scrollbar-gutter: stable;
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Bootstrap y SweetAlert2 agregan padding-right al body al abrir modales
+   para compensar el scrollbar. Con scrollbar-gutter: stable ya no hace falta,
+   pero por si acaso lo aplican igual lo reseteamos. */
+body.modal-open,
+body.swal2-shown {
+  padding-right: 0 !important;
 }
