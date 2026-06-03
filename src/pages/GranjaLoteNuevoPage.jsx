@@ -592,9 +592,9 @@ const GranjaLoteNuevoPage = () => {
               onClick={() => setTab("crianza")}
             >
               <i className="bi bi-house-door me-1"></i>En crianza
-              {lotesCrianza.length > 0 && (
-                <span className="badge bg-success ms-2" style={{ fontSize: "0.65rem" }}>
-                  {lotesCrianza.length}
+              {lotesCrianza.filter((l) => l.cantidadActual === 0).length > 0 && (
+                <span className="badge bg-secondary ms-2" style={{ fontSize: "0.65rem" }}>
+                  {lotesCrianza.filter((l) => l.cantidadActual === 0).length} vacío{lotesCrianza.filter((l) => l.cantidadActual === 0).length > 1 ? "s" : ""}
                 </span>
               )}
             </button>
@@ -632,85 +632,8 @@ const GranjaLoteNuevoPage = () => {
             {/* ══ SOLAPA EN CRIANZA ══ */}
             {tab === "crianza" && (
               <>
-                {/* Tarjetas de galpones activos */}
-                {lotesCrianza.length === 0 ? (
-                  <div className="text-center py-4 text-muted">
-                    <i className="bi bi-house-door fs-1 d-block mb-2"></i>
-                    No hay galpones en crianza.
-                  </div>
-                ) : (
-                  GRANJA_OPTS.map(({ value, label }) => {
-                    const lotesGranja = lotesCrianza.filter((l) => l.granja === value);
-                    if (lotesGranja.length === 0) return null;
-                    return (
-                      <div key={value} className="mb-4">
-                        <h6 className="fw-bold text-secondary mb-2">
-                          <i className="bi bi-geo-alt me-1"></i>{label}
-                        </h6>
-                        <div className="row g-2">
-                          {lotesGranja.map((lote) => {
-                            const vacio = lote.cantidadActual === 0;
-                            const dias  = Math.floor((Date.now() - new Date(lote.fechaIngreso)) / (1000 * 60 * 60 * 24));
-                            const sem   = Math.max(1, Math.ceil(dias / 7));
-                            const barColor = vacio ? "#ced4da"
-                              : dias < 30 ? "#198754"
-                              : dias < 40 ? "#fd7e14"
-                              : "#dc3545";
-                            return (
-                              <div key={lote._id} className="col-6 col-sm-4 col-md-3 col-lg-2">
-                                <div
-                                  className="card border-0 shadow-sm text-center"
-                                  style={{
-                                    borderLeft: `4px solid ${barColor}`,
-                                    background: vacio ? "#f5f5f5" : "#f8f9fa",
-                                  }}
-                                >
-                                  <div className="p-2">
-                                    <div className="fw-bold fs-5" style={{ color: barColor }}>
-                                      {GRANJAS_PREFIX[value]}{lote.galpon}
-                                    </div>
-                                    {vacio ? (
-                                      <>
-                                        <div className="small text-muted mb-2">Galpón vacío</div>
-                                        <button
-                                          className="btn btn-outline-danger btn-sm w-100"
-                                          onClick={() => handleEliminar(lote)}
-                                        >
-                                          <i className="bi bi-trash me-1"></i>Cerrar
-                                        </button>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <div className="small text-muted">Día {dias} / Sem. {sem}</div>
-                                        <div className="small fw-semibold">{lote.cantidadActual.toLocaleString("es-AR")} pollos</div>
-                                        <div className="small text-muted">#{lote.numeroLote}</div>
-                                        {puedeEditar && (
-                                          <button
-                                            className="btn btn-outline-primary btn-sm mt-1 w-100"
-                                            style={{ fontSize: "0.7rem", padding: "2px 6px" }}
-                                            onClick={() => setEditLote(lote)}
-                                          >
-                                            <i className="bi bi-pencil me-1"></i>Editar
-                                          </button>
-                                        )}
-                                      </>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-
                 {/* Historial */}
-                <div className="mt-4">
-                  <h6 className="text-muted fw-semibold mb-3 text-uppercase" style={{ fontSize: "0.75rem", letterSpacing: "0.06em" }}>
-                    Historial de ingresos
-                  </h6>
+                <div>
 
                   {/* Filtros */}
                   <div className="card border-0 shadow-sm mb-3">
