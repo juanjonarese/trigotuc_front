@@ -7,7 +7,6 @@ const Layout = ({ children }) => {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [altasOpen, setAltasOpen] = useState(false);
-  const [contableClientesOpen, setContableClientesOpen] = useState(false);
   const [frigorificoOpen, setFrigorificoOpen] = useState(false);
   const [granjaOpen, setGranjaOpen] = useState(false);
   const [contableGranjaOpen, setContableGranjaOpen] = useState(false);
@@ -51,15 +50,6 @@ const Layout = ({ children }) => {
       path.startsWith("/granja/cta-cte")
     ) {
       setContableGranjaOpen(true);
-    }
-
-    // Contable Clientes
-    if (
-      path.startsWith("/cobros") ||
-      path.startsWith("/cta-cte-clientes") ||
-      path.startsWith("/facturacion")
-    ) {
-      setContableClientesOpen(true);
     }
 
     // Frigorifico submenu

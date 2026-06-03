@@ -183,16 +183,27 @@ const NuevoPedidoModal = ({ onClose, onCreado, ocupados }) => {
 
 // ── Tarjeta de pedido pendiente (granja confirma) ───────────────────────────
 const TarjetaPedidoPendiente = ({ pedido, onConfirmado, onCancelado }) => {
-  const [bajas, setBajas]       = useState("");
-  const [motivo, setMotivo]     = useState("");
-  const [saving, setSaving]     = useState(false);
+  const [bajas, setBajas]         = useState("");
+  const [motivo, setMotivo]       = useState("");
+  const [saving, setSaving]       = useState(false);
+  const [bajasInvalida, setBajasInvalida] = useState(false);
 
-  const bajasNum = Number(bajas || 0);
-  const ingresados = bajasNum >= 0 && bajasNum < pedido.cantidadEnviada
+  const bajasNum = Number(bajas);
+  const ingresados = bajas !== "" && bajasNum >= 0 && bajasNum < pedido.cantidadEnviada
     ? pedido.cantidadEnviada - bajasNum
     : null;
 
+  const handleBajasChange = (e) => {
+    setBajas(e.target.value);
+    setBajasInvalida(false);
+  };
+
   const handleConfirmar = async () => {
+    if (bajas === "" || bajas === null) {
+      setBajasInvalida(true);
+      Swal.fire("Campo requerido", "Ingresá la cantidad de bajas. Si no hubo muertes, ingresá 0.", "warning");
+      return;
+    }
     if (bajasNum >= pedido.cantidadEnviada) {
       Swal.fire("Error", "Las bajas no pueden ser iguales o mayores a la cantidad enviada.", "error");
       return;
@@ -203,6 +214,7 @@ const TarjetaPedidoPendiente = ({ pedido, onConfirmado, onCancelado }) => {
         bajasRecibidas: bajasNum,
         motivoBajas:    motivo.trim() || undefined,
       });
+      setBajasInvalida(false);
       onConfirmado();
       Swal.fire({
         icon: "success",
@@ -281,17 +293,22 @@ const TarjetaPedidoPendiente = ({ pedido, onConfirmado, onCancelado }) => {
           </p>
           <div className="row g-2 align-items-start">
             <div className="col-6 col-md-4">
-              <label className="form-label small mb-1">Bajas recibidas</label>
+              <label className="form-label small mb-1 fw-semibold">
+                Bajas recibidas <span className="text-danger">*</span>
+              </label>
               <input
                 type="number"
-                className="form-control"
+                className={`form-control ${bajasInvalida ? "is-invalid" : ""}`}
                 value={bajas}
-                onChange={(e) => setBajas(e.target.value)}
+                onChange={handleBajasChange}
                 min="0"
                 placeholder="0"
                 disabled={saving}
               />
-              <div className="form-text">0 si no hubo bajas</div>
+              {bajasInvalida
+                ? <div className="invalid-feedback">Requerido — ingresá 0 si no hubo muertes</div>
+                : <div className="form-text">0 si no hubo bajas</div>
+              }
             </div>
             {ingresados !== null && (
               <div className="col-6 col-md-4 d-flex align-items-center" style={{ paddingTop: "1.6rem" }}>

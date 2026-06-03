@@ -7,6 +7,8 @@ import {
   eliminarDespachoFrigorifico,
   obtenerResumenStock,
   buscarClientes,
+  obtenerUsuarios,
+  obtenerCamiones,
 } from "../services/api";
 import Swal from "sweetalert2";
 
@@ -130,10 +132,23 @@ const NuevaOrdenModal = ({ onClose, onCreada, resumen }) => {
   const [turno, setTurno]                   = useState("");
   const [lineas, setLineas]                 = useState([]);
   const [trozadosLineas, setTrozadosLineas] = useState([]);
+  const [modalidad, setModalidad]           = useState("retiro_cliente");
+  const [choferes, setChoferes]             = useState([]);
+  const [camiones, setCamiones]             = useState([]);
+  const [choferSel, setChoferSel]           = useState("");
   const [form, setForm] = useState({
     fecha:         new Date().toISOString().split("T")[0],
     observaciones: "",
   });
+
+  useEffect(() => {
+    Promise.all([obtenerUsuarios(), obtenerCamiones()])
+      .then(([usuarios, cams]) => {
+        setChoferes((usuarios.usuarios || []).filter((u) => u.rolUsuario === "chofer"));
+        setCamiones(cams.camiones || cams || []);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (busqueda.length < 2 || clienteSel) { setResultados([]); return; }
@@ -179,6 +194,7 @@ const NuevaOrdenModal = ({ onClose, onCreada, resumen }) => {
     if (!clienteSel) { Swal.fire("Faltan datos", "Seleccioná un cliente.", "warning"); return; }
     if (!camara)     { Swal.fire("Faltan datos", "Seleccioná la cámara de origen.", "warning"); return; }
     if (!turno)      { Swal.fire("Faltan datos", "Indicá si la carga es por la mañana o por la tarde.", "warning"); return; }
+    if (modalidad === "delivery_chofer" && !choferSel) { Swal.fire("Faltan datos", "Seleccioná el chofer para la entrega.", "warning"); return; }
 
     const lineasValidas   = lineasCalc.filter((l) => l.cajones > 0);
     const trozadosValidos = trozadosLineas.filter((t) => Number(t.cajas) > 0 && Number(t.kgCaja) > 0);
@@ -198,14 +214,19 @@ const NuevaOrdenModal = ({ onClose, onCreada, resumen }) => {
 
     setSaving(true);
     try {
+      const camionDelChofer = camiones.find((c) => c.chofer?._id === choferSel || c.chofer === choferSel);
+
       const despacho = await crearDespachoFrigorifico({
-        fecha:         form.fecha,
+        fecha:            form.fecha,
         camara,
         turno,
-        cliente:       clienteSel._id,
-        calibres:      lineasValidas.map(({ calibre, cajones }) => ({ calibre: Number(calibre), cajones })),
-        trozados:      trozadosValidos.map((t) => ({ tipo: t.tipo, kgCaja: Number(t.kgCaja), cajas: Number(t.cajas) })),
-        observaciones: form.observaciones || undefined,
+        cliente:          clienteSel._id,
+        calibres:         lineasValidas.map(({ calibre, cajones }) => ({ calibre: Number(calibre), cajones })),
+        trozados:         trozadosValidos.map((t) => ({ tipo: t.tipo, kgCaja: Number(t.kgCaja), cajas: Number(t.cajas) })),
+        observaciones:    form.observaciones || undefined,
+        modalidadEntrega: modalidad,
+        chofer:           modalidad === "delivery_chofer" ? choferSel : undefined,
+        camion:           modalidad === "delivery_chofer" ? (camionDelChofer?._id || undefined) : undefined,
       });
       onCreada(despacho);
     } catch (err) {
@@ -286,6 +307,55 @@ const NuevaOrdenModal = ({ onClose, onCreada, resumen }) => {
                     </div>
                   </div>
                 </div>
+
+                {/* Modalidad de entrega */}
+                <div className="mb-3">
+                  <label className="form-label fw-semibold">
+                    Modalidad de entrega <span className="text-danger">*</span>
+                  </label>
+                  <div className="d-flex gap-2">
+                    {[
+                      { value: "retiro_cliente", label: "Retiro cliente",  icon: "bi-person-walking" },
+                      { value: "delivery_chofer", label: "Camión Trigotuc", icon: "bi-truck"          },
+                    ].map((m) => (
+                      <button key={m.value} type="button"
+                        className={`btn flex-grow-1 py-2 ${modalidad === m.value ? "btn-primary" : "btn-outline-secondary"}`}
+                        onClick={() => { setModalidad(m.value); setChoferSel(""); }}>
+                        <i className={`bi ${m.icon} me-1`}></i>{m.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Selector de chofer (solo delivery) */}
+                {modalidad === "delivery_chofer" && (
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold">
+                      Chofer <span className="text-danger">*</span>
+                    </label>
+                    {choferes.length === 0 ? (
+                      <div className="alert alert-warning py-2 small mb-0">
+                        No hay choferes registrados. Creá un usuario con rol <strong>chofer</strong>.
+                      </div>
+                    ) : (
+                      <select
+                        className={`form-select ${modalidad === "delivery_chofer" && !choferSel ? "is-invalid" : ""}`}
+                        value={choferSel}
+                        onChange={(e) => setChoferSel(e.target.value)}
+                      >
+                        <option value="">Seleccioná un chofer...</option>
+                        {choferes.map((c) => {
+                          const cam = camiones.find((k) => String(k.chofer?._id || k.chofer) === String(c._id) && k.activo);
+                          return (
+                            <option key={c._id} value={c._id}>
+                              {c.nombreUsuario}{cam ? ` — ${cam.marca} ${cam.patente}` : " (sin camión asignado)"}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    )}
+                  </div>
+                )}
 
                 {/* Cámara */}
                 <div className="mb-3">
@@ -549,9 +619,9 @@ const DespachoFrigorificoPage = () => {
                       <th>Cliente</th>
                       <th>Cámara</th>
                       <th>Turno</th>
+                      <th>Modalidad</th>
                       <th>Detalle</th>
                       <th>Estado</th>
-                      <th>Registrado por</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -563,6 +633,16 @@ const DespachoFrigorificoPage = () => {
                         <td className="fw-semibold small">{d.cliente?.razonSocial || "—"}</td>
                         <td><span className="badge bg-secondary">{camaraLbl(d.camara)}</span></td>
                         <td className="small text-muted">{d.turno || "—"}</td>
+                        <td>
+                          {d.modalidadEntrega === "delivery_chofer" ? (
+                            <div>
+                              <span className="badge bg-info text-dark"><i className="bi bi-truck me-1"></i>Camión</span>
+                              {d.chofer && <div className="small text-muted mt-1">{d.chofer.nombreUsuario}</div>}
+                            </div>
+                          ) : (
+                            <span className="badge bg-light text-dark border"><i className="bi bi-person-walking me-1"></i>Cliente</span>
+                          )}
+                        </td>
                         <td>
                           <div className="d-flex flex-wrap gap-1">
                             {d.calibres?.map((c, i) => (
@@ -576,12 +656,17 @@ const DespachoFrigorificoPage = () => {
                           </div>
                         </td>
                         <td>
-                          {d.estado === "completada"
-                            ? <span className="badge bg-success">Completada</span>
-                            : <span className="badge bg-warning text-dark">Pendiente</span>
+                          {d.estado !== "completada"
+                            ? <span className="badge bg-warning text-dark">Pendiente</span>
+                            : d.modalidadEntrega === "delivery_chofer"
+                              ? d.entregado
+                                ? <span className="badge bg-success">Entregado</span>
+                                : d.confirmadaCarga
+                                  ? <span className="badge bg-info text-dark">En camión</span>
+                                  : <span className="badge bg-success">Listo para cargar</span>
+                              : <span className="badge bg-success">Completada</span>
                           }
                         </td>
-                        <td className="small text-muted">{d.registradoPor?.nombreUsuario || "—"}</td>
                         <td>
                           <div className="d-flex gap-1">
                             {d.estado === "pendiente" && (

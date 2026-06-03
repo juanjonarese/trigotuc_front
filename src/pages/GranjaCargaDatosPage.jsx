@@ -529,7 +529,7 @@ const GranjaCargaDatosPage = () => {
     <Layout>
       <div className="container-fluid">
 
-        <div className="d-flex align-items-center justify-content-between mb-4">
+        <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
           <h1 className="h3 mb-0">Datos semanales</h1>
           <div className="d-flex gap-2">
             <button
@@ -566,15 +566,15 @@ const GranjaCargaDatosPage = () => {
           return (
             <div className="card border-0 shadow mb-4 border-start border-4 border-warning">
               {/* Header */}
-              <div className="card-header bg-warning text-dark py-2 d-flex align-items-center justify-content-between">
-                <div>
+              <div className="card-header bg-warning text-dark py-2 d-flex align-items-start justify-content-between flex-wrap gap-1">
+                <div className="me-2" style={{ minWidth: 0 }}>
                   <span className="fw-bold">Galpón {galponLabel}</span>
-                  <span className="ms-2 small">
+                  <div className="small">
                     Día {dias} — Sem. {sem} &nbsp;·&nbsp;
                     {loteSeleccionado.cantidadActual.toLocaleString("es-AR")} pollos
                     {totalBajas > 0 && ` · ${totalBajas} bajas`}
                     {pesoActual != null && ` · Último: ${formatPeso(pesoActual)}`}
-                  </span>
+                  </div>
                 </div>
                 <button className="btn btn-sm btn-outline-dark"
                   onClick={() => { setLoteSeleccionado(null); setModo(null); }}>
@@ -718,6 +718,7 @@ const GranjaCargaDatosPage = () => {
                         onClick={() => setModo(null)}>
                         <i className="bi bi-arrow-left me-1"></i>Volver
                       </button>
+                      <div className="table-responsive">
                       <table className="table table-hover align-middle mb-0">
                         <thead className="table-light">
                           <tr>
@@ -749,6 +750,7 @@ const GranjaCargaDatosPage = () => {
                           ))}
                         </tbody>
                       </table>
+                      </div>
                     </div>
                   );
                 })()}
