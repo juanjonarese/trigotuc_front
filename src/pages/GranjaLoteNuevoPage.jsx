@@ -476,13 +476,14 @@ const GranjaLoteNuevoPage = () => {
   const puedeEditar  = rolUsuario === "superadmin" || rolUsuario === "frigorifico" || rolUsuario === "granja";
   const esSuperAdmin = rolUsuario === "superadmin";
 
-  const [lotes, setLotes]         = useState([]);
+  const [lotes, setLotes]                         = useState([]);
   const [pedidosPendientes, setPedidosPendientes] = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [ocupados, setOcupados]   = useState({});
-  const [showNuevo, setShowNuevo] = useState(false);
-  const [editLote, setEditLote]   = useState(null);
-  const [pagina, setPagina]       = useState(1);
+  const [loading, setLoading]                     = useState(true);
+  const [ocupados, setOcupados]                   = useState({});
+  const [showNuevo, setShowNuevo]                 = useState(false);
+  const [editLote, setEditLote]                   = useState(null);
+  const [tab, setTab]                             = useState("envios");
+  const [pagina, setPagina]                       = useState(1);
 
   const [filtroGranja, setFiltroGranja] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("");
@@ -517,22 +518,23 @@ const GranjaLoteNuevoPage = () => {
 
   const handleEliminar = async (lote) => {
     const confirm = await Swal.fire({
-      title: "¿Eliminar ingreso?",
-      html: `Se eliminará el lote <strong>#${lote.numeroLote}</strong> y todos sus registros.`,
+      title: "¿Cerrar galpón?",
+      html: `Se eliminará el lote <strong>#${lote.numeroLote}</strong> y todos sus registros. El galpón quedará libre para un nuevo ingreso.`,
       icon: "warning", showCancelButton: true,
-      confirmButtonColor: "#dc3545", confirmButtonText: "Sí, eliminar", cancelButtonText: "Cancelar",
+      confirmButtonColor: "#dc3545", confirmButtonText: "Sí, cerrar", cancelButtonText: "Cancelar",
     });
     if (!confirm.isConfirmed) return;
     try {
       await eliminarLoteGranja(lote._id);
       await cargarDatos();
-      Swal.fire({ icon: "success", title: "Eliminado", timer: 1500, showConfirmButton: false });
+      Swal.fire({ icon: "success", title: "Galpón cerrado", timer: 1500, showConfirmButton: false });
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudo eliminar.", "error");
     }
   };
 
-  const lotesFiltrados = lotes.filter((l) => {
+  const lotesCrianza    = lotes.filter((l) => l.estado === "en_crianza");
+  const lotesFiltrados  = lotes.filter((l) => {
     if (filtroGranja && l.granja !== filtroGranja) return false;
     if (filtroEstado && l.estado !== filtroEstado) return false;
     if (filtroGalpon && l.galpon !== Number(filtroGalpon)) return false;
@@ -544,10 +546,10 @@ const GranjaLoteNuevoPage = () => {
     return true;
   });
 
-  const totalFiltrados = lotesFiltrados.length;
-  const inicio         = (pagina - 1) * ITEMS_POR_PAGINA;
-  const lotesPagina    = lotesFiltrados.slice(inicio, inicio + ITEMS_POR_PAGINA);
-  const hayFiltros     = filtroGranja || filtroEstado || filtroGalpon || filtroTexto;
+  const totalFiltrados    = lotesFiltrados.length;
+  const inicio            = (pagina - 1) * ITEMS_POR_PAGINA;
+  const lotesPagina       = lotesFiltrados.slice(inicio, inicio + ITEMS_POR_PAGINA);
+  const hayFiltros        = filtroGranja || filtroEstado || filtroGalpon || filtroTexto;
   const maxGalponesGranja = filtroGranja
     ? GRANJA_OPTS.find((g) => g.value === filtroGranja)?.galpones || 8
     : 8;
@@ -562,207 +564,324 @@ const GranjaLoteNuevoPage = () => {
             <i className="bi bi-box-seam me-2 text-success"></i>
             Ingreso de Pollitos
           </h1>
-          <div className="d-flex align-items-center gap-3">
-            <span className="text-muted small">{totalFiltrados} registros</span>
-            {puedeCrear && (
-              <button className="btn btn-success" onClick={() => setShowNuevo(true)}>
-                <i className="bi bi-plus-circle me-1"></i>Nuevo ingreso
-              </button>
-            )}
-          </div>
+          {puedeCrear && (
+            <button className="btn btn-success btn-sm" onClick={() => setShowNuevo(true)}>
+              <i className="bi bi-plus-circle me-1"></i>Nuevo ingreso
+            </button>
+          )}
         </div>
 
-        {/* Tarjetas pendientes */}
-        {pedidosPendientes.length > 0 && (
-          <div className="mb-4">
-            <h5 className="mb-3 text-warning">
-              <i className="bi bi-hourglass-split me-2"></i>
-              Pendientes de recepción ({pedidosPendientes.length})
-            </h5>
-            <div className="d-flex flex-wrap gap-3">
-              {loading ? null : pedidosPendientes.map((pedido) => (
-                <div key={pedido._id} style={{ width: "320px" }}>
-                  <TarjetaPedidoPendiente
-                    pedido={pedido}
-                    onConfirmado={cargarDatos}
-                    onCancelado={cargarDatos}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Solapas */}
+        <ul className="nav nav-tabs mb-4">
+          <li className="nav-item">
+            <button
+              className={`nav-link ${tab === "envios" ? "active" : ""}`}
+              onClick={() => setTab("envios")}
+            >
+              <i className="bi bi-send me-1"></i>Envíos
+              {pedidosPendientes.length > 0 && (
+                <span className="badge bg-warning text-dark ms-2" style={{ fontSize: "0.65rem" }}>
+                  {pedidosPendientes.length}
+                </span>
+              )}
+            </button>
+          </li>
+          <li className="nav-item">
+            <button
+              className={`nav-link ${tab === "crianza" ? "active" : ""}`}
+              onClick={() => setTab("crianza")}
+            >
+              <i className="bi bi-house-door me-1"></i>En crianza
+              {lotesCrianza.length > 0 && (
+                <span className="badge bg-success ms-2" style={{ fontSize: "0.65rem" }}>
+                  {lotesCrianza.length}
+                </span>
+              )}
+            </button>
+          </li>
+        </ul>
 
-        {/* Filtros */}
-        <div className="card border-0 shadow-sm mb-3">
-          <div className="card-body py-2">
-            <div className="row g-2 align-items-end">
-              <div className="col-12 col-sm-6 col-md-3">
-                <label className="form-label small mb-1 text-muted">Buscar</label>
-                <input type="text" className="form-control form-control-sm"
-                  placeholder="N° lote o enviado por..."
-                  value={filtroTexto} onChange={(e) => setFiltroTexto(e.target.value)} />
-              </div>
-              <div className="col-6 col-sm-4 col-md-2">
-                <label className="form-label small mb-1 text-muted">Granja</label>
-                <select className="form-select form-select-sm" value={filtroGranja}
-                  onChange={(e) => { setFiltroGranja(e.target.value); setFiltroGalpon(""); }}>
-                  <option value="">Todas</option>
-                  {GRANJA_OPTS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
-                </select>
-              </div>
-              <div className="col-6 col-sm-4 col-md-2">
-                <label className="form-label small mb-1 text-muted">Galpón</label>
-                <select className="form-select form-select-sm" value={filtroGalpon}
-                  onChange={(e) => setFiltroGalpon(e.target.value)}>
-                  <option value="">Todos</option>
-                  {Array.from({ length: maxGalponesGranja }, (_, i) => i + 1).map((n) => (
-                    <option key={n} value={n}>
-                      {filtroGranja ? `${GRANJAS_PREFIX[filtroGranja]}${n}` : n}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-6 col-sm-4 col-md-2">
-                <label className="form-label small mb-1 text-muted">Estado</label>
-                <select className="form-select form-select-sm" value={filtroEstado}
-                  onChange={(e) => setFiltroEstado(e.target.value)}>
-                  <option value="">Todos</option>
-                  <option value="en_crianza">En crianza</option>
-                  <option value="finalizado">Finalizado</option>
-                </select>
-              </div>
-              <div className="col-6 col-sm-4 col-md-2">
-                {hayFiltros && (
-                  <button className="btn btn-outline-secondary btn-sm w-100"
-                    onClick={() => { setFiltroGranja(""); setFiltroEstado(""); setFiltroGalpon(""); setFiltroTexto(""); }}>
-                    <i className="bi bi-x-circle me-1"></i>Limpiar
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Tabla / lista */}
-        <div className="card border-0 shadow-sm">
-          <div className="card-body p-0">
-            {loading ? (
-              <div className="text-center py-5"><div className="spinner-border text-success"></div></div>
-            ) : lotesPagina.length === 0 ? (
-              <p className="text-center text-muted p-4 mb-0">
-                {hayFiltros ? "No hay registros que coincidan con los filtros." : "Sin ingresos registrados."}
-              </p>
-            ) : (
+        {loading ? (
+          <div className="text-center py-5"><div className="spinner-border text-success"></div></div>
+        ) : (
+          <>
+            {/* ══ SOLAPA ENVÍOS ══ */}
+            {tab === "envios" && (
               <>
-                {/* Mobile */}
-                <div className="d-md-none p-3">
-                  {lotesPagina.map((lote) => (
-                    <div key={lote._id} className="card border mb-2">
-                      <div className="card-body py-2 px-3">
-                        <div className="d-flex justify-content-between align-items-start mb-1">
-                          <div>
-                            <span className="badge bg-dark me-1">#{lote.numeroLote}</span>
-                            <span className={`badge ${lote.estado === "en_crianza" ? "bg-success" : "bg-secondary"}`}>
-                              {lote.estado === "en_crianza" ? "En crianza" : "Finalizado"}
-                            </span>
-                          </div>
-                          <div className="d-flex gap-1">
-                            {puedeEditar && (
-                              <button className="btn btn-outline-primary btn-sm" onClick={() => setEditLote(lote)}>
-                                <i className="bi bi-pencil"></i>
-                              </button>
-                            )}
-                            {esSuperAdmin && (
-                              <button className="btn btn-outline-danger btn-sm" onClick={() => handleEliminar(lote)}>
-                                <i className="bi bi-trash"></i>
-                              </button>
-                            )}
-                          </div>
+                {pedidosPendientes.length === 0 ? (
+                  <div className="text-center py-5 text-muted">
+                    <i className="bi bi-inbox fs-1 d-block mb-2"></i>
+                    No hay envíos pendientes de confirmación.
+                  </div>
+                ) : (
+                  <div className="d-flex flex-wrap gap-3">
+                    {pedidosPendientes.map((pedido) => (
+                      <div key={pedido._id} style={{ width: "min(100%, 380px)" }}>
+                        <TarjetaPedidoPendiente
+                          pedido={pedido}
+                          onConfirmado={cargarDatos}
+                          onCancelado={cargarDatos}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* ══ SOLAPA EN CRIANZA ══ */}
+            {tab === "crianza" && (
+              <>
+                {/* Tarjetas de galpones activos */}
+                {lotesCrianza.length === 0 ? (
+                  <div className="text-center py-4 text-muted">
+                    <i className="bi bi-house-door fs-1 d-block mb-2"></i>
+                    No hay galpones en crianza.
+                  </div>
+                ) : (
+                  GRANJA_OPTS.map(({ value, label }) => {
+                    const lotesGranja = lotesCrianza.filter((l) => l.granja === value);
+                    if (lotesGranja.length === 0) return null;
+                    return (
+                      <div key={value} className="mb-4">
+                        <h6 className="fw-bold text-secondary mb-2">
+                          <i className="bi bi-geo-alt me-1"></i>{label}
+                        </h6>
+                        <div className="row g-2">
+                          {lotesGranja.map((lote) => {
+                            const vacio = lote.cantidadActual === 0;
+                            const dias  = Math.floor((Date.now() - new Date(lote.fechaIngreso)) / (1000 * 60 * 60 * 24));
+                            const sem   = Math.max(1, Math.ceil(dias / 7));
+                            const barColor = vacio ? "#ced4da"
+                              : dias < 30 ? "#198754"
+                              : dias < 40 ? "#fd7e14"
+                              : "#dc3545";
+                            return (
+                              <div key={lote._id} className="col-6 col-sm-4 col-md-3 col-lg-2">
+                                <div
+                                  className="card border-0 shadow-sm text-center"
+                                  style={{
+                                    borderLeft: `4px solid ${barColor}`,
+                                    background: vacio ? "#f5f5f5" : "#f8f9fa",
+                                  }}
+                                >
+                                  <div className="p-2">
+                                    <div className="fw-bold fs-5" style={{ color: barColor }}>
+                                      {GRANJAS_PREFIX[value]}{lote.galpon}
+                                    </div>
+                                    {vacio ? (
+                                      <>
+                                        <div className="small text-muted mb-2">Galpón vacío</div>
+                                        <button
+                                          className="btn btn-outline-danger btn-sm w-100"
+                                          onClick={() => handleEliminar(lote)}
+                                        >
+                                          <i className="bi bi-trash me-1"></i>Cerrar
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <div className="small text-muted">Día {dias} / Sem. {sem}</div>
+                                        <div className="small fw-semibold">{lote.cantidadActual.toLocaleString("es-AR")} pollos</div>
+                                        <div className="small text-muted">#{lote.numeroLote}</div>
+                                        {puedeEditar && (
+                                          <button
+                                            className="btn btn-outline-primary btn-sm mt-1 w-100"
+                                            style={{ fontSize: "0.7rem", padding: "2px 6px" }}
+                                            onClick={() => setEditLote(lote)}
+                                          >
+                                            <i className="bi bi-pencil me-1"></i>Editar
+                                          </button>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                        <div className="small text-muted">
-                          {GRANJAS_LABEL[lote.granja]} — Galpón {GRANJAS_PREFIX[lote.granja]}{lote.galpon}
+                      </div>
+                    );
+                  })
+                )}
+
+                {/* Historial */}
+                <div className="mt-4">
+                  <h6 className="text-muted fw-semibold mb-3 text-uppercase" style={{ fontSize: "0.75rem", letterSpacing: "0.06em" }}>
+                    Historial de ingresos
+                  </h6>
+
+                  {/* Filtros */}
+                  <div className="card border-0 shadow-sm mb-3">
+                    <div className="card-body py-2">
+                      <div className="row g-2 align-items-end">
+                        <div className="col-12 col-sm-6 col-md-3">
+                          <label className="form-label small mb-1 text-muted">Buscar</label>
+                          <input type="text" className="form-control form-control-sm"
+                            placeholder="N° lote..."
+                            value={filtroTexto} onChange={(e) => setFiltroTexto(e.target.value)} />
                         </div>
-                        <div className="small">
-                          {formatearFechaLocal(lote.fechaIngreso)} · {(lote.cantidadIngreso - (lote.bajasIngreso || 0)).toLocaleString("es-AR")} ingresados
-                          {lote.bajasIngreso > 0 && (
-                            <span className="text-danger"> · {lote.bajasIngreso.toLocaleString("es-AR")} bajas{lote.motivoBajas ? ` (${lote.motivoBajas})` : ""}</span>
+                        <div className="col-6 col-sm-4 col-md-2">
+                          <label className="form-label small mb-1 text-muted">Granja</label>
+                          <select className="form-select form-select-sm" value={filtroGranja}
+                            onChange={(e) => { setFiltroGranja(e.target.value); setFiltroGalpon(""); }}>
+                            <option value="">Todas</option>
+                            {GRANJA_OPTS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
+                          </select>
+                        </div>
+                        <div className="col-6 col-sm-4 col-md-2">
+                          <label className="form-label small mb-1 text-muted">Galpón</label>
+                          <select className="form-select form-select-sm" value={filtroGalpon}
+                            onChange={(e) => setFiltroGalpon(e.target.value)}>
+                            <option value="">Todos</option>
+                            {Array.from({ length: maxGalponesGranja }, (_, i) => i + 1).map((n) => (
+                              <option key={n} value={n}>
+                                {filtroGranja ? `${GRANJAS_PREFIX[filtroGranja]}${n}` : n}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="col-6 col-sm-4 col-md-2">
+                          <label className="form-label small mb-1 text-muted">Estado</label>
+                          <select className="form-select form-select-sm" value={filtroEstado}
+                            onChange={(e) => setFiltroEstado(e.target.value)}>
+                            <option value="">Todos</option>
+                            <option value="en_crianza">En crianza</option>
+                            <option value="finalizado">Finalizado</option>
+                          </select>
+                        </div>
+                        <div className="col-6 col-sm-4 col-md-2 d-flex align-items-end">
+                          {hayFiltros && (
+                            <button className="btn btn-outline-secondary btn-sm w-100"
+                              onClick={() => { setFiltroGranja(""); setFiltroEstado(""); setFiltroGalpon(""); setFiltroTexto(""); }}>
+                              <i className="bi bi-x-circle me-1"></i>Limpiar
+                            </button>
                           )}
                         </div>
-                        {lote.registradoPor?.nombreUsuario && <div className="small text-muted"><i className="bi bi-person me-1"></i>{lote.registradoPor.nombreUsuario}</div>}
                       </div>
                     </div>
-                  ))}
-                </div>
+                  </div>
 
-                {/* Desktop */}
-                <div className="d-none d-md-block table-responsive">
-                  <table className="table table-hover align-middle mb-0">
-                    <thead className="table-light">
-                      <tr>
-                        <th className="text-center">#Lote</th>
-                        <th className="text-center">Granja</th>
-                        <th className="text-center">Galpón</th>
-                        <th className="text-center">Fecha ingreso</th>
-                        <th className="text-center">Ingresados</th>
-                        <th className="text-center">Bajas ing.</th>
-                        <th className="text-center">Registrado por</th>
-                        <th className="text-center">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {lotesPagina.map((lote) => (
-                        <tr key={lote._id}>
-                          <td className="text-center"><span className="badge bg-dark">#{lote.numeroLote}</span></td>
-                          <td className="text-center">{GRANJAS_LABEL[lote.granja] || lote.granja}</td>
-                          <td className="text-center fw-semibold">{GRANJAS_PREFIX[lote.granja]}{lote.galpon}</td>
-                          <td className="text-center">{formatearFechaLocal(lote.fechaIngreso)}</td>
-                          <td className="text-center">{(lote.cantidadIngreso - (lote.bajasIngreso || 0)).toLocaleString("es-AR")}</td>
-                          <td className="text-center">
-                            {lote.bajasIngreso > 0 ? (
-                              <>
-                                <span className="text-danger fw-semibold">{lote.bajasIngreso.toLocaleString("es-AR")}</span>
-                                {lote.motivoBajas && (
-                                  <div className="text-danger small">{lote.motivoBajas}</div>
-                                )}
-                              </>
-                            ) : (
-                              <span className="text-muted">—</span>
-                            )}
-                          </td>
-                          <td className="text-center text-muted small">{lote.registradoPor?.nombreUsuario || "—"}</td>
-                          <td className="text-center">
-                            <div className="d-flex gap-1 justify-content-center">
-                              {puedeEditar && (
-                                <button className="btn btn-outline-primary btn-sm" onClick={() => setEditLote(lote)}>
-                                  <i className="bi bi-pencil"></i>
-                                </button>
-                              )}
-                              {esSuperAdmin && (
-                                <button className="btn btn-outline-danger btn-sm" onClick={() => handleEliminar(lote)}>
-                                  <i className="bi bi-trash"></i>
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                  <div className="card border-0 shadow-sm">
+                    <div className="card-body p-0">
+                      {lotesPagina.length === 0 ? (
+                        <p className="text-center text-muted p-4 mb-0">
+                          {hayFiltros ? "No hay registros que coincidan." : "Sin ingresos registrados."}
+                        </p>
+                      ) : (
+                        <>
+                          {/* Mobile */}
+                          <div className="d-md-none p-3">
+                            {lotesPagina.map((lote) => (
+                              <div key={lote._id} className="card border mb-2">
+                                <div className="card-body py-2 px-3">
+                                  <div className="d-flex justify-content-between align-items-start mb-1">
+                                    <div>
+                                      <span className="badge bg-dark me-1">#{lote.numeroLote}</span>
+                                      <span className={`badge ${lote.estado === "en_crianza" ? "bg-success" : "bg-secondary"}`}>
+                                        {lote.estado === "en_crianza" ? "En crianza" : "Finalizado"}
+                                      </span>
+                                    </div>
+                                    <div className="d-flex gap-1">
+                                      {puedeEditar && (
+                                        <button className="btn btn-outline-primary btn-sm" onClick={() => setEditLote(lote)}>
+                                          <i className="bi bi-pencil"></i>
+                                        </button>
+                                      )}
+                                      {esSuperAdmin && (
+                                        <button className="btn btn-outline-danger btn-sm" onClick={() => handleEliminar(lote)}>
+                                          <i className="bi bi-trash"></i>
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="small text-muted">
+                                    {GRANJAS_LABEL[lote.granja]} — Galpón {GRANJAS_PREFIX[lote.granja]}{lote.galpon}
+                                  </div>
+                                  <div className="small">
+                                    {formatearFechaLocal(lote.fechaIngreso)} · {(lote.cantidadIngreso - (lote.bajasIngreso || 0)).toLocaleString("es-AR")} ingresados
+                                    {lote.bajasIngreso > 0 && (
+                                      <span className="text-danger"> · {lote.bajasIngreso.toLocaleString("es-AR")} bajas{lote.motivoBajas ? ` (${lote.motivoBajas})` : ""}</span>
+                                    )}
+                                  </div>
+                                  {lote.registradoPor?.nombreUsuario && <div className="small text-muted"><i className="bi bi-person me-1"></i>{lote.registradoPor.nombreUsuario}</div>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
 
-                <div className="px-3 pb-3">
-                  <Pagination
-                    currentPage={pagina}
-                    totalItems={totalFiltrados}
-                    itemsPerPage={ITEMS_POR_PAGINA}
-                    onPageChange={setPagina}
-                  />
+                          {/* Desktop */}
+                          <div className="d-none d-md-block table-responsive">
+                            <table className="table table-hover align-middle mb-0">
+                              <thead className="table-light">
+                                <tr>
+                                  <th className="text-center">#Lote</th>
+                                  <th className="text-center">Granja</th>
+                                  <th className="text-center">Galpón</th>
+                                  <th className="text-center">Fecha ingreso</th>
+                                  <th className="text-center">Ingresados</th>
+                                  <th className="text-center">Bajas ing.</th>
+                                  <th className="text-center">Registrado por</th>
+                                  <th className="text-center">Acciones</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {lotesPagina.map((lote) => (
+                                  <tr key={lote._id}>
+                                    <td className="text-center"><span className="badge bg-dark">#{lote.numeroLote}</span></td>
+                                    <td className="text-center">{GRANJAS_LABEL[lote.granja] || lote.granja}</td>
+                                    <td className="text-center fw-semibold">{GRANJAS_PREFIX[lote.granja]}{lote.galpon}</td>
+                                    <td className="text-center">{formatearFechaLocal(lote.fechaIngreso)}</td>
+                                    <td className="text-center">{(lote.cantidadIngreso - (lote.bajasIngreso || 0)).toLocaleString("es-AR")}</td>
+                                    <td className="text-center">
+                                      {lote.bajasIngreso > 0 ? (
+                                        <>
+                                          <span className="text-danger fw-semibold">{lote.bajasIngreso.toLocaleString("es-AR")}</span>
+                                          {lote.motivoBajas && <div className="text-danger small">{lote.motivoBajas}</div>}
+                                        </>
+                                      ) : (
+                                        <span className="text-muted">—</span>
+                                      )}
+                                    </td>
+                                    <td className="text-center text-muted small">{lote.registradoPor?.nombreUsuario || "—"}</td>
+                                    <td className="text-center">
+                                      <div className="d-flex gap-1 justify-content-center">
+                                        {puedeEditar && (
+                                          <button className="btn btn-outline-primary btn-sm" onClick={() => setEditLote(lote)}>
+                                            <i className="bi bi-pencil"></i>
+                                          </button>
+                                        )}
+                                        {esSuperAdmin && (
+                                          <button className="btn btn-outline-danger btn-sm" onClick={() => handleEliminar(lote)}>
+                                            <i className="bi bi-trash"></i>
+                                          </button>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          <div className="px-3 pb-3">
+                            <Pagination
+                              currentPage={pagina}
+                              totalItems={totalFiltrados}
+                              itemsPerPage={ITEMS_POR_PAGINA}
+                              onPageChange={setPagina}
+                            />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </>
             )}
-          </div>
-        </div>
+          </>
+        )}
 
       </div>
 
