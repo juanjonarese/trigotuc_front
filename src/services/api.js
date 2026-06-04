@@ -642,3 +642,24 @@ export const eliminarProveedorEmpaque = async (id) => {
   });
   return handleResponse(response);
 };
+
+// ============= PUSH NOTIFICATIONS =============
+
+export const obtenerVapidKey = async () => {
+  const response = await fetch(`${API_URL}/push/vapid-key`);
+  return handleResponse(response, false);
+};
+
+export const suscribirPush = async (subscription) => {
+  const response = await fetch(`${API_URL}/push`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(subscription),
+  });
+  return handleResponse(response);
+};
+
+export const desuscribirPush = async (endpoint) => {
+  const response = await fetch(`${API_URL}/push`, {
+    method: "DELETE", headers: getAuthHeaders(), body: JSON.stringify({ endpoint }),
+  });
+  return handleResponse(response);
+};

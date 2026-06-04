@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import "../css/DashboardPage.css";
+import usePushNotification from "../hooks/usePushNotification";
 
 const Layout = ({ children }) => {
+  const { estado, activar, rolHabilitado } = usePushNotification();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -477,6 +479,20 @@ const Layout = ({ children }) => {
             </div>
           </div>
         </header>
+
+        {/* Banner notificaciones */}
+        {rolHabilitado && estado === "default" && (
+          <div className="d-flex align-items-center gap-2 px-3 py-2"
+            style={{ background: "#fffbeb", borderBottom: "1px solid #fde68a", fontSize: "0.85rem" }}>
+            <i className="bi bi-bell text-warning fs-5 flex-shrink-0"></i>
+            <span className="text-dark flex-grow-1">
+              Activá las notificaciones para recibir alertas de nuevas órdenes.
+            </span>
+            <button className="btn btn-warning btn-sm py-1 flex-shrink-0" onClick={activar}>
+              Activar
+            </button>
+          </div>
+        )}
 
         {/* Page Content */}
         <div className="page-content p-2 p-md-4">{children}</div>
