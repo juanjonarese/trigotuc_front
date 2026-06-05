@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { obtenerUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario, resetearBaseDeDatos } from "../services/api";
+import { obtenerUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario, resetearBaseDeDatos, estadoPush, testPush } from "../services/api";
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
 import Swal from "sweetalert2";
@@ -28,6 +28,8 @@ const PersonalPage = () => {
   const [showPass, setShowPass]         = useState(false);
   const [showConfirm, setShowConfirm]   = useState(false);
   const [resetting, setResetting]       = useState(false);
+  const [pushEstado, setPushEstado]     = useState(null);
+  const [pushTesting, setPushTesting]   = useState(false);
 
   const handleReset = async () => {
     const { value } = await Swal.fire({
@@ -429,6 +431,72 @@ const PersonalPage = () => {
             />
           </div>
         )}
+
+        {/* Debug notificaciones push */}
+        <div className="card border-warning mt-4">
+          <div className="card-header bg-warning text-dark d-flex align-items-center gap-2">
+            <i className="bi bi-bell-fill"></i>
+            <span className="fw-semibold">Debug — Notificaciones Push</span>
+          </div>
+          <div className="card-body">
+            <div className="d-flex flex-wrap gap-2 mb-3">
+              <button
+                className="btn btn-outline-dark"
+                onClick={async () => {
+                  try {
+                    const data = await estadoPush();
+                    setPushEstado(data);
+                  } catch (err) {
+                    Swal.fire("Error", err.message, "error");
+                  }
+                }}
+              >
+                <i className="bi bi-info-circle me-1"></i>Ver estado
+              </button>
+              <button
+                className="btn btn-warning"
+                disabled={pushTesting}
+                onClick={async () => {
+                  setPushTesting(true);
+                  try {
+                    const data = await testPush();
+                    Swal.fire("Enviado", `Notificación enviada a: ${data.roles.join(", ")}`, "success");
+                  } catch (err) {
+                    Swal.fire("Error", err.message, "error");
+                  } finally {
+                    setPushTesting(false);
+                  }
+                }}
+              >
+                {pushTesting
+                  ? <><span className="spinner-border spinner-border-sm me-1"></span>Enviando...</>
+                  : <><i className="bi bi-send me-1"></i>Enviar notificación de prueba</>}
+              </button>
+            </div>
+            {pushEstado && (
+              <div className="bg-light rounded p-3" style={{ fontSize: "0.85rem" }}>
+                <div className="mb-1">
+                  <strong>VAPID configurado:</strong>{" "}
+                  {pushEstado.vapidConfigurado
+                    ? <span className="text-success">Sí</span>
+                    : <span className="text-danger">No — faltan las env vars en Vercel</span>}
+                </div>
+                <div className="mb-2">
+                  <strong>Suscripciones guardadas:</strong> {pushEstado.totalSuscripciones}
+                </div>
+                {pushEstado.suscripciones.length > 0 && (
+                  <ul className="mb-0 ps-3">
+                    {pushEstado.suscripciones.map((s, i) => (
+                      <li key={i}>
+                        <strong>{s.usuario}</strong> ({s.rol}) — <span className="text-muted">{s.endpoint}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Zona peligrosa */}
         <div className="card border-danger mt-4">

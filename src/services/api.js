@@ -663,3 +663,15 @@ export const desuscribirPush = async (endpoint) => {
   });
   return handleResponse(response);
 };
+
+export const estadoPush = async () => {
+  const response = await fetch(`${API_URL}/push/estado`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+export const testPush = async () => {
+  const response = await fetch(`${API_URL}/push/test`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify({}),
+  });
+  return handleResponse(response);
+};
