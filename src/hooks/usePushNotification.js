@@ -42,9 +42,9 @@ const usePushNotification = () => {
 
     navigator.serviceWorker.register("/sw.js").then(async (reg) => {
       setSwReg(reg);
+      // Siempre sincroniza con el backend para corregir datos desactualizados (rol, etc.)
       if (Notification.permission === "granted") {
-        const existente = await reg.pushManager.getSubscription();
-        if (!existente) await suscribirConReg(reg);
+        await suscribirConReg(reg);
       }
     }).catch(() => {});
   }, [rolHabilitado]);
@@ -56,8 +56,7 @@ const usePushNotification = () => {
       const permiso = await Notification.requestPermission();
       setEstado(permiso);
       if (permiso === "granted") {
-        const existente = await swReg.pushManager.getSubscription();
-        if (!existente) await suscribirConReg(swReg);
+        await suscribirConReg(swReg);
       }
     } catch {
       setEstado("denied");
