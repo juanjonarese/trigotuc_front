@@ -366,7 +366,7 @@ const Layout = ({ children }) => {
                   </a>
                 )}
                 {/* 6 — Envío Cámara */}
-                {(rolUsuario === "superadmin" || rolUsuario === "frigorifico") && (
+                {(rolUsuario === "superadmin" || rolUsuario === "administracion") && (
                   <a
                     href="#"
                     className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${

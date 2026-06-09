@@ -105,18 +105,23 @@ const DespachoCard = ({ despacho, onActualizar }) => {
         {/* Cliente */}
         <div className="fw-bold fs-5 mb-1">{despacho.cliente?.razonSocial || "—"}</div>
 
-        {/* Cámara + totales */}
-        <div className="text-muted small mb-3">
-          <i className="bi bi-snow me-1"></i>{camaraLbl[despacho.camara] || despacho.camara}
-          &nbsp;·&nbsp;
-          <i className="bi bi-box-seam me-1"></i>{fmt(despacho.totalCajones)} cajones
-          &nbsp;·&nbsp;{fmt(despacho.pesoTotalKg)} kg
-          {despacho.camion && (
-            <span className="d-block mt-1">
-              <i className="bi bi-truck me-1"></i>
-              {despacho.camion.marca} · <span className="fw-semibold">{despacho.camion.patente}</span>
-            </span>
-          )}
+        {/* Lugar de retiro — prominente */}
+        <div className="rounded px-3 py-2 mb-3 d-flex align-items-center gap-2"
+          style={{ background: porCargar ? "#eff6ff" : "#f0fdf4", border: `1px solid ${porCargar ? "#bfdbfe" : "#bbf7d0"}` }}>
+          <i className={`bi bi-geo-alt-fill fs-5 ${porCargar ? "text-primary" : "text-success"}`}></i>
+          <div>
+            <div className="fw-bold" style={{ fontSize: "0.95rem" }}>
+              Retirá en Frigorifico {camaraLbl[despacho.camara] || despacho.camara}
+            </div>
+            <div className="text-muted small">
+              <i className="bi bi-box-seam me-1"></i>{fmt(despacho.totalCajones)} cajones · {fmt(despacho.pesoTotalKg)} kg
+              {despacho.camion && (
+                <span className="ms-2">
+                  <i className="bi bi-truck me-1"></i>{despacho.camion.marca} {despacho.camion.patente}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Detalle calibres */}

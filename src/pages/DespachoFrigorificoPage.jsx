@@ -4,6 +4,7 @@ import CalibreTable, { calcularCajones } from "../components/CalibreTable";
 import {
   obtenerDespachosFrigorifico,
   crearDespachoFrigorifico,
+  completarDespachoFrigorifico,
   eliminarDespachoFrigorifico,
   obtenerResumenStock,
   buscarClientes,
@@ -510,8 +511,10 @@ const NuevaOrdenModal = ({ onClose, onCreada, resumen }) => {
 
 // ── Página principal ─────────────────────────────────────────────────────────
 const DespachoFrigorificoPage = () => {
-  const rolUsuario   = localStorage.getItem("rolUsuario");
-  const esSuperAdmin = rolUsuario === "superadmin";
+  const rolUsuario    = localStorage.getItem("rolUsuario");
+  const esSuperAdmin  = rolUsuario === "superadmin";
+  const esAdmin       = ["superadmin", "administracion"].includes(rolUsuario);
+  const puedeProcesar = ["superadmin", "administracion", "frigorifico"].includes(rolUsuario);
 
   const [despachos, setDespachos]       = useState([]);
   const [resumen, setResumen]           = useState(null);
@@ -551,6 +554,60 @@ const DespachoFrigorificoPage = () => {
       confirmButtonColor: "#0d6efd",
     });
     if (isConfirmed) imprimirOrdenConCodigo(despacho);
+  };
+
+  const handleCompletar = async (d) => {
+    if (d.modalidadEntrega === "delivery_chofer") {
+      const choferNombre = d.chofer?.nombreUsuario || "chofer asignado";
+      const ok = await Swal.fire({
+        title: "¿Confirmar orden lista para retiro?",
+        html: `<div style="text-align:left;font-size:14px">
+          <div><strong>Cliente:</strong> ${d.cliente?.razonSocial || "—"}</div>
+          <div style="margin-top:6px"><strong>Chofer:</strong> ${choferNombre}</div>
+          <div style="margin-top:6px;color:#6b7280">El chofer recibirá una notificación para venir a retirar.</div>
+        </div>`,
+        icon: "question",
+        showCancelButton: true,
+        confirmButtonColor: "#2563eb",
+        confirmButtonText: "Sí, lista para retiro",
+        cancelButtonText: "Cancelar",
+      });
+      if (!ok.isConfirmed) return;
+      try {
+        await completarDespachoFrigorifico(d._id);
+        cargarDatos();
+        Swal.fire({ icon: "success", title: "Orden confirmada", text: "El chofer fue notificado.", timer: 2000, showConfirmButton: false });
+      } catch (err) {
+        Swal.fire("Error", err.message || "No se pudo completar.", "error");
+      }
+    } else {
+      // retiro_cliente — pide el código que trae el cliente
+      const { value: codigo, isConfirmed } = await Swal.fire({
+        title: "Código de retiro del cliente",
+        html: `<div style="margin-bottom:8px;font-size:14px;color:#374151">
+          <strong>${d.cliente?.razonSocial || "—"}</strong> — ingresá el código que te presentó el cliente.
+        </div>`,
+        input: "text",
+        inputAttributes: { maxlength: 6, style: "text-transform:uppercase;letter-spacing:0.3em;font-size:1.4rem;text-align:center;font-weight:bold" },
+        inputPlaceholder: "XXXXXX",
+        showCancelButton: true,
+        confirmButtonColor: "#198754",
+        confirmButtonText: "Confirmar entrega",
+        cancelButtonText: "Cancelar",
+        preConfirm: (val) => {
+          if (!val || val.trim().length < 4) { Swal.showValidationMessage("Ingresá el código completo"); return false; }
+          return val;
+        },
+      });
+      if (!isConfirmed || !codigo) return;
+      try {
+        await completarDespachoFrigorifico(d._id, { codigoRetiro: codigo.trim() });
+        cargarDatos();
+        Swal.fire({ icon: "success", title: "Entrega confirmada", text: "Stock descontado correctamente.", timer: 2000, showConfirmButton: false });
+      } catch (err) {
+        Swal.fire("Error", err.message || "No se pudo completar.", "error");
+      }
+    }
   };
 
   const handleEliminar = async (id) => {
@@ -594,9 +651,11 @@ const DespachoFrigorificoPage = () => {
                 {l}
               </button>
             ))}
-            <button className="btn btn-success btn-sm" onClick={() => setModalAbierto(true)}>
-              <i className="bi bi-plus-circle me-1"></i>Nueva orden
-            </button>
+            {esAdmin && (
+              <button className="btn btn-success btn-sm" onClick={() => setModalAbierto(true)}>
+                <i className="bi bi-plus-circle me-1"></i>Nueva orden
+              </button>
+            )}
           </div>
         </div>
 
@@ -668,11 +727,21 @@ const DespachoFrigorificoPage = () => {
                           }
                         </td>
                         <td>
-                          <div className="d-flex gap-1">
+                          <div className="d-flex gap-1 flex-wrap">
                             {d.estado === "pendiente" && (
-                              <button className="btn btn-outline-primary btn-sm" title="Imprimir orden con código"
+                              <button className="btn btn-outline-secondary btn-sm" title="Imprimir orden con código"
                                 onClick={() => imprimirOrdenConCodigo(d)}>
                                 <i className="bi bi-printer"></i>
+                              </button>
+                            )}
+                            {d.estado === "pendiente" && puedeProcesar && (
+                              <button
+                                className={`btn btn-sm ${d.modalidadEntrega === "delivery_chofer" ? "btn-primary" : "btn-success"}`}
+                                title={d.modalidadEntrega === "delivery_chofer" ? "Lista para retiro del chofer" : "Confirmar entrega al cliente"}
+                                onClick={() => handleCompletar(d)}
+                              >
+                                <i className={`bi ${d.modalidadEntrega === "delivery_chofer" ? "bi-truck" : "bi-check2-circle"} me-1`}></i>
+                                {d.modalidadEntrega === "delivery_chofer" ? "Lista para retiro" : "Entregar"}
                               </button>
                             )}
                             {esSuperAdmin && d.estado === "pendiente" && (

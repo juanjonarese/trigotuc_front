@@ -423,7 +423,7 @@ const RecepcionOrdenCargaPage = () => {
       html: `<div style="text-align:left;font-size:14px">
         <div><strong>Orden:</strong> ${orden.numero}</div>
         <div style="margin-top:6px"><strong>Pollos:</strong> ${Number(orden.cantidadEstimada).toLocaleString("es-AR")} — ${orden.pesoEstimadoKg} kg est.</div>
-        <div style="margin-top:6px;color:#6b7280">El frigorifico podrá recepcionar el pedido.</div>
+        <div style="margin-top:6px;color:#6b7280">El pedido queda listo para faenar directamente.</div>
       </div>`,
       icon: "question",
       showCancelButton: true,
@@ -435,7 +435,7 @@ const RecepcionOrdenCargaPage = () => {
     try {
       await enviarOrdenCarga(orden._id);
       await cargar();
-      Swal.fire({ icon: "success", title: "Pedido enviado", text: "El frigorifico puede recepcionar el pedido.", timer: 2000, showConfirmButton: false });
+      Swal.fire({ icon: "success", title: "Pedido enviado", text: "El pedido ya está listo para faenar.", timer: 2000, showConfirmButton: false });
     } catch (err) {
       Swal.fire("Error", err.message, "error");
     }

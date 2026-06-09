@@ -42,35 +42,21 @@ const estadoBadgePedido = (o) => {
 // ── Modal recepción ─────────────────────────────────────────────────────────
 const RecepcionarModal = ({ orden, onClose, onConfirmada }) => {
   const [form, setForm] = useState({
-    cantidadReal: "",
-    pesoRealKg:   "",
-    fechaEntrega: obtenerFechaHoy(),
+    fechaEntrega:         obtenerFechaHoy(),
     observacionesEntrega: "",
   });
   const [saving, setSaving] = useState(false);
 
-  const hayDif = () =>
-    (form.cantidadReal !== "" && Number(form.cantidadReal) !== orden.cantidadEstimada) ||
-    (form.pesoRealKg   !== "" && Math.abs(Number(form.pesoRealKg) - orden.pesoEstimadoKg) > 0.01);
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.cantidadReal || !form.pesoRealKg) {
-      Swal.fire("Faltan datos", "Ingresá cantidad y kg recibidos.", "warning"); return;
-    }
-    if (hayDif() && !form.observacionesEntrega.trim()) {
-      Swal.fire("Falta el motivo", "Hay diferencia con el pedido. Explicá el motivo.", "warning"); return;
-    }
     setSaving(true);
     try {
       await entregarOrdenCarga(orden._id, {
-        cantidadReal:         Number(form.cantidadReal),
-        pesoRealKg:           Number(form.pesoRealKg),
         fechaEntrega:         ajustarFechaParaGuardar(form.fechaEntrega),
         observacionesEntrega: form.observacionesEntrega || undefined,
       });
       onConfirmada();
-      Swal.fire({ icon: "success", title: "Recepción registrada", timer: 1500, showConfirmButton: false });
+      Swal.fire({ icon: "success", title: "Pedido enviado a faena", timer: 1500, showConfirmButton: false });
     } catch (err) {
       Swal.fire("Error", err.message, "error");
     } finally {
@@ -86,7 +72,7 @@ const RecepcionarModal = ({ orden, onClose, onConfirmada }) => {
             <div className="modal-header bg-primary text-white">
               <div>
                 <h5 className="modal-title mb-0">
-                  <i className="bi bi-box-arrow-in-down me-2"></i>Recepcionar pedido
+                  <i className="bi bi-box-arrow-in-down me-2"></i>Confirmar recepción — pasa a faena
                 </h5>
                 <div className="small opacity-75 mt-1">{orden.numero}</div>
               </div>
@@ -97,7 +83,7 @@ const RecepcionarModal = ({ orden, onClose, onConfirmada }) => {
               {/* Resumen del pedido */}
               <div className="card border-0 bg-light mb-3">
                 <div className="card-body py-2 px-3">
-                  <div className="small text-muted fw-semibold mb-1 text-uppercase" style={{ letterSpacing: "0.05em" }}>Pedido original</div>
+                  <div className="small text-muted fw-semibold mb-1 text-uppercase" style={{ letterSpacing: "0.05em" }}>Pedido original (estimativo)</div>
                   <div className="d-flex gap-4">
                     <div>
                       <div className="fw-bold">{Number(orden.cantidadEstimada).toLocaleString("es-AR")}</div>
@@ -112,54 +98,24 @@ const RecepcionarModal = ({ orden, onClose, onConfirmada }) => {
                       <div className="text-muted" style={{ fontSize: "0.72rem" }}>origen</div>
                     </div>
                   </div>
+                  <div className="mt-2 small text-info">
+                    <i className="bi bi-info-circle me-1"></i>
+                    La cantidad y peso reales se registran al cargar el Lote de Faena.
+                  </div>
                 </div>
               </div>
 
               <form id="form-recepcion" onSubmit={handleSubmit}>
                 <div className="row g-3">
-                  <div className="col-6">
-                    <label className="form-label fw-semibold">Cantidad recibida <span className="text-danger">*</span></label>
-                    <input type="number" min="1" className={`form-control form-control-lg text-center ${hayDif() && form.cantidadReal ? "border-warning" : ""}`}
-                      placeholder={orden.cantidadEstimada}
-                      value={form.cantidadReal}
-                      onChange={(e) => setForm({ ...form, cantidadReal: e.target.value })}
-                      required autoFocus />
-                    {form.cantidadReal && Number(form.cantidadReal) !== orden.cantidadEstimada && (
-                      <div className="form-text text-warning fw-semibold text-center">
-                        Dif: {Number(form.cantidadReal) - orden.cantidadEstimada > 0 ? "+" : ""}
-                        {Number(form.cantidadReal) - orden.cantidadEstimada} pollos
-                      </div>
-                    )}
-                  </div>
-                  <div className="col-6">
-                    <label className="form-label fw-semibold">Kg vivos recibidos <span className="text-danger">*</span></label>
-                    <input type="number" min="0.01" step="0.01" className={`form-control form-control-lg text-center ${form.pesoRealKg && Math.abs(Number(form.pesoRealKg) - orden.pesoEstimadoKg) > 0.01 ? "border-warning" : ""}`}
-                      placeholder={orden.pesoEstimadoKg}
-                      value={form.pesoRealKg}
-                      onChange={(e) => setForm({ ...form, pesoRealKg: e.target.value })}
-                      required />
-                    {form.pesoRealKg && Math.abs(Number(form.pesoRealKg) - orden.pesoEstimadoKg) > 0.01 && (
-                      <div className="form-text text-warning fw-semibold text-center">
-                        Dif: {(Number(form.pesoRealKg) - orden.pesoEstimadoKg) > 0 ? "+" : ""}
-                        {(Number(form.pesoRealKg) - orden.pesoEstimadoKg).toFixed(1)} kg
-                      </div>
-                    )}
-                  </div>
                   <div className="col-12">
                     <label className="form-label fw-semibold">Fecha de recepción</label>
                     <input type="date" className="form-control" value={form.fechaEntrega}
-                      onChange={(e) => setForm({ ...form, fechaEntrega: e.target.value })} />
+                      onChange={(e) => setForm({ ...form, fechaEntrega: e.target.value })} autoFocus />
                   </div>
                   <div className="col-12">
-                    <label className={`form-label fw-semibold ${hayDif() ? "text-warning" : ""}`}>
-                      {hayDif()
-                        ? <><i className="bi bi-exclamation-triangle me-1"></i>Motivo de la diferencia <span className="text-danger">*</span></>
-                        : "Observaciones (opcional)"
-                      }
-                    </label>
-                    <textarea className={`form-control ${hayDif() && !form.observacionesEntrega.trim() ? "border-warning" : ""}`}
-                      rows={2}
-                      placeholder={hayDif() ? "Explicá la diferencia con el pedido..." : "Notas adicionales..."}
+                    <label className="form-label fw-semibold">Observaciones (opcional)</label>
+                    <textarea className="form-control" rows={2}
+                      placeholder="Notas adicionales..."
                       value={form.observacionesEntrega}
                       onChange={(e) => setForm({ ...form, observacionesEntrega: e.target.value })} />
                   </div>
@@ -731,7 +687,7 @@ const PedidosGranjaPage = () => {
     const { isConfirmed } = await Swal.fire({
       title: "¿Eliminar pedido?",
       html: esEntregada
-        ? `<div>Se revertirá la recepción y se restaurarán <strong>${orden.cantidadReal?.toLocaleString("es-AR")} pollos</strong> al galpón.</div>`
+        ? `<div>Se revertirá la recepción y se restaurarán <strong>${(orden.cantidadReal ?? orden.cantidadEstimada)?.toLocaleString("es-AR")} pollos</strong> al galpón.</div>`
         : `<div>Se cancelará el pedido y se liberarán <strong>${orden.cantidadEstimada?.toLocaleString("es-AR")} pollos comprometidos</strong>.</div>`,
       icon: "warning",
       showCancelButton: true,
@@ -1054,7 +1010,10 @@ const PedidosGranjaPage = () => {
                                   {o.estado === "entregada" && !o.loteAsociado && (
                                     <span className="badge bg-info text-dark align-self-center">Pendiente faena</span>
                                   )}
-                                  {o.loteAsociado && (
+                                  {o.loteAsociado && o.faenaPendiente && (
+                                    <span className="badge bg-warning text-dark align-self-center"><i className="bi bi-hourglass-split me-1"></i>Faena en curso (parcial)</span>
+                                  )}
+                                  {o.loteAsociado && !o.faenaPendiente && (
                                     <span className="badge bg-success align-self-center"><i className="bi bi-check2 me-1"></i>Faenado</span>
                                   )}
                                   {esAdmin && !o.loteAsociado && (
@@ -1138,7 +1097,10 @@ const PedidosGranjaPage = () => {
                                         {o.estado === "entregada" && !o.loteAsociado && (
                                           <span className="badge bg-info text-dark">Pendiente faena</span>
                                         )}
-                                        {o.loteAsociado && (
+                                        {o.loteAsociado && o.faenaPendiente && (
+                                          <span className="badge bg-warning text-dark"><i className="bi bi-hourglass-split me-1"></i>Faena en curso (parcial)</span>
+                                        )}
+                                        {o.loteAsociado && !o.faenaPendiente && (
                                           <span className="badge bg-success"><i className="bi bi-check2 me-1"></i>Faenado</span>
                                         )}
                                         {esAdmin && !o.loteAsociado && (

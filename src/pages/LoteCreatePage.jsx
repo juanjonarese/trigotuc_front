@@ -125,6 +125,8 @@ const FORM_VACIO = {
   unidadesTrozadas:    "",
   kgTrozados:          "",
   observaciones:       "",
+  faenaParcial:        false,
+  pollosSinFaenar:     "",
 };
 
 // ── Modal nuevo lote ────────────────────────────────────────────────────────
@@ -144,7 +146,7 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
   useEffect(() => {
     setLoadingRec(true);
     obtenerOrdenesCarga({ estado: "entregada", tipo: "pedido_frigorifico" })
-      .then((data) => setRecepciones(data.filter((o) => !o.loteAsociado)))
+      .then((data) => setRecepciones(data.filter((o) => !o.loteAsociado || o.faenaPendiente)))
       .catch(() => {})
       .finally(() => setLoadingRec(false));
   }, []);
@@ -165,11 +167,9 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
     const rec = recepciones.find((o) => o._id === id) || null;
     setRecepcionSel(rec);
     if (rec) {
-      setForm((f) => ({
-        ...f,
-        kgVivos:          rec.pesoRealKg   != null ? String(rec.pesoRealKg)   : "",
-        unidadesFaenadas: rec.cantidadReal  != null ? String(rec.cantidadReal) : "",
-      }));
+      // kgVivos y unidadesFaenadas no se autofill:
+      // esos datos reales solo se conocen al terminar la faena (no en la recepción).
+      setForm((f) => ({ ...f, kgVivos: "", unidadesFaenadas: "" }));
     }
   };
 
@@ -215,6 +215,10 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
       if (form.unidadesTrozadas)    payload.unidadesTrozadas    = Number(form.unidadesTrozadas);
       if (form.kgTrozados)          payload.kgTrozados          = Number(form.kgTrozados);
       if (recepcionSel)             payload.ordenCarga          = recepcionSel._id;
+      if (form.faenaParcial) {
+        payload.faenaParcial    = true;
+        payload.pollosSinFaenar = Number(form.pollosSinFaenar || 0);
+      }
 
       const trozadosPayload = trozados
         .filter((t) => Number(t.cajas) > 0)
@@ -268,7 +272,7 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
                     <option value="">— Sin vincular —</option>
                     {recepciones.map((o) => (
                       <option key={o._id} value={o._id}>
-                        {o.numero} · {o.granja === "cañete" ? "Cañete" : "Los Pinos"}{o.galpon ? ` G${o.galpon}` : ""} · {fmtNum(o.cantidadReal)} pollos · {o.pesoRealKg} kg
+                        {o.numero} · {o.granja === "cañete" ? "Cañete" : "Los Pinos"}{o.galpon ? ` G${o.galpon}` : ""} · ~{fmtNum(o.cantidadEstimada)} pollos{o.faenaPendiente ? " · ⚠ faena parcial" : ""}
                       </option>
                     ))}
                   </select>
@@ -277,7 +281,7 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
 
               {/* Banner recepción seleccionada */}
               {recepcionSel && (
-                <div className="alert alert-primary border-start border-4 border-primary mb-3 py-3">
+                <div className={`alert border-start border-4 mb-3 py-3 ${recepcionSel.faenaPendiente ? "alert-warning border-warning" : "alert-primary border-primary"}`}>
                   <div className="d-flex align-items-center gap-2 mb-2">
                     <i className="bi bi-box-arrow-in-down fs-5"></i>
                     <strong>Recepción {recepcionSel.numero}</strong>
@@ -285,30 +289,31 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
                       — {recepcionSel.granja === "cañete" ? "Cañete" : "Los Pinos"}
                       {recepcionSel.galpon && ` G${recepcionSel.galpon}`}
                     </span>
+                    {recepcionSel.faenaPendiente && (
+                      <span className="badge bg-warning text-dark ms-1">
+                        <i className="bi bi-hourglass-split me-1"></i>Faena parcial — continuación
+                      </span>
+                    )}
                   </div>
                   <div className="d-flex flex-wrap gap-3">
                     <div className="text-center px-3 border-end">
-                      <div className="text-muted small">Pollos pedidos</div>
+                      <div className="text-muted small">Pollos pedidos (est.)</div>
                       <div className="fw-bold">{fmtNum(recepcionSel.cantidadEstimada)}</div>
                     </div>
                     <div className="text-center px-3 border-end">
-                      <div className="text-muted small">Pollos recibidos</div>
-                      <div className="fw-bold text-success fs-5">{fmtNum(recepcionSel.cantidadReal)}</div>
-                    </div>
-                    <div className="text-center px-3 border-end">
-                      <div className="text-muted small">Kg pedidos</div>
+                      <div className="text-muted small">Kg estimados</div>
                       <div className="fw-bold">{recepcionSel.pesoEstimadoKg} kg</div>
                     </div>
-                    <div className="text-center px-3">
-                      <div className="text-muted small">Kg recibidos (vivos)</div>
-                      <div className="fw-bold text-success fs-5">{recepcionSel.pesoRealKg} kg</div>
-                    </div>
+                    {recepcionSel.cantidadReal != null && (
+                      <div className="text-center px-3 border-end">
+                        <div className="text-muted small">Real total faena</div>
+                        <div className="fw-bold text-success">{fmtNum(recepcionSel.cantidadReal)} pol · {recepcionSel.pesoRealKg} kg</div>
+                      </div>
+                    )}
                   </div>
-                  {recepcionSel.diferenciaCantidad !== 0 && (
-                    <div className="mt-2 small text-warning fw-semibold">
-                      <i className="bi bi-exclamation-triangle me-1"></i>
-                      Diferencia: {recepcionSel.diferenciaCantidad > 0 ? "+" : ""}{recepcionSel.diferenciaCantidad} pollos · {recepcionSel.diferenciaKg > 0 ? "+" : ""}{recepcionSel.diferenciaKg?.toFixed(1)} kg
-                      {recepcionSel.observacionesEntrega && ` — ${recepcionSel.observacionesEntrega}`}
+                  {recepcionSel.observacionesEntrega && (
+                    <div className="mt-2 small text-muted">
+                      <i className="bi bi-chat-left me-1"></i>{recepcionSel.observacionesEntrega}
                     </div>
                   )}
                 </div>
@@ -386,6 +391,40 @@ const NuevoLoteModal = ({ onClose, onCreado }) => {
                       onChange={(e) => setForm({ ...form, observaciones: e.target.value })} />
                   </div>
                 </div>
+
+                {/* Faena parcial (solo si hay recepción vinculada) */}
+                {recepcionSel && (
+                  <div className="mb-3 p-3 rounded border border-warning-subtle bg-warning-subtle">
+                    <div className="form-check form-switch mb-0">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        id="faenaParcial"
+                        checked={form.faenaParcial}
+                        onChange={(e) => setForm({ ...form, faenaParcial: e.target.checked, pollosSinFaenar: "" })}
+                      />
+                      <label className="form-check-label fw-semibold" htmlFor="faenaParcial">
+                        <i className="bi bi-hourglass-split me-1 text-warning"></i>
+                        Faena parcial — continúa después
+                      </label>
+                    </div>
+                    {form.faenaParcial && (
+                      <div className="mt-2">
+                        <label className="form-label fw-semibold small">Pollos sin faenar que vuelven a Granja</label>
+                        <input
+                          type="number" min="0" className="form-control form-control-sm"
+                          placeholder="Cantidad de pollos sobrantes"
+                          value={form.pollosSinFaenar}
+                          onChange={(e) => setForm({ ...form, pollosSinFaenar: e.target.value })}
+                        />
+                        <div className="form-text text-warning small">
+                          <i className="bi bi-info-circle me-1"></i>
+                          Estos pollos quedan registrados como pendientes. Podrás crear un lote de continuación vinculado a esta misma recepción.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Trozados — desglose por tipo */}
                 {(form.kgTrozados || form.unidadesTrozadas) && (
