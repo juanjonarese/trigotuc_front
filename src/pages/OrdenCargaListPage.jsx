@@ -11,6 +11,7 @@ import {
   obtenerLotesGranja,
 } from "../services/api";
 import { formatearFechaLocal, obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
+import { normalizarWhatsapp } from "../utils/whatsappUtils";
 import Swal from "sweetalert2";
 
 const GRANJAS = [
@@ -137,15 +138,21 @@ const NuevaOrdenModal = ({ onClose, onCreada, lotes }) => {
         observaciones:    form.observaciones || undefined,
       });
       onCreada(orden);
-      const { isConfirmed } = await Swal.fire({
+      const ordenCompleta = { ...orden, cliente: clienteSeleccionado };
+      const result = await Swal.fire({
         icon: "success",
         title: `Orden ${orden.numero} creada`,
-        text: "¿Querés descargar el PDF para enviar al cliente?",
+        text: "¿Qué querés hacer con la orden?",
+        showDenyButton: true,
         showCancelButton: true,
-        confirmButtonText: "Descargar PDF",
-        cancelButtonText: "No, cerrar",
+        confirmButtonText: '<i class="bi bi-whatsapp me-1"></i>Enviar por WhatsApp',
+        denyButtonText: '<i class="bi bi-file-earmark-arrow-down me-1"></i>Bajar PDF',
+        cancelButtonText: "Cancelar",
+        confirmButtonColor: "#25D366",
+        denyButtonColor: "#6c757d",
       });
-      if (isConfirmed) generarPDF({ ...orden, cliente: clienteSeleccionado });
+      if (result.isConfirmed) await compartirPDFWhatsApp(ordenCompleta);
+      else if (result.isDenied) generarPDF(ordenCompleta);
     } catch (err) {
       Swal.fire("Error", err.message, "error");
     } finally {
@@ -342,7 +349,7 @@ const NuevaOrdenModal = ({ onClose, onCreada, lotes }) => {
   );
 };
 
-const generarPDF = (o) => {
+const construirPDF = (o) => {
   const doc = new jsPDF();
   const clienteNombre = o.cliente?.razonSocial || o.cliente?.nombre || "";
   const granjaStr = o.granja === "cañete" ? "Cañete" : "Los Pinos";
@@ -487,7 +494,47 @@ const generarPDF = (o) => {
   doc.setFontSize(8); doc.setTextColor(150);
   doc.text(`Trigotuc Avícola — ${o.numero} — Emitida: ${fecha}`, W / 2, 285, { align: "center" });
 
-  doc.save(`OrdenCarga_${o.numero}.pdf`);
+  return doc;
+};
+
+const generarPDF = (o) => {
+  construirPDF(o).save(`OrdenCarga_${o.numero}.pdf`);
+};
+
+// Comparte el PDF de la orden por WhatsApp usando el selector nativo (Web Share API) en celulares.
+// En escritorio descarga el PDF y abre WhatsApp Web directamente.
+const compartirPDFWhatsApp = async (o) => {
+  const doc = construirPDF(o);
+  const filename = `OrdenCarga_${o.numero}.pdf`;
+  const clienteNombre = o.cliente?.razonSocial || o.cliente?.nombre || "";
+  const mensaje = `Orden de Carga ${o.numero}${clienteNombre ? ` - ${clienteNombre}` : ""}`;
+
+  const esMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  if (esMobile && navigator.canShare) {
+    const file = new File([doc.output("blob")], filename, { type: "application/pdf" });
+    if (navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: filename, text: mensaje });
+        return;
+      } catch (err) {
+        if (err.name === "AbortError") return;
+      }
+    }
+  }
+
+  doc.save(filename);
+  const telefono = normalizarWhatsapp(o.cliente?.telefono);
+  if (!telefono) {
+    Swal.fire({
+      icon: "info",
+      title: "PDF descargado",
+      text: "El cliente no tiene un teléfono registrado. Abrí WhatsApp y adjuntá el PDF descargado manualmente.",
+      confirmButtonColor: "#0d6efd",
+    });
+    return;
+  }
+  window.open(`https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`, "_blank");
 };
 
 const EditarOrdenModal = ({ orden, lotes, onClose, onGuardado }) => {
@@ -746,7 +793,6 @@ const OrdenCargaListPage = () => {
   const rolUsuario    = localStorage.getItem("rolUsuario");
   const puedeCrear   = ["superadmin", "administracion_granja", "frigorifico"].includes(rolUsuario);
   const esAdmin      = ["superadmin", "administracion_granja"].includes(rolUsuario);
-  const esSuperAdmin = rolUsuario === "superadmin";
 
   const [ordenes, setOrdenes]   = useState([]);
   const [lotes, setLotes]       = useState([]);
@@ -844,15 +890,18 @@ const OrdenCargaListPage = () => {
                             )}
                           </div>
                           <div className="d-flex gap-1">
+                            <button className="btn btn-outline-success btn-sm" onClick={(ev) => { ev.stopPropagation(); compartirPDFWhatsApp(o); }} title="Enviar por WhatsApp">
+                              <i className="bi bi-whatsapp"></i>
+                            </button>
                             <button className="btn btn-outline-secondary btn-sm" onClick={(ev) => { ev.stopPropagation(); generarPDF(o); }} title="Bajar orden">
                               <i className="bi bi-file-earmark-arrow-down"></i>
                             </button>
-                            {o.estado !== "entregada" && (puedeCrear || esSuperAdmin) && (
+                            {esAdmin && (
                               <button className="btn btn-outline-primary btn-sm" onClick={(ev) => { ev.stopPropagation(); setEditOrden(o); }} title="Editar">
                                 <i className="bi bi-pencil"></i>
                               </button>
                             )}
-                            {o.estado !== "entregada" && esSuperAdmin && (
+                            {esAdmin && (
                               <button className="btn btn-outline-danger btn-sm" onClick={(ev) => { ev.stopPropagation(); handleEliminar(o); }} title="Eliminar">
                                 <i className="bi bi-trash"></i>
                               </button>
@@ -932,15 +981,18 @@ const OrdenCargaListPage = () => {
                           </td>
                           <td onClick={(ev) => ev.stopPropagation()}>
                             <div className="d-flex gap-1">
+                              <button className="btn btn-outline-success btn-sm" onClick={() => compartirPDFWhatsApp(o)} title="Enviar por WhatsApp">
+                                <i className="bi bi-whatsapp"></i>
+                              </button>
                               <button className="btn btn-outline-secondary btn-sm" onClick={() => generarPDF(o)} title="Bajar orden">
                                 <i className="bi bi-file-earmark-arrow-down"></i>
                               </button>
-                              {o.estado !== "entregada" && (puedeCrear || esSuperAdmin) && (
+                              {esAdmin && (
                                 <button className="btn btn-outline-primary btn-sm" onClick={() => setEditOrden(o)} title="Editar">
                                   <i className="bi bi-pencil"></i>
                                 </button>
                               )}
-                              {o.estado !== "entregada" && esSuperAdmin && (
+                              {esAdmin && (
                                 <button className="btn btn-outline-danger btn-sm" onClick={() => handleEliminar(o)} title="Eliminar">
                                   <i className="bi bi-trash"></i>
                                 </button>
