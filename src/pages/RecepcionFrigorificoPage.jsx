@@ -137,7 +137,8 @@ const imprimirRemito = (despacho) => {
 // ── Modal confirmar entrega ───────────────────────────────────────────────────
 const ConfirmarModal = ({ despacho, onClose, onConfirmado, esAdmin }) => {
   const yaLiberada = !!despacho.liberada;
-  const [paso, setPaso]         = useState(yaLiberada ? 2 : 1);
+  const esDelivery = despacho.modalidadEntrega === "delivery_chofer";
+  const [paso, setPaso]         = useState((yaLiberada || esDelivery) ? 2 : 1);
   const [codigo, setCodigo]     = useState("");
   const [codigoError, setCodigoError] = useState("");
   const [liberadaSinCodigo, setLiberadaSinCodigo] = useState(yaLiberada);
@@ -171,9 +172,17 @@ const ConfirmarModal = ({ despacho, onClose, onConfirmado, esAdmin }) => {
       });
       imprimirRemito(despacho);
       onConfirmado();
-      Swal.fire({ icon: "success", title: "Entrega confirmada", text: `Orden ${despacho.numeroOrden} cerrada.`, timer: 2000, showConfirmButton: false });
+      Swal.fire({
+        icon: "success",
+        title: esDelivery ? "Carga confirmada" : "Entrega confirmada",
+        text: esDelivery
+          ? `Orden ${despacho.numeroOrden} lista — el chofer fue notificado.`
+          : `Orden ${despacho.numeroOrden} cerrada.`,
+        timer: 2000,
+        showConfirmButton: false,
+      });
     } catch (err) {
-      Swal.fire("Error", err.message || "No se pudo confirmar la entrega.", "error");
+      Swal.fire("Error", err.message || "No se pudo confirmar.", "error");
     } finally {
       setSaving(false);
     }
@@ -187,7 +196,8 @@ const ConfirmarModal = ({ despacho, onClose, onConfirmado, esAdmin }) => {
             <div className="modal-header bg-success text-white">
               <div>
                 <h5 className="modal-title mb-0">
-                  <i className="bi bi-check2-circle me-2"></i>Confirmar entrega
+                  <i className="bi bi-check2-circle me-2"></i>
+                  {esDelivery ? "Confirmar carga del camión" : "Confirmar entrega"}
                 </h5>
                 <div className="small opacity-75 mt-1">
                   {despacho.numeroOrden} — {despacho.cliente?.razonSocial || "—"}
@@ -241,6 +251,14 @@ const ConfirmarModal = ({ despacho, onClose, onConfirmado, esAdmin }) => {
                     <div className="alert alert-warning py-2 mb-3 d-flex align-items-center gap-2">
                       <i className="bi bi-unlock-fill"></i>
                       <span>Liberada sin código por administración</span>
+                    </div>
+                  ) : esDelivery ? (
+                    <div className="alert alert-primary py-2 mb-3 d-flex align-items-center gap-2">
+                      <i className="bi bi-truck"></i>
+                      <span>
+                        Entrega por camión de Trigotuc
+                        {despacho.chofer?.nombreUsuario ? ` — Chofer: ${despacho.chofer.nombreUsuario}` : ""}
+                      </span>
                     </div>
                   ) : (
                     <div className="alert alert-success py-2 mb-3 d-flex align-items-center gap-2">
@@ -304,7 +322,9 @@ const ConfirmarModal = ({ despacho, onClose, onConfirmado, esAdmin }) => {
 
                   <div className="alert alert-info py-2 mb-0 small">
                     <i className="bi bi-printer me-1"></i>
-                    Al confirmar se imprimirá el remito para que firme el cliente.
+                    {esDelivery
+                      ? "Al confirmar se imprimirá el remito para entregar al chofer."
+                      : "Al confirmar se imprimirá el remito para que firme el cliente."}
                   </div>
                 </>
               )}
@@ -316,7 +336,8 @@ const ConfirmarModal = ({ despacho, onClose, onConfirmado, esAdmin }) => {
               {paso === 2 && (
                 <button className="btn btn-success btn-lg px-4" onClick={handleConfirmar} disabled={saving}>
                   {saving && <span className="spinner-border spinner-border-sm me-2"></span>}
-                  <i className="bi bi-check-circle me-1"></i>Confirmar entrega
+                  <i className="bi bi-check-circle me-1"></i>
+                  {esDelivery ? "Confirmar carga" : "Confirmar entrega"}
                 </button>
               )}
             </div>
@@ -330,8 +351,9 @@ const ConfirmarModal = ({ despacho, onClose, onConfirmado, esAdmin }) => {
 
 // ── Página principal ─────────────────────────────────────────────────────────
 const RecepcionFrigorificoPage = () => {
-  const rolUsuario = localStorage.getItem("rolUsuario");
-  const esAdmin    = rolUsuario === "superadmin";
+  const rolUsuario     = localStorage.getItem("rolUsuario");
+  const esAdmin        = rolUsuario === "superadmin";
+  const puedeConfirmar = ["superadmin", "frigorifico"].includes(rolUsuario);
 
   const [despachos, setDespachos]     = useState([]);
   const [loading, setLoading]         = useState(true);
@@ -456,6 +478,16 @@ const RecepcionFrigorificoPage = () => {
                         <span className="badge bg-secondary">
                           <i className="bi bi-snow me-1"></i>{camaraLbl(d.camara)}
                         </span>
+                        {d.modalidadEntrega === "delivery_chofer" ? (
+                          <span className="badge bg-info text-dark">
+                            <i className="bi bi-truck me-1"></i>
+                            Camión{d.chofer?.nombreUsuario ? `: ${d.chofer.nombreUsuario}` : ""}
+                          </span>
+                        ) : (
+                          <span className="badge bg-light text-dark border">
+                            <i className="bi bi-person-walking me-1"></i>Retiro cliente
+                          </span>
+                        )}
                         {d.turno && (
                           <span className={`badge ${d.turno === "mañana" ? "bg-warning text-dark" : "bg-info text-dark"}`}>
                             <i className={`bi bi-${d.turno === "mañana" ? "sunrise" : "sunset"} me-1`}></i>
@@ -532,10 +564,17 @@ const RecepcionFrigorificoPage = () => {
                         <i className="bi bi-unlock-fill me-1"></i>Liberada por administración — sin código
                       </div>
                     )}
-                    <button className="btn btn-success w-100 mb-2" onClick={() => setDespachoModal(d)}>
-                      <i className="bi bi-check2-circle me-1"></i>Confirmar entrega
-                    </button>
-                    {esAdmin && !d.liberada && (
+                    {puedeConfirmar ? (
+                      <button className="btn btn-success w-100 mb-2" onClick={() => setDespachoModal(d)}>
+                        <i className={`bi ${d.modalidadEntrega === "delivery_chofer" ? "bi-truck" : "bi-check2-circle"} me-1`}></i>
+                        {d.modalidadEntrega === "delivery_chofer" ? "Confirmar carga" : "Confirmar entrega"}
+                      </button>
+                    ) : (
+                      <div className="alert alert-light border py-2 mb-2 small text-center text-muted">
+                        <i className="bi bi-hourglass-split me-1"></i>Esperando confirmación de frigorífico
+                      </div>
+                    )}
+                    {esAdmin && !d.liberada && d.modalidadEntrega !== "delivery_chofer" && (
                       <button className="btn btn-outline-warning btn-sm w-100" onClick={() => handleLiberar(d)}>
                         <i className="bi bi-unlock me-1"></i>Liberar sin código
                       </button>

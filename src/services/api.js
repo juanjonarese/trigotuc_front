@@ -184,6 +184,13 @@ export const crearDespachoFrigorifico = async (data) => {
   return handleResponse(response);
 };
 
+export const actualizarDespachoFrigorifico = async (id, data) => {
+  const response = await fetch(`${API_URL}/despachos-frigorifico/${id}`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
 export const completarDespachoFrigorifico = async (id, data = {}) => {
   const response = await fetch(`${API_URL}/despachos-frigorifico/${id}/completar`, {
     method: "PATCH", headers: getAuthHeaders(), body: JSON.stringify(data),
