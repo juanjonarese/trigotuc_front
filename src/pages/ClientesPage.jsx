@@ -357,7 +357,7 @@ const ClientesPage = () => {
                       </div>
                       <div className="col-md-6 mb-3">
                         <label htmlFor="cuit" className="form-label">
-                          CUIT <span className="text-danger">*</span>
+                          CUIT
                         </label>
                         <input
                           type="text"
@@ -369,7 +369,6 @@ const ClientesPage = () => {
                           placeholder="30-12345678-9"
                           autoComplete="off"
                           data-form-type="other"
-                          required
                         />
                       </div>
                     </div>
@@ -411,7 +410,7 @@ const ClientesPage = () => {
                       </div>
                       <div className="col-md-6 mb-3">
                         <label htmlFor="telefono" className="form-label">
-                          Teléfono
+                          Teléfono <span className="text-danger">*</span>
                         </label>
                         <input
                           type="tel"
@@ -423,6 +422,7 @@ const ClientesPage = () => {
                           placeholder="381-1234567"
                           autoComplete="off"
                           data-form-type="other"
+                          required
                         />
                       </div>
                     </div>
