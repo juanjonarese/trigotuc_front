@@ -8,7 +8,7 @@ import {
   eliminarDespachoFrigorifico,
   obtenerResumenStock,
   buscarClientes,
-  obtenerUsuarios,
+  obtenerChoferes,
   obtenerCamiones,
 } from "../services/api";
 import Swal from "sweetalert2";
@@ -143,9 +143,9 @@ const NuevaOrdenModal = ({ onClose, onCreada, resumen }) => {
   });
 
   useEffect(() => {
-    Promise.all([obtenerUsuarios(), obtenerCamiones()])
-      .then(([usuarios, cams]) => {
-        setChoferes((usuarios.usuarios || []).filter((u) => u.rolUsuario === "chofer"));
+    Promise.all([obtenerChoferes(), obtenerCamiones()])
+      .then(([data, cams]) => {
+        setChoferes(data.choferes || []);
         setCamiones(cams.camiones || cams || []);
       })
       .catch(() => {});
@@ -215,7 +215,7 @@ const NuevaOrdenModal = ({ onClose, onCreada, resumen }) => {
 
     setSaving(true);
     try {
-      const camionDelChofer = camiones.find((c) => c.chofer?._id === choferSel || c.chofer === choferSel);
+      const camionDelChofer = camiones.find((c) => c.choferes?.some((ch) => String(ch?._id || ch) === String(choferSel)));
 
       const despacho = await crearDespachoFrigorifico({
         fecha:            form.fecha,
@@ -346,7 +346,7 @@ const NuevaOrdenModal = ({ onClose, onCreada, resumen }) => {
                       >
                         <option value="">Seleccioná un chofer...</option>
                         {choferes.map((c) => {
-                          const cam = camiones.find((k) => String(k.chofer?._id || k.chofer) === String(c._id) && k.activo);
+                          const cam = camiones.find((k) => k.choferes?.some((ch) => String(ch?._id || ch) === String(c._id)) && k.activo);
                           return (
                             <option key={c._id} value={c._id}>
                               {c.nombreUsuario}{cam ? ` — ${cam.marca} ${cam.patente}` : " (sin camión asignado)"}
@@ -513,8 +513,8 @@ const NuevaOrdenModal = ({ onClose, onCreada, resumen }) => {
 const DespachoFrigorificoPage = () => {
   const rolUsuario    = localStorage.getItem("rolUsuario");
   const esSuperAdmin  = rolUsuario === "superadmin";
-  const esAdmin       = ["superadmin", "administracion"].includes(rolUsuario);
-  const puedeProcesar = ["superadmin", "administracion", "frigorifico"].includes(rolUsuario);
+  const esAdmin       = ["superadmin", "administracion_frigorifico"].includes(rolUsuario);
+  const puedeProcesar = ["superadmin", "frigorifico"].includes(rolUsuario);
 
   const [despachos, setDespachos]       = useState([]);
   const [resumen, setResumen]           = useState(null);

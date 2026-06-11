@@ -22,7 +22,7 @@ const PersonalPage = () => {
     emailUsuario: "",
     telefonoUsuario: "",
     contraseniaUsuario: "",
-    rolUsuario: "administracion",
+    rolUsuario: "administracion_frigorifico",
   });
   const [confirmarContrasenia, setConfirmarContrasenia] = useState("");
   const [showPass, setShowPass]         = useState(false);
@@ -134,7 +134,7 @@ const PersonalPage = () => {
       emailUsuario: "",
       telefonoUsuario: "",
       contraseniaUsuario: "",
-      rolUsuario: "administracion",
+      rolUsuario: "administracion_frigorifico",
     });
     setConfirmarContrasenia("");
     setShowPass(false);
@@ -359,7 +359,8 @@ const PersonalPage = () => {
                           </div>
                           <span className={`badge ${
                             usuario.rolUsuario === 'superadmin' ? 'bg-danger' :
-                            usuario.rolUsuario === 'administracion' ? 'bg-primary' :
+                            usuario.rolUsuario === 'administracion_frigorifico' ? 'bg-primary' :
+                            usuario.rolUsuario === 'administracion_granja' ? 'bg-success-subtle text-success' :
                             usuario.rolUsuario === 'frigorifico' ? 'bg-info text-dark' :
                             usuario.rolUsuario === 'granja' ? 'bg-success' :
                             usuario.rolUsuario === 'camaras' ? 'bg-warning text-dark' :
@@ -392,7 +393,8 @@ const PersonalPage = () => {
                             <td>
                               <span className={`badge ${
                                 usuario.rolUsuario === 'superadmin' ? 'bg-danger' :
-                                usuario.rolUsuario === 'administracion' ? 'bg-primary' :
+                                usuario.rolUsuario === 'administracion_frigorifico' ? 'bg-primary' :
+                                usuario.rolUsuario === 'administracion_granja' ? 'bg-success-subtle text-success' :
                                 usuario.rolUsuario === 'frigorifico' ? 'bg-info text-dark' :
                                 usuario.rolUsuario === 'camaras' ? 'bg-success' :
                                 'bg-secondary'
@@ -675,7 +677,8 @@ const PersonalPage = () => {
                             onChange={handleChange}
                             required
                           >
-                            <option value="administracion">Administración (Todo menos usuarios)</option>
+                            <option value="administracion_frigorifico">Administración Frigorífico (Clientes, camiones, despachos)</option>
+                            <option value="administracion_granja">Administración Granja (Clientes, camiones, granja)</option>
                             <option value="frigorifico">Frigorífico (Lotes y envíos cámara)</option>
                             <option value="granja">Granja (Ingreso pollitos, galpones, datos semanales)</option>
                             <option value="camaras">Cámaras (Entregas)</option>
@@ -684,7 +687,8 @@ const PersonalPage = () => {
                           </select>
                           <div className="form-text">
                             <small>
-                              <strong>Administración:</strong> Acceso completo excepto gestión de usuarios. <br />
+                              <strong>Administración Frigorífico:</strong> Clientes, camiones, stock, despachos y envíos cámara. <br />
+                              <strong>Administración Granja:</strong> Clientes, camiones, ingreso de pollitos, galpones, órdenes de carga y recepción. <br />
                               <strong>Frigorífico:</strong> Carga de lotes y envíos entre cámaras. <br />
                               <strong>Cámaras:</strong> Registro de entregas de mercadería. <br />
                               <strong>Super Admin:</strong> Acceso total al sistema.

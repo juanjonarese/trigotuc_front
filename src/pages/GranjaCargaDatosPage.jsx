@@ -445,7 +445,7 @@ const MudarPollosModal = ({ lotes, lotePresel, onClose, onGuardado }) => {
 // ── Página principal ───────────────────────────────────────────────────────
 const GranjaCargaDatosPage = () => {
   const rolUsuario  = localStorage.getItem("rolUsuario");
-  const puedeEliminar = rolUsuario === "superadmin" || rolUsuario === "administracion";
+  const puedeEliminar = ["superadmin", "administracion_granja"].includes(rolUsuario);
 
   const [lotes, setLotes]   = useState([]);
   const [loading, setLoading] = useState(true);

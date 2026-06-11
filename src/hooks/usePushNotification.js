@@ -8,7 +8,7 @@ const urlBase64ToUint8Array = (base64String) => {
   return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
 };
 
-const ROLES_CON_NOTIFICACIONES = ["granja", "frigorifico", "superadmin", "administracion"];
+const ROLES_CON_NOTIFICACIONES = ["granja", "frigorifico", "superadmin", "administracion_granja", "administracion_frigorifico"];
 
 const suscribirConReg = async (reg) => {
   try {

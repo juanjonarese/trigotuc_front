@@ -331,7 +331,7 @@ const ConfirmarModal = ({ despacho, onClose, onConfirmado, esAdmin }) => {
 // ── Página principal ─────────────────────────────────────────────────────────
 const RecepcionFrigorificoPage = () => {
   const rolUsuario = localStorage.getItem("rolUsuario");
-  const esAdmin    = rolUsuario === "superadmin" || rolUsuario === "administracion";
+  const esAdmin    = rolUsuario === "superadmin";
 
   const [despachos, setDespachos]     = useState([]);
   const [loading, setLoading]         = useState(true);

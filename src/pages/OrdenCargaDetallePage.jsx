@@ -11,7 +11,7 @@ const OrdenCargaDetallePage = () => {
   const navigate   = useNavigate();
   const printRef   = useRef();
   const rolUsuario = localStorage.getItem("rolUsuario");
-  const puedeEntregar  = rolUsuario === "superadmin" || rolUsuario === "frigorifico" || rolUsuario === "administracion";
+  const puedeEntregar  = ["superadmin", "frigorifico", "administracion_granja"].includes(rolUsuario);
 
   const [orden, setOrden]           = useState(null);
   const [loading, setLoading]       = useState(true);

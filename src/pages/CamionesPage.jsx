@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { obtenerCamiones, crearCamion, actualizarCamion, eliminarCamion, obtenerUsuarios } from "../services/api";
+import { obtenerCamiones, crearCamion, actualizarCamion, eliminarCamion, obtenerChoferes, crearChofer } from "../services/api";
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
 import Swal from "sweetalert2";
 import "../css/Tablas.css";
 
-const FORM_INICIAL = { marca: "", patente: "", chofer: "" };
+const FORM_INICIAL = { marca: "", patente: "", choferes: ["", ""] };
+const NUEVO_CHOFER_INICIAL = { nombreUsuario: "", emailUsuario: "", telefonoUsuario: "", contraseniaUsuario: "" };
 const ITEMS_PER_PAGE = 30;
+const PASSWORD_REGEX = /^[A-Z](?=.*[a-z])(?=.*\d)[A-Za-z\d]{5,}$/;
 
 const CamionesPage = () => {
   const [camiones, setCamiones]     = useState([]);
@@ -19,8 +21,15 @@ const CamionesPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [formData, setFormData]     = useState(FORM_INICIAL);
 
+  const [mostrarNuevoChofer, setMostrarNuevoChofer] = useState(false);
+  const [nuevoChoferData, setNuevoChoferData] = useState(NUEVO_CHOFER_INICIAL);
+  const [confirmarContraseniaChofer, setConfirmarContraseniaChofer] = useState("");
+  const [showPassChofer, setShowPassChofer] = useState(false);
+  const [showConfirmChofer, setShowConfirmChofer] = useState(false);
+  const [creandoChofer, setCreandoChofer] = useState(false);
+
   const rolUsuario  = localStorage.getItem("rolUsuario");
-  const puedeEditar = rolUsuario === "superadmin" || rolUsuario === "administracion";
+  const puedeEditar = ["superadmin", "administracion_frigorifico", "administracion_granja"].includes(rolUsuario);
 
   const cargarCamiones = async () => {
     try {
@@ -37,21 +46,36 @@ const CamionesPage = () => {
     }
   };
 
+  const cargarChoferes = async () => {
+    try {
+      const data = await obtenerChoferes();
+      setChoferes(data.choferes || []);
+      return data.choferes || [];
+    } catch {
+      return [];
+    }
+  };
+
   useEffect(() => {
     cargarCamiones();
-    obtenerUsuarios()
-      .then((data) => setChoferes((data.usuarios || data || []).filter((u) => u.rolUsuario === "chofer")))
-      .catch(() => {});
+    cargarChoferes();
   }, []);
 
   const handleOpenModal = (camion = null) => {
     if (camion) {
       setEditingCamion(camion);
-      setFormData({ marca: camion.marca, patente: camion.patente, chofer: camion.chofer?._id || "" });
+      setFormData({
+        marca: camion.marca,
+        patente: camion.patente,
+        choferes: [camion.choferes?.[0]?._id || "", camion.choferes?.[1]?._id || ""],
+      });
     } else {
       setEditingCamion(null);
       setFormData(FORM_INICIAL);
     }
+    setMostrarNuevoChofer(false);
+    setNuevoChoferData(NUEVO_CHOFER_INICIAL);
+    setConfirmarContraseniaChofer("");
     setShowModal(true);
   };
 
@@ -59,19 +83,108 @@ const CamionesPage = () => {
     setShowModal(false);
     setEditingCamion(null);
     setFormData(FORM_INICIAL);
+    setMostrarNuevoChofer(false);
+    setNuevoChoferData(NUEVO_CHOFER_INICIAL);
+    setConfirmarContraseniaChofer("");
   };
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const handleChoferChange = (index, value) => {
+    setFormData((prev) => {
+      const nuevosChoferes = [...prev.choferes];
+      nuevosChoferes[index] = value;
+      return { ...prev, choferes: nuevosChoferes };
+    });
+  };
+
+  // Choferes disponibles para el slot `index`: excluye el elegido en el otro slot
+  // y los choferes ya asignados a otro camión activo.
+  const choferesDisponibles = (index) => {
+    const otroIndex = index === 0 ? 1 : 0;
+    const otroSeleccionado = formData.choferes[otroIndex];
+    const asignadosOtrosCamiones = camiones
+      .filter((c) => c.activo && c._id !== editingCamion?._id)
+      .flatMap((c) => (c.choferes || []).map((ch) => ch._id || ch));
+
+    return choferes.filter((c) => {
+      if (c._id === otroSeleccionado) return false;
+      if (asignadosOtrosCamiones.includes(c._id)) return false;
+      return true;
+    });
+  };
+
+  const handleNuevoChoferChange = (e) => {
+    setNuevoChoferData({ ...nuevoChoferData, [e.target.name]: e.target.value });
+  };
+
+  const handleCrearChofer = async () => {
+    const { nombreUsuario, emailUsuario, telefonoUsuario, contraseniaUsuario } = nuevoChoferData;
+    if (!nombreUsuario || !emailUsuario || !telefonoUsuario || !contraseniaUsuario) {
+      Swal.fire({ title: "Completá todos los campos", icon: "warning", confirmButtonColor: "#d33" });
+      return;
+    }
+    if (contraseniaUsuario !== confirmarContraseniaChofer) {
+      Swal.fire({ title: "Las contraseñas no coinciden", icon: "warning", confirmButtonColor: "#d33" });
+      return;
+    }
+    if (!PASSWORD_REGEX.test(contraseniaUsuario)) {
+      Swal.fire({
+        title: "Contraseña inválida",
+        text: "Debe comenzar con MAYÚSCULA, contener letras y números (mínimo 6 caracteres alfanuméricos). Ejemplo: Arqui123",
+        icon: "warning",
+        confirmButtonColor: "#d33",
+      });
+      return;
+    }
+
+    setCreandoChofer(true);
+    try {
+      const resp = await crearChofer(nuevoChoferData);
+      const listaActualizada = await cargarChoferes();
+      const nuevo = listaActualizada.find((c) => c.emailUsuario === emailUsuario);
+
+      if (nuevo) {
+        setFormData((prev) => {
+          const nuevosChoferes = [...prev.choferes];
+          const idxVacio = nuevosChoferes.findIndex((c) => !c);
+          if (idxVacio !== -1) nuevosChoferes[idxVacio] = nuevo._id;
+          return { ...prev, choferes: nuevosChoferes };
+        });
+      }
+
+      setMostrarNuevoChofer(false);
+      setNuevoChoferData(NUEVO_CHOFER_INICIAL);
+      setConfirmarContraseniaChofer("");
+      Swal.fire({
+        title: "¡Chofer creado!",
+        text: resp.msg || "El chofer fue creado correctamente",
+        icon: "success",
+        confirmButtonColor: "#198754",
+      });
+    } catch (err) {
+      console.error("Error al crear chofer:", err);
+      Swal.fire({
+        title: "Error",
+        text: err.message || "Error al crear el chofer",
+        icon: "error",
+        confirmButtonColor: "#d33",
+      });
+    } finally {
+      setCreandoChofer(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      const payload = { ...formData, choferes: formData.choferes.filter(Boolean) };
       if (editingCamion) {
-        await actualizarCamion(editingCamion._id, formData);
+        await actualizarCamion(editingCamion._id, payload);
       } else {
-        await crearCamion(formData);
+        await crearCamion(payload);
       }
       await cargarCamiones();
       handleCloseModal();
@@ -210,9 +323,10 @@ const CamionesPage = () => {
                             <div>
                               <span className="fw-semibold d-block">{c.marca}</span>
                               <small className="text-muted">{c.patente}</small>
-                              {c.chofer && (
+                              {c.choferes?.length > 0 && (
                                 <small className="text-primary d-block">
-                                  <i className="bi bi-person-fill me-1"></i>{c.chofer.nombreUsuario}
+                                  <i className="bi bi-person-fill me-1"></i>
+                                  {c.choferes.map((ch) => ch.nombreUsuario).join(", ")}
                                 </small>
                               )}
                             </div>
@@ -245,7 +359,7 @@ const CamionesPage = () => {
                         <tr>
                           <th>Marca</th>
                           <th>Patente</th>
-                          <th>Chofer</th>
+                          <th>Choferes</th>
                           {puedeEditar && <th>Acciones</th>}
                         </tr>
                       </thead>
@@ -255,8 +369,10 @@ const CamionesPage = () => {
                             <td>{c.marca}</td>
                             <td>{c.patente}</td>
                             <td>
-                              {c.chofer
-                                ? <span className="badge bg-primary">{c.chofer.nombreUsuario}</span>
+                              {c.choferes?.length > 0
+                                ? c.choferes.map((ch) => (
+                                    <span key={ch._id} className="badge bg-primary me-1">{ch.nombreUsuario}</span>
+                                  ))
                                 : <span className="text-muted small">—</span>}
                             </td>
                             {puedeEditar && (
@@ -341,23 +457,161 @@ const CamionesPage = () => {
                         />
                       </div>
                       <div className="mb-3">
-                        <label htmlFor="chofer" className="form-label">
-                          Chofer asignado
-                        </label>
-                        <select
-                          className="form-select"
-                          id="chofer"
-                          name="chofer"
-                          value={formData.chofer}
-                          onChange={handleChange}
-                        >
-                          <option value="">— Sin chofer —</option>
-                          {choferes.map((c) => (
-                            <option key={c._id} value={c._id}>{c.nombreUsuario}</option>
-                          ))}
-                        </select>
+                        <label className="form-label">Choferes asignados</label>
+                        <div className="row g-2">
+                          <div className="col-12 col-sm-6">
+                            <select
+                              className="form-select"
+                              aria-label="Chofer 1"
+                              value={formData.choferes[0]}
+                              onChange={(e) => handleChoferChange(0, e.target.value)}
+                            >
+                              <option value="">— Chofer 1 —</option>
+                              {choferesDisponibles(0).map((c) => (
+                                <option key={c._id} value={c._id}>{c.nombreUsuario}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="col-12 col-sm-6">
+                            <select
+                              className="form-select"
+                              aria-label="Chofer 2"
+                              value={formData.choferes[1]}
+                              onChange={(e) => handleChoferChange(1, e.target.value)}
+                            >
+                              <option value="">— Chofer 2 —</option>
+                              {choferesDisponibles(1).map((c) => (
+                                <option key={c._id} value={c._id}>{c.nombreUsuario}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <div className="form-text">
+                          Podés asignar hasta 2 choferes, por ejemplo para distintos turnos.
+                        </div>
                         {choferes.length === 0 && (
-                          <div className="form-text text-muted">No hay usuarios con rol chofer cargados aún.</div>
+                          <div className="form-text text-muted">
+                            No hay choferes registrados aún. Podés crear uno nuevo abajo.
+                          </div>
+                        )}
+
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-primary mt-2"
+                          onClick={() => setMostrarNuevoChofer((v) => !v)}
+                        >
+                          <i className="bi bi-person-plus me-1"></i>
+                          {mostrarNuevoChofer ? "Cancelar nuevo chofer" : "+ Nuevo chofer"}
+                        </button>
+
+                        {mostrarNuevoChofer && (
+                          <div className="border rounded p-3 mt-2 bg-light">
+                            <h6 className="mb-3">Crear nuevo chofer</h6>
+                            <div className="row g-2">
+                              <div className="col-12 col-sm-6">
+                                <label className="form-label">
+                                  Nombre <span className="text-danger">*</span>
+                                </label>
+                                <input
+                                  type="text"
+                                  className="form-control"
+                                  name="nombreUsuario"
+                                  value={nuevoChoferData.nombreUsuario}
+                                  onChange={handleNuevoChoferChange}
+                                  placeholder="Nombre y apellido"
+                                />
+                              </div>
+                              <div className="col-12 col-sm-6">
+                                <label className="form-label">
+                                  Teléfono <span className="text-danger">*</span>
+                                </label>
+                                <input
+                                  type="number"
+                                  className="form-control"
+                                  name="telefonoUsuario"
+                                  value={nuevoChoferData.telefonoUsuario}
+                                  onChange={handleNuevoChoferChange}
+                                  placeholder="3814123456"
+                                />
+                              </div>
+                              <div className="col-12 col-sm-6">
+                                <label className="form-label">
+                                  Email <span className="text-danger">*</span>
+                                </label>
+                                <input
+                                  type="email"
+                                  className="form-control"
+                                  name="emailUsuario"
+                                  value={nuevoChoferData.emailUsuario}
+                                  onChange={handleNuevoChoferChange}
+                                  placeholder="chofer@ejemplo.com"
+                                />
+                              </div>
+                              <div className="col-12 col-sm-6">
+                                <label className="form-label">
+                                  Contraseña <span className="text-danger">*</span>
+                                </label>
+                                <div className="input-group">
+                                  <input
+                                    type={showPassChofer ? "text" : "password"}
+                                    className="form-control"
+                                    name="contraseniaUsuario"
+                                    value={nuevoChoferData.contraseniaUsuario}
+                                    onChange={handleNuevoChoferChange}
+                                    placeholder="Ej: Arqui123"
+                                    autoComplete="new-password"
+                                  />
+                                  <button
+                                    type="button"
+                                    className="btn btn-outline-secondary"
+                                    onClick={() => setShowPassChofer((v) => !v)}
+                                    tabIndex="-1"
+                                  >
+                                    <i className={`bi ${showPassChofer ? "bi-eye-slash" : "bi-eye"}`}></i>
+                                  </button>
+                                </div>
+                                <div className="form-text">
+                                  Mayúscula inicial, letras y números, mínimo 6 caracteres.
+                                </div>
+                              </div>
+                              <div className="col-12 col-sm-6">
+                                <label className="form-label">
+                                  Confirmar contraseña <span className="text-danger">*</span>
+                                </label>
+                                <div className="input-group">
+                                  <input
+                                    type={showConfirmChofer ? "text" : "password"}
+                                    className={`form-control ${confirmarContraseniaChofer && (confirmarContraseniaChofer === nuevoChoferData.contraseniaUsuario ? "is-valid" : "is-invalid")}`}
+                                    value={confirmarContraseniaChofer}
+                                    onChange={(e) => setConfirmarContraseniaChofer(e.target.value)}
+                                    placeholder="Repetí la contraseña"
+                                    autoComplete="new-password"
+                                  />
+                                  <button
+                                    type="button"
+                                    className="btn btn-outline-secondary"
+                                    onClick={() => setShowConfirmChofer((v) => !v)}
+                                    tabIndex="-1"
+                                  >
+                                    <i className={`bi ${showConfirmChofer ? "bi-eye-slash" : "bi-eye"}`}></i>
+                                  </button>
+                                  {confirmarContraseniaChofer && confirmarContraseniaChofer !== nuevoChoferData.contraseniaUsuario && (
+                                    <div className="invalid-feedback">Las contraseñas no coinciden</div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-end mt-2">
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-success"
+                                onClick={handleCrearChofer}
+                                disabled={creandoChofer}
+                              >
+                                {creandoChofer ? "Creando..." : "Crear chofer"}
+                              </button>
+                            </div>
+                          </div>
                         )}
                       </div>
                     </div>

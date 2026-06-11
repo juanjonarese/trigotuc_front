@@ -106,7 +106,7 @@ const Layout = ({ children }) => {
             </a>
           )}
 
-          {(rolUsuario === "superadmin" || rolUsuario === "administracion") && (
+          {(rolUsuario === "superadmin" || rolUsuario === "administracion_frigorifico" || rolUsuario === "administracion_granja") && (
           <div className="nav-section mb-2">
             <a
               href="#"
@@ -190,7 +190,7 @@ const Layout = ({ children }) => {
           )}
           */}
 
-          {(rolUsuario === "superadmin" || rolUsuario === "administracion") && (
+          {rolUsuario === "superadmin" && (
             <a
               href="#"
               className={`nav-link d-flex align-items-center gap-2 mb-2 rounded ${
@@ -205,7 +205,7 @@ const Layout = ({ children }) => {
 
 
           {/* Granja (crianza) */}
-          {(rolUsuario === "superadmin" || rolUsuario === "administracion" || rolUsuario === "granja") && (
+          {(rolUsuario === "superadmin" || rolUsuario === "administracion_granja" || rolUsuario === "granja") && (
           <div className="nav-section mb-2">
             <a
               href="#"
@@ -239,16 +239,18 @@ const Layout = ({ children }) => {
                   <span>Galpones</span>
                 </a>
                 {/* 3 — Datos Semanales */}
-                <a
-                  href="#"
-                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/granja/cargar-datos") ? "text-white" : "text-white-50"}`}
-                  onClick={(e) => { e.preventDefault(); navigate("/granja/cargar-datos"); }}
-                >
-                  <i className="bi bi-pencil-square"></i>
-                  <span>Datos Semanales</span>
-                </a>
+                {(rolUsuario === "superadmin" || rolUsuario === "granja") && (
+                  <a
+                    href="#"
+                    className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/granja/cargar-datos") ? "text-white" : "text-white-50"}`}
+                    onClick={(e) => { e.preventDefault(); navigate("/granja/cargar-datos"); }}
+                  >
+                    <i className="bi bi-pencil-square"></i>
+                    <span>Datos Semanales</span>
+                  </a>
+                )}
                 {/* 4 — Órdenes de Carga */}
-                {(rolUsuario === "superadmin" || rolUsuario === "administracion") && (
+                {(rolUsuario === "superadmin" || rolUsuario === "administracion_granja") && (
                   <a
                     href="#"
                     className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/granja/ordenes-carga") ? "text-white" : "text-white-50"}`}
@@ -276,7 +278,7 @@ const Layout = ({ children }) => {
           )}
 
           {/* Frigorifico */}
-          {rolUsuario !== "granja" && (
+          {rolUsuario !== "granja" && rolUsuario !== "administracion_granja" && (
           <div className="nav-section mb-2">
             <a
               href="#"
@@ -337,7 +339,7 @@ const Layout = ({ children }) => {
                   <span>Stock</span>
                 </a>
                 {/* 4 — Órdenes de Carga - Venta (administración emite) */}
-                {(rolUsuario === "superadmin" || rolUsuario === "administracion") && (
+                {(rolUsuario === "superadmin" || rolUsuario === "administracion_frigorifico") && (
                   <a
                     href="#"
                     className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
@@ -353,7 +355,7 @@ const Layout = ({ children }) => {
                   </a>
                 )}
                 {/* 5 — Recepción de Órdenes (frigorifico confirma) */}
-                {(rolUsuario === "superadmin" || rolUsuario === "frigorifico" || rolUsuario === "administracion" || rolUsuario === "camaras") && (
+                {(rolUsuario === "superadmin" || rolUsuario === "frigorifico" || rolUsuario === "camaras") && (
                   <a
                     href="#"
                     className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
@@ -366,7 +368,7 @@ const Layout = ({ children }) => {
                   </a>
                 )}
                 {/* 6 — Envío Cámara */}
-                {(rolUsuario === "superadmin" || rolUsuario === "administracion") && (
+                {(rolUsuario === "superadmin" || rolUsuario === "administracion_frigorifico") && (
                   <a
                     href="#"
                     className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
@@ -379,7 +381,7 @@ const Layout = ({ children }) => {
                   </a>
                 )}
                 {/* 7 — Stock Empaque */}
-                {(rolUsuario === "superadmin" || rolUsuario === "administracion") && (
+                {rolUsuario === "superadmin" && (
                   <a
                     href="#"
                     className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${

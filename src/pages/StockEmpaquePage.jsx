@@ -17,7 +17,7 @@ import { obtenerFechaHoy } from "../utils/dateUtils";
 import Swal from "sweetalert2";
 
 const rolUsuario  = () => localStorage.getItem("rolUsuario");
-const esAdmin     = () => ["superadmin", "administracion"].includes(rolUsuario());
+const esAdmin     = () => rolUsuario() === "superadmin";
 const esSuperAdmin = () => rolUsuario() === "superadmin";
 
 const fmtNum   = (n) => n != null ? new Intl.NumberFormat("es-AR").format(n) : "—";

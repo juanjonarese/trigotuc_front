@@ -411,7 +411,7 @@ const RecepcionOrdenCargaPage = () => {
   const [filtroEstado, setFiltroEstado] = useState("pendiente");
   const [ordenModal, setOrdenModal]     = useState(null);
 
-  const esAdmin = rolUsuario === "superadmin" || rolUsuario === "administracion";
+  const esAdmin = ["superadmin", "administracion_granja"].includes(rolUsuario);
 
   const abrirModal = (orden) => {
     setOrdenModal(orden);

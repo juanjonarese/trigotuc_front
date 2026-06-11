@@ -290,6 +290,18 @@ export const obtenerCamiones = async () => {
   return handleResponse(response);
 };
 
+export const obtenerChoferes = async () => {
+  const response = await fetch(`${API_URL}/camiones/choferes`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+export const crearChofer = async (data) => {
+  const response = await fetch(`${API_URL}/camiones/choferes`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
 export const crearCamion = async (data) => {
   const response = await fetch(`${API_URL}/camiones`, {
     method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
