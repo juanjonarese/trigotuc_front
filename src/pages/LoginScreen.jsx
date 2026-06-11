@@ -124,14 +124,14 @@ const LoginScreen = () => {
                       htmlFor="emailUsuario"
                       className="form-label text-muted small fw-semibold"
                     >
-                      EMAIL
+                      USUARIO
                     </label>
                     <input
-                      type="email"
+                      type="text"
                       className="form-control"
                       id="emailUsuario"
                       name="emailUsuario"
-                      placeholder="correo@ejemplo.com"
+                      placeholder="Usuario"
                       value={formData.emailUsuario}
                       onChange={handleChange}
                       disabled={loading}

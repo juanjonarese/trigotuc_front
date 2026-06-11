@@ -6,7 +6,7 @@ import Swal from "sweetalert2";
 import "../css/Tablas.css";
 
 const FORM_INICIAL = { marca: "", patente: "", choferes: ["", ""] };
-const NUEVO_CHOFER_INICIAL = { nombreUsuario: "", emailUsuario: "", telefonoUsuario: "", contraseniaUsuario: "" };
+const NUEVO_CHOFER_INICIAL = { nombreUsuario: "", telefonoUsuario: "", contraseniaUsuario: "" };
 const ITEMS_PER_PAGE = 30;
 const PASSWORD_REGEX = /^[A-Z](?=.*[a-z])(?=.*\d)[A-Za-z\d]{5,}$/;
 
@@ -121,8 +121,8 @@ const CamionesPage = () => {
   };
 
   const handleCrearChofer = async () => {
-    const { nombreUsuario, emailUsuario, telefonoUsuario, contraseniaUsuario } = nuevoChoferData;
-    if (!nombreUsuario || !emailUsuario || !telefonoUsuario || !contraseniaUsuario) {
+    const { nombreUsuario, telefonoUsuario, contraseniaUsuario } = nuevoChoferData;
+    if (!nombreUsuario || !telefonoUsuario || !contraseniaUsuario) {
       Swal.fire({ title: "Completá todos los campos", icon: "warning", confirmButtonColor: "#d33" });
       return;
     }
@@ -143,14 +143,13 @@ const CamionesPage = () => {
     setCreandoChofer(true);
     try {
       const resp = await crearChofer(nuevoChoferData);
-      const listaActualizada = await cargarChoferes();
-      const nuevo = listaActualizada.find((c) => c.emailUsuario === emailUsuario);
+      await cargarChoferes();
 
-      if (nuevo) {
+      if (resp.usuario?.id) {
         setFormData((prev) => {
           const nuevosChoferes = [...prev.choferes];
           const idxVacio = nuevosChoferes.findIndex((c) => !c);
-          if (idxVacio !== -1) nuevosChoferes[idxVacio] = nuevo._id;
+          if (idxVacio !== -1) nuevosChoferes[idxVacio] = resp.usuario.id;
           return { ...prev, choferes: nuevosChoferes };
         });
       }
@@ -532,19 +531,6 @@ const CamionesPage = () => {
                                   value={nuevoChoferData.telefonoUsuario}
                                   onChange={handleNuevoChoferChange}
                                   placeholder="3814123456"
-                                />
-                              </div>
-                              <div className="col-12 col-sm-6">
-                                <label className="form-label">
-                                  Email <span className="text-danger">*</span>
-                                </label>
-                                <input
-                                  type="email"
-                                  className="form-control"
-                                  name="emailUsuario"
-                                  value={nuevoChoferData.emailUsuario}
-                                  onChange={handleNuevoChoferChange}
-                                  placeholder="chofer@ejemplo.com"
                                 />
                               </div>
                               <div className="col-12 col-sm-6">
