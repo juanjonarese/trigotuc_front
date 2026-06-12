@@ -28,6 +28,19 @@ const fmtFecha  = (f) => f ? new Date(f).toLocaleDateString("es-AR") : "—";
 const camaraLbl = (v) => v === "cañete" ? "Cañete" : v === "trigotuc" ? "Trigotuc" : v;
 const tipoLbl   = (tipo) => TIPOS_TROZADO.find((x) => x.tipo === tipo)?.label || tipo;
 
+// ── Badge de estado ───────────────────────────────────────────────────────────
+const estadoBadge = (d) => {
+  if (d.estado !== "completada") {
+    return <span className="badge bg-warning text-dark"><i className="bi bi-hourglass-split me-1"></i>Pendiente</span>;
+  }
+  if (d.modalidadEntrega === "delivery_chofer") {
+    if (d.entregado)       return <span className="badge bg-success"><i className="bi bi-check-circle me-1"></i>Entregado</span>;
+    if (d.confirmadaCarga) return <span className="badge bg-info text-dark"><i className="bi bi-truck me-1"></i>En camión</span>;
+    return <span className="badge bg-success"><i className="bi bi-check-circle me-1"></i>Listo para cargar</span>;
+  }
+  return <span className="badge bg-success"><i className="bi bi-check-circle me-1"></i>Completada</span>;
+};
+
 // ── PDF de la orden (para descargar / compartir por WhatsApp) ────────────────
 const construirPDFDespacho = (d) => {
   const doc = new jsPDF();
@@ -990,7 +1003,7 @@ const DespachoFrigorificoPage = () => {
   const [loading, setLoading]           = useState(true);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [editDespacho, setEditDespacho] = useState(null);
-  const [filtro, setFiltro]             = useState("");
+  const [filtro, setFiltro]             = useState("pendiente");
 
   const cargarDatos = useCallback(async () => {
     setLoading(true);
@@ -1067,9 +1080,9 @@ const DespachoFrigorificoPage = () => {
           </h1>
           <div className="d-flex gap-2 flex-wrap">
             {[
-              { v: "",           l: "Todas"      },
               { v: "pendiente",  l: "Pendientes" },
               { v: "completada", l: "Completadas" },
+              { v: "",           l: "Todas"      },
             ].map(({ v, l }) => (
               <button key={v}
                 className={`btn btn-sm ${filtro === v ? "btn-dark" : "btn-outline-secondary"}`}
@@ -1093,95 +1106,130 @@ const DespachoFrigorificoPage = () => {
             No hay órdenes en este estado.
           </div>
         ) : (
-          <div className="card border-0 shadow-sm">
-            <div className="card-body p-0">
-              <div className="table-responsive">
-                <table className="table table-hover align-middle mb-0">
-                  <thead className="table-light">
-                    <tr>
-                      <th>N° Orden</th>
-                      <th>Fecha</th>
-                      <th>Cliente</th>
-                      <th>Cámara</th>
-                      <th>Turno</th>
-                      <th>Modalidad</th>
-                      <th>Detalle</th>
-                      <th>Estado</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {despachosVisibles.map((d) => (
-                      <tr key={d._id}>
-                        <td><span className="badge bg-dark">{d.numeroOrden}</span></td>
-                        <td className="small">{fmtFecha(d.fecha)}</td>
-                        <td className="fw-semibold small">{d.cliente?.razonSocial || "—"}</td>
-                        <td><span className="badge bg-secondary">{camaraLbl(d.camara)}</span></td>
-                        <td className="small text-muted">{d.turno || "—"}</td>
-                        <td>
-                          {d.modalidadEntrega === "delivery_chofer" ? (
-                            <div>
-                              <span className="badge bg-info text-dark"><i className="bi bi-truck me-1"></i>Camión</span>
-                              {d.chofer && <div className="small text-muted mt-1">{d.chofer.nombreUsuario}</div>}
-                            </div>
-                          ) : (
-                            <span className="badge bg-light text-dark border"><i className="bi bi-person-walking me-1"></i>Cliente</span>
-                          )}
-                        </td>
-                        <td>
-                          <div className="d-flex flex-wrap gap-1">
-                            {d.calibres?.map((c, i) => (
-                              <span key={i} className="badge bg-primary">Cal.{c.calibre}: {fmt(c.cajones)} caj</span>
-                            ))}
-                            {d.trozados?.map((t, i) => (
-                              <span key={`t${i}`} className="badge bg-warning text-dark">
-                                {tipoLbl(t.tipo)}: {fmt(t.cajas)} caj
-                              </span>
-                            ))}
+          <div className="row g-3">
+            {despachosVisibles.map((d) => (
+              <div key={d._id} className="col-12 col-md-6 col-lg-4">
+                <div className="card border-0 shadow-sm h-100"
+                  style={{ borderLeft: `4px solid ${d.estado === "pendiente" ? "#ffc107" : "#198754"}` }}>
+                  <div className="card-body">
+
+                    {/* Número + badges */}
+                    <div className="d-flex justify-content-between align-items-start mb-2">
+                      <span className="badge bg-dark fs-6">{d.numeroOrden}</span>
+                      <div className="d-flex gap-1 flex-wrap justify-content-end">
+                        <span className="badge bg-secondary">
+                          <i className="bi bi-snow me-1"></i>{camaraLbl(d.camara)}
+                        </span>
+                        {d.modalidadEntrega === "delivery_chofer" ? (
+                          <span className="badge bg-info text-dark">
+                            <i className="bi bi-truck me-1"></i>
+                            Camión{d.chofer?.nombreUsuario ? `: ${d.chofer.nombreUsuario}` : ""}
+                          </span>
+                        ) : (
+                          <span className="badge bg-light text-dark border">
+                            <i className="bi bi-person-walking me-1"></i>Retiro cliente
+                          </span>
+                        )}
+                        {d.turno && (
+                          <span className={`badge ${d.turno === "mañana" ? "bg-warning text-dark" : "bg-info text-dark"}`}>
+                            <i className={`bi bi-${d.turno === "mañana" ? "sunrise" : "sunset"} me-1`}></i>
+                            {d.turno === "mañana" ? "Mañana" : "Tarde"}
+                          </span>
+                        )}
+                        {estadoBadge(d)}
+                      </div>
+                    </div>
+
+                    {/* Cliente + fecha */}
+                    <div className="fw-semibold mb-1">
+                      <i className="bi bi-person me-1 text-muted"></i>
+                      {d.cliente?.razonSocial || "—"}
+                    </div>
+                    <div className="text-muted small mb-2">
+                      <i className="bi bi-calendar me-1"></i>{fmtFecha(d.fecha)}
+                    </div>
+
+                    {/* Detalle calibres + trozados */}
+                    {(d.calibres?.length > 0 || d.trozados?.length > 0) && (
+                      <div className="mb-2 rounded overflow-hidden" style={{ border: "1px solid #d1fae5" }}>
+                        {d.calibres?.map((c, idx) => (
+                          <div key={idx}
+                            className="d-flex justify-content-between align-items-center px-2 py-1"
+                            style={{
+                              borderBottom: (idx < d.calibres.length - 1 || d.trozados?.length > 0)
+                                ? "1px solid #d1fae5" : "none",
+                              background: "#f0fdf4",
+                            }}>
+                            <span className="fw-semibold text-success">Cal. {c.calibre}</span>
+                            <span className="text-muted small">{fmt(c.cajones)} cajones · {fmt(c.cajones * 20)} kg</span>
                           </div>
-                        </td>
-                        <td>
-                          {d.estado !== "completada"
-                            ? <span className="badge bg-warning text-dark">Pendiente</span>
-                            : d.modalidadEntrega === "delivery_chofer"
-                              ? d.entregado
-                                ? <span className="badge bg-success">Entregado</span>
-                                : d.confirmadaCarga
-                                  ? <span className="badge bg-info text-dark">En camión</span>
-                                  : <span className="badge bg-success">Listo para cargar</span>
-                              : <span className="badge bg-success">Completada</span>
-                          }
-                        </td>
-                        <td>
-                          <div className="d-flex gap-1 flex-wrap">
-                            <button className="btn btn-outline-success btn-sm" title="Enviar por WhatsApp"
-                              onClick={() => compartirPDFDespachoWhatsApp(d)}>
-                              <i className="bi bi-whatsapp"></i>
-                            </button>
-                            <button className="btn btn-outline-secondary btn-sm" title="Descargar PDF"
-                              onClick={() => descargarPDFDespacho(d)}>
-                              <i className="bi bi-file-earmark-arrow-down"></i>
-                            </button>
-                            {esAdmin && d.estado === "pendiente" && (
-                              <button className="btn btn-outline-primary btn-sm" title="Editar"
-                                onClick={() => setEditDespacho(d)}>
-                                <i className="bi bi-pencil"></i>
-                              </button>
-                            )}
-                            {esSuperAdmin && d.estado === "pendiente" && (
-                              <button className="btn btn-outline-danger btn-sm" title="Eliminar"
-                                onClick={() => handleEliminar(d._id)}>
-                                <i className="bi bi-trash"></i>
-                              </button>
-                            )}
+                        ))}
+                        {d.trozados?.map((t, idx) => (
+                          <div key={`t${idx}`}
+                            className="d-flex justify-content-between align-items-center px-2 py-1"
+                            style={{
+                              borderBottom: idx < d.trozados.length - 1 ? "1px solid #fef9c3" : "none",
+                              background: "#fffbeb",
+                            }}>
+                            <span className="fw-semibold text-warning">{tipoLbl(t.tipo)}</span>
+                            <span className="text-muted small">{fmt(t.cajas)} cajas · {fmt(t.kgTotal)} kg</span>
                           </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        ))}
+                        <div className="d-flex justify-content-between align-items-center px-2 py-1 fw-bold"
+                          style={{ background: "#dcfce7" }}>
+                          <span className="text-success small">Total</span>
+                          <span className="text-muted small">
+                            {d.totalCajones > 0 ? `${fmt(d.totalCajones)} cajones` : ""}
+                            {d.totalCajones > 0 && d.totalKgTrozados > 0 ? " · " : ""}
+                            {d.totalKgTrozados > 0 ? `${fmt(d.totalKgTrozados)} kg trozados` : ""}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Observaciones */}
+                    {d.observaciones && (
+                      <div className="mb-2 p-2 rounded"
+                        style={{ background: "#fffbeb", border: "1px solid #fde68a", fontSize: "0.85rem" }}>
+                        <i className="bi bi-info-circle me-1 text-warning"></i>{d.observaciones}
+                      </div>
+                    )}
+
+                    {/* Liberada sin código */}
+                    {d.liberada && (
+                      <div className="alert alert-warning py-1 px-2 mb-0 small text-center">
+                        <i className="bi bi-unlock-fill me-1"></i>Liberada — sin código
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="card-footer bg-transparent border-top-0 pt-0 pb-3 px-3">
+                    <div className="d-flex gap-2">
+                      <button className="btn btn-outline-success btn-sm flex-grow-1" title="Enviar por WhatsApp"
+                        onClick={() => compartirPDFDespachoWhatsApp(d)}>
+                        <i className="bi bi-whatsapp"></i>
+                      </button>
+                      <button className="btn btn-outline-secondary btn-sm flex-grow-1" title="Descargar PDF"
+                        onClick={() => descargarPDFDespacho(d)}>
+                        <i className="bi bi-file-earmark-arrow-down"></i>
+                      </button>
+                      {esAdmin && d.estado === "pendiente" && (
+                        <button className="btn btn-outline-primary btn-sm flex-grow-1" title="Editar"
+                          onClick={() => setEditDespacho(d)}>
+                          <i className="bi bi-pencil"></i>
+                        </button>
+                      )}
+                      {esSuperAdmin && d.estado === "pendiente" && (
+                        <button className="btn btn-outline-danger btn-sm flex-grow-1" title="Eliminar"
+                          onClick={() => handleEliminar(d._id)}>
+                          <i className="bi bi-trash"></i>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
+            ))}
           </div>
         )}
 

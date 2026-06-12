@@ -355,7 +355,7 @@ const Layout = ({ children }) => {
                   </a>
                 )}
                 {/* 5 — Recepción de Órdenes (frigorifico confirma) */}
-                {(rolUsuario === "superadmin" || rolUsuario === "frigorifico" || rolUsuario === "camaras") && (
+                {(rolUsuario === "superadmin" || rolUsuario === "frigorifico" || rolUsuario === "camaras" || rolUsuario === "administracion_frigorifico") && (
                   <a
                     href="#"
                     className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
@@ -422,7 +422,7 @@ const Layout = ({ children }) => {
               onClick={(e) => { e.preventDefault(); navigate("/chofer"); }}
             >
               <i className="bi bi-truck fs-5"></i>
-              <span>Mis Entregas</span>
+              <span>Cargas Camión</span>
             </a>
           </div>
           )}

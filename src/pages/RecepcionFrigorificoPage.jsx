@@ -27,19 +27,22 @@ const imprimirRemito = (despacho) => {
   const turno    = despacho.turno || "—";
   const fecha    = new Date(despacho.fecha).toLocaleDateString("es-AR");
   const hoy      = new Date().toLocaleDateString("es-AR");
+  const segundaFirmaLbl = despacho.modalidadEntrega === "delivery_chofer"
+    ? "Firma del chofer — entregado conforme"
+    : "Firma del encargado de frigorifico";
 
   const filasCalibres = (despacho.calibres || []).map((c) => `
     <tr>
-      <td style="padding:6px 12px;border:1px solid #dee2e6">Cal. ${c.calibre}</td>
-      <td style="padding:6px 12px;border:1px solid #dee2e6;text-align:right">${fmt(c.cajones)}</td>
-      <td style="padding:6px 12px;border:1px solid #dee2e6;text-align:right">${fmt(c.cajones * 20)} kg</td>
+      <td style="padding:3px 8px;border:1px solid #dee2e6">Cal. ${c.calibre}</td>
+      <td style="padding:3px 8px;border:1px solid #dee2e6;text-align:right">${fmt(c.cajones)}</td>
+      <td style="padding:3px 8px;border:1px solid #dee2e6;text-align:right">${fmt(c.cajones * 20)} kg</td>
     </tr>`).join("");
 
   const filasTrozados = (despacho.trozados || []).map((t) => `
     <tr>
-      <td style="padding:6px 12px;border:1px solid #dee2e6">${tipoLbl(t.tipo)}</td>
-      <td style="padding:6px 12px;border:1px solid #dee2e6;text-align:right">${fmt(t.cajas)} cajas</td>
-      <td style="padding:6px 12px;border:1px solid #dee2e6;text-align:right">${fmt(t.kgTotal)} kg</td>
+      <td style="padding:3px 8px;border:1px solid #dee2e6">${tipoLbl(t.tipo)}</td>
+      <td style="padding:3px 8px;border:1px solid #dee2e6;text-align:right">${fmt(t.cajas)} cajas</td>
+      <td style="padding:3px 8px;border:1px solid #dee2e6;text-align:right">${fmt(t.kgTotal)} kg</td>
     </tr>`).join("");
 
   const bloque = (copia) => `
@@ -90,7 +93,7 @@ const imprimirRemito = (despacho) => {
         </div>
         <div class="firma-box">
           <div class="firma-linea"></div>
-          <div class="firma-lbl">Firma del encargado de frigorifico</div>
+          <div class="firma-lbl">${segundaFirmaLbl}</div>
         </div>
       </div>
       <div class="no-factura">Documento no válido como factura</div>
@@ -100,26 +103,27 @@ const imprimirRemito = (despacho) => {
     <title>Orden ${despacho.numeroOrden}</title>
     <style>
       * { box-sizing: border-box; }
-      body { font-family: Arial, sans-serif; padding: 20px; color: #222; margin: 0; }
-      .copia { max-width: 640px; margin: 0 auto; padding: 20px 30px; }
-      .separador { border: none; border-top: 2px dashed #aaa; margin: 12px auto; max-width: 640px; }
-      .copia-label { float: right; font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 1px; border: 1px solid #ccc; padding: 2px 8px; border-radius: 4px; margin-bottom: 4px; }
-      .logo { font-size: 20px; font-weight: bold; margin-bottom: 2px; }
+      body { font-family: Arial, sans-serif; padding: 8px; color: #222; margin: 0; font-size: 11px; }
+      .copia { max-width: 640px; margin: 0 auto; padding: 8px 20px; page-break-inside: avoid; }
+      .separador { border: none; border-top: 1px dashed #aaa; margin: 6px auto; max-width: 640px; }
+      .copia-label { float: right; font-size: 9px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 1px; border: 1px solid #ccc; padding: 1px 6px; border-radius: 4px; margin-bottom: 2px; }
+      .logo { font-size: 16px; font-weight: bold; margin-bottom: 1px; }
       .logo span { color: #f59e0b; }
-      .subtitulo { font-size: 12px; color: #666; margin-bottom: 16px; }
-      h2 { font-size: 13px; border-bottom: 2px solid #222; padding-bottom: 5px; margin: 16px 0 10px; text-transform: uppercase; letter-spacing: .5px; }
-      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 20px; margin-bottom: 14px; }
+      .subtitulo { font-size: 10px; color: #666; margin-bottom: 8px; }
+      h2 { font-size: 11px; border-bottom: 2px solid #222; padding-bottom: 3px; margin: 8px 0 6px; text-transform: uppercase; letter-spacing: .5px; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; margin-bottom: 8px; }
       .fila { display: flex; flex-direction: column; }
-      .lbl { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: .5px; }
-      .val { font-size: 13px; font-weight: 600; }
-      table { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 12px; }
-      th { background: #f3f4f6; text-align: left; padding: 6px 12px; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: #555; border: 1px solid #dee2e6; }
-      .obs { background: #fffbeb; border: 1px solid #fde68a; border-radius: 4px; padding: 8px 12px; font-size: 11px; color: #78350f; margin: 10px 0; }
-      .firma-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 40px; }
+      .lbl { font-size: 8px; color: #888; text-transform: uppercase; letter-spacing: .5px; }
+      .val { font-size: 11px; font-weight: 600; }
+      table { width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 10px; }
+      th { background: #f3f4f6; text-align: left; padding: 3px 8px; font-size: 8px; text-transform: uppercase; letter-spacing: .5px; color: #555; border: 1px solid #dee2e6; }
+      .obs { background: #fffbeb; border: 1px solid #fde68a; border-radius: 4px; padding: 4px 8px; font-size: 9px; color: #78350f; margin: 6px 0; }
+      .firma-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 16px; }
       .firma-box { text-align: center; }
-      .firma-linea { border-top: 1.5px solid #222; margin-bottom: 5px; }
-      .firma-lbl { font-size: 10px; color: #555; }
-      .no-factura { text-align: center; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #6b7280; border-top: 1px dashed #d1d5db; margin-top: 20px; padding-top: 10px; }
+      .firma-linea { border-top: 1.5px solid #222; margin-bottom: 3px; }
+      .firma-lbl { font-size: 8px; color: #555; }
+      .no-factura { text-align: center; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #6b7280; border-top: 1px dashed #d1d5db; margin-top: 10px; padding-top: 5px; }
+      @page { size: A4; margin: 8mm; }
       @media print { body { padding: 0; } }
     </style></head><body>
     ${bloque("Original — Cliente")}
@@ -352,7 +356,7 @@ const ConfirmarModal = ({ despacho, onClose, onConfirmado, esAdmin }) => {
 // ── Página principal ─────────────────────────────────────────────────────────
 const RecepcionFrigorificoPage = () => {
   const rolUsuario     = localStorage.getItem("rolUsuario");
-  const esAdmin        = rolUsuario === "superadmin";
+  const puedeLiberar   = ["superadmin", "administracion_frigorifico"].includes(rolUsuario);
   const puedeConfirmar = ["superadmin", "frigorifico"].includes(rolUsuario);
 
   const [despachos, setDespachos]     = useState([]);
@@ -574,7 +578,7 @@ const RecepcionFrigorificoPage = () => {
                         <i className="bi bi-hourglass-split me-1"></i>Esperando confirmación de frigorífico
                       </div>
                     )}
-                    {esAdmin && !d.liberada && d.modalidadEntrega !== "delivery_chofer" && (
+                    {puedeLiberar && !d.liberada && d.modalidadEntrega !== "delivery_chofer" && (
                       <button className="btn btn-outline-warning btn-sm w-100" onClick={() => handleLiberar(d)}>
                         <i className="bi bi-unlock me-1"></i>Liberar sin código
                       </button>
@@ -650,7 +654,7 @@ const RecepcionFrigorificoPage = () => {
       {despachoModal && (
         <ConfirmarModal
           despacho={despachoModal}
-          esAdmin={esAdmin}
+          esAdmin={puedeLiberar}
           onClose={() => setDespachoModal(null)}
           onConfirmado={() => { setDespachoModal(null); cargar(); }}
         />

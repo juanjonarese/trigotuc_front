@@ -8,8 +8,17 @@ import {
 import { formatearFechaLocal } from "../utils/dateUtils";
 import Swal from "sweetalert2";
 
-const fmt = (n) => n != null ? new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n) : "—";
-const camaraLbl = { cañete: "Cañete", trigotuc: "Trigotuc" };
+const TIPOS_TROZADO = [
+  { tipo: "filet",   label: "Filet"      },
+  { tipo: "pata",    label: "Pata/muslo" },
+  { tipo: "alita",   label: "Alita"      },
+  { tipo: "menudo",  label: "Menudo"     },
+  { tipo: "carcaza", label: "Carcaza"    },
+];
+
+const fmt       = (n) => n != null ? new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n) : "—";
+const camaraLbl = (v) => v === "cañete" ? "Cañete" : v === "trigotuc" ? "Trigotuc" : v;
+const tipoLbl   = (tipo) => TIPOS_TROZADO.find((x) => x.tipo === tipo)?.label || tipo;
 
 // ── Tarjeta de despacho ──────────────────────────────────────────────────────
 const DespachoCard = ({ despacho, onActualizar }) => {
@@ -29,7 +38,7 @@ const DespachoCard = ({ despacho, onActualizar }) => {
       title: "¿Confirmás que cargaste este pedido?",
       html: `<div style="text-align:left;font-size:14px">
         <strong>${despacho.cliente?.razonSocial || "—"}</strong><br/>
-        ${camaraLbl[despacho.camara] || despacho.camara} · ${fmt(despacho.totalCajones)} cajones · ${fmt(despacho.pesoTotalKg)} kg<br/><br/>
+        ${camaraLbl(despacho.camara)} · ${fmt(despacho.totalCajones)} cajones · ${fmt(despacho.pesoTotalKg)} kg<br/><br/>
         <span style="color:#6b7280">Al confirmar declarás que recibiste esta carga en el camión.</span>
       </div>`,
       icon: "question",
@@ -79,15 +88,18 @@ const DespachoCard = ({ despacho, onActualizar }) => {
   };
 
   return (
-    <div className="card border-0 shadow-sm mb-3" style={{ borderLeft: `5px solid ${barColor}` }}>
-      <div className="card-body pb-2">
+    <div className="card border-0 shadow-sm mb-3" style={{ borderLeft: `4px solid ${barColor}` }}>
+      <div className="card-body">
 
-        {/* Encabezado */}
+        {/* Número + badges */}
         <div className="d-flex justify-content-between align-items-start mb-2">
-          <div>
-            <span className="badge bg-dark fs-6 me-2">{despacho.numeroOrden}</span>
-            {despacho.estado !== "completada" && (
-              <span className="badge bg-warning text-dark">Pendiente frigorifico</span>
+          <span className="badge bg-dark fs-6">{despacho.numeroOrden}</span>
+          <div className="d-flex gap-1 flex-wrap justify-content-end">
+            <span className="badge bg-secondary">
+              <i className="bi bi-snow me-1"></i>{camaraLbl(despacho.camara)}
+            </span>
+            {pendienteFrigorifico && (
+              <span className="badge bg-warning text-dark"><i className="bi bi-hourglass-split me-1"></i>Pendiente frigorifico</span>
             )}
             {porCargar && (
               <span className="badge bg-primary"><i className="bi bi-box-arrow-in-down me-1"></i>Por cargar</span>
@@ -96,69 +108,65 @@ const DespachoCard = ({ despacho, onActualizar }) => {
               <span className="badge bg-success"><i className="bi bi-truck me-1"></i>Por entregar</span>
             )}
             {despacho.entregado && (
-              <span className="badge bg-secondary">Entregado</span>
+              <span className="badge bg-secondary"><i className="bi bi-check-circle me-1"></i>Entregado</span>
             )}
           </div>
-          <span className="small text-muted">{formatearFechaLocal(despacho.fecha)}</span>
         </div>
 
-        {/* Cliente */}
-        <div className="fw-bold fs-5 mb-1">{despacho.cliente?.razonSocial || "—"}</div>
+        {/* Cliente + fecha */}
+        <div className="fw-bold fs-5 mb-1">
+          <i className="bi bi-person me-1 text-muted"></i>{despacho.cliente?.razonSocial || "—"}
+        </div>
+        <div className="text-muted small mb-2">
+          <i className="bi bi-calendar me-1"></i>{formatearFechaLocal(despacho.fecha)}
+          {despacho.camion && (
+            <span className="ms-2"><i className="bi bi-truck me-1"></i>{despacho.camion.marca} {despacho.camion.patente}</span>
+          )}
+        </div>
 
         {/* Lugar de retiro — prominente */}
-        <div className="rounded px-3 py-2 mb-3 d-flex align-items-center gap-2"
+        <div className="rounded px-3 py-2 mb-2 d-flex align-items-center gap-2"
           style={{ background: porCargar ? "#eff6ff" : "#f0fdf4", border: `1px solid ${porCargar ? "#bfdbfe" : "#bbf7d0"}` }}>
           <i className={`bi bi-geo-alt-fill fs-5 ${porCargar ? "text-primary" : "text-success"}`}></i>
-          <div>
-            <div className="fw-bold" style={{ fontSize: "0.95rem" }}>
-              Retirá en Frigorifico {camaraLbl[despacho.camara] || despacho.camara}
-            </div>
-            <div className="text-muted small">
-              <i className="bi bi-box-seam me-1"></i>{fmt(despacho.totalCajones)} cajones · {fmt(despacho.pesoTotalKg)} kg
-              {despacho.camion && (
-                <span className="ms-2">
-                  <i className="bi bi-truck me-1"></i>{despacho.camion.marca} {despacho.camion.patente}
-                </span>
-              )}
-            </div>
+          <div className="fw-bold" style={{ fontSize: "0.95rem" }}>
+            Retirá en Frigorifico {camaraLbl(despacho.camara)}
           </div>
         </div>
 
-        {/* Detalle calibres */}
-        {(despacho.calibres || []).length > 0 && (
-          <div className="mb-3">
-            <div className="text-muted small fw-semibold text-uppercase mb-2" style={{ letterSpacing: "0.05em" }}>
-              Pollos por calibre
-            </div>
-            <div className="d-flex flex-wrap gap-2">
-              {despacho.calibres.map((c) => (
-                <div key={c.calibre} className="rounded px-3 py-2 text-center"
-                  style={{ background: "#eff6ff", border: "1px solid #bfdbfe", minWidth: 80 }}>
-                  <div className="fw-bold text-primary" style={{ fontSize: "0.8rem" }}>Cal. {c.calibre}</div>
-                  <div className="fw-bold fs-5">{fmt(c.cajones)}</div>
-                  <div className="text-muted" style={{ fontSize: "0.7rem" }}>cajones</div>
-                  <div className="text-muted" style={{ fontSize: "0.7rem" }}>{fmt(c.cajones * 20)} kg</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Detalle trozados */}
-        {(despacho.trozados || []).length > 0 && (
-          <div className="mb-3">
-            <div className="text-muted small fw-semibold text-uppercase mb-2" style={{ letterSpacing: "0.05em" }}>
-              Trozados
-            </div>
-            <div className="d-flex flex-wrap gap-2">
-              {despacho.trozados.map((t) => (
-                <div key={t.tipo} className="rounded px-3 py-2 text-center"
-                  style={{ background: "#fffbeb", border: "1px solid #fde68a", minWidth: 80 }}>
-                  <div className="fw-bold text-warning" style={{ fontSize: "0.8rem" }}>{t.tipo}</div>
-                  <div className="fw-bold fs-5">{fmt(t.cajas)}</div>
-                  <div className="text-muted" style={{ fontSize: "0.7rem" }}>cajas · {fmt(t.kgTotal)} kg</div>
-                </div>
-              ))}
+        {/* Detalle calibres + trozados */}
+        {(despacho.calibres?.length > 0 || despacho.trozados?.length > 0) && (
+          <div className="mb-2 rounded overflow-hidden" style={{ border: "1px solid #d1fae5" }}>
+            {despacho.calibres?.map((c, idx) => (
+              <div key={c.calibre}
+                className="d-flex justify-content-between align-items-center px-2 py-1"
+                style={{
+                  borderBottom: (idx < despacho.calibres.length - 1 || despacho.trozados?.length > 0)
+                    ? "1px solid #d1fae5" : "none",
+                  background: "#f0fdf4",
+                }}>
+                <span className="fw-semibold text-success">Cal. {c.calibre}</span>
+                <span className="text-muted small">{fmt(c.cajones)} cajones · {fmt(c.cajones * 20)} kg</span>
+              </div>
+            ))}
+            {despacho.trozados?.map((t, idx) => (
+              <div key={t.tipo}
+                className="d-flex justify-content-between align-items-center px-2 py-1"
+                style={{
+                  borderBottom: idx < despacho.trozados.length - 1 ? "1px solid #fef9c3" : "none",
+                  background: "#fffbeb",
+                }}>
+                <span className="fw-semibold text-warning">{tipoLbl(t.tipo)}</span>
+                <span className="text-muted small">{fmt(t.cajas)} cajas · {fmt(t.kgTotal)} kg</span>
+              </div>
+            ))}
+            <div className="d-flex justify-content-between align-items-center px-2 py-1 fw-bold"
+              style={{ background: "#dcfce7" }}>
+              <span className="text-success small">Total</span>
+              <span className="text-muted small">
+                {despacho.totalCajones > 0 ? `${fmt(despacho.totalCajones)} cajones` : ""}
+                {despacho.totalCajones > 0 && despacho.totalKgTrozados > 0 ? " · " : ""}
+                {despacho.totalKgTrozados > 0 ? `${fmt(despacho.totalKgTrozados)} kg trozados` : ""}
+              </span>
             </div>
           </div>
         )}
@@ -177,7 +185,7 @@ const DespachoCard = ({ despacho, onActualizar }) => {
         )}
 
         {despacho.observaciones && (
-          <div className="rounded p-2 mb-2 small" style={{ background: "#fffbeb", border: "1px solid #fde68a" }}>
+          <div className="rounded p-2 mb-0 small" style={{ background: "#fffbeb", border: "1px solid #fde68a" }}>
             <i className="bi bi-info-circle me-1 text-warning"></i>{despacho.observaciones}
           </div>
         )}
@@ -243,7 +251,7 @@ const ChoferPage = () => {
 
         <div className="mb-3">
           <h1 className="h4 mb-0">
-            <i className="bi bi-truck me-2 text-primary"></i>Mis Entregas
+            <i className="bi bi-truck me-2 text-primary"></i>Cargas Camión
           </h1>
         </div>
 
@@ -274,7 +282,7 @@ const ChoferPage = () => {
           {[
             { key: "cargar",    label: "Por cargar",    count: porCargar.length,   color: "btn-primary"   },
             { key: "entregar",  label: "Por entregar",  count: porEntregar.length, color: "btn-success"   },
-            { key: "historial", label: "Historial",     count: entregadas.length,  color: "btn-secondary" },
+            { key: "historial", label: "Completadas",   count: entregadas.length,  color: "btn-secondary" },
           ].map(({ key, label, count, color }) => (
             <button key={key}
               className={`btn btn-sm flex-fill ${tab === key ? color : "btn-outline-secondary"}`}
