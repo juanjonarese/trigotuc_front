@@ -177,6 +177,15 @@ export const obtenerDespachosFrigorifico = async (filtros = {}) => {
   return handleResponse(response);
 };
 
+export const obtenerStockDisponibleFrigorifico = async (camara, excluirId) => {
+  const params = new URLSearchParams({ camara });
+  if (excluirId) params.append("excluir", excluirId);
+  const response = await fetch(`${API_URL}/despachos-frigorifico/stock-disponible?${params.toString()}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
 export const crearDespachoFrigorifico = async (data) => {
   const response = await fetch(`${API_URL}/despachos-frigorifico`, {
     method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),

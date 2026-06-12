@@ -7,7 +7,7 @@ import {
   crearDespachoFrigorifico,
   actualizarDespachoFrigorifico,
   eliminarDespachoFrigorifico,
-  obtenerResumenStock,
+  obtenerStockDisponibleFrigorifico,
   buscarClientes,
   obtenerChoferes,
   obtenerCamiones,
@@ -213,7 +213,7 @@ const compartirPDFDespachoWhatsApp = async (d) => {
 };
 
 // ── Modal nueva orden ────────────────────────────────────────────────────────
-const NuevaOrdenModal = ({ onClose, onCreada, resumen }) => {
+const NuevaOrdenModal = ({ onClose, onCreada }) => {
   const [saving, setSaving]                 = useState(false);
   const [busqueda, setBusqueda]             = useState("");
   const [resultados, setResultados]         = useState([]);
@@ -226,6 +226,9 @@ const NuevaOrdenModal = ({ onClose, onCreada, resumen }) => {
   const [choferes, setChoferes]             = useState([]);
   const [camiones, setCamiones]             = useState([]);
   const [choferSel, setChoferSel]           = useState("");
+  const [stockCalibres, setStockCalibres]   = useState(null);
+  const [trozadosDisp, setTrozadosDisp]     = useState([]);
+  const [loadingStock, setLoadingStock]     = useState(false);
   const [form, setForm] = useState({
     fecha:         new Date().toISOString().split("T")[0],
     observaciones: "",
@@ -264,17 +267,18 @@ const NuevaOrdenModal = ({ onClose, onCreada, resumen }) => {
     setTrozadosLineas([]);
   };
 
-  const stockCalibres = camara === "cañete"
-    ? (resumen?.stockCañete   || [])
-    : camara === "trigotuc"
-    ? (resumen?.stockTrigotuc || [])
-    : null;
-
-  const trozadosDisp = camara === "cañete"
-    ? (resumen?.trozadosCañete   || []).filter((t) => t.cajas > 0)
-    : camara === "trigotuc"
-    ? (resumen?.trozadosTrigotuc || []).filter((t) => t.cajas > 0)
-    : [];
+  // ── Stock disponible de la cámara seleccionada (físico - comprometido por otras órdenes) ──
+  useEffect(() => {
+    if (!camara) { setStockCalibres(null); setTrozadosDisp([]); return; }
+    setLoadingStock(true);
+    obtenerStockDisponibleFrigorifico(camara)
+      .then((data) => {
+        setStockCalibres(data.stockCalibres || []);
+        setTrozadosDisp((data.trozadosDisp || []).filter((t) => t.cajas > 0));
+      })
+      .catch(() => { setStockCalibres([]); setTrozadosDisp([]); })
+      .finally(() => setLoadingStock(false));
+  }, [camara]);
 
   const totalCajCam = (stockCalibres || []).reduce((a, c) => a + c.cajones, 0);
   const lineasCalc  = lineas.map((l) => ({ ...l, cajones: calcularCajones(l.pollos, l.calibre) }));
@@ -469,7 +473,12 @@ const NuevaOrdenModal = ({ onClose, onCreada, resumen }) => {
                 {/* Panel de stock — tarjetitas */}
                 {camara && (
                   <div className="mb-3">
-                    {totalCajCam === 0 && trozadosDisp.length === 0 ? (
+                    {loadingStock ? (
+                      <div className="text-center py-2 text-muted small">
+                        <span className="spinner-border spinner-border-sm me-2"></span>
+                        Calculando stock disponible...
+                      </div>
+                    ) : totalCajCam === 0 && trozadosDisp.length === 0 ? (
                       <div className="rounded px-3 py-2 small text-muted"
                         style={{ background: "#fef9c3", border: "1px solid #fde68a" }}>
                         <i className="bi bi-exclamation-triangle me-1 text-warning"></i>
@@ -478,7 +487,7 @@ const NuevaOrdenModal = ({ onClose, onCreada, resumen }) => {
                     ) : (
                       <div className="rounded p-3" style={{ background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
                         <div className="small fw-semibold text-success mb-2">
-                          <i className="bi bi-snow me-1"></i>Stock en {camaraLbl(camara)}
+                          <i className="bi bi-snow me-1"></i>Stock disponible en {camaraLbl(camara)}
                         </div>
                         <div className="d-flex flex-wrap gap-2">
                           {(stockCalibres || []).filter((c) => c.cajones > 0).map((c) => (
@@ -504,7 +513,7 @@ const NuevaOrdenModal = ({ onClose, onCreada, resumen }) => {
                 )}
 
                 {/* Detalle a cargar */}
-                {camara && (totalCajCam > 0 || trozadosDisp.length > 0) && (
+                {camara && !loadingStock && (totalCajCam > 0 || trozadosDisp.length > 0) && (
                   <>
                     <div className="fw-semibold mb-2 small text-uppercase text-muted" style={{ letterSpacing: "0.05em" }}>
                       Detalle a cargar
@@ -584,7 +593,7 @@ const NuevaOrdenModal = ({ onClose, onCreada, resumen }) => {
 
             <div className="modal-footer">
               <button className="btn btn-outline-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
-              <button type="submit" form="form-despacho" className="btn btn-success" disabled={saving}>
+              <button type="submit" form="form-despacho" className="btn btn-success" disabled={saving || loadingStock}>
                 {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
                 Confirmar orden de carga
               </button>
@@ -599,7 +608,7 @@ const NuevaOrdenModal = ({ onClose, onCreada, resumen }) => {
 };
 
 // ── Modal editar orden ───────────────────────────────────────────────────────
-const EditarDespachoModal = ({ despacho, onClose, onGuardado, resumen }) => {
+const EditarDespachoModal = ({ despacho, onClose, onGuardado }) => {
   const [saving, setSaving]                 = useState(false);
   const [busqueda, setBusqueda]             = useState(despacho.cliente?.razonSocial || despacho.cliente?.nombre || "");
   const [resultados, setResultados]         = useState([]);
@@ -620,6 +629,9 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado, resumen }) => {
   const [choferes, setChoferes]             = useState([]);
   const [camiones, setCamiones]             = useState([]);
   const [choferSel, setChoferSel]           = useState(despacho.chofer?._id || "");
+  const [stockCalibres, setStockCalibres]   = useState(null);
+  const [trozadosDisp, setTrozadosDisp]     = useState([]);
+  const [loadingStock, setLoadingStock]     = useState(false);
   const [form, setForm] = useState({
     fecha:         despacho.fecha ? new Date(despacho.fecha).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
     observaciones: despacho.observaciones || "",
@@ -658,17 +670,19 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado, resumen }) => {
     setTrozadosLineas([]);
   };
 
-  const stockCalibres = camara === "cañete"
-    ? (resumen?.stockCañete   || [])
-    : camara === "trigotuc"
-    ? (resumen?.stockTrigotuc || [])
-    : null;
-
-  const trozadosDisp = camara === "cañete"
-    ? (resumen?.trozadosCañete   || []).filter((t) => t.cajas > 0)
-    : camara === "trigotuc"
-    ? (resumen?.trozadosTrigotuc || []).filter((t) => t.cajas > 0)
-    : [];
+  // ── Stock disponible de la cámara seleccionada (físico - comprometido por otras órdenes) ──
+  // Se excluye esta misma orden del cálculo de "comprometido" para poder reasignar su propio stock.
+  useEffect(() => {
+    if (!camara) { setStockCalibres(null); setTrozadosDisp([]); return; }
+    setLoadingStock(true);
+    obtenerStockDisponibleFrigorifico(camara, despacho._id)
+      .then((data) => {
+        setStockCalibres(data.stockCalibres || []);
+        setTrozadosDisp((data.trozadosDisp || []).filter((t) => t.cajas > 0));
+      })
+      .catch(() => { setStockCalibres([]); setTrozadosDisp([]); })
+      .finally(() => setLoadingStock(false));
+  }, [camara, despacho._id]);
 
   const totalCajCam = (stockCalibres || []).reduce((a, c) => a + c.cajones, 0);
   const lineasCalc  = lineas.map((l) => ({ ...l, cajones: calcularCajones(l.pollos, l.calibre) }));
@@ -863,7 +877,12 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado, resumen }) => {
                 {/* Panel de stock — tarjetitas */}
                 {camara && (
                   <div className="mb-3">
-                    {totalCajCam === 0 && trozadosDisp.length === 0 ? (
+                    {loadingStock ? (
+                      <div className="text-center py-2 text-muted small">
+                        <span className="spinner-border spinner-border-sm me-2"></span>
+                        Calculando stock disponible...
+                      </div>
+                    ) : totalCajCam === 0 && trozadosDisp.length === 0 ? (
                       <div className="rounded px-3 py-2 small text-muted"
                         style={{ background: "#fef9c3", border: "1px solid #fde68a" }}>
                         <i className="bi bi-exclamation-triangle me-1 text-warning"></i>
@@ -872,7 +891,7 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado, resumen }) => {
                     ) : (
                       <div className="rounded p-3" style={{ background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
                         <div className="small fw-semibold text-success mb-2">
-                          <i className="bi bi-snow me-1"></i>Stock en {camaraLbl(camara)}
+                          <i className="bi bi-snow me-1"></i>Stock disponible en {camaraLbl(camara)}
                         </div>
                         <div className="d-flex flex-wrap gap-2">
                           {(stockCalibres || []).filter((c) => c.cajones > 0).map((c) => (
@@ -898,7 +917,7 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado, resumen }) => {
                 )}
 
                 {/* Detalle a cargar */}
-                {camara && (totalCajCam > 0 || trozadosDisp.length > 0) && (
+                {camara && !loadingStock && (totalCajCam > 0 || trozadosDisp.length > 0) && (
                   <>
                     <div className="fw-semibold mb-2 small text-uppercase text-muted" style={{ letterSpacing: "0.05em" }}>
                       Detalle a cargar
@@ -978,7 +997,7 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado, resumen }) => {
 
             <div className="modal-footer">
               <button className="btn btn-outline-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
-              <button type="submit" form="form-editar-despacho" className="btn btn-primary" disabled={saving}>
+              <button type="submit" form="form-editar-despacho" className="btn btn-primary" disabled={saving || loadingStock}>
                 {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
                 Guardar cambios
               </button>
@@ -999,7 +1018,6 @@ const DespachoFrigorificoPage = () => {
   const esAdmin       = ["superadmin", "administracion_frigorifico"].includes(rolUsuario);
 
   const [despachos, setDespachos]       = useState([]);
-  const [resumen, setResumen]           = useState(null);
   const [loading, setLoading]           = useState(true);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [editDespacho, setEditDespacho] = useState(null);
@@ -1008,12 +1026,8 @@ const DespachoFrigorificoPage = () => {
   const cargarDatos = useCallback(async () => {
     setLoading(true);
     try {
-      const [desp, res] = await Promise.all([
-        obtenerDespachosFrigorifico(),
-        obtenerResumenStock(),
-      ]);
+      const desp = await obtenerDespachosFrigorifico();
       setDespachos(desp);
-      setResumen(res);
     } catch {
       Swal.fire("Error", "No se pudieron cargar los datos.", "error");
     } finally {
@@ -1239,7 +1253,6 @@ const DespachoFrigorificoPage = () => {
         <NuevaOrdenModal
           onClose={() => setModalAbierto(false)}
           onCreada={handleCreada}
-          resumen={resumen}
         />
       )}
 
@@ -1248,7 +1261,6 @@ const DespachoFrigorificoPage = () => {
           despacho={editDespacho}
           onClose={() => setEditDespacho(null)}
           onGuardado={handleEditado}
-          resumen={resumen}
         />
       )}
     </Layout>
