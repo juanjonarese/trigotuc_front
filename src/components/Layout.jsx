@@ -90,7 +90,7 @@ const Layout = ({ children }) => {
         </div>
 
         <nav className="sidebar-nav flex-grow-1 p-3">
-          {rolUsuario !== "frigorifico" && rolUsuario !== "granja" && (
+          {rolUsuario !== "frigorifico" && rolUsuario !== "granja" && rolUsuario !== "chofer" && (
             <a
               href="#"
               className={`nav-link d-flex align-items-center gap-2 mb-2 rounded ${
@@ -278,7 +278,7 @@ const Layout = ({ children }) => {
           )}
 
           {/* Frigorifico */}
-          {rolUsuario !== "granja" && rolUsuario !== "administracion_granja" && (
+          {rolUsuario !== "granja" && rolUsuario !== "chofer" && (
           <div className="nav-section mb-2">
             <a
               href="#"
