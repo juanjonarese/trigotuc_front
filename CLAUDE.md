@@ -114,7 +114,17 @@ Secciones: `USUARIOS`, `CLIENTES`, `LOTES (FAENA)`, `ENVÍOS CÁMARA`, `DESPACHO
 
 - `DashboarPage.jsx` — typo en el nombre, **no renombrar** (rompería imports).
 - `._id` siempre, nunca `.id` para documentos MongoDB.
-- Algunas funciones de impresión arman HTML con `document.write` interpolando datos del usuario sin escapar (revisar al editar — riesgo XSS).
+- Las funciones de impresión arman HTML con `document.write`. Interpolar SIEMPRE
+  los datos de texto del usuario (razón social, observaciones, etc.) con
+  `escapeHtml()` de `utils/escapeHtml.js` para evitar XSS.
+
+## Notas de seguridad (riesgos aceptados)
+
+- `xlsx` (SheetJS) tiene vulnerabilidades sin fix en npm (prototype pollution /
+  ReDoS). Se acepta el riesgo porque solo se usa para **exportar** (escribir
+  Excel), nunca para parsear archivos subidos por el usuario, que es el único
+  vector explotable. Si en el futuro se importan archivos `.xlsx` de usuarios,
+  reemplazar por `exceljs` o migrar a la versión parcheada del CDN de SheetJS.
 
 ## Environment Variables
 

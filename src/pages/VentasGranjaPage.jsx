@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Layout from "../components/Layout";
+import { escapeHtml } from "../utils/escapeHtml";
 import {
   obtenerVentasGranja,
   emitirVentaGranja,
@@ -28,9 +29,9 @@ const GRANJAS = [
 ];
 
 const imprimirOrdenRetiro = (o) => {
-  const granja  = GRANJA_LABEL[o.granja] || o.granja;
-  const galpon  = o.galpon ? ` — Galpón ${o.galpon}` : "";
-  const cliente = o.cliente?.razonSocial || o.cliente?.nombre || "—";
+  const granja  = escapeHtml(GRANJA_LABEL[o.granja] || o.granja);
+  const galpon  = o.galpon ? ` — Galpón ${escapeHtml(o.galpon)}` : "";
+  const cliente = escapeHtml(o.cliente?.razonSocial || o.cliente?.nombre || "—");
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
     <title>Orden ${o.numero}</title>
     <style>
@@ -60,7 +61,7 @@ const imprimirOrdenRetiro = (o) => {
       <div class="fila"><span class="lbl">Cantidad estimada</span><span class="val">${fmtNum(o.cantidadEstimada)} pollos</span></div>
       <div class="fila"><span class="lbl">Peso estimado</span><span class="val">${o.pesoEstimadoKg} kg</span></div>
     </div>
-    ${o.observaciones ? `<p style="font-size:13px;color:#555"><strong>Obs:</strong> ${o.observaciones}</p>` : ""}
+    ${o.observaciones ? `<p style="font-size:13px;color:#555"><strong>Obs:</strong> ${escapeHtml(o.observaciones)}</p>` : ""}
     <div class="codigo-box">
       <div class="codigo-lbl">Código de retiro — presentar al empleado del galpón</div>
       <div class="codigo-val">${o.codigoRetiro || "—"}</div>

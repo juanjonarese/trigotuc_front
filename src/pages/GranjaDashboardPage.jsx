@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import * as XLSX from "xlsx";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
+import { escapeHtml } from "../utils/escapeHtml";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
 import { obtenerResumenStock, obtenerLotes, eliminarLote, actualizarLote } from "../services/api";
 import Swal from "sweetalert2";
@@ -306,7 +307,7 @@ const GranjaDashboardPage = () => {
   ${lote.observaciones ? `
   <section>
     <h2>Observaciones</h2>
-    <p>${lote.observaciones}</p>
+    <p>${escapeHtml(lote.observaciones)}</p>
   </section>
   ` : ""}
 
