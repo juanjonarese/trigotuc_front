@@ -262,20 +262,6 @@ export const obtenerOrdenesRetiro = async (filtros = {}) => {
   return handleResponse(response);
 };
 
-export const confirmarCargaOrdenRetiro = async (id) => {
-  const response = await fetch(`${API_URL}/ordenes-retiro/${id}/confirmar-carga`, {
-    method: "PATCH", headers: getAuthHeaders(),
-  });
-  return handleResponse(response);
-};
-
-export const confirmarEntregaChofer = async (id) => {
-  const response = await fetch(`${API_URL}/ordenes-retiro/${id}/confirmar-entrega`, {
-    method: "PATCH", headers: getAuthHeaders(),
-  });
-  return handleResponse(response);
-};
-
 // ============= DECOMISADOS =============
 
 export const obtenerDecomisados = async (filtros = {}) => {

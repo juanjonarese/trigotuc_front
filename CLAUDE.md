@@ -5,10 +5,12 @@ React 19 + Vite SPA for Trigotuc Avícola. Connects to the Node.js/Express backe
 ## Development Commands
 
 ```bash
-npm run dev      # Vite dev server
+npm run dev      # Vite dev server (default port 5173)
 npm run build    # Production build
 npm run lint     # ESLint
 ```
+
+There are no automated tests.
 
 ## Architecture
 
@@ -17,111 +19,106 @@ npm run lint     # ESLint
 **Public:**
 - `/login`
 
-**Protected (all via `<ProtectedRoute>`):**
-- `/dashboard` — Main dashboard
-- `/clientes` — Clients CRUD
-- `/personal` — Staff management (admin only)
-- `/facturacion` — Invoices list
-- `/facturacion/crear` — Create invoice
-- `/cobros` — Collections list
-- `/cobros/registrar` — Register collection
-- `/cta-cte-clientes` — Client current account
-- `/caja` — Cash box
-- `/granja` — Farm dashboard (stock overview)
-- `/granja/lotes/nuevo` — Create batch
-- `/granja/lotes/actualizar` — Update batch
-- `/granja/ventas` — Poultry sales
-- `/listas-precios` — Price lists (admin only)
+**Protected (all wrapped in `<ProtectedRoute>`):**
 
-Default redirect: unknown routes → `/login`
+| Route | Page | Área |
+|-------|------|------|
+| `/dashboard` | `DashboarPage` (typo intencional) | General |
+| `/clientes` | `ClientesPage` | Altas |
+| `/personal` | `PersonalPage` (gestión de usuarios) | Altas |
+| `/camiones` | `CamionesPage` (camiones + choferes inline) | Altas |
+| `/frigorifico` | `GranjaDashboardPage` (stock cámara) | Frigorífico |
+| `/frigorifico/lotes/nuevo` | `LoteCreatePage` (faenar) | Frigorífico |
+| `/frigorifico/pedidos-granja` | `PedidosGranjaPage` | Frigorífico |
+| `/frigorifico/envios` | `EnvioCamaraPage` | Frigorífico |
+| `/frigorifico/decomisados` | `DecomisadosPage` | Frigorífico |
+| `/frigorifico/stock-empaque` | `StockEmpaquePage` | Frigorífico |
+| `/frigorifico/ordenes-carga` | `DespachoFrigorificoPage` | Frigorífico |
+| `/frigorifico/recepcion` | `RecepcionFrigorificoPage` | Frigorífico |
+| `/frigorifico/recepcion-remitos` | `RecepcionRemitosPage` | Frigorífico |
+| `/frigorifico/historial-accesos` | `HistorialAccesosPage` (audit log) | Frigorífico |
+| `/granja/galpones` | `GranjaLotesPage` | Granja (crianza) |
+| `/granja/galpones/nuevo` | `GranjaLoteNuevoPage` (ingreso pollitos) | Granja |
+| `/granja/cargar-datos` | `GranjaCargaDatosPage` (datos semanales) | Granja |
+| `/granja/historial` | `GranjaHistorialPage` | Granja |
+| `/granja/ordenes-carga` | `OrdenCargaListPage` | Granja |
+| `/granja/ordenes-carga/:id` | `OrdenCargaDetallePage` | Granja |
+| `/granja/recepcion-ordenes` | `RecepcionOrdenCargaPage` | Granja |
+| `/granja/ventas` | `VentasGranjaPage` | Granja |
+| `/granja/remitos` | `GranjaRemitosPage` | Granja |
+| `/chofer` | `ChoferPage` (Cargas Camión) | Chofer |
+
+Default redirect: `/` y rutas desconocidas → `/login`.
+
+### Roles (`localStorage.rolUsuario`)
+
+`superadmin`, `administracion_frigorifico`, `administracion_granja`, `frigorifico`, `camaras`, `granja`, `chofer`.
+
+> El gateo por rol en el frontend es **cosmético** (oculta secciones del sidebar). La autorización real la aplica el backend con JWT + middleware. No confiar en el front para seguridad.
 
 ### Authentication Flow
 
-1. Login with `emailUsuario` + `contraseniaUsuario` → `POST /api/usuarios/login`
-2. On success, stores in `localStorage`: `isAuthenticated`, `token`, `rolUsuario`, `emailUsuario`
-3. All API calls send `Authorization: Bearer <token>`
-4. 401 response → clear localStorage → redirect to login
+1. Login con `emailUsuario` + `contraseniaUsuario` → `POST /api/usuarios/login`.
+   - Los choferes pueden loguearse con **teléfono** en lugar de email.
+2. En éxito se guarda en `localStorage`: `isAuthenticated`, `token`, `rolUsuario`, `emailUsuario`, `nombreUsuario`.
+3. Toda llamada manda `Authorization: Bearer <token>` (helper `getAuthHeaders()` en `api.js`).
+4. `ProtectedRoute` chequea `localStorage.isAuthenticated === "true"`.
+5. Logout: `localStorage.clear()` → `/login`.
 
-### Key Pages
+### Sidebar (`src/components/Layout.jsx`)
 
-| File | Purpose |
-|------|---------|
-| `LoginScreen.jsx` | Login form |
-| `DashboarPage.jsx` | Dashboard (note: typo in filename) |
-| `ClientesPage.jsx` | Clients CRUD + listaPrecios select in modal |
-| `PersonalPage.jsx` | User management (admin only) |
-| `FacturasListPage.jsx` | Invoice list with filters |
-| `FacturacionPage.jsx` | Create invoice |
-| `CobrosListPage.jsx` | Collections list |
-| `CobrosCreatePage.jsx` | Register collection |
-| `CtaCteClientesPage.jsx` | Client current account + Excel export |
-| `CajaPage.jsx` | Cash box management |
-| `GranjaDashboardPage.jsx` | Farm stock overview |
-| `LoteCreatePage.jsx` | Create new batch |
-| `ActualizarLotePage.jsx` | Update existing batch |
-| `VentasPolloPage.jsx` | Register/list poultry sales (per-calibre pricing + discount) |
-| `ListasPreciosPage.jsx` | CRUD for price lists (admin only) |
+Secciones colapsables, fondo oscuro, auto-expande según la ruta activa. Visibilidad por rol:
 
-### Key Components
+- **Panel Principal** (`/dashboard`) — oculto para `frigorifico`, `granja`, `chofer`.
+- **Altas** (colapsable) — `superadmin` / `administracion_frigorifico` / `administracion_granja`:
+  - Clientes; Usuarios (solo `superadmin`); Camiones.
+- **Actividad** (`/frigorifico/historial-accesos`) — solo `superadmin`.
+- **Granja** (colapsable) — `superadmin` / `administracion_granja` / `granja`:
+  - Ingreso de pollitos, Galpones, Datos Semanales (solo `superadmin`/`granja`), Órdenes de Carga (Venta) (solo `superadmin`/`administracion_granja`), Recepción de Órdenes.
+- **Frigorífico** (colapsable) — todos menos `granja` y `chofer`:
+  - Pedidos a Granja, Faenar, Stock, Órdenes de Carga (Venta), Recepción de Órdenes, Envío Cámara, Stock Empaque (solo `superadmin`). Decomisados está comentado.
+- **Chofer** (`/chofer`, "Cargas Camión") — `chofer` / `superadmin`.
+
+### API Service (`src/services/api.js`)
+
+Todas las funciones siguen el patrón `apiMethod(endpoint, data?)`, usan `getAuthHeaders()` y `handleResponse()` (lanza error en respuestas no-OK; en 401 limpia sesión).
+
+Secciones: `USUARIOS`, `CLIENTES`, `LOTES (FAENA)`, `ENVÍOS CÁMARA`, `DESPACHOS FRIGORIFICO`, `AUDIT LOG`, `ÓRDENES DE RETIRO` (solo `obtenerOrdenesRetiro`, legacy — la usa el KPI del Dashboard), `DECOMISADOS`, `CAMIONES`, `GRANJA (CRIANZA)`, `PEDIDOS INGRESO POLLITOS`, `VENTAS GRANJA (GORDOS)`, `ÓRDENES DE CARGA`, `REMITOS GRANJA`, `STOCK EMPAQUE`, `PUSH NOTIFICATIONS`.
+
+### Components
 
 | File | Purpose |
 |------|---------|
 | `Layout.jsx` | Sidebar + header wrapper |
-| `ProtectedRoute.jsx` | Auth guard (checks localStorage) |
-| `CalibreTable.jsx` | Reusable calibre input table. Props: `lineas`, `onChange`, `showTotals`, `showPrecio` |
-| `Pagination.jsx` | Generic pagination |
+| `ProtectedRoute.jsx` | Guard de auth (chequea `localStorage`) |
+| `CalibreTable.jsx` | Tabla reutilizable de carga por calibre. Props: `lineas`, `onChange`, `showTotals`, `showPrecio` |
+| `SelectDropdown.jsx` | Dropdown custom (usado por `CalibreTable`) |
+| `Pagination.jsx` | Paginación genérica |
+| `Footer.jsx` | Footer (login + algunas páginas) |
 
-#### CalibreTable prop `showPrecio`
-When `showPrecio={true}` (used in VentasPolloPage):
-- Lineas have shape `{ calibre, pollos, precioPorCajon }`
-- Shows $/cajón input and Subtotal column per line
-- When false (default, LoteCreate/ActualizarLote): lineas = `{ calibre, pollos }`, shows Kg column
+### Hooks / Utils
 
-### API Service (`src/services/api.js`)
-
-All functions follow the pattern `apiMethod(endpoint, data?)` and throw on non-OK responses.
-
-**Sections:**
-- `USUARIOS` — login, CRUD
-- `CLIENTES` — CRUD + buscar (all responses include `listaPrecios` populated)
-- `FACTURAS` — CRUD + numero-factura-x
-- `COBROS` — CRUD + forzar + recibo
-- `CUENTA CORRIENTE` — ctacte + resumen IVA
-- `CAJA` — movimientos + transferencias
-- `LOTES (GRANJA)` — CRUD lotes + historial + resumen stock
-- `VENTAS POLLO (GRANJA)` — obtener, crear, eliminar
-- `LISTAS DE PRECIOS` — `obtenerListasPrecios`, `obtenerListaPrecioPorId`, `crearListaPrecio`, `actualizarListaPrecio`, `eliminarListaPrecio`
-
-### Sidebar Structure (`Layout.jsx`)
-
-Collapsible sections, dark background:
-1. **Panel Principal** — `/dashboard`
-2. **Altas** (collapsible) — Clientes, Usuarios (admin only)
-3. **Contable Clientes** (collapsible) — Facturas, Cobros, Cta Cte (hidden for `personal`)
-4. **Caja** — hidden for `personal`
-5. **Granja** (collapsible) — Stock, Nuevo Lote, Actualizar Lote (admin+granja), Envío Cámara (admin+granja)
-6. **Comercial** (collapsible, admin only) — Listas de Precios
-
-Auto-expands section based on active route.
+- `hooks/usePushNotification.js` — suscripción a push (VAPID); expone `estado`, `activar`, `rolHabilitado`.
+- `utils/dateUtils.js`, `utils/numeroALetras.js`, `utils/whatsappUtils.js`.
 
 ### Styling
 
-- Bootstrap 5.3.8 + Bootstrap Icons
-- Custom CSS in `src/css/`
-- Responsive: mobile cards / desktop tables pattern used throughout
-- `Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' })` for ARS formatting
-- SweetAlert2 for modals/confirmations
-- xlsx for Excel export (CtaCteClientesPage)
-
-### Environment Variables
-
-```
-VITE_API_URL=http://localhost:3001/api
-```
+- Bootstrap 5 + Bootstrap Icons.
+- CSS custom en `src/css/` (`DashboardPage.css`, `Login.css`, `Tablas.css`, `ComprobantePago.css`).
+- Patrón responsive: cards en mobile (`d-md-none`) / tablas en desktop (`d-none d-md-block`).
+- `Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' })` para montos.
+- SweetAlert2 para modales/confirmaciones; `xlsx` para export Excel.
+- PWA: `public/manifest.json` + `public/sw.js`.
 
 ## Important Notes
 
-- `DashboarPage.jsx` — typo in filename, don't rename (would break imports)
-- `._id` always, never `.id` for MongoDB documents
-- `rolUsuario` values: `admin`, `personal`, `contable`, `granja`, `compras`, `usuario`
-- Bootstrap grid: mobile-first, `d-md-none` for mobile cards, `d-none d-md-block` for desktop tables
+- `DashboarPage.jsx` — typo en el nombre, **no renombrar** (rompería imports).
+- `._id` siempre, nunca `.id` para documentos MongoDB.
+- Algunas funciones de impresión arman HTML con `document.write` interpolando datos del usuario sin escapar (revisar al editar — riesgo XSS).
+
+## Environment Variables
+
+```
+VITE_API_URL=http://localhost:4000/api
+VITE_BACKEND_URL=https://trigotuc-back.vercel.app
+```
