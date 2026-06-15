@@ -6,13 +6,13 @@ const Footer = () => {
       <div className="container">
         <div className="row align-items-center">
           <div className="col-12 col-md-4 text-center text-md-start mb-2 mb-md-0">
-            <small>&copy; 2024 Desarrollado por <strong>JotaDev</strong></small>
+            <small>&copy; 2026 Desarrollado por <strong>JotaDev</strong></small>
           </div>
           <div className="col-12 col-md-4 text-center mb-2 mb-md-0">
             <small>
               <i className="bi bi-envelope me-2"></i>
-              <a href="mailto:contacto@jotadev.com" className="text-white text-decoration-none">
-                contacto@jotadev.com
+              <a href="mailto:contacto@jotajota.dev" className="text-white text-decoration-none">
+                contacto@jotajota.dev
               </a>
             </small>
           </div>
