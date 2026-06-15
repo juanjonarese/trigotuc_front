@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Layout from "../components/Layout";
+import { escapeHtml } from "../utils/escapeHtml";
 import {
   obtenerRemitosGranja,
   crearRemitoGranja,
@@ -82,9 +83,9 @@ const GranjaRemitosPage = () => {
         <div class="row"><span class="lbl">Fecha de envío</span><span class="val">${fmtFecha(remito.fechaEnvio)}</span></div>
         <div class="row"><span class="lbl">Cantidad enviada</span><span class="val">${fmtNum(remito.cantidadEnviada)} pollos</span></div>
         ${remito.pesoEstimadoKg ? `<div class="row"><span class="lbl">Peso estimado</span><span class="val">${fmtNum(remito.pesoEstimadoKg)} kg</span></div>` : ""}
-        ${remito.camion ? `<div class="row"><span class="lbl">Camión</span><span class="val">${remito.camion.marca} — ${remito.camion.patente}</span></div>` : ""}
+        ${remito.camion ? `<div class="row"><span class="lbl">Camión</span><span class="val">${escapeHtml(remito.camion.marca)} — ${escapeHtml(remito.camion.patente)}</span></div>` : ""}
       </div>
-      ${remito.observacionesEnvio ? `<p style="font-size:13px;color:#555;">Obs: ${remito.observacionesEnvio}</p>` : ""}
+      ${remito.observacionesEnvio ? `<p style="font-size:13px;color:#555;">Obs: ${escapeHtml(remito.observacionesEnvio)}</p>` : ""}
       <div class="firmas">
         <div class="firma">Firma conductor</div>
         <div class="firma">Firma recepción frigorífico</div>

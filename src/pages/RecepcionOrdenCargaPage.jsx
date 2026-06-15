@@ -3,13 +3,14 @@ import Layout from "../components/Layout";
 import { obtenerOrdenesCarga, enviarOrdenCarga, entregarOrdenCarga, liberarOrdenCarga } from "../services/api";
 import { formatearFechaLocal, obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
 import Swal from "sweetalert2";
+import { escapeHtml } from "../utils/escapeHtml";
 
 const fmtNum = (n) => n != null ? new Intl.NumberFormat("es-AR").format(n) : "—";
 
 const imprimirComprobanteEntrega = (orden, datosReales) => {
   const granja  = orden.granja === "cañete" ? "Cañete" : "Los Pinos";
   const galpon  = orden.galpon ? ` — Galpón ${orden.galpon}` : "";
-  const cliente = orden.cliente?.razonSocial || orden.cliente?.nombre || "—";
+  const cliente = escapeHtml(orden.cliente?.razonSocial || orden.cliente?.nombre || "—");
   const fechaEntrega = datosReales.fechaEntrega
     ? new Date(datosReales.fechaEntrega + "T12:00:00").toLocaleDateString("es-AR")
     : new Date().toLocaleDateString("es-AR");
@@ -62,7 +63,7 @@ const imprimirComprobanteEntrega = (orden, datosReales) => {
         </tbody>
       </table>
       ${datosReales.observacionesEntrega
-        ? `<div class="obs"><strong>Observaciones:</strong> ${datosReales.observacionesEntrega}</div>`
+        ? `<div class="obs"><strong>Observaciones:</strong> ${escapeHtml(datosReales.observacionesEntrega)}</div>`
         : ""}
       <div class="firma-grid">
         <div class="firma-box">

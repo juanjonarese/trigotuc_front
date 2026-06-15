@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Layout from "../components/Layout";
+import { escapeHtml } from "../utils/escapeHtml";
 import {
   obtenerDespachosFrigorifico,
   completarDespachoFrigorifico,
@@ -22,9 +23,9 @@ const tipoLbl   = (tipo) => TIPOS_TROZADO.find((x) => x.tipo === tipo)?.label ||
 
 // ── Imprimir remito de entrega ────────────────────────────────────────────────
 const imprimirRemito = (despacho) => {
-  const cliente  = despacho.cliente?.razonSocial || "—";
+  const cliente  = escapeHtml(despacho.cliente?.razonSocial || "—");
   const camara   = camaraLbl(despacho.camara);
-  const turno    = despacho.turno || "—";
+  const turno    = escapeHtml(despacho.turno || "—");
   const fecha    = new Date(despacho.fecha).toLocaleDateString("es-AR");
   const hoy      = new Date().toLocaleDateString("es-AR");
   const segundaFirmaLbl = despacho.modalidadEntrega === "delivery_chofer"
@@ -83,7 +84,7 @@ const imprimirRemito = (despacho) => {
         </table>` : ""}
 
       ${despacho.observaciones
-        ? `<div class="obs"><strong>Observaciones:</strong> ${despacho.observaciones}</div>`
+        ? `<div class="obs"><strong>Observaciones:</strong> ${escapeHtml(despacho.observaciones)}</div>`
         : ""}
 
       <div class="firma-grid">
