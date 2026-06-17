@@ -6,6 +6,7 @@ import ClientesPage from "./pages/ClientesPage";
 import PersonalPage from "./pages/PersonalPage";
 import GranjaDashboardPage from "./pages/GranjaDashboardPage";
 import LoteCreatePage from "./pages/LoteCreatePage";
+import LoteFaenaCrearPage from "./pages/LoteFaenaCrearPage";
 import PedidosGranjaPage from "./pages/PedidosGranjaPage";
 import EnvioCamaraPage from "./pages/EnvioCamaraPage";
 import CamionesPage from "./pages/CamionesPage";
@@ -41,6 +42,7 @@ function App() {
         {/* Frigorifico */}
         <Route path="/frigorifico" element={<ProtectedRoute><GranjaDashboardPage /></ProtectedRoute>} />
         <Route path="/frigorifico/lotes/nuevo" element={<ProtectedRoute><LoteCreatePage /></ProtectedRoute>} />
+        <Route path="/frigorifico/lotes/crear" element={<ProtectedRoute><LoteFaenaCrearPage /></ProtectedRoute>} />
         <Route path="/frigorifico/pedidos-granja" element={<ProtectedRoute><PedidosGranjaPage /></ProtectedRoute>} />
         <Route path="/frigorifico/envios" element={<ProtectedRoute><EnvioCamaraPage /></ProtectedRoute>} />
         <Route path="/frigorifico/decomisados" element={<ProtectedRoute><DecomisadosPage /></ProtectedRoute>} />

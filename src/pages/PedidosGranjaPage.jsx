@@ -791,7 +791,7 @@ const PedidosGranjaPage = () => {
                           const pedidosPendientes = pedidos.filter(
                             (p) => (p.estado === "pendiente" || p.estado === "enviada") && p.granja === key && p.galpon === n
                           ).length;
-                          const barColor = !lote ? "#ced4da" : dias < 30 ? "#198754" : dias < 40 ? "#fd7e14" : "#dc3545";
+                          const barColor = !lote ? "#ced4da" : dias < 30 ? "#198754" : dias < 45 ? "#fd7e14" : "#dc3545";
 
                           return (
                             <div key={n} className="col-6 col-sm-4 col-md-3 col-lg-2">

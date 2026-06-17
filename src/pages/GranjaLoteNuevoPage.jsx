@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from "react";
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
 import {
-  crearLoteGranja,
   obtenerLotesGranja,
   actualizarLoteGranja,
   eliminarLoteGranja,
@@ -473,7 +472,7 @@ const EditarIngresoModal = ({ lote, onClose, onGuardado }) => {
 const GranjaLoteNuevoPage = () => {
   const rolUsuario   = localStorage.getItem("rolUsuario");
   const puedeCrear   = ["superadmin", "administracion_granja"].includes(rolUsuario);
-  const puedeEditar  = rolUsuario === "superadmin" || rolUsuario === "frigorifico" || rolUsuario === "granja";
+  const puedeEditar  = rolUsuario === "superadmin" || rolUsuario === "frigorifico";
   const esSuperAdmin = rolUsuario === "superadmin";
 
   const [lotes, setLotes]                         = useState([]);

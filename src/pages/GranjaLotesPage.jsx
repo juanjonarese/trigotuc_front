@@ -295,8 +295,8 @@ const GalponCard = ({ label, lote, onClick }) => {
   const egreso  = estadoEgreso(lote);
   const cfg     = egreso ? EGRESO_CONFIG[egreso] : null;
 
-  const alerta   = dias >= 40 && !egreso;
-  const barColor = egreso ? cfg.border : (dias < 30 ? "#198754" : dias < 40 ? "#fd7e14" : "#dc3545");
+  const alerta   = dias >= 45 && !egreso;
+  const barColor = egreso ? cfg.border : (dias < 30 ? "#198754" : dias < 45 ? "#fd7e14" : "#dc3545");
   const bgColor  = egreso ? cfg.bg : (alerta ? "#fff9e6" : "#f0fdf4");
   const progresoPct = Math.min(100, Math.round((dias / 45) * 100));
   const lastPeso = lote.pesajes?.length > 0
@@ -537,7 +537,7 @@ const GranjaLotesPage = () => {
         {/* Referencia */}
         <div className="d-flex gap-3 flex-wrap mb-4 small text-muted">
           <span><span className="badge bg-success me-1">●</span>En crianza</span>
-          <span><span className="badge bg-warning text-dark me-1">●</span>≥ 40 días — revisar egreso</span>
+          <span><span className="badge bg-warning text-dark me-1">●</span>≥ 45 días — revisar egreso</span>
           <span style={{ color: "#ca8a04" }}><i className="bi bi-star-fill me-1"></i>Peso ideal — listo para sacar</span>
           <span className="text-danger"><i className="bi bi-exclamation-circle-fill me-1"></i>Excede peso ideal</span>
           <span><span className="badge bg-light text-muted border me-1">●</span>Vacío</span>
