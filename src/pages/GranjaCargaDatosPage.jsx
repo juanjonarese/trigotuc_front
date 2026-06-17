@@ -886,7 +886,7 @@ const GranjaCargaDatosPage = () => {
                     const dias = diasDeVida(lote.fechaIngreso);
                     const sem  = semanaActual(lote.fechaIngreso);
                     const seleccionado = loteSeleccionado?._id === lote._id;
-                    const barColor = dias < 30 ? "#198754" : dias < 40 ? "#fd7e14" : "#dc3545";
+                    const barColor = dias < 30 ? "#198754" : dias < 45 ? "#fd7e14" : "#dc3545";
                     return (
                       <div key={lote._id} className="col-6 col-sm-4 col-md-3 col-lg-2">
                         <div
