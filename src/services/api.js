@@ -689,3 +689,20 @@ export const testPush = async () => {
   });
   return handleResponse(response);
 };
+
+// ============= PRUEBA DROPBOX (integración POS / FoxPro) =============
+
+export const listarArchivosDropbox = async () => {
+  const response = await fetch(`${API_URL}/prueba-dropbox/archivos`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const leerArchivoDropbox = async ({ ruta, encoding = "latin1", delimitador = ";" }) => {
+  const params = new URLSearchParams({ ruta, encoding, delimitador });
+  const response = await fetch(`${API_URL}/prueba-dropbox/leer?${params}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
