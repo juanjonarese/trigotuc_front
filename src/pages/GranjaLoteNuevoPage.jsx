@@ -471,9 +471,9 @@ const EditarIngresoModal = ({ lote, onClose, onGuardado }) => {
 // ── Página principal ────────────────────────────────────────────────────────
 const GranjaLoteNuevoPage = () => {
   const rolUsuario   = localStorage.getItem("rolUsuario");
-  const puedeCrear   = ["superadmin", "administracion_granja"].includes(rolUsuario);
-  const puedeEditar  = rolUsuario === "superadmin" || rolUsuario === "frigorifico";
-  const esSuperAdmin = rolUsuario === "superadmin";
+  const puedeCrear    = ["superadmin", "administracion_granja"].includes(rolUsuario);
+  const puedeEditar   = ["superadmin", "frigorifico", "administracion_granja"].includes(rolUsuario);
+  const puedeEliminar = ["superadmin", "administracion_granja"].includes(rolUsuario);
 
   const [lotes, setLotes]                         = useState([]);
   const [pedidosPendientes, setPedidosPendientes] = useState([]);
@@ -711,7 +711,7 @@ const GranjaLoteNuevoPage = () => {
                                           <i className="bi bi-pencil"></i>
                                         </button>
                                       )}
-                                      {esSuperAdmin && (
+                                      {puedeEliminar && (
                                         <button className="btn btn-outline-danger btn-sm" onClick={() => handleEliminar(lote)}>
                                           <i className="bi bi-trash"></i>
                                         </button>
@@ -774,7 +774,7 @@ const GranjaLoteNuevoPage = () => {
                                             <i className="bi bi-pencil"></i>
                                           </button>
                                         )}
-                                        {esSuperAdmin && (
+                                        {puedeEliminar && (
                                           <button className="btn btn-outline-danger btn-sm" onClick={() => handleEliminar(lote)}>
                                             <i className="bi bi-trash"></i>
                                           </button>
