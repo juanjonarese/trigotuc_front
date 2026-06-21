@@ -151,6 +151,10 @@ const GranjaDashboardPage = () => {
   const rolUsuario = localStorage.getItem("rolUsuario");
   const esSuperAdmin = rolUsuario === "superadmin";
   const puedeGestionar = rolUsuario === "superadmin" || rolUsuario === "frigorifico";
+  const puedeActualizarStock = [
+    "superadmin", "frigorifico", "camaras",
+    "administracion_frigorifico", "administracion_granja",
+  ].includes(rolUsuario);
 
   const [resumen, setResumen] = useState({
     totalPollosVivos: 0,
@@ -405,7 +409,7 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
           Frigorífico — Stock
         </h1>
         <div className="d-flex flex-wrap gap-2">
-          {(puedeGestionar || rolUsuario === "camaras") && (
+          {puedeActualizarStock && (
             <button
               className="btn btn-primary btn-sm"
               onClick={handleActualizarStock}
