@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import { escapeHtml } from "../utils/escapeHtml";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
-import { obtenerResumenStock, obtenerLotes, eliminarLote, actualizarLote, sincronizarVentasDropbox } from "../services/api";
+import { obtenerResumenStock, obtenerLotes, eliminarLote, actualizarLote, sincronizarVentasDropbox, obtenerMovimientosCamara } from "../services/api";
 import Swal from "sweetalert2";
 
 const fmtNum = (n) =>
@@ -152,7 +152,7 @@ const GranjaDashboardPage = () => {
   const esSuperAdmin = rolUsuario === "superadmin";
   const puedeGestionar = rolUsuario === "superadmin" || rolUsuario === "frigorifico";
   const puedeActualizarStock = [
-    "superadmin", "frigorifico", "camaras",
+    "superadmin", "frigorifico",
     "administracion_frigorifico", "administracion_granja",
   ].includes(rolUsuario);
 
@@ -171,6 +171,11 @@ const GranjaDashboardPage = () => {
   const [error, setError]         = useState(null);
   const [loteEditar, setLoteEditar] = useState(null);
   const [actualizandoStock, setActualizandoStock] = useState(false);
+
+  const [mostrarHistorial, setMostrarHistorial] = useState(false);
+  const [historial, setHistorial] = useState([]);
+  const [cargandoHistorial, setCargandoHistorial] = useState(false);
+  const [filtroOrigen, setFiltroOrigen] = useState("");
 
   const cargarDatos = useCallback(async () => {
     try {
@@ -218,6 +223,30 @@ const GranjaDashboardPage = () => {
     } finally {
       setActualizandoStock(false);
     }
+  };
+
+  // Historial de movimientos de stock (solo superadmin)
+  const cargarHistorial = async (origen = filtroOrigen) => {
+    setCargandoHistorial(true);
+    try {
+      const data = await obtenerMovimientosCamara({ origen, limite: 100 });
+      setHistorial(data);
+    } catch (err) {
+      Swal.fire("Error", err.message, "error");
+    } finally {
+      setCargandoHistorial(false);
+    }
+  };
+
+  const toggleHistorial = () => {
+    const abrir = !mostrarHistorial;
+    setMostrarHistorial(abrir);
+    if (abrir) cargarHistorial();
+  };
+
+  const cambiarFiltroOrigen = (origen) => {
+    setFiltroOrigen(origen);
+    cargarHistorial(origen);
   };
 
   const handleEliminarLote = async (lote) => {
@@ -622,6 +651,95 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Historial de movimientos de stock (solo superadmin) ── */}
+      {esSuperAdmin && (
+        <div className="card border-0 shadow-sm mt-4">
+          <div className="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <h6 className="mb-0">
+              <i className="bi bi-clock-history me-2 text-secondary"></i>
+              Historial de movimientos de stock
+            </h6>
+            <div className="d-flex gap-2">
+              {mostrarHistorial && (
+                <select
+                  className="form-select form-select-sm"
+                  style={{ width: "auto" }}
+                  value={filtroOrigen}
+                  onChange={(e) => cambiarFiltroOrigen(e.target.value)}
+                >
+                  <option value="">Todos los orígenes</option>
+                  <option value="usuario">Usuario (app)</option>
+                  <option value="dropbox">Dropbox (POS)</option>
+                </select>
+              )}
+              <button className="btn btn-outline-secondary btn-sm" onClick={toggleHistorial}>
+                {mostrarHistorial ? "Ocultar" : "Ver historial"}
+              </button>
+            </div>
+          </div>
+          {mostrarHistorial && (
+            <div className="card-body">
+              {cargandoHistorial ? (
+                <p className="text-muted small mb-0">Cargando…</p>
+              ) : historial.length === 0 ? (
+                <p className="text-muted small mb-0">Sin movimientos registrados.</p>
+              ) : (
+                <div className="table-responsive">
+                  <table className="table table-sm table-hover align-middle mb-0">
+                    <thead>
+                      <tr>
+                        <th>Fecha</th>
+                        <th>Origen</th>
+                        <th>Operación</th>
+                        <th>Cámara</th>
+                        <th>Detalle</th>
+                        <th>Usuario</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historial.map((m) => {
+                        const opLabel = {
+                          faena: "Faena (ingreso)", venta_pos: "Venta POS", despacho: "Despacho",
+                          envio_camara: "Envío entre cámaras", ajuste_manual: "Ajuste manual",
+                        }[m.operacion] || m.operacion;
+                        const tipoBadge = {
+                          ingreso: "success", salida: "danger", transferencia: "info", ajuste: "warning",
+                        }[m.tipo] || "secondary";
+                        const detalleTxt = (m.detalle || []).map((d) =>
+                          d.clase === "entero"
+                            ? `Cal.${d.calibre}: ${formatNum(d.cajones)} caj`
+                            : `${TIPOS_LABEL[d.tipo] || d.tipo}: ${formatNum(d.cajas)} cajas`
+                        ).join(" · ");
+                        const camaraTxt = m.camaraDestino
+                          ? `${m.camara} → ${m.camaraDestino}`
+                          : (m.camara || "—");
+                        return (
+                          <tr key={m._id}>
+                            <td className="text-nowrap small">{new Date(m.fecha).toLocaleString("es-AR")}</td>
+                            <td>
+                              <span className={`badge ${m.origen === "dropbox" ? "bg-dark" : "bg-light text-dark border"}`}>
+                                {m.origen === "dropbox" ? "Dropbox (POS)" : "Usuario"}
+                              </span>
+                            </td>
+                            <td className="small">
+                              <span className={`badge bg-${tipoBadge} me-1`}>{m.tipo}</span>
+                              {opLabel}
+                            </td>
+                            <td className="small text-capitalize">{camaraTxt}</td>
+                            <td className="small">{detalleTxt || "—"}</td>
+                            <td className="small">{m.registradoPorNombre || m.registradoPor?.nombreUsuario || "—"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

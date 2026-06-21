@@ -203,19 +203,6 @@ const Layout = ({ children }) => {
             </a>
           )}
 
-          {rolUsuario === "superadmin" && (
-            <a
-              href="#"
-              className={`nav-link d-flex align-items-center gap-2 mb-2 rounded ${
-                isActive("/prueba-dropbox") ? "text-white" : "text-white-50"
-              }`}
-              onClick={(e) => { e.preventDefault(); navigate("/prueba-dropbox"); }}
-            >
-              <i className="bi bi-box-arrow-in-down fs-5"></i>
-              <span>Prueba POS</span>
-            </a>
-          )}
-
 
           {/* Granja (crianza) */}
           {(rolUsuario === "superadmin" || rolUsuario === "administracion_granja" || rolUsuario === "granja") && (
