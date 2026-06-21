@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import { escapeHtml } from "../utils/escapeHtml";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
-import { obtenerResumenStock, obtenerLotes, eliminarLote, actualizarLote } from "../services/api";
+import { obtenerResumenStock, obtenerLotes, eliminarLote, actualizarLote, sincronizarVentasDropbox } from "../services/api";
 import Swal from "sweetalert2";
 
 const fmtNum = (n) =>
@@ -166,6 +166,7 @@ const GranjaDashboardPage = () => {
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState(null);
   const [loteEditar, setLoteEditar] = useState(null);
+  const [actualizandoStock, setActualizandoStock] = useState(false);
 
   const cargarDatos = useCallback(async () => {
     try {
@@ -190,6 +191,30 @@ const GranjaDashboardPage = () => {
   }, [cargarDatos]);
 
   const formatNum = fmtNum;
+
+  // Trae las ventas nuevas del POS desde Dropbox y descuenta el stock
+  const handleActualizarStock = async () => {
+    setActualizandoStock(true);
+    try {
+      const r = await sincronizarVentasDropbox("trigotuc");
+      const nuevos = r.procesados?.length || 0;
+      const fallidos = r.fallidos?.length || 0;
+      await cargarDatos();
+      if (nuevos === 0 && fallidos === 0) {
+        Swal.fire({ icon: "info", title: "Stock al día", text: "No hay ventas nuevas para descontar.", timer: 2000, showConfirmButton: false });
+      } else {
+        Swal.fire(
+          "Stock actualizado",
+          `Ventas nuevas descontadas: ${nuevos}${fallidos ? ` · No aplicadas: ${fallidos}` : ""}`,
+          fallidos ? "warning" : "success"
+        );
+      }
+    } catch (err) {
+      Swal.fire("Error", err.message || "No se pudo actualizar el stock.", "error");
+    } finally {
+      setActualizandoStock(false);
+    }
+  };
 
   const handleEliminarLote = async (lote) => {
     const confirm = await Swal.fire({
@@ -380,6 +405,18 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
           Frigorífico — Stock
         </h1>
         <div className="d-flex flex-wrap gap-2">
+          {(puedeGestionar || rolUsuario === "camaras") && (
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={handleActualizarStock}
+              disabled={actualizandoStock}
+              title="Trae las ventas del POS y descuenta el stock"
+            >
+              {actualizandoStock
+                ? <><span className="spinner-border spinner-border-sm me-1"></span>Actualizando…</>
+                : <><i className="bi bi-arrow-repeat me-1"></i>Actualizar stock</>}
+            </button>
+          )}
           {puedeGestionar && (
               <button
                 className="btn btn-success btn-sm"

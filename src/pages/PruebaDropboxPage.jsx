@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import Layout from "../components/Layout";
-import { listarArchivosDropbox, leerArchivoDropbox } from "../services/api";
+import { listarArchivosDropbox, leerArchivoDropbox, procesarVentaPos, sincronizarVentasDropbox } from "../services/api";
 import Swal from "sweetalert2";
 
 // Parseo local (mismo criterio que el backend): líneas no vacías, columnas por delimitador.
@@ -24,6 +24,12 @@ const PruebaDropboxPage = () => {
   const [archivos, setArchivos] = useState([]);
   const [cargandoLista, setCargandoLista] = useState(false);
   const [cargandoArchivo, setCargandoArchivo] = useState(false);
+
+  const [procesando, setProcesando] = useState(false);
+  const [resultadoDescuento, setResultadoDescuento] = useState(null);
+
+  const [sincronizando, setSincronizando] = useState(false);
+  const [resultadoSync, setResultadoSync] = useState(null);
 
   // ---- A) Archivo local (FileReader) — sirve para probar sin Dropbox configurado ----
   const handleArchivoLocal = (e) => {
@@ -78,6 +84,54 @@ const PruebaDropboxPage = () => {
     if (contenido) setFilas(parsear(contenido, nuevoDelim));
   };
 
+  // ---- D) Sincronizar desde Dropbox (FLUJO REAL, idempotente) ----
+  const handleSync = async () => {
+    setSincronizando(true);
+    try {
+      const data = await sincronizarVentasDropbox("trigotuc");
+      setResultadoSync(data);
+      Swal.fire(
+        "Sincronización lista",
+        `Archivos leídos: ${data.archivosLeidos} · Tickets nuevos: ${data.procesados.length} · Ya procesados: ${data.yaProcesados.length} · Fallidos: ${data.fallidos.length}`,
+        data.fallidos.length ? "warning" : "success"
+      );
+    } catch (err) {
+      Swal.fire("Error", err.message, "error");
+    } finally {
+      setSincronizando(false);
+    }
+  };
+
+  // ---- C) Descontar stock (PRUEBA) ----
+  const handleDescontar = async () => {
+    if (filas.length === 0) return;
+    const confirm = await Swal.fire({
+      title: "¿Descontar stock de cámara Trigotuc?",
+      html: `Se procesarán <b>${filas.length}</b> línea(s) y se descontará el stock correspondiente.<br><small class="text-muted">Prueba sin idempotencia: reenviar el mismo archivo descuenta de nuevo.</small>`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Sí, descontar",
+      cancelButtonText: "Cancelar",
+    });
+    if (!confirm.isConfirmed) return;
+
+    setProcesando(true);
+    try {
+      const data = await procesarVentaPos({ filas, camara: "trigotuc" });
+      setResultadoDescuento(data);
+      const r = data.resumen;
+      Swal.fire(
+        "Stock descontado",
+        `Líneas descontadas: ${r.lineasDescontadas} · No mapeadas: ${r.noMapeados} · Errores: ${r.errores}`,
+        r.noMapeados || r.errores ? "warning" : "success"
+      );
+    } catch (err) {
+      Swal.fire("Error", err.message, "error");
+    } finally {
+      setProcesando(false);
+    }
+  };
+
   const maxColumnas = filas.reduce((m, f) => Math.max(m, f.length), 0);
 
   return (
@@ -88,9 +142,61 @@ const PruebaDropboxPage = () => {
           <div>
             <h1 className="h4 mb-0">Prueba — Lectura de archivo POS</h1>
             <small className="text-muted">
-              Lectura de .txt desde Dropbox o un archivo local. Todavía no descuenta stock.
+              Lee los .txt de la carpeta de Dropbox y descuenta el stock de cámara Trigotuc.
             </small>
           </div>
+        </div>
+
+        {/* Sincronización automática desde Dropbox (flujo real) */}
+        <div className="card mb-3 border-success">
+          <div className="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div>
+              <h6 className="mb-1">
+                <i className="bi bi-arrow-repeat me-1 text-success"></i>
+                Sincronizar ventas desde Dropbox
+              </h6>
+              <small className="text-muted">
+                Lee la carpeta, descuenta los <b>tickets nuevos</b> (idempotente) y saltea los ya procesados.
+                El backend también revisa solo, automáticamente, cada 30&nbsp;s.
+              </small>
+            </div>
+            <button className="btn btn-success" onClick={handleSync} disabled={sincronizando}>
+              <i className="bi bi-cloud-download me-1"></i>
+              {sincronizando ? "Sincronizando…" : "Sincronizar ahora"}
+            </button>
+          </div>
+          {resultadoSync && (
+            <div className="card-body border-top pt-3">
+              <div className="d-flex flex-wrap gap-3 mb-2">
+                <span className="badge bg-secondary">Archivos leídos: {resultadoSync.archivosLeidos}</span>
+                <span className="badge bg-success">Tickets nuevos: {resultadoSync.procesados.length}</span>
+                <span className="badge bg-info text-dark">Ya procesados: {resultadoSync.yaProcesados.length}</span>
+                <span className="badge bg-warning text-dark">Fallidos: {resultadoSync.fallidos.length}</span>
+              </div>
+              {resultadoSync.procesados.length > 0 && (
+                <table className="table table-sm table-bordered mb-2">
+                  <thead>
+                    <tr><th>Ticket</th><th>Entero (cajones)</th><th>Trozado (cajas)</th></tr>
+                  </thead>
+                  <tbody>
+                    {resultadoSync.procesados.map((p) => (
+                      <tr key={p.ticket}>
+                        <td>{p.ticket}</td>
+                        <td>{p.calibres.map((c) => `cal${c.calibre}: ${c.cajones}`).join(", ") || "—"}</td>
+                        <td>{p.trozados.map((t) => `${t.tipo}: ${t.cajas}`).join(", ") || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {resultadoSync.fallidos.length > 0 && (
+                <div className="alert alert-warning py-2 mb-0">
+                  <b>Tickets fallidos:</b>{" "}
+                  {resultadoSync.fallidos.map((f) => `${f.ticket} (${f.motivo})`).join(" · ")}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Opciones de parseo */}
@@ -203,9 +309,19 @@ const PruebaDropboxPage = () => {
                 <i className="bi bi-table me-1"></i>
                 Resultado — {origen}
               </span>
-              <span className="badge bg-secondary">
-                {filas.length} fila{filas.length === 1 ? "" : "s"}
-              </span>
+              <div className="d-flex align-items-center gap-2">
+                <span className="badge bg-secondary">
+                  {filas.length} fila{filas.length === 1 ? "" : "s"}
+                </span>
+                <button
+                  className="btn btn-sm btn-danger"
+                  onClick={handleDescontar}
+                  disabled={procesando || filas.length === 0}
+                >
+                  <i className="bi bi-box-arrow-down me-1"></i>
+                  {procesando ? "Descontando…" : "Descontar stock (prueba)"}
+                </button>
+              </div>
             </div>
             <div className="card-body">
               {/* Tabla parseada */}
@@ -242,6 +358,94 @@ const PruebaDropboxPage = () => {
                   style={{ maxHeight: 300, overflow: "auto", fontSize: "0.8rem" }}
                 >
                   {contenido}
+                </pre>
+              </details>
+            </div>
+          </div>
+        )}
+
+        {/* Resultado del descuento de stock */}
+        {resultadoDescuento && (
+          <div className="card mt-3 border-danger">
+            <div className="card-header bg-danger text-white fw-semibold">
+              <i className="bi bi-box-arrow-down me-1"></i>
+              Descuento de stock — Cámara {resultadoDescuento.camara}
+            </div>
+            <div className="card-body">
+              <div className="row g-3 mb-3">
+                {/* Entero descontado */}
+                <div className="col-12 col-md-6">
+                  <h6 className="text-muted">Pollo entero descontado (cajones)</h6>
+                  {resultadoDescuento.descuentoEntero.length === 0 ? (
+                    <p className="text-muted small mb-0">Nada.</p>
+                  ) : (
+                    <table className="table table-sm table-bordered mb-0">
+                      <thead>
+                        <tr><th>Calibre</th><th>Cajones</th><th>Pollos</th></tr>
+                      </thead>
+                      <tbody>
+                        {resultadoDescuento.descuentoEntero.map((d) => (
+                          <tr key={d.calibre}>
+                            <td>{d.calibre}</td>
+                            <td>{d.cajones}</td>
+                            <td>{d.pollos}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+                {/* Trozado descontado */}
+                <div className="col-12 col-md-6">
+                  <h6 className="text-muted">Trozado descontado (cajas)</h6>
+                  {resultadoDescuento.descuentoTrozado.length === 0 ? (
+                    <p className="text-muted small mb-0">Nada.</p>
+                  ) : (
+                    <table className="table table-sm table-bordered mb-0">
+                      <thead>
+                        <tr><th>Tipo</th><th>Cajas</th></tr>
+                      </thead>
+                      <tbody>
+                        {resultadoDescuento.descuentoTrozado.map((d) => (
+                          <tr key={d.tipo}>
+                            <td>{d.tipo}</td>
+                            <td>{d.cajas}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+
+              {/* No mapeados / errores */}
+              {resultadoDescuento.noMapeados.length > 0 && (
+                <div className="alert alert-warning py-2 mb-2">
+                  <b>Códigos no mapeados:</b>{" "}
+                  {resultadoDescuento.noMapeados
+                    .map((n) => `${n.codigo} (línea ${n.linea})`)
+                    .join(", ")}
+                </div>
+              )}
+              {resultadoDescuento.errores.length > 0 && (
+                <div className="alert alert-danger py-2 mb-2">
+                  <b>Filas con error:</b>{" "}
+                  {resultadoDescuento.errores
+                    .map((e) => `línea ${e.linea}: ${e.motivo}`)
+                    .join(" · ")}
+                </div>
+              )}
+
+              {/* Stock antes/después por calibre */}
+              <details>
+                <summary className="text-muted small" style={{ cursor: "pointer" }}>
+                  Ver stock antes / después
+                </summary>
+                <pre
+                  className="bg-dark text-light p-2 rounded mt-2 mb-0"
+                  style={{ maxHeight: 300, overflow: "auto", fontSize: "0.8rem" }}
+                >
+                  {JSON.stringify(resultadoDescuento.stock, null, 2)}
                 </pre>
               </details>
             </div>
