@@ -26,7 +26,6 @@ import StockEmpaquePage from "./pages/StockEmpaquePage";
 import DespachoFrigorificoPage from "./pages/DespachoFrigorificoPage";
 import RecepcionFrigorificoPage from "./pages/RecepcionFrigorificoPage";
 import ChoferPage from "./pages/ChoferPage";
-import PruebaDropboxPage from "./pages/PruebaDropboxPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
@@ -66,9 +65,6 @@ function App() {
 
         {/* Chofer */}
         <Route path="/chofer" element={<ProtectedRoute><ChoferPage /></ProtectedRoute>} />
-
-        {/* Prueba integración POS (Dropbox) */}
-        <Route path="/prueba-dropbox" element={<ProtectedRoute><PruebaDropboxPage /></ProtectedRoute>} />
 
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
