@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Layout from "../components/Layout";
-import { obtenerOrdenesCarga, enviarOrdenCarga, entregarOrdenCarga, liberarOrdenCarga } from "../services/api";
+import { obtenerOrdenesCarga, enviarOrdenCarga, entregarOrdenCarga, liberarOrdenCarga, revertirOrdenCarga } from "../services/api";
 import { formatearFechaLocal, obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
 import Swal from "sweetalert2";
 import { escapeHtml } from "../utils/escapeHtml";
@@ -97,9 +97,9 @@ const imprimirComprobanteEntrega = (orden, datosReales) => {
       th { background: #f3f4f6; text-align: left; padding: 6px 8px; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: #555; }
       td { padding: 7px 8px; border-bottom: 1px solid #e5e7eb; }
       .dif { color: ${hayDif ? "#92400e" : "#166534"}; font-weight: 600; }
-      .firma-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 40px; }
+      .firma-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 50px; margin-top: 75px; }
       .firma-box { text-align: center; }
-      .firma-linea { border-top: 1.5px solid #222; margin-bottom: 5px; }
+      .firma-linea { border-top: 1.5px solid #222; margin-bottom: 6px; }
       .firma-lbl { font-size: 10px; color: #555; }
       .obs { background: #fffbeb; border: 1px solid #fde68a; border-radius: 4px; padding: 8px 12px; font-size: 11px; color: #78350f; margin-top: 10px; margin-bottom: 6px; }
       @media print { body { padding: 0; } }
@@ -413,6 +413,7 @@ const RecepcionOrdenCargaPage = () => {
   const [ordenModal, setOrdenModal]     = useState(null);
 
   const esAdmin = ["superadmin", "administracion_granja"].includes(rolUsuario);
+  const esSuperAdmin = rolUsuario === "superadmin";
 
   const abrirModal = (orden) => {
     setOrdenModal(orden);
@@ -457,6 +458,26 @@ const RecepcionOrdenCargaPage = () => {
       await liberarOrdenCarga(orden._id);
       await cargar();
       Swal.fire({ icon: "success", title: "Orden liberada", text: "La granja puede confirmar la entrega sin código.", timer: 2000, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire("Error", err.message, "error");
+    }
+  };
+
+  const handleRevertir = async (orden) => {
+    const ok = await Swal.fire({
+      title: "¿Revertir recepción?",
+      html: `La orden <strong>${orden.numero}</strong> volverá a estado <strong>pendiente</strong> y reaparecerá en Órdenes de Carga.<br><br>Se devolverá el stock descontado al galpón. Usá esto solo para corregir una recepción cargada por error.`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#dc3545",
+      confirmButtonText: "Sí, revertir",
+      cancelButtonText: "Cancelar",
+    });
+    if (!ok.isConfirmed) return;
+    try {
+      await revertirOrdenCarga(orden._id);
+      await cargar();
+      Swal.fire({ icon: "success", title: "Recepción revertida", text: `La orden ${orden.numero} volvió a pendiente.`, timer: 2000, showConfirmButton: false });
     } catch (err) {
       Swal.fire("Error", err.message, "error");
     }
@@ -741,13 +762,24 @@ const RecepcionOrdenCargaPage = () => {
                           </td>
                           <td>
                             {entregada && (
-                              <button
-                                className="btn btn-outline-secondary btn-sm"
-                                title="Reimprimir comprobante"
-                                onClick={() => imprimirComprobanteEntrega(o, o)}
-                              >
-                                <i className="bi bi-printer"></i>
-                              </button>
+                              <div className="d-flex gap-1">
+                                <button
+                                  className="btn btn-outline-secondary btn-sm"
+                                  title="Reimprimir comprobante"
+                                  onClick={() => imprimirComprobanteEntrega(o, o)}
+                                >
+                                  <i className="bi bi-printer"></i>
+                                </button>
+                                {esSuperAdmin && !o.loteAsociado && !o.faenaPendiente && !o.ventaGranjaAsociada && (
+                                  <button
+                                    className="btn btn-outline-danger btn-sm"
+                                    title="Revertir recepción (vuelve a pendiente)"
+                                    onClick={() => handleRevertir(o)}
+                                  >
+                                    <i className="bi bi-arrow-counterclockwise"></i>
+                                  </button>
+                                )}
+                              </div>
                             )}
                           </td>
                         </tr>

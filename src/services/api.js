@@ -214,6 +214,13 @@ export const liberarDespachoFrigorifico = async (id) => {
   return handleResponse(response);
 };
 
+export const revertirDespachoFrigorifico = async (id) => {
+  const response = await fetch(`${API_URL}/despachos-frigorifico/${id}/revertir`, {
+    method: "PATCH", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
 export const eliminarDespachoFrigorifico = async (id) => {
   const response = await fetch(`${API_URL}/despachos-frigorifico/${id}`, {
     method: "DELETE", headers: getAuthHeaders(),
@@ -523,6 +530,13 @@ export const liberarOrdenCarga = async (id) => {
   return handleResponse(response);
 };
 
+export const revertirOrdenCarga = async (id) => {
+  const response = await fetch(`${API_URL}/ordenes-carga/${id}/revertir`, {
+    method: "PUT", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
 // ============= REMITOS GRANJA =============
 
 export const obtenerRemitoGranjaPorId = async (id) => {
@@ -612,13 +626,6 @@ export const resetearBaseDeDatos = async () => {
 
 export const consumirStockLote = async (data) => {
   const response = await fetch(`${API_URL}/stock-empaque/consumo-lote`, {
-    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
-  });
-  return handleResponse(response);
-};
-
-export const enviarPedidoStock = async (data) => {
-  const response = await fetch(`${API_URL}/stock-empaque/pedido`, {
     method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
   });
   return handleResponse(response);
