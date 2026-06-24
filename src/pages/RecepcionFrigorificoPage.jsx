@@ -5,6 +5,7 @@ import {
   obtenerDespachosFrigorifico,
   completarDespachoFrigorifico,
   liberarDespachoFrigorifico,
+  revertirDespachoFrigorifico,
 } from "../services/api";
 import Swal from "sweetalert2";
 
@@ -119,10 +120,10 @@ const imprimirRemito = (despacho) => {
       table { width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 10px; }
       th { background: #f3f4f6; text-align: left; padding: 3px 8px; font-size: 8px; text-transform: uppercase; letter-spacing: .5px; color: #555; border: 1px solid #dee2e6; }
       .obs { background: #fffbeb; border: 1px solid #fde68a; border-radius: 4px; padding: 4px 8px; font-size: 9px; color: #78350f; margin: 6px 0; }
-      .firma-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 16px; }
+      .firma-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-top: 42px; }
       .firma-box { text-align: center; }
-      .firma-linea { border-top: 1.5px solid #222; margin-bottom: 3px; }
-      .firma-lbl { font-size: 8px; color: #555; }
+      .firma-linea { border-top: 1.5px solid #222; margin-bottom: 4px; }
+      .firma-lbl { font-size: 9px; color: #555; }
       .no-factura { text-align: center; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #6b7280; border-top: 1px dashed #d1d5db; margin-top: 10px; padding-top: 5px; }
       @page { size: A4; margin: 8mm; }
       @media print { body { padding: 0; } }
@@ -359,6 +360,7 @@ const RecepcionFrigorificoPage = () => {
   const rolUsuario     = localStorage.getItem("rolUsuario");
   const puedeLiberar   = ["superadmin", "administracion_frigorifico"].includes(rolUsuario);
   const puedeConfirmar = ["superadmin", "frigorifico"].includes(rolUsuario);
+  const esSuperAdmin   = rolUsuario === "superadmin";
 
   const [despachos, setDespachos]     = useState([]);
   const [loading, setLoading]         = useState(true);
@@ -395,6 +397,26 @@ const RecepcionFrigorificoPage = () => {
       await liberarDespachoFrigorifico(d._id);
       await cargar();
       Swal.fire({ icon: "success", title: "Orden liberada", timer: 1800, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire("Error", err.message, "error");
+    }
+  };
+
+  const handleRevertir = async (d) => {
+    const { isConfirmed } = await Swal.fire({
+      title: "¿Revertir recepción?",
+      html: `La orden <strong>${d.numeroOrden}</strong> volverá a estado <strong>pendiente</strong> y reaparecerá en Órdenes de Carga.<br><br>Se devolverá a la cámara el stock descontado. Usá esto solo para corregir una recepción confirmada por error.`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#dc3545",
+      confirmButtonText: "Sí, revertir",
+      cancelButtonText: "Cancelar",
+    });
+    if (!isConfirmed) return;
+    try {
+      await revertirDespachoFrigorifico(d._id);
+      await cargar();
+      Swal.fire({ icon: "success", title: "Recepción revertida", text: `La orden ${d.numeroOrden} volvió a pendiente.`, timer: 2000, showConfirmButton: false });
     } catch (err) {
       Swal.fire("Error", err.message, "error");
     }
@@ -607,6 +629,7 @@ const RecepcionFrigorificoPage = () => {
                       <th>Detalle</th>
                       <th>Estado</th>
                       <th>Completada por</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -640,6 +663,28 @@ const RecepcionFrigorificoPage = () => {
                           }
                         </td>
                         <td className="small text-muted">{d.completadoPor?.nombreUsuario || "—"}</td>
+                        <td>
+                          {d.estado === "completada" && (
+                            <div className="d-flex gap-1">
+                              <button
+                                className="btn btn-outline-secondary btn-sm"
+                                title="Reimprimir remito"
+                                onClick={() => imprimirRemito(d)}
+                              >
+                                <i className="bi bi-printer"></i>
+                              </button>
+                              {esSuperAdmin && (
+                                <button
+                                  className="btn btn-outline-danger btn-sm"
+                                  title="Revertir recepción (vuelve a pendiente)"
+                                  onClick={() => handleRevertir(d)}
+                                >
+                                  <i className="bi bi-arrow-counterclockwise"></i>
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
