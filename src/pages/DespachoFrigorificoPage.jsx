@@ -1043,7 +1043,7 @@ const DespachoFrigorificoPage = () => {
     const result = await Swal.fire({
       icon: "success",
       title: "Orden creada",
-      html: `<div>Orden <strong>${despacho.numeroOrden}</strong> generada con código <strong style="letter-spacing:0.2em">${despacho.codigoRetiro}</strong>.</div>
+      html: `<div>Orden <strong>${despacho.numeroOrden}</strong> generada${despacho.codigoRetiro ? ` con código <strong style="letter-spacing:0.2em">${despacho.codigoRetiro}</strong>` : ""}.</div>
              <div class="mt-2 text-muted" style="font-size:0.9rem">¿Qué querés hacer con la orden?</div>`,
       showDenyButton: true,
       showCancelButton: true,
