@@ -5,6 +5,7 @@ import CalibreTable, { calcularCajones } from "../components/CalibreTable";
 import { TrozadoTable, DestinoGrupo, TROZADO_TIPOS, trozadosVacios, trozadosAPayload } from "../components/TrozadoTable";
 import { crearLote, obtenerOrdenesCarga } from "../services/api";
 import { obtenerFechaHoy } from "../utils/dateUtils";
+import { confirmarCoherenciaFaena } from "../utils/faenaValidacion";
 import Swal from "sweetalert2";
 
 const fmtNum = (n) =>
@@ -124,6 +125,15 @@ const LoteFaenaCrearPage = () => {
       Swal.fire("Falta el destino", "Elegí si los trozados van a cámara ahora o quedan pendientes.", "warning");
       return;
     }
+    // Coherencia: faenadas = calibres + trozados (u) + decomisados (u). Advierte y confirma.
+    const pollosCalibres = calibresPayload.reduce((a, c) => a + c.pollos, 0);
+    const coherente = await confirmarCoherenciaFaena({
+      unidadesFaenadas:    form.unidadesFaenadas,
+      pollosCalibres,
+      unidadesTrozadas:    form.unidadesTrozadas,
+      unidadesDecomisadas: form.unidadesDecomisadas,
+    });
+    if (!coherente) return;
     setSaving(true);
     try {
 

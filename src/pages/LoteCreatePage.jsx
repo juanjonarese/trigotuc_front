@@ -10,6 +10,7 @@ import {
   enviarLoteACamara,
 } from "../services/api";
 import { obtenerFechaHoy } from "../utils/dateUtils";
+import { confirmarCoherenciaFaena } from "../utils/faenaValidacion";
 import Swal from "sweetalert2";
 
 const fmtNum = (n) =>
@@ -60,6 +61,16 @@ const EditarLoteModal = ({ lote, onClose, onGuardado }) => {
       Swal.fire("Error", "Agregá al menos un calibre con pollos.", "error");
       return;
     }
+    // Coherencia: faenadas = calibres + trozados (u) + decomisados (u). Advierte y confirma.
+    const pollosCalibres = calibresPayload.reduce((a, c) => a + c.pollos, 0);
+    const coherente = await confirmarCoherenciaFaena({
+      unidadesFaenadas:    form.unidadesFaenadas,
+      pollosCalibres,
+      unidadesTrozadas:    form.unidadesTrozadas,
+      unidadesDecomisadas: form.unidadesDecomisadas,
+      confirmText:         "Guardar igual",
+    });
+    if (!coherente) return;
     setSaving(true);
     try {
       const payload = {
