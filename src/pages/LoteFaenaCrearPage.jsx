@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
-import { TrozadoTable, DestinoGrupo, TROZADO_TIPOS, trozadosVacios, trozadosAPayload } from "../components/TrozadoTable";
+import { TrozadoTable, TROZADO_TIPOS } from "../components/TrozadoTable";
 import { crearLote, obtenerOrdenesCarga } from "../services/api";
 import { obtenerFechaHoy } from "../utils/dateUtils";
 import { confirmarCoherenciaFaena } from "../utils/faenaValidacion";
@@ -43,10 +43,6 @@ const LoteFaenaCrearPage = () => {
   const [trozados, setTrozados] = useState(
     TROZADO_TIPOS.map((t) => ({ ...t, kgCaja: t.kgCajaDefault, cajas: "" }))
   );
-  // Destino al terminar la faena. Sin elegir por defecto (null): hay que marcar
-  // "camara" o "pendiente" para cada grupo antes de crear el lote.
-  const [enterosDestino, setEnterosDestino]   = useState(null);
-  const [trozadosDestino, setTrozadosDestino] = useState(null);
   const [saving, setSaving]     = useState(false);
   const calibreRef              = useRef(null);
   const recepcionRef            = useRef(null);
@@ -93,13 +89,11 @@ const LoteFaenaCrearPage = () => {
     .filter((t) => t.tipo === "menudo")
     .reduce((s, t) => s + (Number(t.cajas) || 0) * (Number(t.kgCaja) || 0), 0);
   const kgTrozadosTotal = (Number(form.kgTrozados) || 0) + kgMenudo;
-  const kgTotalCamara   = totalKg + kgTrozadosTotal;
   const hayTrozados     = kgTrozadosTotal > 0 || trozados.some((t) => Number(t.cajas) > 0);
-  const hayEnteros      = totalCajones > 0;
-  const kgACamaraAhora  = (enterosDestino === "camara" ? totalKg : 0) + (trozadosDestino === "camara" ? kgTrozadosTotal : 0);
-  const kgPendiente     = (enterosDestino === "pendiente" ? totalKg : 0) + (trozadosDestino === "pendiente" ? kgTrozadosTotal : 0);
-  // Falta definir destino de algún grupo con contenido
-  const destinoIncompleto = (hayEnteros && !enterosDestino) || (hayTrozados && !trozadosDestino);
+  // Regla fija: los enteros (por calibre) van directo a cámara; los trozados
+  // quedan pendientes (deben congelarse antes de poder venderse y sumar stock).
+  const kgACamaraAhora  = totalKg;
+  const kgPendiente     = kgTrozadosTotal;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -115,14 +109,6 @@ const LoteFaenaCrearPage = () => {
     }
     if (calibresPayload.length === 0) {
       Swal.fire("Error", "Agregá al menos un calibre con pollos en la tabla de calibres.", "error");
-      return;
-    }
-    if (hayEnteros && !enterosDestino) {
-      Swal.fire("Falta el destino", "Elegí si los pollos enteros van a cámara ahora o quedan pendientes.", "warning");
-      return;
-    }
-    if (hayTrozados && !trozadosDestino) {
-      Swal.fire("Falta el destino", "Elegí si los trozados van a cámara ahora o quedan pendientes.", "warning");
       return;
     }
     // Coherencia: faenadas = calibres + trozados (u) + decomisados (u). Advierte y confirma.
@@ -145,8 +131,9 @@ const LoteFaenaCrearPage = () => {
         fechaIngreso:    form.fechaIngreso,
         calibres:        calibresPayload,
         observaciones:   form.observaciones || undefined,
-        enterosACamara:  enterosDestino === "camara",
-        trozadosACamara: trozadosDestino === "camara",
+        // Enteros directo a cámara; trozados quedan pendientes (deben congelarse).
+        enterosACamara:  true,
+        trozadosACamara: false,
       };
       if (form.kgVivos)             payload.kgVivos             = Number(form.kgVivos);
       if (form.unidadesFaenadas)    payload.unidadesFaenadas    = Number(form.unidadesFaenadas);
@@ -173,10 +160,11 @@ const LoteFaenaCrearPage = () => {
         icon:  "success",
         title: `Lote #${loteCreado.numeroLote} creado`,
         html:  `${fmtNum(totalPollosF)} pollos · ${fmtNum(totalCajonesF)} cajones · ${fmtNum(totalKgF)} kg` +
+               `<br><span class="text-success"><i class="bi bi-snow"></i> Enteros ingresados a cámara Cañete.</span>` +
                (kgPendiente > 0
-                 ? `<br><span class="text-warning"><i class="bi bi-hourglass-split"></i> ${fmtNum(kgPendiente)} kg quedan pendientes de cámara.</span>` +
-                   `<br><span class="text-muted small">Enviálos desde Lotes de Faena cuando termines el proceso.</span>`
-                 : `<br><span class="text-success"><i class="bi bi-snow"></i> Todo ingresó a cámara.</span>`),
+                 ? `<br><span class="text-warning"><i class="bi bi-snow2"></i> ${fmtNum(kgPendiente)} kg de trozados quedan congelando (pendientes de cámara).</span>` +
+                   `<br><span class="text-muted small">Pasálos a cámara desde Lotes de Faena → pestaña "Trozados pendientes" cuando estén en condiciones.</span>`
+                 : ""),
       });
       navigate(VOLVER_A);
     } catch (err) {
@@ -411,41 +399,18 @@ const LoteFaenaCrearPage = () => {
               <p className="text-muted small mb-2">El calibre indica cuántos pollos entran en un cajón de 20 kg.</p>
               <CalibreTable ref={calibreRef} lineas={lineas} onChange={setLineas} />
 
-              {/* Destino al terminar la faena: qué entra a cámara ahora y qué queda pendiente */}
-              {(hayEnteros || hayTrozados) && (
-                <div className="mt-3 p-3 rounded border">
-                  <div className="fw-semibold mb-1">
-                    <i className="bi bi-box-arrow-in-down me-1 text-primary"></i>
-                    Destino al terminar la faena
+              {/* Destino: regla fija. Enteros → cámara; trozados → pendientes (congelado). */}
+              {hayTrozados && (
+                <div className="mt-3 p-3 rounded border border-warning-subtle bg-warning-subtle">
+                  <div className="fw-semibold mb-1" style={{ color: "#b45309" }}>
+                    <i className="bi bi-snow2 me-1"></i>
+                    Los trozados quedan congelando
                   </div>
-                  <p className="text-muted small mb-3">
-                    Elegí qué entra a cámara ahora. Lo que dejes <strong>pendiente</strong> no suma stock
-                    hasta que lo envíes desde <em>Lotes de Faena</em> (lo podés hacer al otro día).
+                  <p className="text-muted small mb-0">
+                    Los <strong>pollos enteros</strong> entran directo a cámara Cañete. Los <strong>trozados</strong> no
+                    suman stock todavía: deben congelarse antes de encajonarse y venderse. Pasálos a cámara desde
+                    <em> Lotes de Faena → pestaña "Trozados pendientes"</em> cuando estén en condiciones.
                   </p>
-                  <div className="d-flex flex-column gap-3">
-                    {hayEnteros && (
-                      <DestinoGrupo
-                        titulo="Pollos enteros"
-                        kg={totalKg}
-                        destino={enterosDestino}
-                        onChange={setEnterosDestino}
-                      />
-                    )}
-                    {hayTrozados && (
-                      <DestinoGrupo
-                        titulo="Trozados"
-                        kg={kgTrozadosTotal}
-                        destino={trozadosDestino}
-                        onChange={setTrozadosDestino}
-                      />
-                    )}
-                  </div>
-                  {destinoIncompleto && (
-                    <div className="text-danger small mt-2">
-                      <i className="bi bi-exclamation-triangle me-1"></i>
-                      Elegí el destino de cada grupo para poder crear el lote.
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -488,7 +453,7 @@ const LoteFaenaCrearPage = () => {
                   <div className="rounded px-3 py-2 d-flex justify-content-between align-items-center"
                     style={{ background: "#f0fdf4", border: "2px solid #86efac" }}>
                     <div className="fw-semibold text-success">
-                      <i className="bi bi-snow me-2"></i>Kg a cámara ahora
+                      <i className="bi bi-snow me-2"></i>Kg enteros a cámara ahora
                     </div>
                     <div className="fw-bold fs-5 text-success">{fmtNum(kgACamaraAhora)} kg</div>
                   </div>
@@ -496,7 +461,7 @@ const LoteFaenaCrearPage = () => {
                     <div className="rounded px-3 py-2 mt-2 d-flex justify-content-between align-items-center"
                       style={{ background: "#fffbeb", border: "2px solid #fde68a" }}>
                       <div className="fw-semibold" style={{ color: "#b45309" }}>
-                        <i className="bi bi-hourglass-split me-2"></i>Kg que quedan pendientes de cámara
+                        <i className="bi bi-snow2 me-2"></i>Kg de trozados congelando (pendientes)
                       </div>
                       <div className="fw-bold fs-5" style={{ color: "#b45309" }}>{fmtNum(kgPendiente)} kg</div>
                     </div>
@@ -510,7 +475,7 @@ const LoteFaenaCrearPage = () => {
             <button className="btn btn-outline-secondary" onClick={() => navigate(VOLVER_A)} disabled={saving}>
               Cancelar
             </button>
-            <button type="submit" form="form-nuevo-lote" className="btn btn-success" disabled={saving || !recepcionSel || destinoIncompleto}>
+            <button type="submit" form="form-nuevo-lote" className="btn btn-success" disabled={saving || !recepcionSel}>
               {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
               <i className="bi bi-plus-circle me-1"></i>Crear Lote
             </button>
