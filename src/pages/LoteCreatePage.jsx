@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
-import { TrozadoTable, DestinoGrupo, trozadosDesdeLote, trozadosAPayload } from "../components/TrozadoTable";
+import { TrozadoTable, trozadosDesdeLote, trozadosAPayload } from "../components/TrozadoTable";
 import {
   actualizarLote,
   obtenerLotes,
@@ -38,9 +38,11 @@ const EditarLoteModal = ({ lote, onClose, onGuardado }) => {
     ? [...(lote.trozadosCañete || []), ...(lote.trozadosPendientes || [])]
     : (lote.trozados || []);
   const [trozados, setTrozados] = useState(trozadosDesdeLote(trozadosLote));
-  // Destino actual: pendiente si hay algo en los arrays de pendientes; si no, cámara.
-  const [enterosDestino, setEnterosDestino]   = useState((lote.calibresPendientes?.length || 0) > 0 ? "pendiente" : "camara");
-  const [trozadosDestino, setTrozadosDestino] = useState((lote.trozadosPendientes?.length || 0) > 0 ? "pendiente" : "camara");
+  // Destino actual de cada grupo (no editable en la edición): se conserva el estado
+  // del lote. Cambiar enteros→cámara / trozados→pendiente se hace en la creación;
+  // pasar trozados a cámara, desde la pestaña "Trozados pendientes".
+  const enterosDestino  = (lote.calibresPendientes?.length || 0) > 0 ? "pendiente" : "camara";
+  const trozadosDestino = (lote.trozadosPendientes?.length || 0) > 0 ? "pendiente" : "camara";
   const [saving, setSaving]   = useState(false);
   const calibreRef            = useRef(null);
 
@@ -170,23 +172,32 @@ const EditarLoteModal = ({ lote, onClose, onGuardado }) => {
                 <CalibreTable ref={calibreRef} lineas={lineas} onChange={setLineas} />
 
                 {(hayEnteros || hayTrozados) && (
-                  <div className="mt-3 p-3 rounded border">
-                    <div className="fw-semibold mb-1">
-                      <i className="bi bi-box-arrow-in-down me-1 text-primary"></i>Destino
+                  <div className="mt-3 p-3 rounded border small">
+                    <div className="fw-semibold mb-2">
+                      <i className="bi bi-box-arrow-in-down me-1 text-primary"></i>Destino actual
                     </div>
-                    <p className="text-muted small mb-3">
-                      Lo que dejes <strong>pendiente</strong> no suma stock hasta enviarlo a cámara.
-                    </p>
-                    <div className="d-flex flex-column gap-3">
+                    <div className="d-flex flex-column gap-1">
                       {hayEnteros && (
-                        <DestinoGrupo titulo="Pollos enteros" kg={totalKgCalibres}
-                          destino={enterosDestino} onChange={setEnterosDestino} />
+                        <div>
+                          <i className="bi bi-grid-3x3-gap me-1 text-primary"></i>Pollos enteros:{" "}
+                          {enterosDestino === "camara"
+                            ? <span className="text-success fw-semibold">en cámara</span>
+                            : <span className="text-warning fw-semibold">pendiente de cámara</span>}
+                        </div>
                       )}
                       {hayTrozados && (
-                        <DestinoGrupo titulo="Trozados" kg={kgTrozadosTotal}
-                          destino={trozadosDestino} onChange={setTrozadosDestino} />
+                        <div>
+                          <i className="bi bi-scissors me-1 text-warning"></i>Trozados:{" "}
+                          {trozadosDestino === "camara"
+                            ? <span className="text-success fw-semibold">en cámara</span>
+                            : <span className="text-warning fw-semibold">congelando (pendiente de cámara)</span>}
+                        </div>
                       )}
                     </div>
+                    <p className="text-muted mb-0 mt-2">
+                      El destino no se edita acá. Los trozados pendientes pasan a cámara desde la pestaña
+                      <em> "Trozados pendientes"</em> en Lotes de Faena.
+                    </p>
                   </div>
                 )}
               </form>
@@ -262,12 +273,13 @@ const LoteCreatePage = () => {
     if (cajonesPend > 0)    partes.push(`enteros (${fmtNum(cajonesPend)} cajones)`);
     if (kgTrozadosPend > 0) partes.push(`trozados (${fmtNum(kgTrozadosPend)} kg)`);
     const confirm = await Swal.fire({
-      title: "¿Enviar a cámara?",
-      html: `Se ingresará a cámara <strong>Cañete</strong> lo pendiente del lote <strong>#${lote.numeroLote || ""}</strong>:` +
+      title: "¿Pasar a cámara Cañete?",
+      html: `Confirmá que los trozados ya están <strong>congelados y en condiciones</strong>. Se ingresará a cámara ` +
+            `<strong>Cañete</strong> lo pendiente del lote <strong>#${lote.numeroLote || ""}</strong>:` +
             `<br><span class="text-muted">${partes.join(" · ")} — total ${fmtNum(kgTotal)} kg</span>` +
             `<br><span class="text-muted small">A partir de ahí ese stock queda disponible para vender o despachar.</span>`,
       icon: "question", showCancelButton: true,
-      confirmButtonColor: "#198754", confirmButtonText: "Sí, enviar a cámara", cancelButtonText: "Cancelar",
+      confirmButtonColor: "#198754", confirmButtonText: "Sí, pasar a cámara", cancelButtonText: "Cancelar",
     });
     if (!confirm.isConfirmed) return;
     try {
@@ -279,25 +291,35 @@ const LoteCreatePage = () => {
     }
   };
 
-  const esPendiente   = (lote) =>
-    (lote.calibresPendientes?.length || 0) > 0 || (lote.trozadosPendientes?.length || 0) > 0;
-  const pendienteLabel = (lote) => {
-    const e = (lote.calibresPendientes?.length || 0) > 0;
-    const t = (lote.trozadosPendientes?.length || 0) > 0;
-    if (e && t) return "Pendiente cámara";
-    if (t)      return "Trozados pend.";
-    if (e)      return "Enteros pend.";
-    return "";
-  };
-  const cantPendientes = lotes.filter(esPendiente).length;
+  const tieneTrozadosPend = (lote) => (lote.trozadosPendientes?.length || 0) > 0;
+  const cantPendientes = lotes.filter(tieneTrozadosPend).length;
+  // Pestaña 1 "Resultado de faena": todos los lotes (la faena es un resultado,
+  // esté o no en cámara). Pestaña 2: solo los que tienen trozados pendientes.
   const lotesFiltrados = lotes.filter((l) =>
-    filtroCamara === "pendientes" ? esPendiente(l)
-    : filtroCamara === "encamara" ? !esPendiente(l)
-    : true
+    filtroCamara === "pendientes" ? tieneTrozadosPend(l) : true
   );
 
   const totalPaginas  = Math.ceil(lotesFiltrados.length / POR_PAGINA);
   const lotesPagina   = lotesFiltrados.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
+
+  const paginador = totalPaginas > 1 && (
+    <div className="d-flex justify-content-center align-items-center gap-2 mt-3">
+      <button className="btn btn-outline-secondary btn-sm"
+        onClick={() => setPagina((p) => Math.max(1, p - 1))} disabled={pagina === 1}>
+        <i className="bi bi-chevron-left"></i>
+      </button>
+      {Array.from({ length: totalPaginas }, (_, i) => i + 1).map((p) => (
+        <button key={p} className={`btn btn-sm ${pagina === p ? "btn-dark" : "btn-outline-secondary"}`}
+          onClick={() => setPagina(p)}>
+          {p}
+        </button>
+      ))}
+      <button className="btn btn-outline-secondary btn-sm"
+        onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))} disabled={pagina === totalPaginas}>
+        <i className="bi bi-chevron-right"></i>
+      </button>
+    </div>
+  );
 
   return (
     <Layout>
@@ -316,32 +338,33 @@ const LoteCreatePage = () => {
           )}
         </div>
 
-        {/* Aviso + filtro de envío a cámara */}
-        {!loading && lotes.length > 0 && (
-          <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-            {cantPendientes > 0 ? (
-              <div className="alert alert-warning py-2 px-3 mb-0 d-flex align-items-center gap-2">
-                <i className="bi bi-hourglass-split"></i>
-                <span>
-                  <strong>{cantPendientes}</strong> {cantPendientes === 1 ? "lote pendiente" : "lotes pendientes"} de enviar a cámara
-                </span>
-              </div>
-            ) : <span></span>}
-            <div className="btn-group btn-group-sm" role="group">
-              {[
-                { key: "todos",      label: "Todos" },
-                { key: "pendientes", label: `Pendientes${cantPendientes > 0 ? ` (${cantPendientes})` : ""}` },
-                { key: "encamara",   label: "En cámara" },
-              ].map((f) => (
+        {/* Pestañas */}
+        {!loading && (
+          <ul className="nav nav-tabs mb-3">
+            {[
+              { key: "todos",      label: "Resultado de faena",  icon: "bi-bar-chart-line" },
+              { key: "pendientes", label: "Trozados pendientes", icon: "bi-snow2", badge: cantPendientes },
+            ].map((f) => (
+              <li className="nav-item" key={f.key}>
                 <button
-                  key={f.key}
-                  className={`btn ${filtroCamara === f.key ? "btn-dark" : "btn-outline-dark"}`}
+                  className={`nav-link ${filtroCamara === f.key ? "active fw-semibold" : ""}`}
                   onClick={() => { setFiltroCamara(f.key); setPagina(1); }}
                 >
-                  {f.label}
+                  <i className={`bi ${f.icon} me-1`}></i>{f.label}
+                  {f.badge > 0 && <span className="badge bg-warning text-dark ms-2">{f.badge}</span>}
                 </button>
-              ))}
-            </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* Aviso de trozados congelando (fuera de la pestaña de pendientes) */}
+        {!loading && cantPendientes > 0 && filtroCamara !== "pendientes" && (
+          <div className="alert alert-warning py-2 px-3 mb-3 d-flex align-items-center gap-2">
+            <i className="bi bi-snow2"></i>
+            <span>
+              <strong>{cantPendientes}</strong> {cantPendientes === 1 ? "lote con trozados" : "lotes con trozados"} congelando, pendientes de cámara
+            </span>
           </div>
         )}
 
@@ -352,8 +375,116 @@ const LoteCreatePage = () => {
           <p className="text-center text-muted py-5 mb-0">No hay lotes registrados.</p>
         ) : lotesFiltrados.length === 0 ? (
           <p className="text-center text-muted py-5 mb-0">
-            {filtroCamara === "pendientes" ? "No hay lotes pendientes de enviar a cámara." : "No hay lotes en cámara."}
+            No hay trozados pendientes de pasar a cámara.
           </p>
+        ) : filtroCamara === "pendientes" ? (
+          <>
+            {/* ── TROZADOS PENDIENTES — tabla dedicada ── */}
+            {/* Tarjetas — mobile */}
+            <div className="d-md-none d-flex flex-column gap-3">
+              {lotesPagina.map((lote) => {
+                const pend       = lote.trozadosPendientes || [];
+                const kgTotal    = pend.reduce((s, t) => s + (t.kgTotal || 0), 0);
+                const cajasTotal = pend.reduce((s, t) => s + (t.cajas || 0), 0);
+                return (
+                  <div key={lote._id} className="card border-0 shadow-sm" style={{ borderLeft: "4px solid #f59e0b" }}>
+                    <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                      <div className="d-flex align-items-center gap-2 flex-wrap">
+                        {lote.numeroLote && <span className="badge bg-dark fs-6 px-3">#{lote.numeroLote}</span>}
+                        <span className="text-muted small">
+                          <i className="bi bi-calendar3 me-1"></i>{new Date(lote.fechaIngreso).toLocaleDateString("es-AR")}
+                        </span>
+                        <span className="badge bg-warning text-dark"><i className="bi bi-snow2 me-1"></i>Congelando</span>
+                      </div>
+                    </div>
+                    <div className="card-body py-2 px-3">
+                      <div className="d-flex flex-wrap gap-2 mb-2">
+                        {pend.map((t) => (
+                          <div key={t.tipo} className="d-flex flex-column align-items-center rounded px-3 py-2"
+                            style={{ background: "#fffbeb", border: "1px solid #fde68a", minWidth: 72 }}>
+                            <span className="fw-bold" style={{ fontSize: "0.75rem", color: "#b45309" }}>
+                              {t.tipo.charAt(0).toUpperCase() + t.tipo.slice(1)}
+                            </span>
+                            <span className="fw-semibold text-dark">{fmtNum(t.cajas)} caj</span>
+                            <span className="text-muted" style={{ fontSize: "0.7rem" }}>{fmtNum(t.kgTotal)} kg</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="d-flex justify-content-between small text-muted mb-2">
+                        <span>{fmtNum(cajasTotal)} cajas</span>
+                        <span className="fw-semibold">{fmtNum(kgTotal)} kg</span>
+                      </div>
+                      {puedeCrear && (
+                        <button className="btn btn-success w-100" onClick={() => handleEnviarCamara(lote)}>
+                          <i className="bi bi-snow me-1"></i>Enviar a cámara
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Tabla — desktop */}
+            <div className="d-none d-md-block card border-0 shadow-sm">
+              <div className="card-body p-0">
+                <div className="table-responsive">
+                  <table className="table table-hover align-middle mb-0" style={{ fontSize: "0.85rem" }}>
+                    <thead>
+                      <tr className="table-light">
+                        <th>Lote</th>
+                        <th>Fecha</th>
+                        <th>Trozados pendientes</th>
+                        <th className="text-end">Cajas</th>
+                        <th className="text-end">Kg total</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lotesPagina.map((lote) => {
+                        const pend       = lote.trozadosPendientes || [];
+                        const kgTotal    = pend.reduce((s, t) => s + (t.kgTotal || 0), 0);
+                        const cajasTotal = pend.reduce((s, t) => s + (t.cajas || 0), 0);
+                        return (
+                          <tr key={lote._id}>
+                            <td>
+                              {lote.numeroLote
+                                ? <span className="badge bg-dark">#{lote.numeroLote}</span>
+                                : <span className="text-muted">—</span>}
+                            </td>
+                            <td className="text-muted" style={{ whiteSpace: "nowrap" }}>
+                              {new Date(lote.fechaIngreso).toLocaleDateString("es-AR")}
+                            </td>
+                            <td>
+                              <div className="d-flex flex-wrap gap-1">
+                                {pend.map((t) => (
+                                  <span key={t.tipo} className="badge"
+                                    style={{ background: "#fffbeb", color: "#b45309", border: "1px solid #fde68a" }}>
+                                    {t.tipo.charAt(0).toUpperCase() + t.tipo.slice(1)}: {fmtNum(t.cajas)} caj · {fmtNum(t.kgTotal)} kg
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="text-end">{fmtNum(cajasTotal)}</td>
+                            <td className="text-end fw-semibold">{fmtNum(kgTotal)} kg</td>
+                            <td className="text-end">
+                              {puedeCrear && (
+                                <button className="btn btn-success btn-sm text-nowrap" onClick={() => handleEnviarCamara(lote)}>
+                                  <i className="bi bi-snow me-1"></i>Enviar a cámara
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {paginador}
+          </>
         ) : (
           <>
             {/* ── TARJETAS — mobile ── */}
@@ -366,10 +497,9 @@ const LoteCreatePage = () => {
                 const kgCalibes        = totalCajones * 20;
                 const kgTrozadosReal   = (lote.trozados || []).reduce((s, t) => s + (t.kgTotal || 0), 0) || Number(lote.kgTrozados) || 0;
                 const kgTotalCamara    = kgCalibes + kgTrozadosReal;
-                const pend             = esPendiente(lote);
                 return (
                   <div key={lote._id} className="card border-0 shadow-sm"
-                    style={{ borderLeft: `4px solid ${pend ? "#f59e0b" : "#198754"}` }}>
+                    style={{ borderLeft: "4px solid #198754" }}>
                     <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
                       <div className="d-flex align-items-center gap-2 flex-wrap">
                         {lote.numeroLote && (
@@ -382,15 +512,6 @@ const LoteCreatePage = () => {
                         <span className={`badge ${lote.estado === "activo" ? "bg-success" : "bg-secondary"}`}>
                           {lote.estado === "activo" ? "Activo" : "Cerrado"}
                         </span>
-                        {pend ? (
-                          <span className="badge bg-warning text-dark">
-                            <i className="bi bi-hourglass-split me-1"></i>{pendienteLabel(lote)}
-                          </span>
-                        ) : (
-                          <span className="badge bg-info-subtle text-info-emphasis border border-info-subtle">
-                            <i className="bi bi-snow me-1"></i>En cámara
-                          </span>
-                        )}
                       </div>
                       <div className="d-flex gap-1">
                         {puedeCrear && (
@@ -514,11 +635,6 @@ const LoteCreatePage = () => {
                           <i className="bi bi-info-circle me-1 text-warning"></i>{lote.observaciones}
                         </div>
                       )}
-                      {pend && puedeCrear && (
-                        <button className="btn btn-success w-100 mt-3" onClick={() => handleEnviarCamara(lote)}>
-                          <i className="bi bi-snow me-1"></i>Enviar a cámara
-                        </button>
-                      )}
                     </div>
                   </div>
                 );
@@ -569,20 +685,12 @@ const LoteCreatePage = () => {
                         const pctMuertos      = base > 0 && lote.muertos        ? +(lote.muertos / base * 100).toFixed(1)               : null;
                         const pctDecomisados  = base > 0 && lote.unidadesDecomisadas ? +(lote.unidadesDecomisadas / base * 100).toFixed(1) : null;
                         const pctTrozados     = base > 0 && lote.unidadesTrozadas    ? +(lote.unidadesTrozadas / base * 100).toFixed(1)    : null;
-                        const pend            = esPendiente(lote);
                         return (
-                          <tr key={lote._id} className={pend ? "table-warning" : ""}>
+                          <tr key={lote._id}>
                             <td>
                               {lote.numeroLote
                                 ? <span className="badge bg-dark">#{lote.numeroLote}</span>
                                 : <span className="text-muted">—</span>}
-                              {pend && (
-                                <div className="mt-1">
-                                  <span className="badge bg-warning text-dark" style={{ fontSize: "0.6rem" }}>
-                                    <i className="bi bi-hourglass-split me-1"></i>{pendienteLabel(lote)}
-                                  </span>
-                                </div>
-                              )}
                             </td>
                             <td className="text-muted" style={{ whiteSpace: "nowrap" }}>
                               {new Date(lote.fechaIngreso).toLocaleDateString("es-AR")}
@@ -663,11 +771,6 @@ const LoteCreatePage = () => {
                             {/* Acciones */}
                             <td>
                               <div className="d-flex gap-1">
-                                {pend && puedeCrear && (
-                                  <button className="btn btn-success btn-sm text-nowrap" onClick={() => handleEnviarCamara(lote)}>
-                                    <i className="bi bi-snow me-1"></i>A cámara
-                                  </button>
-                                )}
                                 {puedeCrear && (
                                   <button className="btn btn-outline-primary btn-sm" onClick={() => setLoteEditando(lote)}>
                                     <i className="bi bi-pencil"></i>
@@ -689,34 +792,7 @@ const LoteCreatePage = () => {
               </div>
             </div>
 
-            {/* ── Paginador ── */}
-            {totalPaginas > 1 && (
-              <div className="d-flex justify-content-center align-items-center gap-2 mt-3">
-                <button
-                  className="btn btn-outline-secondary btn-sm"
-                  onClick={() => setPagina((p) => Math.max(1, p - 1))}
-                  disabled={pagina === 1}
-                >
-                  <i className="bi bi-chevron-left"></i>
-                </button>
-                {Array.from({ length: totalPaginas }, (_, i) => i + 1).map((p) => (
-                  <button
-                    key={p}
-                    className={`btn btn-sm ${pagina === p ? "btn-dark" : "btn-outline-secondary"}`}
-                    onClick={() => setPagina(p)}
-                  >
-                    {p}
-                  </button>
-                ))}
-                <button
-                  className="btn btn-outline-secondary btn-sm"
-                  onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
-                  disabled={pagina === totalPaginas}
-                >
-                  <i className="bi bi-chevron-right"></i>
-                </button>
-              </div>
-            )}
+            {paginador}
           </>
         )}
 
