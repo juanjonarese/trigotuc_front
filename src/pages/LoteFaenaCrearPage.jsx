@@ -2,108 +2,13 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
+import { TrozadoTable, DestinoGrupo, TROZADO_TIPOS, trozadosVacios, trozadosAPayload } from "../components/TrozadoTable";
 import { crearLote, obtenerOrdenesCarga } from "../services/api";
 import { obtenerFechaHoy } from "../utils/dateUtils";
 import Swal from "sweetalert2";
 
 const fmtNum = (n) =>
   n != null ? new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n) : "—";
-
-// ── Tabla de trozados ────────────────────────────────────────────────────────
-const TROZADO_TIPOS = [
-  { tipo: "menudo",  label: "Menudo",  kgCajaDefault: 10, editableKg: false },
-  { tipo: "filet",   label: "Filet",   kgCajaDefault: 15, editableKg: false },
-  { tipo: "pata",    label: "Pata",    kgCajaDefault: 15, editableKg: false },
-  { tipo: "alita",   label: "Alita",   kgCajaDefault: 15, editableKg: false },
-  { tipo: "carcaza", label: "Carcaza", kgCajaDefault: 12, editableKg: true  },
-];
-
-const TrozadoTable = ({ lineas, onChange, kgTrozadosTotal }) => {
-  const set = (tipo, campo, valor) => {
-    onChange(lineas.map((l) => l.tipo === tipo ? { ...l, [campo]: valor } : l));
-  };
-
-  const totalCajas = lineas.reduce((s, l) => s + (Number(l.cajas) || 0), 0);
-  const totalKg    = lineas.reduce((s, l) => {
-    return s + (Number(l.cajas) || 0) * (Number(l.kgCaja) || 1);
-  }, 0);
-
-  const kgRef      = Number(kgTrozadosTotal) || 0;
-  const diferencia = kgRef > 0 ? +(totalKg - kgRef).toFixed(2) : null;
-
-  return (
-    <div>
-      <div className="table-responsive">
-        <table className="table table-sm align-middle mb-0">
-          <thead className="table-light">
-            <tr>
-              <th style={{ width: 110 }}>Tipo</th>
-              <th style={{ width: 90 }} className="text-center">Kg/caja</th>
-              <th style={{ width: 130 }}>Cajas</th>
-              <th className="text-end">Kg calculados</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lineas.map((l) => {
-              const cajas = Number(l.cajas) || 0;
-              const kgCaj = Number(l.kgCaja) || 1;
-              const kg    = cajas * kgCaj;
-              return (
-                <tr key={l.tipo}>
-                  <td className="fw-semibold small">{l.label}</td>
-                  <td className="text-center">
-                    {l.editableKg ? (
-                      <input
-                        type="number"
-                        className="form-control form-control-sm text-center"
-                        value={l.kgCaja}
-                        onChange={(e) => set(l.tipo, "kgCaja", e.target.value)}
-                        min="1" max="20" step="0.5"
-                        style={{ width: 70 }}
-                      />
-                    ) : (
-                      <span className="text-muted">{l.kgCaja} kg</span>
-                    )}
-                  </td>
-                  <td>
-                    <input
-                      type="number"
-                      className="form-control form-control-sm"
-                      value={l.cajas}
-                      onChange={(e) => set(l.tipo, "cajas", e.target.value)}
-                      min="0" step="1" placeholder="0"
-                    />
-                  </td>
-                  <td className="text-end fw-semibold">
-                    {kg > 0
-                      ? <span className="text-success">{fmtNum(kg)} kg</span>
-                      : <span className="text-muted">—</span>}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-          <tfoot className="table-light">
-            <tr>
-              <td colSpan={2} className="fw-semibold small">Total</td>
-              <td className="fw-semibold text-primary">
-                {totalCajas > 0 ? `${totalCajas} cajas` : "—"}
-              </td>
-              <td className="text-end fw-semibold">
-                {totalKg > 0 ? `${fmtNum(totalKg)} kg` : "—"}
-                {diferencia !== null && (
-                  <span className={`ms-2 small ${Math.abs(diferencia) > 0.1 ? "text-danger" : "text-success"}`}>
-                    {diferencia === 0 ? "✓" : `(${diferencia > 0 ? "+" : ""}${diferencia} kg)`}
-                  </span>
-                )}
-              </td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-    </div>
-  );
-};
 
 const FORM_VACIO = {
   fechaIngreso:        obtenerFechaHoy(),
@@ -137,6 +42,10 @@ const LoteFaenaCrearPage = () => {
   const [trozados, setTrozados] = useState(
     TROZADO_TIPOS.map((t) => ({ ...t, kgCaja: t.kgCajaDefault, cajas: "" }))
   );
+  // Destino al terminar la faena. Sin elegir por defecto (null): hay que marcar
+  // "camara" o "pendiente" para cada grupo antes de crear el lote.
+  const [enterosDestino, setEnterosDestino]   = useState(null);
+  const [trozadosDestino, setTrozadosDestino] = useState(null);
   const [saving, setSaving]     = useState(false);
   const calibreRef              = useRef(null);
   const recepcionRef            = useRef(null);
@@ -182,7 +91,14 @@ const LoteFaenaCrearPage = () => {
   const kgMenudo      = trozados
     .filter((t) => t.tipo === "menudo")
     .reduce((s, t) => s + (Number(t.cajas) || 0) * (Number(t.kgCaja) || 0), 0);
-  const kgTotalCamara = totalKg + (Number(form.kgTrozados) || 0) + kgMenudo;
+  const kgTrozadosTotal = (Number(form.kgTrozados) || 0) + kgMenudo;
+  const kgTotalCamara   = totalKg + kgTrozadosTotal;
+  const hayTrozados     = kgTrozadosTotal > 0 || trozados.some((t) => Number(t.cajas) > 0);
+  const hayEnteros      = totalCajones > 0;
+  const kgACamaraAhora  = (enterosDestino === "camara" ? totalKg : 0) + (trozadosDestino === "camara" ? kgTrozadosTotal : 0);
+  const kgPendiente     = (enterosDestino === "pendiente" ? totalKg : 0) + (trozadosDestino === "pendiente" ? kgTrozadosTotal : 0);
+  // Falta definir destino de algún grupo con contenido
+  const destinoIncompleto = (hayEnteros && !enterosDestino) || (hayTrozados && !trozadosDestino);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -200,6 +116,14 @@ const LoteFaenaCrearPage = () => {
       Swal.fire("Error", "Agregá al menos un calibre con pollos en la tabla de calibres.", "error");
       return;
     }
+    if (hayEnteros && !enterosDestino) {
+      Swal.fire("Falta el destino", "Elegí si los pollos enteros van a cámara ahora o quedan pendientes.", "warning");
+      return;
+    }
+    if (hayTrozados && !trozadosDestino) {
+      Swal.fire("Falta el destino", "Elegí si los trozados van a cámara ahora o quedan pendientes.", "warning");
+      return;
+    }
     setSaving(true);
     try {
 
@@ -208,9 +132,11 @@ const LoteFaenaCrearPage = () => {
       const totalKgF      = totalCajonesF * 20;
 
       const payload = {
-        fechaIngreso:  form.fechaIngreso,
-        calibres:      calibresPayload,
-        observaciones: form.observaciones || undefined,
+        fechaIngreso:    form.fechaIngreso,
+        calibres:        calibresPayload,
+        observaciones:   form.observaciones || undefined,
+        enterosACamara:  enterosDestino === "camara",
+        trozadosACamara: trozadosDestino === "camara",
       };
       if (form.kgVivos)             payload.kgVivos             = Number(form.kgVivos);
       if (form.unidadesFaenadas)    payload.unidadesFaenadas    = Number(form.unidadesFaenadas);
@@ -236,9 +162,11 @@ const LoteFaenaCrearPage = () => {
       await Swal.fire({
         icon:  "success",
         title: `Lote #${loteCreado.numeroLote} creado`,
-        text:  `${fmtNum(totalPollosF)} pollos · ${fmtNum(totalCajonesF)} cajones · ${fmtNum(totalKgF)} kg`,
-        timer: 2000,
-        showConfirmButton: false,
+        html:  `${fmtNum(totalPollosF)} pollos · ${fmtNum(totalCajonesF)} cajones · ${fmtNum(totalKgF)} kg` +
+               (kgPendiente > 0
+                 ? `<br><span class="text-warning"><i class="bi bi-hourglass-split"></i> ${fmtNum(kgPendiente)} kg quedan pendientes de cámara.</span>` +
+                   `<br><span class="text-muted small">Enviálos desde Lotes de Faena cuando termines el proceso.</span>`
+                 : `<br><span class="text-success"><i class="bi bi-snow"></i> Todo ingresó a cámara.</span>`),
       });
       navigate(VOLVER_A);
     } catch (err) {
@@ -473,6 +401,44 @@ const LoteFaenaCrearPage = () => {
               <p className="text-muted small mb-2">El calibre indica cuántos pollos entran en un cajón de 20 kg.</p>
               <CalibreTable ref={calibreRef} lineas={lineas} onChange={setLineas} />
 
+              {/* Destino al terminar la faena: qué entra a cámara ahora y qué queda pendiente */}
+              {(hayEnteros || hayTrozados) && (
+                <div className="mt-3 p-3 rounded border">
+                  <div className="fw-semibold mb-1">
+                    <i className="bi bi-box-arrow-in-down me-1 text-primary"></i>
+                    Destino al terminar la faena
+                  </div>
+                  <p className="text-muted small mb-3">
+                    Elegí qué entra a cámara ahora. Lo que dejes <strong>pendiente</strong> no suma stock
+                    hasta que lo envíes desde <em>Lotes de Faena</em> (lo podés hacer al otro día).
+                  </p>
+                  <div className="d-flex flex-column gap-3">
+                    {hayEnteros && (
+                      <DestinoGrupo
+                        titulo="Pollos enteros"
+                        kg={totalKg}
+                        destino={enterosDestino}
+                        onChange={setEnterosDestino}
+                      />
+                    )}
+                    {hayTrozados && (
+                      <DestinoGrupo
+                        titulo="Trozados"
+                        kg={kgTrozadosTotal}
+                        destino={trozadosDestino}
+                        onChange={setTrozadosDestino}
+                      />
+                    )}
+                  </div>
+                  {destinoIncompleto && (
+                    <div className="text-danger small mt-2">
+                      <i className="bi bi-exclamation-triangle me-1"></i>
+                      Elegí el destino de cada grupo para poder crear el lote.
+                    </div>
+                  )}
+                </div>
+              )}
+
               {totalCajones > 0 && (
                 <>
                   <div className="alert alert-info py-2 mt-3 mb-2">
@@ -512,10 +478,19 @@ const LoteFaenaCrearPage = () => {
                   <div className="rounded px-3 py-2 d-flex justify-content-between align-items-center"
                     style={{ background: "#f0fdf4", border: "2px solid #86efac" }}>
                     <div className="fw-semibold text-success">
-                      <i className="bi bi-snow me-2"></i>Kg totales ingreso a cámara
+                      <i className="bi bi-snow me-2"></i>Kg a cámara ahora
                     </div>
-                    <div className="fw-bold fs-5 text-success">{fmtNum(kgTotalCamara)} kg</div>
+                    <div className="fw-bold fs-5 text-success">{fmtNum(kgACamaraAhora)} kg</div>
                   </div>
+                  {kgPendiente > 0 && (
+                    <div className="rounded px-3 py-2 mt-2 d-flex justify-content-between align-items-center"
+                      style={{ background: "#fffbeb", border: "2px solid #fde68a" }}>
+                      <div className="fw-semibold" style={{ color: "#b45309" }}>
+                        <i className="bi bi-hourglass-split me-2"></i>Kg que quedan pendientes de cámara
+                      </div>
+                      <div className="fw-bold fs-5" style={{ color: "#b45309" }}>{fmtNum(kgPendiente)} kg</div>
+                    </div>
+                  )}
                 </>
               )}
             </form>
@@ -525,7 +500,7 @@ const LoteFaenaCrearPage = () => {
             <button className="btn btn-outline-secondary" onClick={() => navigate(VOLVER_A)} disabled={saving}>
               Cancelar
             </button>
-            <button type="submit" form="form-nuevo-lote" className="btn btn-success" disabled={saving || !recepcionSel}>
+            <button type="submit" form="form-nuevo-lote" className="btn btn-success" disabled={saving || !recepcionSel || destinoIncompleto}>
               {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
               <i className="bi bi-plus-circle me-1"></i>Crear Lote
             </button>

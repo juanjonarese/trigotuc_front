@@ -132,6 +132,13 @@ export const actualizarLote = async (id, data) => {
   return handleResponse(response);
 };
 
+export const enviarLoteACamara = async (id) => {
+  const response = await fetch(`${API_URL}/lotes/${id}/enviar-camara`, {
+    method: "PATCH", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
 export const obtenerHistorialLote = async (id) => {
   const response = await fetch(`${API_URL}/lotes/${id}/historial`, { headers: getAuthHeaders() });
   return handleResponse(response);
