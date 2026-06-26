@@ -132,9 +132,12 @@ export const actualizarLote = async (id, data) => {
   return handleResponse(response);
 };
 
-export const enviarLoteACamara = async (id) => {
+// opciones (opcional): { tiposTrozados: ["alita", ...] } o { enteros: true }.
+// Sin opciones se envía todo lo pendiente del lote.
+export const enviarLoteACamara = async (id, opciones) => {
   const response = await fetch(`${API_URL}/lotes/${id}/enviar-camara`, {
     method: "PATCH", headers: getAuthHeaders(),
+    body: JSON.stringify(opciones || {}),
   });
   return handleResponse(response);
 };
