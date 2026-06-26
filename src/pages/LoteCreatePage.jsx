@@ -264,28 +264,48 @@ const LoteCreatePage = () => {
     }
   };
 
-  const handleEnviarCamara = async (lote) => {
-    const cajonesPend    = (lote.calibresPendientes || []).reduce((a, c) => a + (c.cajones || 0), 0);
-    const kgCalibresPend = cajonesPend * 20;
-    const kgTrozadosPend = (lote.trozadosPendientes || []).reduce((s, t) => s + (t.kgTotal || 0), 0);
-    const kgTotal        = kgCalibresPend + kgTrozadosPend;
-    const partes = [];
-    if (cajonesPend > 0)    partes.push(`enteros (${fmtNum(cajonesPend)} cajones)`);
-    if (kgTrozadosPend > 0) partes.push(`trozados (${fmtNum(kgTrozadosPend)} kg)`);
+  const capitalizar = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+  // Envía a cámara un único corte de trozado (los cortes se congelan a distinto
+  // ritmo, así que entran de a uno cuando están listos). El resto sigue pendiente.
+  const handleEnviarCorte = async (lote, trozado) => {
     const confirm = await Swal.fire({
-      title: "¿Pasar a cámara Cañete?",
-      html: `Confirmá que los trozados ya están <strong>congelados y en condiciones</strong>. Se ingresará a cámara ` +
-            `<strong>Cañete</strong> lo pendiente del lote <strong>#${lote.numeroLote || ""}</strong>:` +
-            `<br><span class="text-muted">${partes.join(" · ")} — total ${fmtNum(kgTotal)} kg</span>` +
+      title: "¿Pasar este corte a cámara?",
+      html: `Confirmá que <strong>${capitalizar(trozado.tipo)}</strong> ya está ` +
+            `<strong>congelado y en condiciones</strong>. Se ingresará a cámara ` +
+            `<strong>Cañete</strong> del lote <strong>#${lote.numeroLote || ""}</strong>:` +
+            `<br><span class="text-muted">${capitalizar(trozado.tipo)} — ${fmtNum(trozado.cajas)} cajas · ${fmtNum(trozado.kgTotal)} kg</span>` +
             `<br><span class="text-muted small">A partir de ahí ese stock queda disponible para vender o despachar.</span>`,
       icon: "question", showCancelButton: true,
       confirmButtonColor: "#198754", confirmButtonText: "Sí, pasar a cámara", cancelButtonText: "Cancelar",
     });
     if (!confirm.isConfirmed) return;
     try {
-      await enviarLoteACamara(lote._id);
+      await enviarLoteACamara(lote._id, { tiposTrozados: [trozado.tipo] });
       await cargarLotes();
-      Swal.fire({ icon: "success", title: "Ingresado a cámara", timer: 1500, showConfirmButton: false });
+      Swal.fire({ icon: "success", title: "Corte ingresado a cámara", timer: 1500, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire("Error", err.message || "No se pudo enviar a cámara.", "error");
+    }
+  };
+
+  // Envía a cámara los enteros (calibres) pendientes del lote, todos juntos.
+  const handleEnviarEnteros = async (lote) => {
+    const cajonesPend = (lote.calibresPendientes || []).reduce((a, c) => a + (c.cajones || 0), 0);
+    const confirm = await Swal.fire({
+      title: "¿Pasar los enteros a cámara?",
+      html: `Se ingresarán a cámara <strong>Cañete</strong> los enteros pendientes del lote ` +
+            `<strong>#${lote.numeroLote || ""}</strong>:` +
+            `<br><span class="text-muted">${fmtNum(cajonesPend)} cajones · ${fmtNum(cajonesPend * 20)} kg</span>` +
+            `<br><span class="text-muted small">A partir de ahí ese stock queda disponible para vender o despachar.</span>`,
+      icon: "question", showCancelButton: true,
+      confirmButtonColor: "#198754", confirmButtonText: "Sí, pasar a cámara", cancelButtonText: "Cancelar",
+    });
+    if (!confirm.isConfirmed) return;
+    try {
+      await enviarLoteACamara(lote._id, { enteros: true });
+      await cargarLotes();
+      Swal.fire({ icon: "success", title: "Enteros ingresados a cámara", timer: 1500, showConfirmButton: false });
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudo enviar a cámara.", "error");
     }
@@ -379,108 +399,59 @@ const LoteCreatePage = () => {
           </p>
         ) : filtroCamara === "pendientes" ? (
           <>
-            {/* ── TROZADOS PENDIENTES — tabla dedicada ── */}
-            {/* Tarjetas — mobile */}
-            <div className="d-md-none d-flex flex-column gap-3">
+            {/* ── TROZADOS PENDIENTES — grilla de tarjetas (≈3 columnas) ── */}
+            <div className="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3">
               {lotesPagina.map((lote) => {
                 const pend       = lote.trozadosPendientes || [];
                 const kgTotal    = pend.reduce((s, t) => s + (t.kgTotal || 0), 0);
                 const cajasTotal = pend.reduce((s, t) => s + (t.cajas || 0), 0);
                 return (
-                  <div key={lote._id} className="card border-0 shadow-sm" style={{ borderLeft: "4px solid #f59e0b" }}>
-                    <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
-                      <div className="d-flex align-items-center gap-2 flex-wrap">
-                        {lote.numeroLote && <span className="badge bg-dark fs-6 px-3">#{lote.numeroLote}</span>}
-                        <span className="text-muted small">
-                          <i className="bi bi-calendar3 me-1"></i>{new Date(lote.fechaIngreso).toLocaleDateString("es-AR")}
-                        </span>
-                        <span className="badge bg-warning text-dark"><i className="bi bi-snow2 me-1"></i>Congelando</span>
+                  <div key={lote._id} className="col">
+                    <div className="card border-0 shadow-sm h-100" style={{ borderLeft: "4px solid #f59e0b" }}>
+                      <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div className="d-flex align-items-center gap-2 flex-wrap">
+                          {lote.numeroLote && <span className="badge bg-dark fs-6 px-3">#{lote.numeroLote}</span>}
+                          <span className="text-muted small">
+                            <i className="bi bi-calendar3 me-1"></i>{new Date(lote.fechaIngreso).toLocaleDateString("es-AR")}
+                          </span>
+                          <span className="badge bg-warning text-dark"><i className="bi bi-snow2 me-1"></i>Congelando</span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="card-body py-2 px-3">
-                      <div className="d-flex flex-wrap gap-2 mb-2">
-                        {pend.map((t) => (
-                          <div key={t.tipo} className="d-flex flex-column align-items-center rounded px-3 py-2"
-                            style={{ background: "#fffbeb", border: "1px solid #fde68a", minWidth: 72 }}>
-                            <span className="fw-bold" style={{ fontSize: "0.75rem", color: "#b45309" }}>
-                              {t.tipo.charAt(0).toUpperCase() + t.tipo.slice(1)}
-                            </span>
-                            <span className="fw-semibold text-dark">{fmtNum(t.cajas)} caj</span>
-                            <span className="text-muted" style={{ fontSize: "0.7rem" }}>{fmtNum(t.kgTotal)} kg</span>
-                          </div>
-                        ))}
+                      <div className="card-body py-2 px-3 d-flex flex-column">
+                        <div className="d-flex flex-column gap-2 mb-2">
+                          {pend.map((t) => (
+                            <div key={t.tipo} className="d-flex align-items-center justify-content-between rounded px-3 py-2"
+                              style={{ background: "#fffbeb", border: "1px solid #fde68a" }}>
+                              <div className="d-flex flex-column">
+                                <span className="fw-bold" style={{ fontSize: "0.8rem", color: "#b45309" }}>
+                                  {t.tipo.charAt(0).toUpperCase() + t.tipo.slice(1)}
+                                </span>
+                                <span className="text-muted" style={{ fontSize: "0.72rem" }}>
+                                  {fmtNum(t.cajas)} cajas · {fmtNum(t.kgTotal)} kg
+                                </span>
+                              </div>
+                              {puedeCrear && (
+                                <button className="btn btn-success btn-sm text-nowrap" onClick={() => handleEnviarCorte(lote, t)}>
+                                  <i className="bi bi-snow me-1"></i>A cámara
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="d-flex justify-content-between small text-muted mb-2">
+                          <span>{fmtNum(cajasTotal)} cajas</span>
+                          <span className="fw-semibold">{fmtNum(kgTotal)} kg</span>
+                        </div>
+                        {puedeCrear && (lote.calibresPendientes?.length || 0) > 0 && (
+                          <button className="btn btn-outline-success w-100 mt-auto" onClick={() => handleEnviarEnteros(lote)}>
+                            <i className="bi bi-snow me-1"></i>Enviar enteros a cámara
+                          </button>
+                        )}
                       </div>
-                      <div className="d-flex justify-content-between small text-muted mb-2">
-                        <span>{fmtNum(cajasTotal)} cajas</span>
-                        <span className="fw-semibold">{fmtNum(kgTotal)} kg</span>
-                      </div>
-                      {puedeCrear && (
-                        <button className="btn btn-success w-100" onClick={() => handleEnviarCamara(lote)}>
-                          <i className="bi bi-snow me-1"></i>Enviar a cámara
-                        </button>
-                      )}
                     </div>
                   </div>
                 );
               })}
-            </div>
-
-            {/* Tabla — desktop */}
-            <div className="d-none d-md-block card border-0 shadow-sm">
-              <div className="card-body p-0">
-                <div className="table-responsive">
-                  <table className="table table-hover align-middle mb-0" style={{ fontSize: "0.85rem" }}>
-                    <thead>
-                      <tr className="table-light">
-                        <th>Lote</th>
-                        <th>Fecha</th>
-                        <th>Trozados pendientes</th>
-                        <th className="text-end">Cajas</th>
-                        <th className="text-end">Kg total</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {lotesPagina.map((lote) => {
-                        const pend       = lote.trozadosPendientes || [];
-                        const kgTotal    = pend.reduce((s, t) => s + (t.kgTotal || 0), 0);
-                        const cajasTotal = pend.reduce((s, t) => s + (t.cajas || 0), 0);
-                        return (
-                          <tr key={lote._id}>
-                            <td>
-                              {lote.numeroLote
-                                ? <span className="badge bg-dark">#{lote.numeroLote}</span>
-                                : <span className="text-muted">—</span>}
-                            </td>
-                            <td className="text-muted" style={{ whiteSpace: "nowrap" }}>
-                              {new Date(lote.fechaIngreso).toLocaleDateString("es-AR")}
-                            </td>
-                            <td>
-                              <div className="d-flex flex-wrap gap-1">
-                                {pend.map((t) => (
-                                  <span key={t.tipo} className="badge"
-                                    style={{ background: "#fffbeb", color: "#b45309", border: "1px solid #fde68a" }}>
-                                    {t.tipo.charAt(0).toUpperCase() + t.tipo.slice(1)}: {fmtNum(t.cajas)} caj · {fmtNum(t.kgTotal)} kg
-                                  </span>
-                                ))}
-                              </div>
-                            </td>
-                            <td className="text-end">{fmtNum(cajasTotal)}</td>
-                            <td className="text-end fw-semibold">{fmtNum(kgTotal)} kg</td>
-                            <td className="text-end">
-                              {puedeCrear && (
-                                <button className="btn btn-success btn-sm text-nowrap" onClick={() => handleEnviarCamara(lote)}>
-                                  <i className="bi bi-snow me-1"></i>Enviar a cámara
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
             </div>
 
             {paginador}
