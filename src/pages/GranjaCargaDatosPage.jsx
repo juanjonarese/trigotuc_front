@@ -97,9 +97,11 @@ const EditarSemanaModal = ({ lote, fila, onClose, onGuardado, puedeEliminar = tr
     ? (fila.pesaje.pesoPromedio / 1000).toFixed(3)
     : "";
   const bajasInicial = fila.mortandad ? String(fila.mortandad.cantidad) : "0";
+  const fechaInicial = (fila.pesaje?.fecha || fila.mortandad?.fecha || "").split("T")[0];
 
   const [peso, setPeso]     = useState(pesoInicial);
   const [bajas, setBajas]   = useState(bajasInicial);
+  const [fecha, setFecha]   = useState(fechaInicial);
   const [saving, setSaving] = useState(false);
 
   const handleGuardar = async () => {
@@ -112,15 +114,23 @@ const EditarSemanaModal = ({ lote, fila, onClose, onGuardado, puedeEliminar = tr
     if (!hideBajas && (isNaN(bajasVal) || bajasVal < 0)) {
       Swal.fire("Error", "Cantidad de bajas inválida.", "warning"); return;
     }
+    if (!fecha) {
+      Swal.fire("Error", "La fecha es obligatoria.", "warning"); return;
+    }
+    const fechaIngresoStr = lote.fechaIngreso?.split("T")[0];
+    if (fechaIngresoStr && fecha < fechaIngresoStr) {
+      Swal.fire("Error", `La fecha no puede ser anterior al ingreso del lote (${formatearFechaLocal(lote.fechaIngreso)}).`, "warning"); return;
+    }
+    const fechaGuardar = ajustarFechaParaGuardar(fecha);
 
     setSaving(true);
     try {
       const promesas = [];
 
-      if (pesoVal !== null && fila.pesaje) {
-        promesas.push(editarPesajeGranja(lote._id, fila.pesaje._id, {
-          pesoPromedio: Math.round(pesoVal * 1000),
-        }));
+      if (fila.pesaje) {
+        const payloadPesaje = { fecha: fechaGuardar };
+        if (pesoVal !== null) payloadPesaje.pesoPromedio = Math.round(pesoVal * 1000);
+        promesas.push(editarPesajeGranja(lote._id, fila.pesaje._id, payloadPesaje));
       }
 
       if (!hideBajas) {
@@ -128,11 +138,11 @@ const EditarSemanaModal = ({ lote, fila, onClose, onGuardado, puedeEliminar = tr
           if (bajasVal === 0) {
             promesas.push(eliminarMortandadGranja(lote._id, fila.mortandad._id));
           } else {
-            promesas.push(editarMortandadGranja(lote._id, fila.mortandad._id, { cantidad: bajasVal }));
+            promesas.push(editarMortandadGranja(lote._id, fila.mortandad._id, { cantidad: bajasVal, fecha: fechaGuardar }));
           }
         } else if (bajasVal > 0) {
           promesas.push(registrarMortandadGranja(lote._id, {
-            fecha: fila.pesaje?.fecha || new Date().toISOString(),
+            fecha: fechaGuardar,
             cantidad: bajasVal,
           }));
         }
@@ -181,6 +191,16 @@ const EditarSemanaModal = ({ lote, fila, onClose, onGuardado, puedeEliminar = tr
               <button className="btn-close btn-sm" onClick={onClose} disabled={saving}></button>
             </div>
             <div className="modal-body">
+              <div className="mb-3">
+                <label className="form-label fw-semibold small mb-1">Fecha</label>
+                <input
+                  type="date" className="form-control"
+                  value={fecha} onChange={(e) => setFecha(e.target.value)}
+                  min={lote.fechaIngreso?.split("T")[0]}
+                  max={obtenerFechaHoy()}
+                />
+                <div className="form-text">Cambiar la fecha puede mover el registro de semana.</div>
+              </div>
               <div className={hideBajas ? "" : "mb-3"}>
                 <label className="form-label fw-semibold small mb-1">
                   Peso promedio <span className="text-muted fw-normal">(kg)</span>
