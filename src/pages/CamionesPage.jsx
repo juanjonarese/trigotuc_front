@@ -6,9 +6,8 @@ import Swal from "sweetalert2";
 import "../css/Tablas.css";
 
 const FORM_INICIAL = { marca: "", patente: "", choferes: ["", ""] };
-const NUEVO_CHOFER_INICIAL = { nombreUsuario: "", telefonoUsuario: "", contraseniaUsuario: "" };
+const NUEVO_CHOFER_INICIAL = { nombreUsuario: "", telefonoUsuario: "" };
 const ITEMS_PER_PAGE = 30;
-const PASSWORD_REGEX = /^[A-Z](?=.*[a-z])(?=.*\d)[A-Za-z\d]{5,}$/;
 
 const CamionesPage = () => {
   const [camiones, setCamiones]     = useState([]);
@@ -23,9 +22,6 @@ const CamionesPage = () => {
 
   const [mostrarNuevoChofer, setMostrarNuevoChofer] = useState(false);
   const [nuevoChoferData, setNuevoChoferData] = useState(NUEVO_CHOFER_INICIAL);
-  const [confirmarContraseniaChofer, setConfirmarContraseniaChofer] = useState("");
-  const [showPassChofer, setShowPassChofer] = useState(false);
-  const [showConfirmChofer, setShowConfirmChofer] = useState(false);
   const [creandoChofer, setCreandoChofer] = useState(false);
 
   const rolUsuario  = localStorage.getItem("rolUsuario");
@@ -75,7 +71,6 @@ const CamionesPage = () => {
     }
     setMostrarNuevoChofer(false);
     setNuevoChoferData(NUEVO_CHOFER_INICIAL);
-    setConfirmarContraseniaChofer("");
     setShowModal(true);
   };
 
@@ -85,7 +80,6 @@ const CamionesPage = () => {
     setFormData(FORM_INICIAL);
     setMostrarNuevoChofer(false);
     setNuevoChoferData(NUEVO_CHOFER_INICIAL);
-    setConfirmarContraseniaChofer("");
   };
 
   const handleChange = (e) => {
@@ -121,22 +115,9 @@ const CamionesPage = () => {
   };
 
   const handleCrearChofer = async () => {
-    const { nombreUsuario, telefonoUsuario, contraseniaUsuario } = nuevoChoferData;
-    if (!nombreUsuario || !telefonoUsuario || !contraseniaUsuario) {
-      Swal.fire({ title: "Completá todos los campos", icon: "warning", confirmButtonColor: "#d33" });
-      return;
-    }
-    if (contraseniaUsuario !== confirmarContraseniaChofer) {
-      Swal.fire({ title: "Las contraseñas no coinciden", icon: "warning", confirmButtonColor: "#d33" });
-      return;
-    }
-    if (!PASSWORD_REGEX.test(contraseniaUsuario)) {
-      Swal.fire({
-        title: "Contraseña inválida",
-        text: "Debe comenzar con MAYÚSCULA, contener letras y números (mínimo 6 caracteres alfanuméricos). Ejemplo: Arqui123",
-        icon: "warning",
-        confirmButtonColor: "#d33",
-      });
+    const { nombreUsuario, telefonoUsuario } = nuevoChoferData;
+    if (!nombreUsuario || !telefonoUsuario) {
+      Swal.fire({ title: "Completá nombre y teléfono", icon: "warning", confirmButtonColor: "#d33" });
       return;
     }
 
@@ -156,7 +137,6 @@ const CamionesPage = () => {
 
       setMostrarNuevoChofer(false);
       setNuevoChoferData(NUEVO_CHOFER_INICIAL);
-      setConfirmarContraseniaChofer("");
       Swal.fire({
         title: "¡Chofer creado!",
         text: resp.msg || "El chofer fue creado correctamente",
@@ -532,58 +512,8 @@ const CamionesPage = () => {
                                   onChange={handleNuevoChoferChange}
                                   placeholder="3814123456"
                                 />
-                              </div>
-                              <div className="col-12 col-sm-6">
-                                <label className="form-label">
-                                  Contraseña <span className="text-danger">*</span>
-                                </label>
-                                <div className="input-group">
-                                  <input
-                                    type={showPassChofer ? "text" : "password"}
-                                    className="form-control"
-                                    name="contraseniaUsuario"
-                                    value={nuevoChoferData.contraseniaUsuario}
-                                    onChange={handleNuevoChoferChange}
-                                    placeholder="Ej: Arqui123"
-                                    autoComplete="new-password"
-                                  />
-                                  <button
-                                    type="button"
-                                    className="btn btn-outline-secondary"
-                                    onClick={() => setShowPassChofer((v) => !v)}
-                                    tabIndex="-1"
-                                  >
-                                    <i className={`bi ${showPassChofer ? "bi-eye-slash" : "bi-eye"}`}></i>
-                                  </button>
-                                </div>
                                 <div className="form-text">
-                                  Mayúscula inicial, letras y números, mínimo 6 caracteres.
-                                </div>
-                              </div>
-                              <div className="col-12 col-sm-6">
-                                <label className="form-label">
-                                  Confirmar contraseña <span className="text-danger">*</span>
-                                </label>
-                                <div className="input-group">
-                                  <input
-                                    type={showConfirmChofer ? "text" : "password"}
-                                    className={`form-control ${confirmarContraseniaChofer && (confirmarContraseniaChofer === nuevoChoferData.contraseniaUsuario ? "is-valid" : "is-invalid")}`}
-                                    value={confirmarContraseniaChofer}
-                                    onChange={(e) => setConfirmarContraseniaChofer(e.target.value)}
-                                    placeholder="Repetí la contraseña"
-                                    autoComplete="new-password"
-                                  />
-                                  <button
-                                    type="button"
-                                    className="btn btn-outline-secondary"
-                                    onClick={() => setShowConfirmChofer((v) => !v)}
-                                    tabIndex="-1"
-                                  >
-                                    <i className={`bi ${showConfirmChofer ? "bi-eye-slash" : "bi-eye"}`}></i>
-                                  </button>
-                                  {confirmarContraseniaChofer && confirmarContraseniaChofer !== nuevoChoferData.contraseniaUsuario && (
-                                    <div className="invalid-feedback">Las contraseñas no coinciden</div>
-                                  )}
+                                  El chofer ingresa al sistema solo con su teléfono.
                                 </div>
                               </div>
                             </div>
