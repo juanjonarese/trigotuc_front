@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { obtenerCamiones, crearCamion, actualizarCamion, eliminarCamion, obtenerChoferes, crearChofer } from "../services/api";
+import { obtenerCamiones, crearCamion, actualizarCamion, eliminarCamion, obtenerChoferes, crearChofer, eliminarChofer } from "../services/api";
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
 import Swal from "sweetalert2";
@@ -153,6 +153,30 @@ const CamionesPage = () => {
       });
     } finally {
       setCreandoChofer(false);
+    }
+  };
+
+  const handleEliminarChofer = async (chofer) => {
+    const confirm = await Swal.fire({
+      title: "¿Eliminar chofer?",
+      html: `Se eliminará a <strong>${chofer.nombreUsuario}</strong>. Esta acción no se puede deshacer.`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#dc3545",
+      confirmButtonText: "Sí, eliminar",
+      cancelButtonText: "Cancelar",
+    });
+    if (!confirm.isConfirmed) return;
+    try {
+      await eliminarChofer(chofer._id);
+      await cargarChoferes();
+      setFormData((prev) => ({
+        ...prev,
+        choferes: prev.choferes.map((c) => (c === chofer._id ? "" : c)),
+      }));
+      Swal.fire({ title: "Chofer eliminado", icon: "success", timer: 1500, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire({ title: "No se pudo eliminar", text: err.message || "Error al eliminar el chofer", icon: "error", confirmButtonColor: "#d33" });
     }
   };
 
@@ -471,6 +495,30 @@ const CamionesPage = () => {
                         {choferes.length === 0 && (
                           <div className="form-text text-muted">
                             No hay choferes registrados aún. Podés crear uno nuevo abajo.
+                          </div>
+                        )}
+
+                        {choferes.length > 0 && (
+                          <div className="mt-2">
+                            <label className="form-label small text-muted mb-1">Choferes registrados</label>
+                            <ul className="list-group">
+                              {choferes.map((c) => (
+                                <li key={c._id} className="list-group-item d-flex justify-content-between align-items-center py-1 px-2">
+                                  <span className="small">
+                                    {c.nombreUsuario}
+                                    {c.telefonoUsuario && <span className="text-muted ms-2">· {c.telefonoUsuario}</span>}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline-danger border-0"
+                                    title="Eliminar chofer"
+                                    onClick={() => handleEliminarChofer(c)}
+                                  >
+                                    <i className="bi bi-trash"></i>
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
                           </div>
                         )}
 
