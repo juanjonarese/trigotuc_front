@@ -299,9 +299,9 @@ const NuevaOrdenModal = ({ onClose, onCreada }) => {
     }
 
     for (const t of trozadosValidos) {
-      const disp = trozadosDisp.find((d) => d.tipo === t.tipo)?.cajas || 0;
+      const disp = trozadosDisp.find((d) => d.tipo === t.tipo && d.clase === t.clase)?.cajas || 0;
       if (Number(t.cajas) > disp) {
-        Swal.fire("Error", `Stock insuficiente de ${tipoLbl(t.tipo)}. Disponible: ${disp} cajas.`, "error");
+        Swal.fire("Error", `Stock insuficiente de ${tipoLbl(t.tipo)} clase ${t.clase || "A"}. Disponible: ${disp} cajas.`, "error");
         return;
       }
     }
@@ -316,7 +316,7 @@ const NuevaOrdenModal = ({ onClose, onCreada }) => {
         turno,
         cliente:          clienteSel._id,
         calibres:         lineasValidas.map(({ calibre, cajones }) => ({ calibre: Number(calibre), cajones })),
-        trozados:         trozadosValidos.map((t) => ({ tipo: t.tipo, kgCaja: Number(t.kgCaja), cajas: Number(t.cajas) })),
+        trozados:         trozadosValidos.map((t) => ({ tipo: t.tipo, kgCaja: Number(t.kgCaja), cajas: Number(t.cajas), clase: t.clase })),
         observaciones:    form.observaciones || undefined,
         modalidadEntrega: modalidad,
         chofer:           modalidad === "delivery_chofer" ? choferSel : undefined,
@@ -499,9 +499,9 @@ const NuevaOrdenModal = ({ onClose, onCreada }) => {
                             </div>
                           ))}
                           {trozadosDisp.map((t) => (
-                            <div key={t.tipo} className="text-center rounded border"
+                            <div key={`${t.tipo}-${t.clase || "A"}`} className="text-center rounded border"
                               style={{ background: "#fffbeb", minWidth: "80px", padding: "6px 10px" }}>
-                              <div className="fw-bold text-warning" style={{ fontSize: "0.85rem" }}>{tipoLbl(t.tipo)}</div>
+                              <div className="fw-bold text-warning" style={{ fontSize: "0.85rem" }}>{tipoLbl(t.tipo)} {t.clase || "A"}</div>
                               <div className="text-muted" style={{ fontSize: "0.72rem", lineHeight: 1.2 }}>{fmt(t.cajas)} cajas</div>
                               <div className="text-muted" style={{ fontSize: "0.68rem" }}>{fmt(t.kgTotal)} kg</div>
                             </div>
@@ -539,6 +539,7 @@ const NuevaOrdenModal = ({ onClose, onCreada }) => {
                           <thead className="table-light">
                             <tr>
                               <th>Tipo</th>
+                              <th>Clase</th>
                               <th className="text-end">Disponible</th>
                               <th style={{ width: "9rem" }}>Cajas a cargar</th>
                               <th>kg/caja</th>
@@ -546,10 +547,11 @@ const NuevaOrdenModal = ({ onClose, onCreada }) => {
                           </thead>
                           <tbody>
                             {trozadosDisp.map((t) => {
-                              const linea = trozadosLineas.find((l) => l.tipo === t.tipo) || { cajas: "", kgCaja: t.kgCaja };
+                              const linea = trozadosLineas.find((l) => l.tipo === t.tipo && l.clase === t.clase) || { cajas: "", kgCaja: t.kgCaja, clase: t.clase };
                               return (
-                                <tr key={t.tipo}>
+                                <tr key={`${t.tipo}-${t.clase || "A"}`}>
                                   <td className="fw-semibold">{tipoLbl(t.tipo)}</td>
+                                  <td><span className="badge bg-secondary">Clase {t.clase || "A"}</span></td>
                                   <td className="text-end text-muted">{fmt(t.cajas)} cajas</td>
                                   <td>
                                     <input type="number" min="0" max={t.cajas} step="1"
@@ -559,8 +561,8 @@ const NuevaOrdenModal = ({ onClose, onCreada }) => {
                                       onChange={(e) => {
                                         const val = e.target.value;
                                         setTrozadosLineas((prev) => {
-                                          const idx = prev.findIndex((l) => l.tipo === t.tipo);
-                                          const nueva = { tipo: t.tipo, cajas: val, kgCaja: t.kgCaja };
+                                          const idx = prev.findIndex((l) => l.tipo === t.tipo && l.clase === t.clase);
+                                          const nueva = { tipo: t.tipo, clase: t.clase, cajas: val, kgCaja: t.kgCaja };
                                           return idx === -1 ? [...prev, nueva] : prev.map((l, i) => i === idx ? nueva : l);
                                         });
                                       }}
@@ -623,7 +625,7 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado }) => {
     }))
   );
   const [trozadosLineas, setTrozadosLineas] = useState(
-    (despacho.trozados || []).map((t) => ({ tipo: t.tipo, cajas: String(t.cajas), kgCaja: t.kgCaja }))
+    (despacho.trozados || []).map((t) => ({ tipo: t.tipo, cajas: String(t.cajas), kgCaja: t.kgCaja, clase: t.clase }))
   );
   const [modalidad, setModalidad]           = useState(despacho.modalidadEntrega || "retiro_cliente");
   const [choferes, setChoferes]             = useState([]);
@@ -703,9 +705,9 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado }) => {
     }
 
     for (const t of trozadosValidos) {
-      const disp = trozadosDisp.find((d) => d.tipo === t.tipo)?.cajas || 0;
+      const disp = trozadosDisp.find((d) => d.tipo === t.tipo && d.clase === t.clase)?.cajas || 0;
       if (Number(t.cajas) > disp) {
-        Swal.fire("Error", `Stock insuficiente de ${tipoLbl(t.tipo)}. Disponible: ${disp} cajas.`, "error");
+        Swal.fire("Error", `Stock insuficiente de ${tipoLbl(t.tipo)} clase ${t.clase || "A"}. Disponible: ${disp} cajas.`, "error");
         return;
       }
     }
@@ -720,7 +722,7 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado }) => {
         turno,
         cliente:          clienteSel._id,
         calibres:         lineasValidas.map(({ calibre, cajones }) => ({ calibre: Number(calibre), cajones })),
-        trozados:         trozadosValidos.map((t) => ({ tipo: t.tipo, kgCaja: Number(t.kgCaja), cajas: Number(t.cajas) })),
+        trozados:         trozadosValidos.map((t) => ({ tipo: t.tipo, kgCaja: Number(t.kgCaja), cajas: Number(t.cajas), clase: t.clase })),
         observaciones:    form.observaciones || undefined,
         modalidadEntrega: modalidad,
         chofer:           modalidad === "delivery_chofer" ? choferSel : undefined,
@@ -903,9 +905,9 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado }) => {
                             </div>
                           ))}
                           {trozadosDisp.map((t) => (
-                            <div key={t.tipo} className="text-center rounded border"
+                            <div key={`${t.tipo}-${t.clase || "A"}`} className="text-center rounded border"
                               style={{ background: "#fffbeb", minWidth: "80px", padding: "6px 10px" }}>
-                              <div className="fw-bold text-warning" style={{ fontSize: "0.85rem" }}>{tipoLbl(t.tipo)}</div>
+                              <div className="fw-bold text-warning" style={{ fontSize: "0.85rem" }}>{tipoLbl(t.tipo)} {t.clase || "A"}</div>
                               <div className="text-muted" style={{ fontSize: "0.72rem", lineHeight: 1.2 }}>{fmt(t.cajas)} cajas</div>
                               <div className="text-muted" style={{ fontSize: "0.68rem" }}>{fmt(t.kgTotal)} kg</div>
                             </div>
@@ -943,6 +945,7 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado }) => {
                           <thead className="table-light">
                             <tr>
                               <th>Tipo</th>
+                              <th>Clase</th>
                               <th className="text-end">Disponible</th>
                               <th style={{ width: "9rem" }}>Cajas a cargar</th>
                               <th>kg/caja</th>
@@ -950,10 +953,11 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado }) => {
                           </thead>
                           <tbody>
                             {trozadosDisp.map((t) => {
-                              const linea = trozadosLineas.find((l) => l.tipo === t.tipo) || { cajas: "", kgCaja: t.kgCaja };
+                              const linea = trozadosLineas.find((l) => l.tipo === t.tipo && l.clase === t.clase) || { cajas: "", kgCaja: t.kgCaja, clase: t.clase };
                               return (
-                                <tr key={t.tipo}>
+                                <tr key={`${t.tipo}-${t.clase || "A"}`}>
                                   <td className="fw-semibold">{tipoLbl(t.tipo)}</td>
+                                  <td><span className="badge bg-secondary">Clase {t.clase || "A"}</span></td>
                                   <td className="text-end text-muted">{fmt(t.cajas)} cajas</td>
                                   <td>
                                     <input type="number" min="0" max={t.cajas} step="1"
@@ -963,8 +967,8 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado }) => {
                                       onChange={(e) => {
                                         const val = e.target.value;
                                         setTrozadosLineas((prev) => {
-                                          const idx = prev.findIndex((l) => l.tipo === t.tipo);
-                                          const nueva = { tipo: t.tipo, cajas: val, kgCaja: t.kgCaja };
+                                          const idx = prev.findIndex((l) => l.tipo === t.tipo && l.clase === t.clase);
+                                          const nueva = { tipo: t.tipo, clase: t.clase, cajas: val, kgCaja: t.kgCaja };
                                           return idx === -1 ? [...prev, nueva] : prev.map((l, i) => i === idx ? nueva : l);
                                         });
                                       }}
