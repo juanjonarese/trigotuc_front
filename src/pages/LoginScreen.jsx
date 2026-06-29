@@ -158,7 +158,9 @@ const LoginScreen = () => {
                         value={formData.contraseniaUsuario}
                         onChange={handleChange}
                         disabled={loading}
-                        required
+                        // Los choferes ingresan solo con su teléfono (sin "@"),
+                        // así que la clave no es obligatoria en ese caso.
+                        required={formData.emailUsuario.includes("@")}
                       />
                       <button
                         type="button"
