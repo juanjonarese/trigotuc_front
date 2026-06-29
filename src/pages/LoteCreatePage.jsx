@@ -269,19 +269,24 @@ const LoteCreatePage = () => {
   // Envía a cámara un único corte de trozado (los cortes se congelan a distinto
   // ritmo, así que entran de a uno cuando están listos). El resto sigue pendiente.
   const handleEnviarCorte = async (lote, trozado) => {
-    const confirm = await Swal.fire({
+    const { value: clase, isConfirmed } = await Swal.fire({
       title: "¿Pasar este corte a cámara?",
       html: `Confirmá que <strong>${capitalizar(trozado.tipo)}</strong> ya está ` +
             `<strong>congelado y en condiciones</strong>. Se ingresará a cámara ` +
             `<strong>Cañete</strong> del lote <strong>#${lote.numeroLote || ""}</strong>:` +
             `<br><span class="text-muted">${capitalizar(trozado.tipo)} — ${fmtNum(trozado.cajas)} cajas · ${fmtNum(trozado.kgTotal)} kg</span>` +
             `<br><span class="text-muted small">A partir de ahí ese stock queda disponible para vender o despachar.</span>`,
-      icon: "question", showCancelButton: true,
+      icon: "question",
+      input: "select",
+      inputOptions: { A: "Clase A", B: "Clase B" },
+      inputPlaceholder: "Elegir clase…",
+      inputValidator: (v) => (!v ? "Elegí la clase (A o B) para continuar." : undefined),
+      showCancelButton: true,
       confirmButtonColor: "#198754", confirmButtonText: "Sí, pasar a cámara", cancelButtonText: "Cancelar",
     });
-    if (!confirm.isConfirmed) return;
+    if (!isConfirmed) return;
     try {
-      await enviarLoteACamara(lote._id, { tiposTrozados: [trozado.tipo] });
+      await enviarLoteACamara(lote._id, { tiposTrozados: [trozado.tipo], clase });
       await cargarLotes();
       Swal.fire({ icon: "success", title: "Corte ingresado a cámara", timer: 1500, showConfirmButton: false });
     } catch (err) {

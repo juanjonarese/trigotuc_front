@@ -114,12 +114,12 @@ const EnvioCamaraPage = () => {
 
     // Validar stock de trozados
     const trozadosDisp = form.camaraOrigen === "cañete"
-      ? (resumen?.trozadosCañete   || [])
-      : (resumen?.trozadosTrigotuc || []);
+      ? (resumen?.trozadosCañeteDetalle   || [])
+      : (resumen?.trozadosTrigotucDetalle || []);
     for (const t of trozadosValidos) {
-      const disponible = trozadosDisp.find((d) => d.tipo === t.tipo)?.cajas || 0;
+      const disponible = trozadosDisp.find((d) => d.tipo === t.tipo && d.clase === t.clase)?.cajas || 0;
       if (Number(t.cajas) > disponible) {
-        Swal.fire("Error", `Stock insuficiente de ${t.tipo}. Disponible: ${disponible} cajas.`, "error");
+        Swal.fire("Error", `Stock insuficiente de ${t.tipo} clase ${t.clase || "A"}. Disponible: ${disponible} cajas.`, "error");
         return;
       }
     }
@@ -140,7 +140,7 @@ const EnvioCamaraPage = () => {
           calibre: Number(calibre), pollos: Number(pollos), cajones,
         })),
         trozados:      trozadosValidos.map((t) => ({
-          tipo: t.tipo, kgCaja: Number(t.kgCaja), cajas: Number(t.cajas),
+          tipo: t.tipo, kgCaja: Number(t.kgCaja), cajas: Number(t.cajas), clase: t.clase,
         })),
         observaciones: form.observaciones,
       });
@@ -279,8 +279,8 @@ const EnvioCamaraPage = () => {
               {/* Trozados */}
               {(() => {
                 const disponibles = form.camaraOrigen === "cañete"
-                  ? (resumen?.trozadosCañete   || []).filter((t) => t.cajas > 0)
-                  : (resumen?.trozadosTrigotuc || []).filter((t) => t.cajas > 0);
+                  ? (resumen?.trozadosCañeteDetalle   || []).filter((t) => t.cajas > 0)
+                  : (resumen?.trozadosTrigotucDetalle || []).filter((t) => t.cajas > 0);
                 if (!form.camaraOrigen || disponibles.length === 0) return null;
                 return (
                   <div className="mb-3">
@@ -289,6 +289,7 @@ const EnvioCamaraPage = () => {
                       <thead className="table-light">
                         <tr>
                           <th>Tipo</th>
+                          <th>Clase</th>
                           <th className="text-end">Disponible (cajas)</th>
                           <th style={{ width: "9rem" }}>Cajas a enviar</th>
                           <th className="text-muted small">kg/caja</th>
@@ -296,10 +297,11 @@ const EnvioCamaraPage = () => {
                       </thead>
                       <tbody>
                         {disponibles.map((t) => {
-                          const linea = trozadosLineas.find((l) => l.tipo === t.tipo) || { tipo: t.tipo, cajas: "", kgCaja: t.kgCaja };
+                          const linea = trozadosLineas.find((l) => l.tipo === t.tipo && l.clase === t.clase) || { tipo: t.tipo, clase: t.clase, cajas: "", kgCaja: t.kgCaja };
                           return (
-                            <tr key={t.tipo}>
+                            <tr key={`${t.tipo}-${t.clase || "A"}`}>
                               <td className="text-capitalize fw-semibold">{t.tipo}</td>
+                              <td><span className="badge bg-secondary">Clase {t.clase || "A"}</span></td>
                               <td className="text-end text-muted">{formatNum(t.cajas)}</td>
                               <td>
                                 <input
@@ -310,8 +312,8 @@ const EnvioCamaraPage = () => {
                                   onChange={(e) => {
                                     const val = e.target.value;
                                     setTrozadosLineas((prev) => {
-                                      const idx = prev.findIndex((l) => l.tipo === t.tipo);
-                                      const nueva = { tipo: t.tipo, cajas: val, kgCaja: t.kgCaja };
+                                      const idx = prev.findIndex((l) => l.tipo === t.tipo && l.clase === t.clase);
+                                      const nueva = { tipo: t.tipo, clase: t.clase, cajas: val, kgCaja: t.kgCaja };
                                       if (idx === -1) return [...prev, nueva];
                                       return prev.map((l, i) => i === idx ? nueva : l);
                                     });

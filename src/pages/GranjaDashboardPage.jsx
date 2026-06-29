@@ -421,12 +421,18 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
   const TIPOS_LABEL = { filet: "Filet", pata: "Pata/muslo", alita: "Alita", menudo: "Menudo", carcaza: "Carcaza" };
   const TIPOS_ORDER = ["filet", "pata", "alita", "menudo", "carcaza"];
 
+  // Total combinado por tipo + clase (suma Cañete + Trigotuc), para mostrar A/B.
   const trozadosTotalesMap = {};
-  for (const t of [...(resumen.trozadosCañete || []), ...(resumen.trozadosTrigotuc || [])]) {
-    if (!trozadosTotalesMap[t.tipo]) trozadosTotalesMap[t.tipo] = { cajas: 0, kgTotal: 0 };
-    trozadosTotalesMap[t.tipo].cajas   += t.cajas;
-    trozadosTotalesMap[t.tipo].kgTotal += t.kgTotal;
+  for (const t of [...(resumen.trozadosCañeteDetalle || []), ...(resumen.trozadosTrigotucDetalle || [])]) {
+    const clase = t.clase || "A";
+    const k = `${t.tipo}|${clase}`;
+    if (!trozadosTotalesMap[k]) trozadosTotalesMap[k] = { tipo: t.tipo, clase, cajas: 0, kgTotal: 0 };
+    trozadosTotalesMap[k].cajas   += t.cajas;
+    trozadosTotalesMap[k].kgTotal += t.kgTotal;
   }
+  const trozadosTotales = Object.values(trozadosTotalesMap)
+    .filter((t) => t.cajas > 0)
+    .sort((a, b) => (TIPOS_ORDER.indexOf(a.tipo) - TIPOS_ORDER.indexOf(b.tipo)) || a.clase.localeCompare(b.clase));
 
   return (
     <Layout>
@@ -489,7 +495,7 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
           </h6>
         </div>
         <div className="card-body py-3">
-          {resumen.cajonesDisponibles === 0 && Object.keys(trozadosTotalesMap).length === 0 ? (
+          {resumen.cajonesDisponibles === 0 && trozadosTotales.length === 0 ? (
             <p className="text-muted small mb-0">Sin stock en cámara.</p>
           ) : (
             <div className="d-flex flex-wrap gap-4">
@@ -505,28 +511,27 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
                         <div className="text-muted" style={{ fontSize: "0.72rem" }}>{formatNum(c.cajones * 20)} kg</div>
                       </div>
                     ))}
-                    <div className="d-flex flex-column justify-content-center ms-1 border-start ps-3">
-                      <div className="fw-bold">{formatNum(resumen.cajonesDisponibles)} caj</div>
-                      <div className="text-muted small">{formatNum(resumen.totalKg)} kg</div>
-                    </div>
+                    {(resumen.porCalibre || []).length > 1 && (
+                      <div className="d-flex flex-column justify-content-center ms-1 border-start ps-3">
+                        <div className="fw-bold">{formatNum(resumen.cajonesDisponibles)} caj</div>
+                        <div className="text-muted small">{formatNum(resumen.totalKg)} kg</div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
               {/* Trozados */}
-              {TIPOS_ORDER.some((tipo) => (trozadosTotalesMap[tipo]?.cajas || 0) > 0) && (
+              {trozadosTotales.length > 0 && (
                 <div>
                   <div className="text-muted small mb-2">Trozados</div>
                   <div className="d-flex flex-wrap gap-2">
-                    {TIPOS_ORDER.filter((tipo) => (trozadosTotalesMap[tipo]?.cajas || 0) > 0).map((tipo) => {
-                      const t = trozadosTotalesMap[tipo];
-                      return (
-                        <div key={tipo} className="text-center border rounded px-2 py-1">
-                          <span className="badge bg-warning text-dark d-block mb-1">{TIPOS_LABEL[tipo]}</span>
-                          <div className="fw-bold small">{formatNum(t.cajas)} cajas</div>
-                          <div className="text-muted" style={{ fontSize: "0.72rem" }}>{formatNum(t.kgTotal)} kg</div>
-                        </div>
-                      );
-                    })}
+                    {trozadosTotales.map((t) => (
+                      <div key={`${t.tipo}-${t.clase}`} className="text-center border rounded px-2 py-1">
+                        <span className="badge bg-warning text-dark d-block mb-1">{TIPOS_LABEL[t.tipo]} · {t.clase}</span>
+                        <div className="fw-bold small">{formatNum(t.cajas)} cajas</div>
+                        <div className="text-muted" style={{ fontSize: "0.72rem" }}>{formatNum(t.kgTotal)} kg</div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -579,13 +584,15 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
                         </div>
                       </>
                     )}
-                    {(resumen.trozadosCañete || []).filter((t) => t.cajas > 0).length > 0 && (
+                    {((resumen.trozadosCañeteDetalle || resumen.trozadosCañete) || []).filter((t) => t.cajas > 0).length > 0 && (
                       <>
                         <div className="text-muted small mb-1">Trozados</div>
                         <div className="d-flex flex-wrap gap-2 mb-2">
-                          {(resumen.trozadosCañete || []).filter((t) => t.cajas > 0).map((t) => (
-                            <div key={t.tipo} className="text-center border rounded px-2 py-1">
-                              <span className="badge bg-warning text-dark d-block mb-1">{TIPOS_LABEL[t.tipo] || t.tipo}</span>
+                          {((resumen.trozadosCañeteDetalle || resumen.trozadosCañete) || []).filter((t) => t.cajas > 0).map((t) => (
+                            <div key={`${t.tipo}-${t.clase || "sc"}`} className="text-center border rounded px-2 py-1">
+                              <span className="badge bg-warning text-dark d-block mb-1">
+                                {TIPOS_LABEL[t.tipo] || t.tipo}{t.clase ? ` · ${t.clase}` : ""}
+                              </span>
                               <div className="fw-bold small">{formatNum(t.cajas)} caj</div>
                               <div className="text-muted" style={{ fontSize: "0.72rem" }}>{formatNum(t.kgTotal)} kg</div>
                             </div>
@@ -629,13 +636,15 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
                         </div>
                       </>
                     )}
-                    {(resumen.trozadosTrigotuc || []).filter((t) => t.cajas > 0).length > 0 && (
+                    {((resumen.trozadosTrigotucDetalle || resumen.trozadosTrigotuc) || []).filter((t) => t.cajas > 0).length > 0 && (
                       <>
                         <div className="text-muted small mb-1">Trozados</div>
                         <div className="d-flex flex-wrap gap-2 mb-2">
-                          {(resumen.trozadosTrigotuc || []).filter((t) => t.cajas > 0).map((t) => (
-                            <div key={t.tipo} className="text-center border rounded px-2 py-1">
-                              <span className="badge bg-warning text-dark d-block mb-1">{TIPOS_LABEL[t.tipo] || t.tipo}</span>
+                          {((resumen.trozadosTrigotucDetalle || resumen.trozadosTrigotuc) || []).filter((t) => t.cajas > 0).map((t) => (
+                            <div key={`${t.tipo}-${t.clase || "sc"}`} className="text-center border rounded px-2 py-1">
+                              <span className="badge bg-warning text-dark d-block mb-1">
+                                {TIPOS_LABEL[t.tipo] || t.tipo}{t.clase ? ` · ${t.clase}` : ""}
+                              </span>
                               <div className="fw-bold small">{formatNum(t.cajas)} caj</div>
                               <div className="text-muted" style={{ fontSize: "0.72rem" }}>{formatNum(t.kgTotal)} kg</div>
                             </div>
