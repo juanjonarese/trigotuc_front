@@ -18,13 +18,15 @@ const GRANJAS = [
   { key: "los_pinos", label: "Los Pinos", prefix: "P" },
 ];
 
+// Objetivo de peso por semana (kg), según la tabla del productor.
 const TABLA_REF_KG = {
-  1: { min: 0.175, max: 0.190 },
-  2: { min: 0.450, max: 0.480 },
-  3: { min: 0.900, max: 0.950 },
-  4: { min: 1.500, max: 1.600 },
-  5: { min: 2.200, max: 2.300 },
-  6: { min: 2.900, max: 3.000 },
+  1: 0.162,
+  2: 0.410,
+  3: 0.800,
+  4: 1.320,
+  5: 1.930,
+  6: 2.560,
+  7: 3.180,
 };
 
 const validarPeso = (val) => {
@@ -44,10 +46,10 @@ const formatPeso = (g) => {
   return `${(g / 1000).toFixed(3).replace(".", ",")} kg`;
 };
 
-// Solo el último pesaje semanal (no día 1 / día 4)
+// Mayor peso semanal registrado (no día 1 / día 4)
 const ultimoPeso = (lote) => {
   const semanales = (lote.pesajes || []).filter((p) => !p.tipo || p.tipo === "semanal");
-  return semanales.length ? semanales[semanales.length - 1].pesoPromedio : null;
+  return semanales.length ? Math.max(...semanales.map((p) => p.pesoPromedio)) : null;
 };
 
 const semanaParaFecha = (fechaIngreso, fechaPesaje) => {
@@ -73,7 +75,10 @@ const buildSemanas = (lote) => {
   for (const p of lote.pesajes || []) {
     if (p.tipo === "dia1" || p.tipo === "dia4") continue;
     if (!mapa[p.semana]) mapa[p.semana] = { semana: p.semana, pesaje: null, mortandad: null };
-    mapa[p.semana].pesaje = p;
+    // Varias tomas por semana: mostrar siempre la de mayor peso.
+    if (!mapa[p.semana].pesaje || p.pesoPromedio > mapa[p.semana].pesaje.pesoPromedio) {
+      mapa[p.semana].pesaje = p;
+    }
   }
   for (const m of lote.mortandad || []) {
     if (m.semana === 0) continue; // bajas de ingreso, no semanales
@@ -88,7 +93,7 @@ const buildSemanas = (lote) => {
 const buildIniciales = (lote) =>
   (lote.pesajes || [])
     .filter((p) => p.tipo === "dia1" || p.tipo === "dia4")
-    .sort((a, b) => (a.tipo === "dia1" ? -1 : 1));
+    .sort((a) => (a.tipo === "dia1" ? -1 : 1));
 
 // ── Modal editar semana / día inicial ─────────────────────────────────────
 const EditarSemanaModal = ({ lote, fila, onClose, onGuardado, puedeEliminar = true, label, hideBajas = false }) => {
@@ -210,8 +215,8 @@ const EditarSemanaModal = ({ lote, fila, onClose, onGuardado, puedeEliminar = tr
                   value={peso} onChange={(e) => setPeso(e.target.value)}
                   autoFocus disabled={!fila.pesaje}
                 />
-                {ref && (
-                  <div className="form-text">Referencia: {ref.min.toFixed(3)}–{ref.max.toFixed(3)} kg</div>
+                {ref != null && (
+                  <div className="form-text">Objetivo: {ref.toFixed(3)} kg</div>
                 )}
                 {!fila.pesaje && (
                   <div className="form-text text-muted">No hay pesaje registrado.</div>
@@ -701,14 +706,20 @@ const GranjaCargaDatosPage = () => {
                           Fecha anterior al ingreso del lote ({formatearFechaLocal(loteSeleccionado.fechaIngreso)}).
                         </div>
                       )}
-                      {!antesDeLIngreso && tipoBadge && (
-                        <div className={`alert py-2 px-3 mb-2 small ${yaHayPesaje ? "alert-warning" : "alert-info"}`}>
-                          {yaHayPesaje
-                            ? <><i className="bi bi-exclamation-triangle me-1"></i><strong>{tipoBadge}</strong> ya tiene datos. Usá <strong>Editar datos</strong> para corregir.</>
-                            : <><i className="bi bi-calendar-check me-1"></i>Cargando <strong>{tipoBadge}</strong>.</>
-                          }
-                        </div>
-                      )}
+                      {!antesDeLIngreso && tipoBadge && (() => {
+                        // Día 1 / Día 4 siguen siendo únicos; los semanales admiten varias tomas.
+                        const duplicadoDia = yaHayPesaje && tipoPesaje !== "semanal";
+                        return (
+                          <div className={`alert py-2 px-3 mb-2 small ${duplicadoDia ? "alert-warning" : "alert-info"}`}>
+                            {duplicadoDia
+                              ? <><i className="bi bi-exclamation-triangle me-1"></i><strong>{tipoBadge}</strong> ya tiene datos. Usá <strong>Editar datos</strong> para corregir.</>
+                              : yaHayPesaje
+                                ? <><i className="bi bi-calendar-check me-1"></i>Ya hay una toma en <strong>{tipoBadge}</strong>. Se agregará otra; la tabla mostrará el <strong>mayor peso</strong>.</>
+                                : <><i className="bi bi-calendar-check me-1"></i>Cargando <strong>{tipoBadge}</strong>.</>
+                            }
+                          </div>
+                        );
+                      })()}
 
                       <div className="row g-2">
                         <div className="col-6 col-md-3">
@@ -729,7 +740,7 @@ const GranjaCargaDatosPage = () => {
                             const ref   = semFecha ? TABLA_REF_KG[semFecha] : null;
                             const placeholder = tipoPesaje === "dia1" ? "Ej: 0.040"
                               : tipoPesaje === "dia4" ? "Ej: 0.100"
-                              : ref ? `Ej: ${ref.min.toFixed(3)}` : "Ej: 1.350";
+                              : ref != null ? `Ej: ${ref.toFixed(3)}` : "Ej: 1.350";
                             return (
                               <>
                                 <input type="number"
@@ -749,8 +760,8 @@ const GranjaCargaDatosPage = () => {
                                 {tipoPesaje === "dia1" && nivel !== "error" && (
                                   <div className="form-text">Ref: ~0,040 kg (40 g)</div>
                                 )}
-                                {(nivel === "ok" || nivel === null) && ref && tipoPesaje === "semanal" && (
-                                  <div className="form-text">Ref: {ref.min.toFixed(3)}–{ref.max.toFixed(3)} kg</div>
+                                {(nivel === "ok" || nivel === null) && ref != null && tipoPesaje === "semanal" && (
+                                  <div className="form-text">Objetivo: {ref.toFixed(3)} kg</div>
                                 )}
                               </>
                             );
