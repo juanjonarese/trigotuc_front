@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import { obtenerLotesGranja } from "../services/api";
 import { formatearFechaLocal } from "../utils/dateUtils";
@@ -9,14 +8,27 @@ const GRANJAS = [
   { key: "los_pinos", label: "Los Pinos", prefix: "P", galpones: 8 },
 ];
 
+// Objetivo de peso por semana (gramos), según la tabla del productor.
 const TABLA_REF = [
-  { semana: 1, min: 175, max: 190 },
-  { semana: 2, min: 450, max: 480 },
-  { semana: 3, min: 900, max: 950 },
-  { semana: 4, min: 1500, max: 1600 },
-  { semana: 5, min: 2200, max: 2300 },
-  { semana: 6, min: 2900, max: 3000 },
+  { semana: 1, objetivo: 162 },
+  { semana: 2, objetivo: 410 },
+  { semana: 3, objetivo: 800 },
+  { semana: 4, objetivo: 1320 },
+  { semana: 5, objetivo: 1930 },
+  { semana: 6, objetivo: 2560 },
+  { semana: 7, objetivo: 3180 },
 ];
+
+// Tolerancia respecto al objetivo: ±5% en rango, hasta ±10% aviso, más = alerta.
+const TOL_OK    = 0.05;
+const TOL_AVISO = 0.10;
+const nivelPeso = (peso, objetivo) => {
+  if (peso == null || objetivo == null) return null;
+  const dif = Math.abs(peso - objetivo) / objetivo;
+  if (dif <= TOL_OK)    return "ok";
+  if (dif <= TOL_AVISO) return "aviso";
+  return "alerta";
+};
 
 const GRANJA_OPTS = [
   { value: "cañete",    label: "Cañete",    galpones: 6 },
@@ -33,28 +45,21 @@ const formatPeso = (g) => {
   return g >= 1000 ? `${(g / 1000).toFixed(3).replace(".", ",")} kg` : `${g} g`;
 };
 
-const formatRango = (min, max) => {
-  if (max >= 1000) {
-    const minK = (min / 1000).toFixed(1).replace(".", ",");
-    const maxK = (max / 1000).toFixed(1).replace(".", ",");
-    return `${minK}–${maxK} kg`;
-  }
-  return `${min}–${max} g`;
-};
-
-const clsPeso = (peso, ref) => {
-  if (peso == null || !ref) return "text-muted";
-  if (peso >= ref.min && peso <= ref.max) return "text-success fw-bold";
-  if (peso > ref.max) return peso <= ref.max * 1.10 ? "text-warning fw-bold" : "text-danger fw-bold";
-  return peso >= ref.min * 0.90 ? "text-warning fw-bold" : "text-danger fw-bold";
+const clsPeso = (peso, objetivo) => {
+  const n = nivelPeso(peso, objetivo);
+  if (n === "ok")     return "text-success fw-bold";
+  if (n === "aviso")  return "text-warning fw-bold";
+  if (n === "alerta") return "text-danger fw-bold";
+  return "text-muted";
 };
 
 const pesoEnSemana = (pesajes, sem) =>
   [...pesajes].filter((p) => p.semana === sem).pop() || null;
 
-// Peso ideal semana 6: 2900-3000 g
-const PESO_IDEAL_MIN = 2900;
-const PESO_IDEAL_MAX = 3000;
+// Peso ideal de faena: objetivo de la última semana de la tabla (sem 7 = 3180 g) ±5%.
+const OBJETIVO_FAENA = TABLA_REF[TABLA_REF.length - 1].objetivo;
+const PESO_IDEAL_MIN = Math.round(OBJETIVO_FAENA * (1 - TOL_OK));
+const PESO_IDEAL_MAX = Math.round(OBJETIVO_FAENA * (1 + TOL_OK));
 
 const estadoEgreso = (lote) => {
   const sem = semana(lote.fechaIngreso);
@@ -69,13 +74,11 @@ const estadoEgreso = (lote) => {
   return "bajo";  // sem >= 6 pero peso aún no alcanzó el ideal
 };
 
-const badgeDif = (dif, ref, peso) => {
-  if (dif == null || ref == null || peso == null) return null;
-  const cls = (() => {
-    if (peso >= ref.min && peso <= ref.max) return "bg-success";
-    if (peso > ref.max) return peso <= ref.max * 1.10 ? "bg-warning text-dark" : "bg-danger";
-    return peso >= ref.min * 0.90 ? "bg-warning text-dark" : "bg-danger";
-  })();
+const badgeDif = (objetivo, peso) => {
+  if (objetivo == null || peso == null) return null;
+  const dif = peso - objetivo;
+  const n   = nivelPeso(peso, objetivo);
+  const cls = n === "ok" ? "bg-success" : n === "aviso" ? "bg-warning text-dark" : "bg-danger";
   return <span className={`badge ${cls}`}>{dif >= 0 ? "+" : ""}{dif} g</span>;
 };
 
@@ -86,7 +89,6 @@ const GalponModal = ({ lote, galponLabel, onClose }) => {
   const sem    = semana(lote.fechaIngreso);
   const bajas  = lote.mortandad.reduce((s, m) => s + m.cantidad, 0);
   const egreso = estadoEgreso(lote);
-  const cfg    = egreso ? EGRESO_CONFIG[egreso] : null;
 
   return (
     <div
@@ -190,11 +192,11 @@ const GalponModal = ({ lote, galponLabel, onClose }) => {
                                   <span className="badge bg-primary ms-1" style={{ fontSize: "0.65rem" }}>actual</span>
                                 )}
                               </td>
-                              <td className="text-muted small">{formatRango(ref.min, ref.max)}</td>
+                              <td className="text-muted small">{formatPeso(ref.objetivo)}</td>
                               {p ? (
                                 <>
-                                  <td className={clsPeso(p.pesoPromedio, ref)}>{formatPeso(p.pesoPromedio)}</td>
-                                  <td>{badgeDif(p.diferencia, ref, p.pesoPromedio)}</td>
+                                  <td className={clsPeso(p.pesoPromedio, ref.objetivo)}>{formatPeso(p.pesoPromedio)}</td>
+                                  <td>{badgeDif(ref.objetivo, p.pesoPromedio)}</td>
                                   <td className="d-none d-sm-table-cell text-muted small">{formatearFechaLocal(p.fecha)}</td>
                                 </>
                               ) : (
@@ -345,130 +347,8 @@ const GalponCard = ({ label, lote, onClick }) => {
   );
 };
 
-// ── Modal editar ingreso ───────────────────────────────────────────────────────
-const EditarIngresoModal = ({ lote, onClose, onGuardado }) => {
-  const [form, setForm] = useState({
-    granja:          lote.granja,
-    galpon:          lote.galpon,
-    fechaIngreso:    lote.fechaIngreso?.split("T")[0] ?? "",
-    cantidadIngreso: lote.cantidadIngreso,
-    proveedor:       lote.proveedor || "",
-    observaciones:   lote.observaciones || "",
-  });
-  const [saving, setSaving] = useState(false);
-
-  const maxGalpones = GRANJA_OPTS.find((g) => g.value === form.granja)?.galpones || 8;
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      await actualizarLoteGranja(lote._id, {
-        ...form,
-        galpon:          Number(form.galpon),
-        cantidadIngreso: Number(form.cantidadIngreso),
-      });
-      onGuardado();
-      Swal.fire({ icon: "success", title: "Ingreso actualizado", timer: 1500, showConfirmButton: false });
-    } catch (err) {
-      Swal.fire("Error", err.message, "error");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <>
-      <div className="modal show d-block" tabIndex="-1">
-        <div className="modal-dialog modal-dialog-scrollable">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h5 className="modal-title"><i className="bi bi-pencil me-2"></i>Editar ingreso — Lote #{lote.numeroLote}</h5>
-              <button className="btn-close" onClick={onClose} disabled={saving}></button>
-            </div>
-            <div className="modal-body">
-              <form id="form-editar-ingreso" onSubmit={handleSubmit}>
-                <div className="row g-3">
-                  <div className="col-6">
-                    <label className="form-label fw-semibold">Granja</label>
-                    <select
-                      className="form-select"
-                      value={form.granja}
-                      onChange={(e) => setForm({ ...form, granja: e.target.value, galpon: 1 })}
-                      required
-                    >
-                      {GRANJA_OPTS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
-                    </select>
-                  </div>
-                  <div className="col-6">
-                    <label className="form-label fw-semibold">Galpón</label>
-                    <input
-                      type="number" className="form-control"
-                      value={form.galpon}
-                      onChange={(e) => setForm({ ...form, galpon: e.target.value })}
-                      min="1" max={maxGalpones} required
-                    />
-                  </div>
-                  <div className="col-6">
-                    <label className="form-label fw-semibold">Fecha de ingreso</label>
-                    <input
-                      type="date" className="form-control"
-                      value={form.fechaIngreso}
-                      onChange={(e) => setForm({ ...form, fechaIngreso: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="col-6">
-                    <label className="form-label fw-semibold">Cantidad</label>
-                    <input
-                      type="number" className="form-control"
-                      value={form.cantidadIngreso}
-                      onChange={(e) => setForm({ ...form, cantidadIngreso: e.target.value })}
-                      min="1" required
-                    />
-                    <div className="form-text">Cantidad × kg — Actual: {lote.cantidadIngreso}</div>
-                  </div>
-                  <div className="col-12">
-                    <label className="form-label">Enviado por (opcional)</label>
-                    <input
-                      type="text" className="form-control"
-                      value={form.proveedor}
-                      onChange={(e) => setForm({ ...form, proveedor: e.target.value })}
-                    />
-                  </div>
-                  <div className="col-12">
-                    <label className="form-label">Observaciones (opcional)</label>
-                    <textarea
-                      className="form-control" rows={2}
-                      value={form.observaciones}
-                      onChange={(e) => setForm({ ...form, observaciones: e.target.value })}
-                    />
-                  </div>
-                </div>
-              </form>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-outline-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
-              <button type="submit" form="form-editar-ingreso" className="btn btn-primary" disabled={saving}>
-                {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
-                Guardar cambios
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className="modal-backdrop show"></div>
-    </>
-  );
-};
-
 // ── Página principal ───────────────────────────────────────────────────────────
 const GranjaLotesPage = () => {
-  const navigate    = useNavigate();
-  const rolUsuario  = localStorage.getItem("rolUsuario");
-  const puedeEditar  = rolUsuario === "superadmin" || rolUsuario === "frigorifico" || rolUsuario === "granja";
-  const esSuperAdmin = rolUsuario === "superadmin";
-
   const [lotes, setLotes]         = useState([]);
   const [loading, setLoading]     = useState(true);
   const [modalLote, setModalLote] = useState(null);
@@ -568,7 +448,7 @@ const GranjaLotesPage = () => {
                         <th key={r.semana}>
                           Sem. {r.semana}
                           <div className="text-muted fw-normal" style={{ fontSize: "0.7rem" }}>
-                            {formatRango(r.min, r.max)}
+                            {formatPeso(r.objetivo)}
                           </div>
                         </th>
                       ))}
@@ -596,7 +476,7 @@ const GranjaLotesPage = () => {
                             const p = pesoEnSemana(lote.pesajes, ref.semana);
                             if (!p) return <td key={ref.semana} className="text-center text-muted">—</td>;
                             return (
-                              <td key={ref.semana} className={`text-center ${clsPeso(p.pesoPromedio, ref)}`}>
+                              <td key={ref.semana} className={`text-center ${clsPeso(p.pesoPromedio, ref.objetivo)}`}>
                                 {formatPeso(p.pesoPromedio)}
                               </td>
                             );
