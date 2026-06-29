@@ -321,6 +321,13 @@ export const crearChofer = async (data) => {
   return handleResponse(response);
 };
 
+export const eliminarChofer = async (id) => {
+  const response = await fetch(`${API_URL}/camiones/choferes/${id}`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
 export const crearCamion = async (data) => {
   const response = await fetch(`${API_URL}/camiones`, {
     method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
