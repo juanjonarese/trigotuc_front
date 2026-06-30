@@ -380,6 +380,19 @@ const Layout = ({ children }) => {
                     <span>Envío Cámara</span>
                   </a>
                 )}
+                {/* 6b — Salida Mostrador (descuenta Trigotuc) */}
+                {(rolUsuario === "superadmin" || rolUsuario === "frigorifico") && (
+                  <a
+                    href="#"
+                    className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
+                      isActive("/frigorifico/salida-mostrador") ? "text-white" : "text-white-50"
+                    }`}
+                    onClick={(e) => { e.preventDefault(); navigate("/frigorifico/salida-mostrador"); }}
+                  >
+                    <i className="bi bi-shop"></i>
+                    <span>Salida Mostrador</span>
+                  </a>
+                )}
                 {/* 7 — Stock Empaque */}
                 {rolUsuario === "superadmin" && (
                   <a
