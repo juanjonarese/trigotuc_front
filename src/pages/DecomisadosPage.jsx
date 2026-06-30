@@ -6,6 +6,7 @@ import {
   eliminarDecomisado,
   obtenerLotes,
 } from "../services/api";
+import { ajustarFechaParaGuardar } from "../utils/dateUtils";
 import Swal from "sweetalert2";
 
 const formatNum = (n) =>
@@ -80,7 +81,7 @@ const DecomisadosPage = () => {
     setSaving(true);
     try {
       await crearDecomisado({
-        fecha:     form.fecha,
+        fecha:     ajustarFechaParaGuardar(form.fecha),
         lote:      form.lote,
         unidades:  Number(form.unidades),
         causa:     form.causa,

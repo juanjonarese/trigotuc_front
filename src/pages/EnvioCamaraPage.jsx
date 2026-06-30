@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
 import { crearEnvioCamara, obtenerEnviosCamara, obtenerCamiones, eliminarEnvioCamara, obtenerResumenStock } from "../services/api";
+import { ajustarFechaParaGuardar } from "../utils/dateUtils";
 import Swal from "sweetalert2";
 
 const CAMARAS = [
@@ -132,7 +133,7 @@ const EnvioCamaraPage = () => {
     setSubmitting(true);
     try {
       const envio = await crearEnvioCamara({
-        fecha:         form.fecha,
+        fecha:         ajustarFechaParaGuardar(form.fecha),
         camion:        form.camion || null,
         camaraOrigen:  form.camaraOrigen,
         camaraDestino: form.camaraDestino,
