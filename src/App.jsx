@@ -10,6 +10,7 @@ import LoteFaenaCrearPage from "./pages/LoteFaenaCrearPage";
 import PedidosGranjaPage from "./pages/PedidosGranjaPage";
 import EnvioCamaraPage from "./pages/EnvioCamaraPage";
 import SalidaMostradorPage from "./pages/SalidaMostradorPage";
+import RecepcionCamaraPage from "./pages/RecepcionCamaraPage";
 import CamionesPage from "./pages/CamionesPage";
 import DecomisadosPage from "./pages/DecomisadosPage";
 import GranjaLotesPage from "./pages/GranjaLotesPage";
@@ -47,6 +48,7 @@ function App() {
         <Route path="/frigorifico/pedidos-granja" element={<ProtectedRoute><PedidosGranjaPage /></ProtectedRoute>} />
         <Route path="/frigorifico/envios" element={<ProtectedRoute><EnvioCamaraPage /></ProtectedRoute>} />
         <Route path="/frigorifico/salida-mostrador" element={<ProtectedRoute><SalidaMostradorPage /></ProtectedRoute>} />
+        <Route path="/frigorifico/recepcion-camara" element={<ProtectedRoute><RecepcionCamaraPage /></ProtectedRoute>} />
         <Route path="/frigorifico/decomisados" element={<ProtectedRoute><DecomisadosPage /></ProtectedRoute>} />
         <Route path="/frigorifico/stock-empaque" element={<ProtectedRoute><StockEmpaquePage /></ProtectedRoute>} />
         <Route path="/frigorifico/ordenes-carga" element={<ProtectedRoute><DespachoFrigorificoPage /></ProtectedRoute>} />

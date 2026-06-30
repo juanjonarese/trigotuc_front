@@ -363,6 +363,7 @@ const EnvioCamaraPage = () => {
                       <div className="card-body py-3">
                         <div className="d-flex justify-content-between align-items-center mb-2">
                           <span className="badge bg-dark fs-6">{e.numeroEnvio}</span>
+                          {e.estado === "pendiente" && <span className="badge bg-warning text-dark ms-1">Pendiente recepción</span>}
                           <div className="d-flex align-items-center gap-2">
                             <span className="text-muted small">{formatFecha(e.fecha)}</span>
                             {esSuperAdmin && (
@@ -443,6 +444,7 @@ const EnvioCamaraPage = () => {
                         <tr key={e._id}>
                           <td>
                             <span className="badge bg-dark">{e.numeroEnvio}</span>
+                            {e.estado === "pendiente" && <span className="badge bg-warning text-dark ms-1">Pendiente</span>}
                           </td>
                           <td>{formatFecha(e.fecha)}</td>
                           <td>

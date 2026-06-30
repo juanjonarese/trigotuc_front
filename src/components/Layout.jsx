@@ -393,6 +393,19 @@ const Layout = ({ children }) => {
                     <span>Salida Mostrador</span>
                   </a>
                 )}
+                {/* 6c — Recepción de Cámara (granja recibe envíos a Trigotuc) */}
+                {(rolUsuario === "superadmin" || rolUsuario === "administracion_granja") && (
+                  <a
+                    href="#"
+                    className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
+                      isActive("/frigorifico/recepcion-camara") ? "text-white" : "text-white-50"
+                    }`}
+                    onClick={(e) => { e.preventDefault(); navigate("/frigorifico/recepcion-camara"); }}
+                  >
+                    <i className="bi bi-box-arrow-in-down"></i>
+                    <span>Recepción de Cámara</span>
+                  </a>
+                )}
                 {/* 7 — Stock Empaque */}
                 {rolUsuario === "superadmin" && (
                   <a
