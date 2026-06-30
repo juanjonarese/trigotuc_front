@@ -13,7 +13,7 @@ import {
   actualizarProveedorEmpaque,
   eliminarProveedorEmpaque,
 } from "../services/api";
-import { obtenerFechaHoy } from "../utils/dateUtils";
+import { obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
 import Swal from "sweetalert2";
 
 const rolUsuario  = () => localStorage.getItem("rolUsuario");
@@ -107,7 +107,7 @@ const ArticuloModal = ({ articulo, onClose, onMovimiento, onEditar, onEliminar }
         tipo:     form.tipo,
         cantidad: Number(form.cantidad),
         motivo:   form.motivo || undefined,
-        fecha:    form.fecha,
+        fecha:    ajustarFechaParaGuardar(form.fecha),
       });
       onMovimiento(result.articulo);
       setShowForm(false);

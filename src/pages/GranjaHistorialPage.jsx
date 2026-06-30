@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
 import { obtenerLotesGranja, actualizarLoteGranja, eliminarLoteGranja } from "../services/api";
-import { formatearFechaLocal } from "../utils/dateUtils";
+import { formatearFechaLocal, ajustarFechaParaGuardar } from "../utils/dateUtils";
 import Swal from "sweetalert2";
 
 const ITEMS_POR_PAGINA = 30;
@@ -34,6 +34,7 @@ const EditarIngresoModal = ({ lote, onClose, onGuardado }) => {
     try {
       await actualizarLoteGranja(lote._id, {
         ...form,
+        fechaIngreso:    ajustarFechaParaGuardar(form.fechaIngreso),
         galpon:          Number(form.galpon),
         cantidadIngreso: Number(form.cantidadIngreso),
         bajasIngreso:    Number(form.bajasIngreso),

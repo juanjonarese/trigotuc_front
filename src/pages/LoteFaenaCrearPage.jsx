@@ -4,7 +4,7 @@ import Layout from "../components/Layout";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
 import { TrozadoTable, TROZADO_TIPOS } from "../components/TrozadoTable";
 import { crearLote, obtenerOrdenesCarga } from "../services/api";
-import { obtenerFechaHoy } from "../utils/dateUtils";
+import { obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
 import { confirmarCoherenciaFaena } from "../utils/faenaValidacion";
 import Swal from "sweetalert2";
 
@@ -128,7 +128,7 @@ const LoteFaenaCrearPage = () => {
       const totalKgF      = totalCajonesF * 20;
 
       const payload = {
-        fechaIngreso:    form.fechaIngreso,
+        fechaIngreso:    ajustarFechaParaGuardar(form.fechaIngreso),
         calibres:        calibresPayload,
         observaciones:   form.observaciones || undefined,
         // Enteros directo a cámara; trozados quedan pendientes (deben congelarse).

@@ -13,6 +13,7 @@ import {
   obtenerCamiones,
 } from "../services/api";
 import { normalizarWhatsapp } from "../utils/whatsappUtils";
+import { ajustarFechaParaGuardar } from "../utils/dateUtils";
 import Swal from "sweetalert2";
 
 const TIPOS_TROZADO = [
@@ -42,8 +43,19 @@ const estadoBadge = (d) => {
 };
 
 // ── PDF de la orden (para descargar / compartir por WhatsApp) ────────────────
+// Por triplicado: 3 páginas (ORIGINAL / DUPLICADO / TRIPLICADO).
+const COPIAS_ORDEN = ["ORIGINAL", "DUPLICADO", "TRIPLICADO"];
 const construirPDFDespacho = (d) => {
   const doc = new jsPDF();
+  COPIAS_ORDEN.forEach((etiqueta, idx) => {
+    if (idx > 0) doc.addPage();
+    renderCopiaDespacho(doc, d, etiqueta);
+  });
+  return doc;
+};
+
+// Dibuja una copia de la orden en la página actual del documento.
+const renderCopiaDespacho = (doc, d, etiqueta) => {
   const cliente = d.cliente?.razonSocial || d.cliente?.nombre || "—";
   const camara  = camaraLbl(d.camara);
   const fecha   = fmtFecha(d.fecha);
@@ -53,7 +65,7 @@ const construirPDFDespacho = (d) => {
   doc.setFontSize(20); doc.setFont("helvetica", "bold"); doc.setTextColor(0);
   doc.text("Trigotuc Avícola", 14, 20);
   doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.setTextColor(100);
-  doc.text("Orden de Carga — Frigorífico", 14, 27);
+  doc.text(`Orden de Carga — Frigorífico · ${etiqueta}`, 14, 27);
 
   doc.setFontSize(18); doc.setFont("helvetica", "bold"); doc.setTextColor(26, 122, 26);
   doc.text(d.numeroOrden, W - 14, 20, { align: "right" });
@@ -168,8 +180,6 @@ const construirPDFDespacho = (d) => {
   // ── Footer ──────────────────────────────────────────────────────────────────
   doc.setFontSize(8); doc.setTextColor(150);
   doc.text(`Trigotuc Avícola — ${d.numeroOrden} — Emitida: ${fecha}`, W / 2, 285, { align: "center" });
-
-  return doc;
 };
 
 const descargarPDFDespacho = (d) => {
@@ -312,7 +322,7 @@ const NuevaOrdenModal = ({ onClose, onCreada }) => {
     try {
 
       const despacho = await crearDespachoFrigorifico({
-        fecha:            form.fecha,
+        fecha:            ajustarFechaParaGuardar(form.fecha),
         camara,
         turno,
         cliente:          clienteSel._id,
@@ -737,7 +747,7 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado }) => {
     try {
 
       const actualizado = await actualizarDespachoFrigorifico(despacho._id, {
-        fecha:            form.fecha,
+        fecha:            ajustarFechaParaGuardar(form.fecha),
         camara,
         turno,
         cliente:          clienteSel._id,

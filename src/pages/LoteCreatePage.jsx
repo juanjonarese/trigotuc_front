@@ -9,7 +9,7 @@ import {
   eliminarLote,
   enviarLoteACamara,
 } from "../services/api";
-import { obtenerFechaHoy } from "../utils/dateUtils";
+import { obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
 import { confirmarCoherenciaFaena } from "../utils/faenaValidacion";
 import Swal from "sweetalert2";
 
@@ -76,7 +76,7 @@ const EditarLoteModal = ({ lote, onClose, onGuardado }) => {
     setSaving(true);
     try {
       const payload = {
-        fechaIngreso: form.fechaIngreso,
+        fechaIngreso: ajustarFechaParaGuardar(form.fechaIngreso),
         calibres:     calibresPayload,
         observaciones: form.observaciones || undefined,
       };

@@ -8,7 +8,7 @@ import {
   obtenerLotesGranja,
   obtenerCamiones,
 } from "../services/api";
-import { obtenerFechaHoy } from "../utils/dateUtils";
+import { obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
 import Swal from "sweetalert2";
 
 const esSuperAdmin = () => localStorage.getItem("rolUsuario") === "superadmin";
@@ -106,7 +106,7 @@ const GranjaRemitosPage = () => {
         loteGranja:      form.loteGranja,
         cantidadEnviada: Number(form.cantidadEnviada),
         pesoEstimadoKg:  form.pesoEstimadoKg ? Number(form.pesoEstimadoKg) : undefined,
-        fechaEnvio:      form.fechaEnvio,
+        fechaEnvio:      ajustarFechaParaGuardar(form.fechaEnvio),
         camion:          form.camion || undefined,
         observaciones:   form.observaciones || undefined,
       });
