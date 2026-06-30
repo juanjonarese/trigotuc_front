@@ -381,7 +381,7 @@ const Layout = ({ children }) => {
                   </a>
                 )}
                 {/* 6b — Salida Mostrador (descuenta Trigotuc) */}
-                {(rolUsuario === "superadmin" || rolUsuario === "frigorifico") && (
+                {(rolUsuario === "superadmin" || rolUsuario === "administracion_frigorifico") && (
                   <a
                     href="#"
                     className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
