@@ -131,6 +131,8 @@ const imprimirRemito = (despacho) => {
     ${bloque("Original — Cliente")}
     <hr class="separador"/>
     ${bloque("Duplicado — Frigorifico")}
+    <hr class="separador"/>
+    ${bloque("Triplicado — Archivo")}
     <script>window.onload=()=>{window.print();}<\/script>
   </body></html>`;
 
