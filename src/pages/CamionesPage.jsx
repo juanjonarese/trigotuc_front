@@ -5,24 +5,28 @@ import Pagination from "../components/Pagination";
 import Swal from "sweetalert2";
 import "../css/Tablas.css";
 
-const FORM_INICIAL = { marca: "", patente: "", choferes: ["", ""] };
-const NUEVO_CHOFER_INICIAL = { nombreUsuario: "", telefonoUsuario: "" };
+const CAMION_INICIAL = { marca: "", patente: "" };
+const CHOFER_INICIAL = { nombreUsuario: "", telefonoUsuario: "" };
 const ITEMS_PER_PAGE = 30;
 
 const CamionesPage = () => {
-  const [camiones, setCamiones]     = useState([]);
-  const [choferes, setChoferes]     = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [error, setError]           = useState("");
-  const [showModal, setShowModal]   = useState(false);
-  const [editingCamion, setEditingCamion] = useState(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [camiones, setCamiones] = useState([]);
+  const [choferes, setChoferes] = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState("");
+  const [searchTerm, setSearchTerm]   = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [formData, setFormData]     = useState(FORM_INICIAL);
 
-  const [mostrarNuevoChofer, setMostrarNuevoChofer] = useState(false);
-  const [nuevoChoferData, setNuevoChoferData] = useState(NUEVO_CHOFER_INICIAL);
-  const [creandoChofer, setCreandoChofer] = useState(false);
+  // Camión (alta/edición)
+  const [showCamionModal, setShowCamionModal] = useState(false);
+  const [editingCamion, setEditingCamion]     = useState(null);
+  const [camionForm, setCamionForm]           = useState(CAMION_INICIAL);
+  const [guardandoCamion, setGuardandoCamion] = useState(false);
+
+  // Chofer (alta)
+  const [showChoferModal, setShowChoferModal] = useState(false);
+  const [choferForm, setChoferForm]           = useState(CHOFER_INICIAL);
+  const [guardandoChofer, setGuardandoChofer] = useState(false);
 
   const rolUsuario  = localStorage.getItem("rolUsuario");
   const puedeEditar = ["superadmin", "administracion_frigorifico", "administracion_granja"].includes(rolUsuario);
@@ -46,9 +50,8 @@ const CamionesPage = () => {
     try {
       const data = await obtenerChoferes();
       setChoferes(data.choferes || []);
-      return data.choferes || [];
     } catch {
-      return [];
+      setChoferes([]);
     }
   };
 
@@ -57,102 +60,88 @@ const CamionesPage = () => {
     cargarChoferes();
   }, []);
 
-  const handleOpenModal = (camion = null) => {
+  // ── Camión ───────────────────────────────────────────────────────────────
+  const openCamionModal = (camion = null) => {
     if (camion) {
       setEditingCamion(camion);
-      setFormData({
-        marca: camion.marca,
-        patente: camion.patente,
-        choferes: [camion.choferes?.[0]?._id || "", camion.choferes?.[1]?._id || ""],
-      });
+      setCamionForm({ marca: camion.marca, patente: camion.patente });
     } else {
       setEditingCamion(null);
-      setFormData(FORM_INICIAL);
+      setCamionForm(CAMION_INICIAL);
     }
-    setMostrarNuevoChofer(false);
-    setNuevoChoferData(NUEVO_CHOFER_INICIAL);
-    setShowModal(true);
+    setShowCamionModal(true);
   };
 
-  const handleCloseModal = () => {
-    setShowModal(false);
+  const closeCamionModal = () => {
+    setShowCamionModal(false);
     setEditingCamion(null);
-    setFormData(FORM_INICIAL);
-    setMostrarNuevoChofer(false);
-    setNuevoChoferData(NUEVO_CHOFER_INICIAL);
+    setCamionForm(CAMION_INICIAL);
   };
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  const handleCamionSubmit = async (e) => {
+    e.preventDefault();
+    setGuardandoCamion(true);
+    try {
+      const payload = { marca: camionForm.marca, patente: camionForm.patente };
+      if (editingCamion) {
+        await actualizarCamion(editingCamion._id, payload);
+      } else {
+        await crearCamion(payload);
+      }
+      await cargarCamiones();
+      closeCamionModal();
+      Swal.fire({ title: editingCamion ? "¡Actualizado!" : "¡Creado!", text: `Camión ${editingCamion ? "actualizado" : "creado"} correctamente`, icon: "success", confirmButtonColor: "#198754", timer: 1500, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire({ title: "Error", text: err.message || "Error al guardar el camión", icon: "error", confirmButtonColor: "#d33" });
+    } finally {
+      setGuardandoCamion(false);
+    }
   };
 
-  const handleChoferChange = (index, value) => {
-    setFormData((prev) => {
-      const nuevosChoferes = [...prev.choferes];
-      nuevosChoferes[index] = value;
-      return { ...prev, choferes: nuevosChoferes };
+  const handleDeleteCamion = async (id, nombre) => {
+    const result = await Swal.fire({
+      title: "¿Estás seguro?",
+      html: `Vas a eliminar el camión:<br/><strong>${nombre}</strong>`,
+      icon: "warning", showCancelButton: true, confirmButtonColor: "#d33", cancelButtonColor: "#6c757d",
+      confirmButtonText: "Sí, eliminar", cancelButtonText: "Cancelar",
     });
+    if (!result.isConfirmed) return;
+    try {
+      await eliminarCamion(id);
+      await cargarCamiones();
+      Swal.fire({ title: "¡Eliminado!", icon: "success", timer: 1500, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire({ title: "Error", text: err.message || "Error al eliminar el camión", icon: "error", confirmButtonColor: "#d33" });
+    }
   };
 
-  // Choferes disponibles para el slot `index`: excluye el elegido en el otro slot
-  // y los choferes ya asignados a otro camión activo.
-  const choferesDisponibles = (index) => {
-    const otroIndex = index === 0 ? 1 : 0;
-    const otroSeleccionado = formData.choferes[otroIndex];
-    const asignadosOtrosCamiones = camiones
-      .filter((c) => c.activo && c._id !== editingCamion?._id)
-      .flatMap((c) => (c.choferes || []).map((ch) => ch._id || ch));
-
-    return choferes.filter((c) => {
-      if (c._id === otroSeleccionado) return false;
-      if (asignadosOtrosCamiones.includes(c._id)) return false;
-      return true;
-    });
+  // ── Chofer ───────────────────────────────────────────────────────────────
+  const openChoferModal = () => {
+    setChoferForm(CHOFER_INICIAL);
+    setShowChoferModal(true);
+  };
+  const closeChoferModal = () => {
+    setShowChoferModal(false);
+    setChoferForm(CHOFER_INICIAL);
   };
 
-  const handleNuevoChoferChange = (e) => {
-    setNuevoChoferData({ ...nuevoChoferData, [e.target.name]: e.target.value });
-  };
-
-  const handleCrearChofer = async () => {
-    const { nombreUsuario, telefonoUsuario } = nuevoChoferData;
+  const handleChoferSubmit = async (e) => {
+    e.preventDefault();
+    const { nombreUsuario, telefonoUsuario } = choferForm;
     if (!nombreUsuario || !telefonoUsuario) {
       Swal.fire({ title: "Completá nombre y teléfono", icon: "warning", confirmButtonColor: "#d33" });
       return;
     }
-
-    setCreandoChofer(true);
+    setGuardandoChofer(true);
     try {
-      const resp = await crearChofer(nuevoChoferData);
+      const resp = await crearChofer(choferForm);
       await cargarChoferes();
-
-      if (resp.usuario?.id) {
-        setFormData((prev) => {
-          const nuevosChoferes = [...prev.choferes];
-          const idxVacio = nuevosChoferes.findIndex((c) => !c);
-          if (idxVacio !== -1) nuevosChoferes[idxVacio] = resp.usuario.id;
-          return { ...prev, choferes: nuevosChoferes };
-        });
-      }
-
-      setMostrarNuevoChofer(false);
-      setNuevoChoferData(NUEVO_CHOFER_INICIAL);
-      Swal.fire({
-        title: "¡Chofer creado!",
-        text: resp.msg || "El chofer fue creado correctamente",
-        icon: "success",
-        confirmButtonColor: "#198754",
-      });
+      closeChoferModal();
+      Swal.fire({ title: "¡Chofer creado!", text: resp.msg || "El chofer fue creado correctamente", icon: "success", confirmButtonColor: "#198754", timer: 1500, showConfirmButton: false });
     } catch (err) {
-      console.error("Error al crear chofer:", err);
-      Swal.fire({
-        title: "Error",
-        text: err.message || "Error al crear el chofer",
-        icon: "error",
-        confirmButtonColor: "#d33",
-      });
+      Swal.fire({ title: "Error", text: err.message || "Error al crear el chofer", icon: "error", confirmButtonColor: "#d33" });
     } finally {
-      setCreandoChofer(false);
+      setGuardandoChofer(false);
     }
   };
 
@@ -160,435 +149,199 @@ const CamionesPage = () => {
     const confirm = await Swal.fire({
       title: "¿Eliminar chofer?",
       html: `Se eliminará a <strong>${chofer.nombreUsuario}</strong>. Esta acción no se puede deshacer.`,
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#dc3545",
-      confirmButtonText: "Sí, eliminar",
-      cancelButtonText: "Cancelar",
+      icon: "warning", showCancelButton: true, confirmButtonColor: "#dc3545",
+      confirmButtonText: "Sí, eliminar", cancelButtonText: "Cancelar",
     });
     if (!confirm.isConfirmed) return;
     try {
       await eliminarChofer(chofer._id);
       await cargarChoferes();
-      setFormData((prev) => ({
-        ...prev,
-        choferes: prev.choferes.map((c) => (c === chofer._id ? "" : c)),
-      }));
       Swal.fire({ title: "Chofer eliminado", icon: "success", timer: 1500, showConfirmButton: false });
     } catch (err) {
       Swal.fire({ title: "No se pudo eliminar", text: err.message || "Error al eliminar el chofer", icon: "error", confirmButtonColor: "#d33" });
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const payload = { ...formData, choferes: formData.choferes.filter(Boolean) };
-      if (editingCamion) {
-        await actualizarCamion(editingCamion._id, payload);
-      } else {
-        await crearCamion(payload);
-      }
-      await cargarCamiones();
-      handleCloseModal();
-      Swal.fire({
-        title: editingCamion ? "¡Actualizado!" : "¡Creado!",
-        text: `Camión ${editingCamion ? "actualizado" : "creado"} correctamente`,
-        icon: "success",
-        confirmButtonColor: "#198754",
-      });
-    } catch (err) {
-      console.error("Error al guardar camión:", err);
-      Swal.fire({
-        title: "Error",
-        text: err.message || "Error al guardar el camión",
-        icon: "error",
-        confirmButtonColor: "#d33",
-      });
-    }
-  };
-
-  const handleDelete = async (id, nombre) => {
-    const result = await Swal.fire({
-      title: "¿Estás seguro?",
-      html: `Vas a eliminar el camión:<br/><strong>${nombre}</strong>`,
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#d33",
-      cancelButtonColor: "#6c757d",
-      confirmButtonText: "Sí, eliminar",
-      cancelButtonText: "Cancelar",
-    });
-
-    if (result.isConfirmed) {
-      try {
-        await eliminarCamion(id);
-        await cargarCamiones();
-        Swal.fire({
-          title: "¡Eliminado!",
-          text: "El camión fue eliminado correctamente",
-          icon: "success",
-          confirmButtonColor: "#198754",
-        });
-      } catch (err) {
-        console.error("Error al eliminar camión:", err);
-        Swal.fire({
-          title: "Error",
-          text: err.message || "Error al eliminar el camión",
-          icon: "error",
-          confirmButtonColor: "#d33",
-        });
-      }
-    }
-  };
-
+  // ── Derivados ──────────────────────────────────────────────────────────────
   const camionesFiltrados = camiones.filter(
-    (c) =>
-      c.marca?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.patente?.toLowerCase().includes(searchTerm.toLowerCase())
+    (c) => c.marca?.toLowerCase().includes(searchTerm.toLowerCase()) || c.patente?.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
-  const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
+  const indexOfLastItem  = currentPage * ITEMS_PER_PAGE;
   const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
-  const currentItems = camionesFiltrados.slice(indexOfFirstItem, indexOfLastItem);
+  const currentItems     = camionesFiltrados.slice(indexOfFirstItem, indexOfLastItem);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm]);
+  useEffect(() => { setCurrentPage(1); }, [searchTerm]);
 
   return (
     <Layout>
       <div className="container-fluid">
-        {/* Header */}
-        <div className="row mb-4">
-          <div className="col-12 col-md-6 mb-3 mb-md-0">
-            <h1 className="h3">Gestión de Camiones</h1>
-            <p className="text-muted">Administra los camiones del sistema</p>
-          </div>
-          {puedeEditar && (
-            <div className="col-12 col-md-6 text-md-end">
-              <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-                <i className="bi bi-plus-circle me-2"></i>
-                Crear Camión
-              </button>
-            </div>
-          )}
+        <div className="mb-4">
+          <h1 className="h3 mb-1">Camiones y Choferes</h1>
+          <p className="text-muted mb-0">Alta independiente de camiones y choferes</p>
         </div>
 
-        {/* Búsqueda */}
-        <div className="row mb-4">
-          <div className="col-12 col-md-6">
-            <input
-              type="text"
-              className="form-control"
-              placeholder="Buscar por marca o patente..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-        </div>
+        {error && (
+          <div className="alert alert-danger"><i className="bi bi-exclamation-triangle me-2"></i>{error}</div>
+        )}
 
-        {/* Loading */}
-        {loading && (
+        {loading ? (
           <div className="d-flex justify-content-center align-items-center my-5">
-            <div
-              className="spinner-border text-success"
-              role="status"
-              style={{ width: "3rem", height: "3rem" }}
-            >
+            <div className="spinner-border text-success" role="status" style={{ width: "3rem", height: "3rem" }}>
               <span className="visually-hidden">Cargando...</span>
             </div>
           </div>
-        )}
-
-        {/* Error */}
-        {error && (
-          <div className="alert alert-danger">
-            <i className="bi bi-exclamation-triangle me-2"></i>
-            {error}
-          </div>
-        )}
-
-        {/* Tabla */}
-        {!loading && !error && (
-          <div className="card tabla-sin-movimiento">
-            <div className="card-body p-0">
-              {camionesFiltrados.length === 0 ? (
-                <p className="text-center text-muted py-4 mb-0">No se encontraron camiones</p>
-              ) : (
-                <>
-                  {/* Mobile: cards */}
-                  <div className="d-md-none p-3">
-                    {currentItems.map((c) => (
-                      <div key={c._id} className="card border mb-3">
-                        <div className="card-body py-3">
-                          <div className="d-flex justify-content-between align-items-start mb-1">
-                            <div>
-                              <span className="fw-semibold d-block">{c.marca}</span>
-                              <small className="text-muted">{c.patente}</small>
-                              {c.choferes?.length > 0 && (
-                                <small className="text-primary d-block">
-                                  <i className="bi bi-person-fill me-1"></i>
-                                  {c.choferes.map((ch) => ch.nombreUsuario).join(", ")}
-                                </small>
-                              )}
-                            </div>
-                            {puedeEditar && (
-                              <div className="d-flex gap-2">
-                                <button
-                                  className="btn btn-sm btn-warning"
-                                  onClick={() => handleOpenModal(c)}
-                                >
-                                  <i className="bi bi-pencil"></i>
-                                </button>
-                                <button
-                                  className="btn btn-sm btn-danger"
-                                  onClick={() => handleDelete(c._id, `${c.marca} - ${c.patente}`)}
-                                >
-                                  <i className="bi bi-trash"></i>
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Desktop: tabla */}
-                  <div className="d-none d-md-block">
-                    <table className="table mb-0">
-                      <thead className="table-light">
-                        <tr>
-                          <th>Marca</th>
-                          <th>Patente</th>
-                          <th>Choferes</th>
-                          {puedeEditar && <th>Acciones</th>}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {currentItems.map((c) => (
-                          <tr key={c._id}>
-                            <td>{c.marca}</td>
-                            <td>{c.patente}</td>
-                            <td>
-                              {c.choferes?.length > 0
-                                ? c.choferes.map((ch) => (
-                                    <span key={ch._id} className="badge bg-primary me-1">{ch.nombreUsuario}</span>
-                                  ))
-                                : <span className="text-muted small">—</span>}
-                            </td>
-                            {puedeEditar && (
-                              <td>
-                                <button
-                                  className="btn btn-sm btn-warning me-2"
-                                  onClick={() => handleOpenModal(c)}
-                                >
-                                  <i className="bi bi-pencil"></i>
-                                </button>
-                                <button
-                                  className="btn btn-sm btn-danger"
-                                  onClick={() => handleDelete(c._id, `${c.marca} - ${c.patente}`)}
-                                >
-                                  <i className="bi bi-trash"></i>
-                                </button>
-                              </td>
-                            )}
+        ) : (
+          <div className="row g-4">
+            {/* ── Camiones ── */}
+            <div className="col-12 col-lg-7">
+              <div className="card tabla-sin-movimiento">
+                <div className="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+                  <h5 className="mb-0"><i className="bi bi-truck me-2 text-primary"></i>Camiones</h5>
+                  {puedeEditar && (
+                    <button className="btn btn-primary btn-sm" onClick={() => openCamionModal()}>
+                      <i className="bi bi-plus-circle me-1"></i>Crear Camión
+                    </button>
+                  )}
+                </div>
+                <div className="card-body">
+                  <input type="text" className="form-control mb-3" placeholder="Buscar por marca o patente..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                  {camionesFiltrados.length === 0 ? (
+                    <p className="text-center text-muted py-3 mb-0">No se encontraron camiones</p>
+                  ) : (
+                    <div className="table-responsive">
+                      <table className="table mb-0 align-middle">
+                        <thead className="table-light">
+                          <tr>
+                            <th>Marca</th>
+                            <th>Patente</th>
+                            {puedeEditar && <th className="text-end">Acciones</th>}
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              )}
+                        </thead>
+                        <tbody>
+                          {currentItems.map((c) => (
+                            <tr key={c._id}>
+                              <td>{c.marca}</td>
+                              <td>{c.patente}</td>
+                              {puedeEditar && (
+                                <td className="text-end">
+                                  <button className="btn btn-sm btn-warning me-2" onClick={() => openCamionModal(c)}><i className="bi bi-pencil"></i></button>
+                                  <button className="btn btn-sm btn-danger" onClick={() => handleDeleteCamion(c._id, `${c.marca} - ${c.patente}`)}><i className="bi bi-trash"></i></button>
+                                </td>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <Pagination currentPage={currentPage} totalItems={camionesFiltrados.length} itemsPerPage={ITEMS_PER_PAGE} onPageChange={setCurrentPage} />
+                </div>
+              </div>
             </div>
-            <Pagination
-              currentPage={currentPage}
-              totalItems={camionesFiltrados.length}
-              itemsPerPage={ITEMS_PER_PAGE}
-              onPageChange={setCurrentPage}
-            />
+
+            {/* ── Choferes ── */}
+            <div className="col-12 col-lg-5">
+              <div className="card tabla-sin-movimiento">
+                <div className="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+                  <h5 className="mb-0"><i className="bi bi-person-badge me-2 text-success"></i>Choferes</h5>
+                  {puedeEditar && (
+                    <button className="btn btn-success btn-sm" onClick={openChoferModal}>
+                      <i className="bi bi-person-plus me-1"></i>Crear Chofer
+                    </button>
+                  )}
+                </div>
+                <div className="card-body">
+                  {choferes.length === 0 ? (
+                    <p className="text-center text-muted py-3 mb-0">No hay choferes registrados</p>
+                  ) : (
+                    <ul className="list-group list-group-flush">
+                      {choferes.map((c) => (
+                        <li key={c._id} className="list-group-item d-flex justify-content-between align-items-center px-0">
+                          <span>
+                            <i className="bi bi-person-fill me-2 text-success"></i>
+                            {c.nombreUsuario}
+                            {c.telefonoUsuario && <span className="text-muted ms-2 small">· {c.telefonoUsuario}</span>}
+                          </span>
+                          {puedeEditar && (
+                            <button className="btn btn-sm btn-outline-danger border-0" title="Eliminar chofer" onClick={() => handleEliminarChofer(c)}>
+                              <i className="bi bi-trash"></i>
+                            </button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* Modal */}
-        {showModal && (
+        {/* ── Modal Camión ── */}
+        {showCamionModal && (
           <>
             <div className="modal show d-block" tabIndex="-1">
               <div className="modal-dialog">
                 <div className="modal-content">
                   <div className="modal-header">
-                    <h5 className="modal-title">
-                      {editingCamion ? "Editar Camión" : "Crear Camión"}
-                    </h5>
-                    <button
-                      type="button"
-                      className="btn-close"
-                      onClick={handleCloseModal}
-                    ></button>
+                    <h5 className="modal-title">{editingCamion ? "Editar Camión" : "Crear Camión"}</h5>
+                    <button type="button" className="btn-close" onClick={closeCamionModal}></button>
                   </div>
-                  <form onSubmit={handleSubmit}>
+                  <form onSubmit={handleCamionSubmit}>
                     <div className="modal-body">
                       <div className="mb-3">
-                        <label htmlFor="marca" className="form-label">
-                          Marca <span className="text-danger">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          id="marca"
-                          name="marca"
-                          value={formData.marca}
-                          onChange={handleChange}
-                          placeholder="Ej: Mercedes Benz"
-                          required
-                        />
+                        <label className="form-label">Marca <span className="text-danger">*</span></label>
+                        <input type="text" className="form-control" name="marca" value={camionForm.marca}
+                          onChange={(e) => setCamionForm({ ...camionForm, marca: e.target.value })} placeholder="Ej: Mercedes Benz" required />
                       </div>
                       <div className="mb-3">
-                        <label htmlFor="patente" className="form-label">
-                          Patente <span className="text-danger">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          id="patente"
-                          name="patente"
-                          value={formData.patente}
-                          onChange={handleChange}
-                          placeholder="Ej: AB123CD"
-                          required
-                        />
-                      </div>
-                      <div className="mb-3">
-                        <label className="form-label">Choferes asignados</label>
-                        <div className="row g-2">
-                          <div className="col-12 col-sm-6">
-                            <select
-                              className="form-select"
-                              aria-label="Chofer 1"
-                              value={formData.choferes[0]}
-                              onChange={(e) => handleChoferChange(0, e.target.value)}
-                            >
-                              <option value="">— Chofer 1 —</option>
-                              {choferesDisponibles(0).map((c) => (
-                                <option key={c._id} value={c._id}>{c.nombreUsuario}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div className="col-12 col-sm-6">
-                            <select
-                              className="form-select"
-                              aria-label="Chofer 2"
-                              value={formData.choferes[1]}
-                              onChange={(e) => handleChoferChange(1, e.target.value)}
-                            >
-                              <option value="">— Chofer 2 —</option>
-                              {choferesDisponibles(1).map((c) => (
-                                <option key={c._id} value={c._id}>{c.nombreUsuario}</option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                        <div className="form-text">
-                          Podés asignar hasta 2 choferes, por ejemplo para distintos turnos.
-                        </div>
-                        {choferes.length === 0 && (
-                          <div className="form-text text-muted">
-                            No hay choferes registrados aún. Podés crear uno nuevo abajo.
-                          </div>
-                        )}
-
-                        {choferes.length > 0 && (
-                          <div className="mt-2">
-                            <label className="form-label small text-muted mb-1">Choferes registrados</label>
-                            <ul className="list-group">
-                              {choferes.map((c) => (
-                                <li key={c._id} className="list-group-item d-flex justify-content-between align-items-center py-1 px-2">
-                                  <span className="small">
-                                    {c.nombreUsuario}
-                                    {c.telefonoUsuario && <span className="text-muted ms-2">· {c.telefonoUsuario}</span>}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    className="btn btn-sm btn-outline-danger border-0"
-                                    title="Eliminar chofer"
-                                    onClick={() => handleEliminarChofer(c)}
-                                  >
-                                    <i className="bi bi-trash"></i>
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-outline-primary mt-2"
-                          onClick={() => setMostrarNuevoChofer((v) => !v)}
-                        >
-                          <i className="bi bi-person-plus me-1"></i>
-                          {mostrarNuevoChofer ? "Cancelar nuevo chofer" : "+ Nuevo chofer"}
-                        </button>
-
-                        {mostrarNuevoChofer && (
-                          <div className="border rounded p-3 mt-2 bg-light">
-                            <h6 className="mb-3">Crear nuevo chofer</h6>
-                            <div className="row g-2">
-                              <div className="col-12 col-sm-6">
-                                <label className="form-label">
-                                  Nombre <span className="text-danger">*</span>
-                                </label>
-                                <input
-                                  type="text"
-                                  className="form-control"
-                                  name="nombreUsuario"
-                                  value={nuevoChoferData.nombreUsuario}
-                                  onChange={handleNuevoChoferChange}
-                                  placeholder="Nombre y apellido"
-                                />
-                              </div>
-                              <div className="col-12 col-sm-6">
-                                <label className="form-label">
-                                  Teléfono <span className="text-danger">*</span>
-                                </label>
-                                <input
-                                  type="number"
-                                  className="form-control"
-                                  name="telefonoUsuario"
-                                  value={nuevoChoferData.telefonoUsuario}
-                                  onChange={handleNuevoChoferChange}
-                                  placeholder="3814123456"
-                                />
-                                <div className="form-text">
-                                  El chofer ingresa al sistema solo con su teléfono.
-                                </div>
-                              </div>
-                            </div>
-                            <div className="text-end mt-2">
-                              <button
-                                type="button"
-                                className="btn btn-sm btn-success"
-                                onClick={handleCrearChofer}
-                                disabled={creandoChofer}
-                              >
-                                {creandoChofer ? "Creando..." : "Crear chofer"}
-                              </button>
-                            </div>
-                          </div>
-                        )}
+                        <label className="form-label">Patente <span className="text-danger">*</span></label>
+                        <input type="text" className="form-control" name="patente" value={camionForm.patente}
+                          onChange={(e) => setCamionForm({ ...camionForm, patente: e.target.value })} placeholder="Ej: AB123CD" required />
                       </div>
                     </div>
                     <div className="modal-footer">
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        onClick={handleCloseModal}
-                      >
-                        Cancelar
+                      <button type="button" className="btn btn-secondary" onClick={closeCamionModal}>Cancelar</button>
+                      <button type="submit" className="btn btn-primary" disabled={guardandoCamion}>
+                        {guardandoCamion ? "Guardando..." : (editingCamion ? "Actualizar" : "Crear Camión")}
                       </button>
-                      <button type="submit" className="btn btn-primary">
-                        {editingCamion ? "Actualizar" : "Crear Camión"}
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+            <div className="modal-backdrop show"></div>
+          </>
+        )}
+
+        {/* ── Modal Chofer ── */}
+        {showChoferModal && (
+          <>
+            <div className="modal show d-block" tabIndex="-1">
+              <div className="modal-dialog">
+                <div className="modal-content">
+                  <div className="modal-header">
+                    <h5 className="modal-title">Crear Chofer</h5>
+                    <button type="button" className="btn-close" onClick={closeChoferModal}></button>
+                  </div>
+                  <form onSubmit={handleChoferSubmit}>
+                    <div className="modal-body">
+                      <div className="mb-3">
+                        <label className="form-label">Nombre <span className="text-danger">*</span></label>
+                        <input type="text" className="form-control" name="nombreUsuario" value={choferForm.nombreUsuario}
+                          onChange={(e) => setChoferForm({ ...choferForm, nombreUsuario: e.target.value })} placeholder="Nombre y apellido" required />
+                      </div>
+                      <div className="mb-3">
+                        <label className="form-label">Teléfono <span className="text-danger">*</span></label>
+                        <input type="number" className="form-control" name="telefonoUsuario" value={choferForm.telefonoUsuario}
+                          onChange={(e) => setChoferForm({ ...choferForm, telefonoUsuario: e.target.value })} placeholder="3814123456" required />
+                        <div className="form-text">El chofer ingresa al sistema solo con su teléfono.</div>
+                      </div>
+                    </div>
+                    <div className="modal-footer">
+                      <button type="button" className="btn btn-secondary" onClick={closeChoferModal}>Cancelar</button>
+                      <button type="submit" className="btn btn-success" disabled={guardandoChofer}>
+                        {guardandoChofer ? "Creando..." : "Crear Chofer"}
                       </button>
                     </div>
                   </form>

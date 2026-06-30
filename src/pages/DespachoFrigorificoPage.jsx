@@ -226,6 +226,7 @@ const NuevaOrdenModal = ({ onClose, onCreada }) => {
   const [choferes, setChoferes]             = useState([]);
   const [camiones, setCamiones]             = useState([]);
   const [choferSel, setChoferSel]           = useState("");
+  const [camionSel, setCamionSel]           = useState("");
   const [stockCalibres, setStockCalibres]   = useState(null);
   const [trozadosDisp, setTrozadosDisp]     = useState([]);
   const [loadingStock, setLoadingStock]     = useState(false);
@@ -289,6 +290,7 @@ const NuevaOrdenModal = ({ onClose, onCreada }) => {
     if (!camara)     { Swal.fire("Faltan datos", "Seleccioná la cámara de origen.", "warning"); return; }
     if (!turno)      { Swal.fire("Faltan datos", "Indicá si la carga es por la mañana o por la tarde.", "warning"); return; }
     if (modalidad === "delivery_chofer" && !choferSel) { Swal.fire("Faltan datos", "Seleccioná el chofer para la entrega.", "warning"); return; }
+    if (modalidad === "delivery_chofer" && !camionSel) { Swal.fire("Faltan datos", "Seleccioná el camión para la entrega.", "warning"); return; }
 
     const lineasValidas   = lineasCalc.filter((l) => l.cajones > 0);
     const trozadosValidos = trozadosLineas.filter((t) => Number(t.cajas) > 0 && Number(t.kgCaja) > 0);
@@ -308,7 +310,6 @@ const NuevaOrdenModal = ({ onClose, onCreada }) => {
 
     setSaving(true);
     try {
-      const camionDelChofer = camiones.find((c) => c.choferes?.some((ch) => String(ch?._id || ch) === String(choferSel)));
 
       const despacho = await crearDespachoFrigorifico({
         fecha:            form.fecha,
@@ -320,7 +321,7 @@ const NuevaOrdenModal = ({ onClose, onCreada }) => {
         observaciones:    form.observaciones || undefined,
         modalidadEntrega: modalidad,
         chofer:           modalidad === "delivery_chofer" ? choferSel : undefined,
-        camion:           modalidad === "delivery_chofer" ? (camionDelChofer?._id || undefined) : undefined,
+        camion:           modalidad === "delivery_chofer" ? (camionSel || undefined) : undefined,
       });
       onCreada(despacho);
     } catch (err) {
@@ -414,40 +415,58 @@ const NuevaOrdenModal = ({ onClose, onCreada }) => {
                     ].map((m) => (
                       <button key={m.value} type="button"
                         className={`btn flex-grow-1 py-2 ${modalidad === m.value ? "btn-primary" : "btn-outline-secondary"}`}
-                        onClick={() => { setModalidad(m.value); setChoferSel(""); }}>
+                        onClick={() => { setModalidad(m.value); setChoferSel(""); setCamionSel(""); }}>
                         <i className={`bi ${m.icon} me-1`}></i>{m.label}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* Selector de chofer (solo delivery) */}
+                {/* Selectores de chofer y camión (independientes, solo delivery) */}
                 {modalidad === "delivery_chofer" && (
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold">
-                      Chofer <span className="text-danger">*</span>
-                    </label>
-                    {choferes.length === 0 ? (
-                      <div className="alert alert-warning py-2 small mb-0">
-                        No hay choferes registrados. Creá un usuario con rol <strong>chofer</strong>.
-                      </div>
-                    ) : (
-                      <select
-                        className={`form-select ${modalidad === "delivery_chofer" && !choferSel ? "is-invalid" : ""}`}
-                        value={choferSel}
-                        onChange={(e) => setChoferSel(e.target.value)}
-                      >
-                        <option value="">Seleccioná un chofer...</option>
-                        {choferes.map((c) => {
-                          const cam = camiones.find((k) => k.choferes?.some((ch) => String(ch?._id || ch) === String(c._id)) && k.activo);
-                          return (
-                            <option key={c._id} value={c._id}>
-                              {c.nombreUsuario}{cam ? ` — ${cam.marca} ${cam.patente}` : " (sin camión asignado)"}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    )}
+                  <div className="row g-3 mb-3">
+                    <div className="col-12 col-md-6">
+                      <label className="form-label fw-semibold">
+                        Chofer <span className="text-danger">*</span>
+                      </label>
+                      {choferes.length === 0 ? (
+                        <div className="alert alert-warning py-2 small mb-0">
+                          No hay choferes registrados. Creá un usuario con rol <strong>chofer</strong>.
+                        </div>
+                      ) : (
+                        <select
+                          className={`form-select ${!choferSel ? "is-invalid" : ""}`}
+                          value={choferSel}
+                          onChange={(e) => setChoferSel(e.target.value)}
+                        >
+                          <option value="">Seleccioná un chofer...</option>
+                          {choferes.map((c) => (
+                            <option key={c._id} value={c._id}>{c.nombreUsuario}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                    <div className="col-12 col-md-6">
+                      <label className="form-label fw-semibold">
+                        Camión <span className="text-danger">*</span>
+                      </label>
+                      {camiones.filter((k) => k.activo).length === 0 ? (
+                        <div className="alert alert-warning py-2 small mb-0">
+                          No hay camiones registrados. Cargalos en <strong>Camiones</strong>.
+                        </div>
+                      ) : (
+                        <select
+                          className={`form-select ${!camionSel ? "is-invalid" : ""}`}
+                          value={camionSel}
+                          onChange={(e) => setCamionSel(e.target.value)}
+                        >
+                          <option value="">Seleccioná un camión...</option>
+                          {camiones.filter((k) => k.activo).map((k) => (
+                            <option key={k._id} value={k._id}>{k.marca} {k.patente}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -631,6 +650,7 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado }) => {
   const [choferes, setChoferes]             = useState([]);
   const [camiones, setCamiones]             = useState([]);
   const [choferSel, setChoferSel]           = useState(despacho.chofer?._id || "");
+  const [camionSel, setCamionSel]           = useState(despacho.camion?._id || "");
   const [stockCalibres, setStockCalibres]   = useState(null);
   const [trozadosDisp, setTrozadosDisp]     = useState([]);
   const [loadingStock, setLoadingStock]     = useState(false);
@@ -695,6 +715,7 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado }) => {
     if (!camara)     { Swal.fire("Faltan datos", "Seleccioná la cámara de origen.", "warning"); return; }
     if (!turno)      { Swal.fire("Faltan datos", "Indicá si la carga es por la mañana o por la tarde.", "warning"); return; }
     if (modalidad === "delivery_chofer" && !choferSel) { Swal.fire("Faltan datos", "Seleccioná el chofer para la entrega.", "warning"); return; }
+    if (modalidad === "delivery_chofer" && !camionSel) { Swal.fire("Faltan datos", "Seleccioná el camión para la entrega.", "warning"); return; }
 
     const lineasValidas   = lineasCalc.filter((l) => l.cajones > 0);
     const trozadosValidos = trozadosLineas.filter((t) => Number(t.cajas) > 0 && Number(t.kgCaja) > 0);
@@ -714,7 +735,6 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado }) => {
 
     setSaving(true);
     try {
-      const camionDelChofer = camiones.find((c) => c.choferes?.some((ch) => String(ch?._id || ch) === String(choferSel)));
 
       const actualizado = await actualizarDespachoFrigorifico(despacho._id, {
         fecha:            form.fecha,
@@ -726,7 +746,7 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado }) => {
         observaciones:    form.observaciones || undefined,
         modalidadEntrega: modalidad,
         chofer:           modalidad === "delivery_chofer" ? choferSel : undefined,
-        camion:           modalidad === "delivery_chofer" ? (camionDelChofer?._id || undefined) : undefined,
+        camion:           modalidad === "delivery_chofer" ? (camionSel || undefined) : undefined,
       });
       onGuardado(actualizado);
     } catch (err) {
@@ -820,40 +840,58 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado }) => {
                     ].map((m) => (
                       <button key={m.value} type="button"
                         className={`btn flex-grow-1 py-2 ${modalidad === m.value ? "btn-primary" : "btn-outline-secondary"}`}
-                        onClick={() => { setModalidad(m.value); setChoferSel(""); }}>
+                        onClick={() => { setModalidad(m.value); setChoferSel(""); setCamionSel(""); }}>
                         <i className={`bi ${m.icon} me-1`}></i>{m.label}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* Selector de chofer (solo delivery) */}
+                {/* Selectores de chofer y camión (independientes, solo delivery) */}
                 {modalidad === "delivery_chofer" && (
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold">
-                      Chofer <span className="text-danger">*</span>
-                    </label>
-                    {choferes.length === 0 ? (
-                      <div className="alert alert-warning py-2 small mb-0">
-                        No hay choferes registrados. Creá un usuario con rol <strong>chofer</strong>.
-                      </div>
-                    ) : (
-                      <select
-                        className={`form-select ${modalidad === "delivery_chofer" && !choferSel ? "is-invalid" : ""}`}
-                        value={choferSel}
-                        onChange={(e) => setChoferSel(e.target.value)}
-                      >
-                        <option value="">Seleccioná un chofer...</option>
-                        {choferes.map((c) => {
-                          const cam = camiones.find((k) => k.choferes?.some((ch) => String(ch?._id || ch) === String(c._id)) && k.activo);
-                          return (
-                            <option key={c._id} value={c._id}>
-                              {c.nombreUsuario}{cam ? ` — ${cam.marca} ${cam.patente}` : " (sin camión asignado)"}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    )}
+                  <div className="row g-3 mb-3">
+                    <div className="col-12 col-md-6">
+                      <label className="form-label fw-semibold">
+                        Chofer <span className="text-danger">*</span>
+                      </label>
+                      {choferes.length === 0 ? (
+                        <div className="alert alert-warning py-2 small mb-0">
+                          No hay choferes registrados. Creá un usuario con rol <strong>chofer</strong>.
+                        </div>
+                      ) : (
+                        <select
+                          className={`form-select ${!choferSel ? "is-invalid" : ""}`}
+                          value={choferSel}
+                          onChange={(e) => setChoferSel(e.target.value)}
+                        >
+                          <option value="">Seleccioná un chofer...</option>
+                          {choferes.map((c) => (
+                            <option key={c._id} value={c._id}>{c.nombreUsuario}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                    <div className="col-12 col-md-6">
+                      <label className="form-label fw-semibold">
+                        Camión <span className="text-danger">*</span>
+                      </label>
+                      {camiones.filter((k) => k.activo).length === 0 ? (
+                        <div className="alert alert-warning py-2 small mb-0">
+                          No hay camiones registrados. Cargalos en <strong>Camiones</strong>.
+                        </div>
+                      ) : (
+                        <select
+                          className={`form-select ${!camionSel ? "is-invalid" : ""}`}
+                          value={camionSel}
+                          onChange={(e) => setCamionSel(e.target.value)}
+                        >
+                          <option value="">Seleccioná un camión...</option>
+                          {camiones.filter((k) => k.activo).map((k) => (
+                            <option key={k._id} value={k._id}>{k.marca} {k.patente}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -1141,7 +1179,8 @@ const DespachoFrigorificoPage = () => {
                         {d.modalidadEntrega === "delivery_chofer" ? (
                           <span className="badge bg-info text-dark">
                             <i className="bi bi-truck me-1"></i>
-                            Camión{d.chofer?.nombreUsuario ? `: ${d.chofer.nombreUsuario}` : ""}
+                            {d.camion ? `${d.camion.marca} ${d.camion.patente}` : "Camión"}
+                            {d.chofer?.nombreUsuario ? ` · ${d.chofer.nombreUsuario}` : ""}
                           </span>
                         ) : (
                           <span className="badge bg-light text-dark border">
