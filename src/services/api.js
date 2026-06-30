@@ -163,6 +163,14 @@ export const crearEnvioCamara = async (data) => {
   return handleResponse(response);
 };
 
+// Salida de mostrador: descuenta stock de Trigotuc. data: { calibres, trozados }
+export const registrarSalidaMostrador = async (data) => {
+  const response = await fetch(`${API_URL}/ventas-mostrador`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
 export const obtenerEnviosCamara = async () => {
   const response = await fetch(`${API_URL}/envios-camara`, { headers: getAuthHeaders() });
   return handleResponse(response);
