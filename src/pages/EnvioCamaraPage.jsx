@@ -4,6 +4,7 @@ import Layout from "../components/Layout";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
 import { crearEnvioCamara, obtenerEnviosCamara, /* obtenerCamiones, */ obtenerChoferes, eliminarEnvioCamara, obtenerResumenStock } from "../services/api";
 import { ajustarFechaParaGuardar } from "../utils/dateUtils";
+import { escapeHtml } from "../utils/escapeHtml";
 import Swal from "sweetalert2";
 
 const CAMARAS = [
@@ -18,6 +19,103 @@ const FORM_INICIAL = {
   camaraOrigen: "",
   camaraDestino: "",
   observaciones: "",
+};
+
+const camaraNombre = (v) => CAMARAS.find((c) => c.value === v)?.label || v;
+const fmtNumOrden  = (n) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(Number(n || 0));
+
+// Orden imprimible que el chofer lleva y presenta en la cámara destino.
+const imprimirOrdenEnvio = (e) => {
+  const origen  = escapeHtml(camaraNombre(e.camaraOrigen));
+  const destino = escapeHtml(camaraNombre(e.camaraDestino));
+  const chofer  = e.chofer?.nombreUsuario ? escapeHtml(e.chofer.nombreUsuario) : "—";
+  const camion  = e.camion ? escapeHtml(`${e.camion.marca || ""} ${e.camion.patente ? "— " + e.camion.patente : ""}`.trim()) : "—";
+  const fecha   = new Date(e.fecha).toLocaleDateString("es-AR");
+
+  const filasCalibres = (e.calibres || []).map((c) => `
+    <tr>
+      <td>Calibre ${escapeHtml(String(c.calibre))}</td>
+      <td class="num">${fmtNumOrden(c.cajones)}</td>
+      <td class="num">${fmtNumOrden(c.pollos)}</td>
+      <td class="num">${fmtNumOrden(Number(c.cajones) * 20)}</td>
+    </tr>`).join("");
+
+  const filasTrozados = (e.trozados || []).map((t) => `
+    <tr>
+      <td class="cap">${escapeHtml(t.tipo)} <span class="clase">Clase ${escapeHtml(t.clase || "A")}</span></td>
+      <td class="num">${fmtNumOrden(t.cajas)}</td>
+      <td class="num">—</td>
+      <td class="num">${fmtNumOrden(t.kgTotal != null ? t.kgTotal : Number(t.cajas) * Number(t.kgCaja))}</td>
+    </tr>`).join("");
+
+  const seccionCalibres = filasCalibres
+    ? `<h2>Calibres (pollo entero)</h2>
+       <table class="detalle">
+         <thead><tr><th>Detalle</th><th class="num">Cajones</th><th class="num">Pollos</th><th class="num">Kg</th></tr></thead>
+         <tbody>${filasCalibres}</tbody>
+       </table>` : "";
+
+  const seccionTrozados = filasTrozados
+    ? `<h2>Trozados</h2>
+       <table class="detalle">
+         <thead><tr><th>Detalle</th><th class="num">Cajas</th><th class="num">Pollos</th><th class="num">Kg</th></tr></thead>
+         <tbody>${filasTrozados}</tbody>
+       </table>` : "";
+
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
+    <title>Orden de Envío ${escapeHtml(e.numeroEnvio)}</title>
+    <style>
+      body { font-family: Arial, sans-serif; padding: 40px; color: #222; max-width: 640px; margin: 0 auto; }
+      .logo { font-size: 22px; font-weight: bold; margin-bottom: 4px; }
+      .logo span { color: #f59e0b; }
+      .subtitulo { font-size: 13px; color: #666; margin-bottom: 20px; }
+      .ruta { text-align: center; font-size: 20px; font-weight: bold; margin: 18px 0; padding: 12px; border: 2px solid #222; border-radius: 8px; }
+      .ruta .flecha { color: #f59e0b; margin: 0 10px; }
+      h2 { font-size: 15px; border-bottom: 2px solid #222; padding-bottom: 6px; margin: 20px 0 10px; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; margin-bottom: 12px; }
+      .fila { display: flex; flex-direction: column; }
+      .lbl { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: .5px; }
+      .val { font-size: 14px; font-weight: 600; }
+      table.detalle { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 13px; }
+      table.detalle th, table.detalle td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+      table.detalle th { background: #f3f4f6; font-size: 11px; text-transform: uppercase; letter-spacing: .3px; }
+      table.detalle .num { text-align: right; }
+      .cap { text-transform: capitalize; }
+      .clase { font-size: 10px; color: #888; }
+      .totales { display: flex; justify-content: flex-end; gap: 24px; margin: 12px 0 20px; font-size: 13px; }
+      .totales b { font-size: 16px; }
+      .firmas { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 48px; }
+      .firma { text-align: center; }
+      .firma .linea { border-top: 1px solid #222; margin-bottom: 6px; }
+      .firma .rol { font-size: 12px; color: #555; }
+      @media print { body { padding: 20px; } }
+    </style></head><body>
+    <div class="logo">Trigotuc <span>Avícola</span></div>
+    <div class="subtitulo">Orden de Envío entre Cámaras — N° ${escapeHtml(e.numeroEnvio)}</div>
+    <div class="ruta">${origen}<span class="flecha">&rarr;</span>${destino}</div>
+    <div class="grid">
+      <div class="fila"><span class="lbl">N° Envío</span><span class="val">${escapeHtml(e.numeroEnvio)}</span></div>
+      <div class="fila"><span class="lbl">Fecha</span><span class="val">${fecha}</span></div>
+      <div class="fila"><span class="lbl">Chofer</span><span class="val">${chofer}</span></div>
+      <div class="fila"><span class="lbl">Camión</span><span class="val">${camion}</span></div>
+    </div>
+    ${seccionCalibres}
+    ${seccionTrozados}
+    <div class="totales">
+      <span>Total cajones: <b>${fmtNumOrden(e.totalCajones)}</b></span>
+      <span>Total pollos: <b>${fmtNumOrden(e.totalPollos)}</b></span>
+      <span>Total kg: <b>${fmtNumOrden(Number(e.pesoTotalKg || 0) + Number(e.totalKgTrozados || 0))}</b></span>
+    </div>
+    ${e.observaciones ? `<p style="font-size:13px;color:#555"><strong>Obs:</strong> ${escapeHtml(e.observaciones)}</p>` : ""}
+    <div class="firmas">
+      <div class="firma"><div class="linea">&nbsp;</div><div class="rol">Entregó — Cámara ${origen}</div></div>
+      <div class="firma"><div class="linea">&nbsp;</div><div class="rol">Recibió — Cámara ${destino}</div></div>
+    </div>
+    <script>window.onload=()=>{window.print();}</script>
+  </body></html>`;
+  const win = window.open("", "_blank", "width=760,height=800");
+  win.document.write(html);
+  win.document.close();
 };
 
 const EnvioCamaraPage = () => {
@@ -81,9 +179,6 @@ const EnvioCamaraPage = () => {
     ...l,
     cajones: calcularCajones(l.pollos, l.calibre),
   }));
-  const totalPollos  = lineasCalculadas.reduce((acc, l) => acc + Number(l.pollos || 0), 0);
-  const totalCajones = lineasCalculadas.reduce((acc, l) => acc + l.cajones, 0);
-  const totalKg      = totalCajones * 20;
 
   const stockCalibresOrigen = form.camaraOrigen === "cañete"
     ? (resumen?.stockCañete   || [])
@@ -150,11 +245,16 @@ const EnvioCamaraPage = () => {
         })),
         observaciones: form.observaciones,
       });
-      Swal.fire(
-        `Envío ${envio.numeroEnvio} registrado`,
-        `${camaraLabel(form.camaraOrigen)} → ${camaraLabel(form.camaraDestino)}`,
-        "success"
-      );
+      const res = await Swal.fire({
+        title: `Envío ${envio.numeroEnvio} registrado`,
+        text: `${camaraLabel(form.camaraOrigen)} → ${camaraLabel(form.camaraDestino)}`,
+        icon: "success",
+        showCancelButton: true,
+        confirmButtonText: "Imprimir orden",
+        confirmButtonColor: "#0d6efd",
+        cancelButtonText: "Cerrar",
+      });
+      if (res.isConfirmed) imprimirOrdenEnvio(envio);
       setForm(FORM_INICIAL);
       setLineas([]);
       setTrozadosLineas([]);
@@ -389,6 +489,13 @@ const EnvioCamaraPage = () => {
                           {e.estado === "pendiente" && <span className="badge bg-warning text-dark ms-1">Pendiente recepción</span>}
                           <div className="d-flex align-items-center gap-2">
                             <span className="text-muted small">{formatFecha(e.fecha)}</span>
+                            <button
+                              className="btn btn-outline-primary btn-sm"
+                              onClick={() => imprimirOrdenEnvio(e)}
+                              title="Imprimir orden"
+                            >
+                              <i className="bi bi-printer"></i>
+                            </button>
                             {esSuperAdmin && (
                               <button
                                 className="btn btn-outline-danger btn-sm"
@@ -466,7 +573,7 @@ const EnvioCamaraPage = () => {
                         <th className="text-end">Cajones</th>
                         <th className="text-end">Kg</th>
                         <th>Observaciones</th>
-                        {esSuperAdmin && <th></th>}
+                        <th></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -506,17 +613,26 @@ const EnvioCamaraPage = () => {
                           <td className="text-end">{formatNum(e.totalCajones)}</td>
                           <td className="text-end">{formatNum(e.pesoTotalKg)}</td>
                           <td className="text-muted small">{e.observaciones || "—"}</td>
-                          {esSuperAdmin && (
-                            <td>
+                          <td>
+                            <div className="d-flex gap-1">
                               <button
-                                className="btn btn-outline-danger btn-sm"
-                                onClick={() => handleEliminar(e._id)}
-                                title="Eliminar"
+                                className="btn btn-outline-primary btn-sm"
+                                onClick={() => imprimirOrdenEnvio(e)}
+                                title="Imprimir orden"
                               >
-                                <i className="bi bi-trash"></i>
+                                <i className="bi bi-printer"></i>
                               </button>
-                            </td>
-                          )}
+                              {esSuperAdmin && (
+                                <button
+                                  className="btn btn-outline-danger btn-sm"
+                                  onClick={() => handleEliminar(e._id)}
+                                  title="Eliminar"
+                                >
+                                  <i className="bi bi-trash"></i>
+                                </button>
+                              )}
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
