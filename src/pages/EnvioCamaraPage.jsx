@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
+import { trozadoLabel } from "../components/TrozadoTable";
 import { crearEnvioCamara, obtenerEnviosCamara, /* obtenerCamiones, */ obtenerChoferes, eliminarEnvioCamara, obtenerResumenStock } from "../services/api";
 import { ajustarFechaParaGuardar } from "../utils/dateUtils";
 import { escapeHtml } from "../utils/escapeHtml";
@@ -42,7 +43,7 @@ const imprimirOrdenEnvio = (e) => {
 
   const filasTrozados = (e.trozados || []).map((t) => `
     <tr>
-      <td class="cap">${escapeHtml(t.tipo)} <span class="clase">Clase ${escapeHtml(t.clase || "A")}</span></td>
+      <td>${escapeHtml(trozadoLabel(t.tipo))} <span class="clase">Clase ${escapeHtml(t.clase || "A")}</span></td>
       <td class="num">${fmtNumOrden(t.cajas)}</td>
       <td class="num">—</td>
       <td class="num">${fmtNumOrden(t.kgTotal != null ? t.kgTotal : Number(t.cajas) * Number(t.kgCaja))}</td>
@@ -219,7 +220,7 @@ const EnvioCamaraPage = () => {
     for (const t of trozadosValidos) {
       const disponible = trozadosDisp.find((d) => d.tipo === t.tipo && d.clase === t.clase)?.cajas || 0;
       if (Number(t.cajas) > disponible) {
-        Swal.fire("Error", `Stock insuficiente de ${t.tipo} clase ${t.clase || "A"}. Disponible: ${disponible} cajas.`, "error");
+        Swal.fire("Error", `Stock insuficiente de ${trozadoLabel(t.tipo)} clase ${t.clase || "A"}. Disponible: ${disponible} cajas.`, "error");
         return;
       }
     }
@@ -424,7 +425,7 @@ const EnvioCamaraPage = () => {
                           const linea = trozadosLineas.find((l) => l.tipo === t.tipo && l.clase === t.clase) || { tipo: t.tipo, clase: t.clase, cajas: "", kgCaja: t.kgCaja };
                           return (
                             <tr key={`${t.tipo}-${t.clase || "A"}`}>
-                              <td className="text-capitalize fw-semibold">{t.tipo}</td>
+                              <td className="fw-semibold">{trozadoLabel(t.tipo)}</td>
                               <td><span className="badge bg-secondary">Clase {t.clase || "A"}</span></td>
                               <td className="text-end text-muted">{formatNum(t.cajas)}</td>
                               <td>
@@ -531,8 +532,8 @@ const EnvioCamaraPage = () => {
                             </span>
                           ))}
                           {(e.trozados || []).map((t, i) => (
-                            <span key={`t${i}`} className="badge bg-warning text-dark text-capitalize">
-                              {t.tipo}: {formatNum(t.cajas)} caj
+                            <span key={`t${i}`} className="badge bg-warning text-dark">
+                              {trozadoLabel(t.tipo)}: {formatNum(t.cajas)} caj
                             </span>
                           ))}
                         </div>
@@ -603,8 +604,8 @@ const EnvioCamaraPage = () => {
                                 </span>
                               ))}
                               {(e.trozados || []).map((t, i) => (
-                                <span key={`t${i}`} className="badge bg-warning text-dark text-capitalize">
-                                  {t.tipo}: {formatNum(t.cajas)} caj
+                                <span key={`t${i}`} className="badge bg-warning text-dark">
+                                  {trozadoLabel(t.tipo)}: {formatNum(t.cajas)} caj
                                 </span>
                               ))}
                             </div>

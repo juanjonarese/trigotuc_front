@@ -418,7 +418,7 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
   const totalTrigotucKg        = (resumen.stockTrigotuc || []).reduce((a, c) => a + c.cajones * 20, 0);
   const totalCañeteTrozadosKg  = (resumen.trozadosCañete || []).reduce((a, t) => a + t.kgTotal, 0);
   const totalTrigotucTrozadosKg = (resumen.trozadosTrigotuc || []).reduce((a, t) => a + t.kgTotal, 0);
-  const TIPOS_LABEL = { filet: "Filet", pata: "Pata/muslo", alita: "Alita", menudo: "Menudo", carcaza: "Carcaza" };
+  const TIPOS_LABEL = { filet: "Filet", pata: "Pata muslo", alita: "Alita", menudo: "Menudo", carcaza: "Carcaza" };
   const TIPOS_ORDER = ["filet", "pata", "alita", "menudo", "carcaza"];
 
   // Total combinado por tipo + clase (suma Cañete + Trigotuc), para mostrar A/B.
