@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
-import { TrozadoTable, trozadosDesdeLote, trozadosAPayload } from "../components/TrozadoTable";
+import { TrozadoTable, trozadosDesdeLote, trozadosAPayload, trozadoLabel } from "../components/TrozadoTable";
 import {
   actualizarLote,
   obtenerLotes,
@@ -264,8 +264,6 @@ const LoteCreatePage = () => {
     }
   };
 
-  const capitalizar = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
-
   // Envía a cámara un único corte de trozado (los cortes se congelan a distinto
   // ritmo, así que entran de a uno cuando están listos). El resto sigue pendiente.
   const handleEnviarCorte = async (lote, trozado) => {
@@ -273,10 +271,10 @@ const LoteCreatePage = () => {
     const claseTxt = trozado.clase ? ` clase ${trozado.clase}` : "";
     const { isConfirmed } = await Swal.fire({
       title: "¿Pasar este corte a cámara?",
-      html: `Confirmá que <strong>${capitalizar(trozado.tipo)}${claseTxt}</strong> ya está ` +
+      html: `Confirmá que <strong>${trozadoLabel(trozado.tipo)}${claseTxt}</strong> ya está ` +
             `<strong>congelado y en condiciones</strong>. Se ingresará a cámara ` +
             `<strong>Cañete</strong> del lote <strong>#${lote.numeroLote || ""}</strong>:` +
-            `<br><span class="text-muted">${capitalizar(trozado.tipo)}${claseTxt} — ${fmtNum(trozado.cajas)} cajas · ${fmtNum(trozado.kgTotal)} kg</span>` +
+            `<br><span class="text-muted">${trozadoLabel(trozado.tipo)}${claseTxt} — ${fmtNum(trozado.cajas)} cajas · ${fmtNum(trozado.kgTotal)} kg</span>` +
             `<br><span class="text-muted small">A partir de ahí ese stock queda disponible para vender o despachar.</span>`,
       icon: "question",
       showCancelButton: true,
@@ -427,7 +425,7 @@ const LoteCreatePage = () => {
                               style={{ background: "#fffbeb", border: "1px solid #fde68a" }}>
                               <div className="d-flex flex-column">
                                 <span className="fw-bold" style={{ fontSize: "0.8rem", color: "#b45309" }}>
-                                  {t.tipo.charAt(0).toUpperCase() + t.tipo.slice(1)}{t.clase ? ` ${t.clase}` : ""}
+                                  {trozadoLabel(t.tipo)}{t.clase ? ` ${t.clase}` : ""}
                                 </span>
                                 <span className="text-muted" style={{ fontSize: "0.72rem" }}>
                                   {fmtNum(t.cajas)} cajas · {fmtNum(t.kgTotal)} kg
@@ -582,7 +580,7 @@ const LoteCreatePage = () => {
                                     className="d-flex flex-column align-items-center rounded px-3 py-2"
                                     style={{ background: "#fffbeb", border: "1px solid #fde68a", minWidth: 72 }}>
                                     <span className="fw-bold" style={{ fontSize: "0.75rem", color: "#b45309" }}>
-                                      {t.tipo.charAt(0).toUpperCase() + t.tipo.slice(1)}{t.clase ? ` ${t.clase}` : ""}
+                                      {trozadoLabel(t.tipo)}{t.clase ? ` ${t.clase}` : ""}
                                     </span>
                                     <span className="fw-semibold text-dark">{fmtNum(t.cajas)} caj</span>
                                     <span className="text-muted" style={{ fontSize: "0.7rem" }}>{fmtNum(t.kgTotal)} kg</span>

@@ -6,12 +6,15 @@ const fmtNum = (n) =>
 // Tipos de trozado y su kg/caja por defecto. carcaza permite editar kg/caja.
 // `clases: true` → el tipo se separa por calidad A y B ya en la faena.
 export const TROZADO_TIPOS = [
-  { tipo: "menudo",  label: "Menudo",  kgCajaDefault: 10, editableKg: false, clases: false },
-  { tipo: "filet",   label: "Filet",   kgCajaDefault: 15, editableKg: false, clases: true  },
-  { tipo: "pata",    label: "Pata",    kgCajaDefault: 15, editableKg: false, clases: true  },
-  { tipo: "alita",   label: "Alita",   kgCajaDefault: 15, editableKg: false, clases: true  },
-  { tipo: "carcaza", label: "Carcaza", kgCajaDefault: 12, editableKg: true,  clases: false },
+  { tipo: "menudo",  label: "Menudo",     kgCajaDefault: 10, editableKg: false, clases: false },
+  { tipo: "filet",   label: "Filet",      kgCajaDefault: 15, editableKg: false, clases: true  },
+  { tipo: "pata",    label: "Pata muslo", kgCajaDefault: 15, editableKg: false, clases: true  },
+  { tipo: "alita",   label: "Alita",      kgCajaDefault: 15, editableKg: false, clases: true  },
+  { tipo: "carcaza", label: "Carcaza",    kgCajaDefault: 12, editableKg: true,  clases: false },
 ];
+
+// Etiqueta visible de un tipo de trozado (el `tipo` guardado sigue siendo el enum).
+export const trozadoLabel = (tipo) => TROZADO_TIPOS.find((t) => t.tipo === tipo)?.label || tipo;
 
 // Identidad de una fila/línea de trozado: tipo + clase ("-" si no tiene).
 export const trozadoKey = (t) => `${t.tipo}|${t.clase || "-"}`;

@@ -8,6 +8,7 @@ import {
   obtenerOrdenesRetiro,
 } from "../services/api";
 import Layout from "../components/Layout";
+import { trozadoLabel } from "../components/TrozadoTable";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer,
@@ -338,7 +339,7 @@ const DashboardPage = () => {
                               <div key={t.tipo} className="rounded px-2 py-1 text-center"
                                 style={{ background: "#fffbeb", border: "1px solid #fde68a", minWidth: 70 }}>
                                 <div className="fw-bold" style={{ fontSize: "0.75rem", color: "#b45309" }}>
-                                  {t.tipo.charAt(0).toUpperCase() + t.tipo.slice(1)}
+                                  {trozadoLabel(t.tipo)}
                                 </div>
                                 <div className="fw-semibold small">{fmtNum(t.cajas)} caj</div>
                                 <div className="text-muted" style={{ fontSize: "0.65rem" }}>{fmtNum(t.kgTotal)} kg</div>

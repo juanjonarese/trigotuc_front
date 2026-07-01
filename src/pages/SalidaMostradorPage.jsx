@@ -5,7 +5,7 @@ import CalibreTable from "../components/CalibreTable";
 import { obtenerResumenStock, registrarSalidaMostrador } from "../services/api";
 import Swal from "sweetalert2";
 
-const TIPOS_LABEL = { filet: "Filet", pata: "Pata/muslo", alita: "Alita", menudo: "Menudo", carcaza: "Carcaza" };
+const TIPOS_LABEL = { filet: "Filet", pata: "Pata muslo", alita: "Alita", menudo: "Menudo", carcaza: "Carcaza" };
 const fmt = (n) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n);
 
 const SalidaMostradorPage = () => {

@@ -18,7 +18,7 @@ import Swal from "sweetalert2";
 
 const TIPOS_TROZADO = [
   { tipo: "filet",   label: "Filet"      },
-  { tipo: "pata",    label: "Pata/muslo" },
+  { tipo: "pata",    label: "Pata muslo" },
   { tipo: "alita",   label: "Alita"      },
   { tipo: "menudo",  label: "Menudo"     },
   { tipo: "carcaza", label: "Carcaza"    },
