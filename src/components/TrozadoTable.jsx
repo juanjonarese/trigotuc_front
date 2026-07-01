@@ -4,22 +4,35 @@ const fmtNum = (n) =>
   n != null ? new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n) : "—";
 
 // Tipos de trozado y su kg/caja por defecto. carcaza permite editar kg/caja.
+// `clases: true` → el tipo se separa por calidad A y B ya en la faena.
 export const TROZADO_TIPOS = [
-  { tipo: "menudo",  label: "Menudo",  kgCajaDefault: 10, editableKg: false },
-  { tipo: "filet",   label: "Filet",   kgCajaDefault: 15, editableKg: false },
-  { tipo: "pata",    label: "Pata",    kgCajaDefault: 15, editableKg: false },
-  { tipo: "alita",   label: "Alita",   kgCajaDefault: 15, editableKg: false },
-  { tipo: "carcaza", label: "Carcaza", kgCajaDefault: 12, editableKg: true  },
+  { tipo: "menudo",  label: "Menudo",  kgCajaDefault: 10, editableKg: false, clases: false },
+  { tipo: "filet",   label: "Filet",   kgCajaDefault: 15, editableKg: false, clases: true  },
+  { tipo: "pata",    label: "Pata",    kgCajaDefault: 15, editableKg: false, clases: true  },
+  { tipo: "alita",   label: "Alita",   kgCajaDefault: 15, editableKg: false, clases: true  },
+  { tipo: "carcaza", label: "Carcaza", kgCajaDefault: 12, editableKg: true,  clases: false },
 ];
+
+// Identidad de una fila/línea de trozado: tipo + clase ("-" si no tiene).
+export const trozadoKey = (t) => `${t.tipo}|${t.clase || "-"}`;
+
+// Filas visibles de la tabla: los tipos con clases:true generan una fila A y una B.
+export const TROZADO_FILAS = TROZADO_TIPOS.flatMap((t) =>
+  t.clases
+    ? ["A", "B"].map((clase) => ({ ...t, clase, label: `${t.label} ${clase}` }))
+    : [{ ...t, clase: null }]
+);
 
 // Estado inicial de la tabla de trozados (todas las líneas en 0 cajas).
 export const trozadosVacios = () =>
-  TROZADO_TIPOS.map((t) => ({ ...t, kgCaja: t.kgCajaDefault, cajas: "" }));
+  TROZADO_FILAS.map((t) => ({ ...t, kgCaja: t.kgCajaDefault, cajas: "" }));
 
-// Estado de la tabla a partir de los trozados guardados de un lote.
+// Estado de la tabla a partir de los trozados guardados de un lote (match por tipo+clase).
 export const trozadosDesdeLote = (trozadosLote = []) =>
-  TROZADO_TIPOS.map((t) => {
-    const guardado = trozadosLote.find((x) => x.tipo === t.tipo);
+  TROZADO_FILAS.map((t) => {
+    const guardado = trozadosLote.find(
+      (x) => x.tipo === t.tipo && (x.clase || null) === (t.clase || null)
+    );
     return {
       ...t,
       kgCaja: guardado?.kgCaja ?? t.kgCajaDefault,
@@ -33,6 +46,7 @@ export const trozadosAPayload = (lineas) =>
     .filter((t) => Number(t.cajas) > 0)
     .map((t) => ({
       tipo:    t.tipo,
+      clase:   t.clase || undefined,
       kgCaja:  Number(t.kgCaja),
       cajas:   Number(t.cajas),
       kgTotal: Number(t.cajas) * Number(t.kgCaja),
@@ -40,8 +54,8 @@ export const trozadosAPayload = (lineas) =>
 
 // ── Tabla de carga de trozados por tipo ──────────────────────────────────────
 export const TrozadoTable = ({ lineas, onChange, kgTrozadosTotal }) => {
-  const set = (tipo, campo, valor) => {
-    onChange(lineas.map((l) => (l.tipo === tipo ? { ...l, [campo]: valor } : l)));
+  const set = (key, campo, valor) => {
+    onChange(lineas.map((l) => (trozadoKey(l) === key ? { ...l, [campo]: valor } : l)));
   };
 
   const totalCajas = lineas.reduce((s, l) => s + (Number(l.cajas) || 0), 0);
@@ -63,11 +77,12 @@ export const TrozadoTable = ({ lineas, onChange, kgTrozadosTotal }) => {
         </thead>
         <tbody>
           {lineas.map((l) => {
+            const key   = trozadoKey(l);
             const cajas = Number(l.cajas) || 0;
             const kgCaj = Number(l.kgCaja) || 1;
             const kg    = cajas * kgCaj;
             return (
-              <tr key={l.tipo}>
+              <tr key={key}>
                 <td className="fw-semibold small">{l.label}</td>
                 <td className="text-center">
                   {l.editableKg ? (
@@ -75,7 +90,7 @@ export const TrozadoTable = ({ lineas, onChange, kgTrozadosTotal }) => {
                       type="number"
                       className="form-control form-control-sm text-center"
                       value={l.kgCaja}
-                      onChange={(e) => set(l.tipo, "kgCaja", e.target.value)}
+                      onChange={(e) => set(key, "kgCaja", e.target.value)}
                       min="1" max="20" step="0.5"
                       style={{ width: 70 }}
                     />
@@ -88,7 +103,7 @@ export const TrozadoTable = ({ lineas, onChange, kgTrozadosTotal }) => {
                     type="number"
                     className="form-control form-control-sm"
                     value={l.cajas}
-                    onChange={(e) => set(l.tipo, "cajas", e.target.value)}
+                    onChange={(e) => set(key, "cajas", e.target.value)}
                     min="0" step="1" placeholder="0"
                   />
                 </td>

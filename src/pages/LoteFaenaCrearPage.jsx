@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
-import { TrozadoTable, TROZADO_TIPOS } from "../components/TrozadoTable";
+import { TrozadoTable, trozadosVacios, trozadosAPayload } from "../components/TrozadoTable";
 import { crearLote, obtenerOrdenesCarga } from "../services/api";
 import { obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
 import { confirmarCoherenciaFaena } from "../utils/faenaValidacion";
@@ -40,9 +40,7 @@ const LoteFaenaCrearPage = () => {
   const [recepcionSel, setRecepcionSel] = useState(null);
   const [form, setForm]         = useState(FORM_VACIO);
   const [lineas, setLineas]     = useState([]);
-  const [trozados, setTrozados] = useState(
-    TROZADO_TIPOS.map((t) => ({ ...t, kgCaja: t.kgCajaDefault, cajas: "" }))
-  );
+  const [trozados, setTrozados] = useState(trozadosVacios());
   const [saving, setSaving]     = useState(false);
   const calibreRef              = useRef(null);
   const recepcionRef            = useRef(null);
@@ -149,9 +147,7 @@ const LoteFaenaCrearPage = () => {
         payload.pollosSinFaenar = Number(form.pollosSinFaenar || 0);
       }
 
-      const trozadosPayload = trozados
-        .filter((t) => Number(t.cajas) > 0)
-        .map((t) => ({ tipo: t.tipo, kgCaja: Number(t.kgCaja), cajas: Number(t.cajas), kgTotal: Number(t.cajas) * Number(t.kgCaja) }));
+      const trozadosPayload = trozadosAPayload(trozados);
       if (trozadosPayload.length > 0) payload.trozados = trozadosPayload;
 
       const { lote: loteCreado } = await crearLote(payload);
