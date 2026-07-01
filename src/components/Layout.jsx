@@ -407,7 +407,7 @@ const Layout = ({ children }) => {
                   </a>
                 )}
                 {/* 7 — Stock Empaque */}
-                {rolUsuario === "superadmin" && (
+                {(rolUsuario === "superadmin" || rolUsuario === "administracion_frigorifico") && (
                   <a
                     href="#"
                     className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${

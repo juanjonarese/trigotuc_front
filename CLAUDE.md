@@ -76,7 +76,7 @@ Secciones colapsables, fondo oscuro, auto-expande según la ruta activa. Visibil
 - **Granja** (colapsable) — `superadmin` / `administracion_granja` / `granja`:
   - Ingreso de pollitos, Galpones, Datos Semanales (solo `superadmin`/`granja`), Órdenes de Carga (Venta) (solo `superadmin`/`administracion_granja`), Recepción de Órdenes.
 - **Frigorífico** (colapsable) — todos menos `granja` y `chofer`:
-  - Pedidos a Granja, Faenar, Stock, Órdenes de Carga (Venta), Recepción de Órdenes, Envío Cámara, Stock Empaque (solo `superadmin`). Decomisados está comentado.
+  - Pedidos a Granja, Faenar, Stock, Órdenes de Carga (Venta), Recepción de Órdenes, Envío Cámara, Stock Empaque (solo `superadmin` / `administracion_frigorifico`). Decomisados está comentado.
 - **Chofer** (`/chofer`, "Cargas Camión") — `chofer` / `superadmin`.
 
 ### API Service (`src/services/api.js`)

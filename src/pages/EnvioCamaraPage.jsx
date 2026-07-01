@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
-import { crearEnvioCamara, obtenerEnviosCamara, obtenerCamiones, eliminarEnvioCamara, obtenerResumenStock } from "../services/api";
+import { crearEnvioCamara, obtenerEnviosCamara, /* obtenerCamiones, */ obtenerChoferes, eliminarEnvioCamara, obtenerResumenStock } from "../services/api";
 import { ajustarFechaParaGuardar } from "../utils/dateUtils";
 import Swal from "sweetalert2";
 
@@ -14,6 +14,7 @@ const CAMARAS = [
 const FORM_INICIAL = {
   fecha: new Date().toISOString().split("T")[0],
   camion: "",
+  chofer: "",
   camaraOrigen: "",
   camaraDestino: "",
   observaciones: "",
@@ -24,7 +25,8 @@ const EnvioCamaraPage = () => {
   const rolUsuario   = localStorage.getItem("rolUsuario");
   const esSuperAdmin = rolUsuario === "superadmin";
 
-  const [camiones, setCamiones]     = useState([]);
+  // const [camiones, setCamiones]     = useState([]); // deshabilitado por ahora (no se usa)
+  const [choferes, setChoferes]     = useState([]);
   const [envios, setEnvios]         = useState([]);
   const [loading, setLoading]       = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -36,12 +38,14 @@ const EnvioCamaraPage = () => {
 
   const cargarDatos = async () => {
     try {
-      const [camionesData, enviosData, resumenData] = await Promise.all([
-        obtenerCamiones(),
+      const [choferesData, enviosData, resumenData] = await Promise.all([
+        // obtenerCamiones(), // deshabilitado por ahora (no se usa)
+        obtenerChoferes(),
         obtenerEnviosCamara(),
         obtenerResumenStock(),
       ]);
-      setCamiones(camionesData.camiones || []);
+      // setCamiones(camionesData.camiones || []);
+      setChoferes(choferesData.choferes || []);
       setEnvios(enviosData);
       setResumen(resumenData);
     } catch {
@@ -135,6 +139,7 @@ const EnvioCamaraPage = () => {
       const envio = await crearEnvioCamara({
         fecha:         ajustarFechaParaGuardar(form.fecha),
         camion:        form.camion || null,
+        chofer:        form.chofer || null,
         camaraOrigen:  form.camaraOrigen,
         camaraDestino: form.camaraDestino,
         calibres:      lineasValidas.map(({ calibre, pollos, cajones }) => ({
@@ -199,8 +204,8 @@ const EnvioCamaraPage = () => {
                   />
                 </div>
 
-                {/* Camión */}
-                <div className="col-12 col-sm-6 col-md-3">
+                {/* Camión — deshabilitado por ahora (no se usa) */}
+                {/* <div className="col-12 col-sm-6 col-md-3">
                   <label className="form-label">Camión (opcional)</label>
                   <select
                     className="form-select"
@@ -212,6 +217,24 @@ const EnvioCamaraPage = () => {
                     {camiones.map((c) => (
                       <option key={c._id} value={c._id}>
                         {c.marca} — {c.patente}
+                      </option>
+                    ))}
+                  </select>
+                </div> */}
+
+                {/* Chofer */}
+                <div className="col-12 col-sm-6 col-md-3">
+                  <label className="form-label">Chofer (opcional)</label>
+                  <select
+                    className="form-select"
+                    name="chofer"
+                    value={form.chofer}
+                    onChange={handleChange}
+                  >
+                    <option value="">— Sin especificar —</option>
+                    {choferes.map((c) => (
+                      <option key={c._id} value={c._id}>
+                        {c.nombreUsuario}
                       </option>
                     ))}
                   </select>
@@ -388,6 +411,12 @@ const EnvioCamaraPage = () => {
                             {e.camion.marca} — {e.camion.patente}
                           </div>
                         )}
+                        {e.chofer && (
+                          <div className="text-muted small mb-2">
+                            <i className="bi bi-person me-1"></i>
+                            {e.chofer.nombreUsuario}
+                          </div>
+                        )}
                         <div className="d-flex flex-wrap gap-1 mb-2">
                           {e.calibres.map((c, i) => (
                             <span key={i} className="badge bg-info text-dark">
@@ -431,6 +460,7 @@ const EnvioCamaraPage = () => {
                         <th>Fecha</th>
                         <th>Origen → Destino</th>
                         <th>Camión</th>
+                        <th>Chofer</th>
                         <th>Calibres</th>
                         <th className="text-end">Pollos</th>
                         <th className="text-end">Cajones</th>
@@ -454,6 +484,9 @@ const EnvioCamaraPage = () => {
                           </td>
                           <td className="text-muted small">
                             {e.camion ? `${e.camion.marca} — ${e.camion.patente}` : "—"}
+                          </td>
+                          <td className="text-muted small">
+                            {e.chofer ? e.chofer.nombreUsuario : "—"}
                           </td>
                           <td>
                             <div className="d-flex flex-wrap gap-1">
