@@ -269,24 +269,22 @@ const LoteCreatePage = () => {
   // Envía a cámara un único corte de trozado (los cortes se congelan a distinto
   // ritmo, así que entran de a uno cuando están listos). El resto sigue pendiente.
   const handleEnviarCorte = async (lote, trozado) => {
-    const { value: clase, isConfirmed } = await Swal.fire({
+    // La clase (A/B) ya viene definida desde la faena; acá solo se confirma.
+    const claseTxt = trozado.clase ? ` clase ${trozado.clase}` : "";
+    const { isConfirmed } = await Swal.fire({
       title: "¿Pasar este corte a cámara?",
-      html: `Confirmá que <strong>${capitalizar(trozado.tipo)}</strong> ya está ` +
+      html: `Confirmá que <strong>${capitalizar(trozado.tipo)}${claseTxt}</strong> ya está ` +
             `<strong>congelado y en condiciones</strong>. Se ingresará a cámara ` +
             `<strong>Cañete</strong> del lote <strong>#${lote.numeroLote || ""}</strong>:` +
-            `<br><span class="text-muted">${capitalizar(trozado.tipo)} — ${fmtNum(trozado.cajas)} cajas · ${fmtNum(trozado.kgTotal)} kg</span>` +
+            `<br><span class="text-muted">${capitalizar(trozado.tipo)}${claseTxt} — ${fmtNum(trozado.cajas)} cajas · ${fmtNum(trozado.kgTotal)} kg</span>` +
             `<br><span class="text-muted small">A partir de ahí ese stock queda disponible para vender o despachar.</span>`,
       icon: "question",
-      input: "select",
-      inputOptions: { A: "Clase A", B: "Clase B" },
-      inputPlaceholder: "Elegir clase…",
-      inputValidator: (v) => (!v ? "Elegí la clase (A o B) para continuar." : undefined),
       showCancelButton: true,
       confirmButtonColor: "#198754", confirmButtonText: "Sí, pasar a cámara", cancelButtonText: "Cancelar",
     });
     if (!isConfirmed) return;
     try {
-      await enviarLoteACamara(lote._id, { tiposTrozados: [trozado.tipo], clase });
+      await enviarLoteACamara(lote._id, { cortes: [{ tipo: trozado.tipo, clase: trozado.clase || null }] });
       await cargarLotes();
       Swal.fire({ icon: "success", title: "Corte ingresado a cámara", timer: 1500, showConfirmButton: false });
     } catch (err) {
@@ -425,11 +423,11 @@ const LoteCreatePage = () => {
                       <div className="card-body py-2 px-3 d-flex flex-column">
                         <div className="d-flex flex-column gap-2 mb-2">
                           {pend.map((t) => (
-                            <div key={t.tipo} className="d-flex align-items-center justify-content-between rounded px-3 py-2"
+                            <div key={`${t.tipo}|${t.clase || "-"}`} className="d-flex align-items-center justify-content-between rounded px-3 py-2"
                               style={{ background: "#fffbeb", border: "1px solid #fde68a" }}>
                               <div className="d-flex flex-column">
                                 <span className="fw-bold" style={{ fontSize: "0.8rem", color: "#b45309" }}>
-                                  {t.tipo.charAt(0).toUpperCase() + t.tipo.slice(1)}
+                                  {t.tipo.charAt(0).toUpperCase() + t.tipo.slice(1)}{t.clase ? ` ${t.clase}` : ""}
                                 </span>
                                 <span className="text-muted" style={{ fontSize: "0.72rem" }}>
                                   {fmtNum(t.cajas)} cajas · {fmtNum(t.kgTotal)} kg
@@ -580,11 +578,11 @@ const LoteCreatePage = () => {
                               {(lote.trozados || []).map((t) => {
                                 const pct = kgTrozadosReal > 0 ? Math.round(t.kgTotal / kgTrozadosReal * 100) : null;
                                 return (
-                                  <div key={t.tipo}
+                                  <div key={`${t.tipo}|${t.clase || "-"}`}
                                     className="d-flex flex-column align-items-center rounded px-3 py-2"
                                     style={{ background: "#fffbeb", border: "1px solid #fde68a", minWidth: 72 }}>
                                     <span className="fw-bold" style={{ fontSize: "0.75rem", color: "#b45309" }}>
-                                      {t.tipo.charAt(0).toUpperCase() + t.tipo.slice(1)}
+                                      {t.tipo.charAt(0).toUpperCase() + t.tipo.slice(1)}{t.clase ? ` ${t.clase}` : ""}
                                     </span>
                                     <span className="fw-semibold text-dark">{fmtNum(t.cajas)} caj</span>
                                     <span className="text-muted" style={{ fontSize: "0.7rem" }}>{fmtNum(t.kgTotal)} kg</span>

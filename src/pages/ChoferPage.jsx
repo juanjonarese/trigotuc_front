@@ -149,13 +149,13 @@ const DespachoCard = ({ despacho, onActualizar }) => {
               </div>
             ))}
             {despacho.trozados?.map((t, idx) => (
-              <div key={t.tipo}
+              <div key={`${t.tipo}-${t.clase || "-"}-${idx}`}
                 className="d-flex justify-content-between align-items-center px-2 py-1"
                 style={{
                   borderBottom: idx < despacho.trozados.length - 1 ? "1px solid #fef9c3" : "none",
                   background: "#fffbeb",
                 }}>
-                <span className="fw-semibold text-warning">{tipoLbl(t.tipo)}</span>
+                <span className="fw-semibold text-warning">{tipoLbl(t.tipo)}{t.clase ? ` ${t.clase}` : ""}</span>
                 <span className="text-muted small">{fmt(t.cajas)} cajas · {fmt(t.kgTotal)} kg</span>
               </div>
             ))}
