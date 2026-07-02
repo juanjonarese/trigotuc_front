@@ -46,10 +46,16 @@ const formatPeso = (g) => {
   return `${(g / 1000).toFixed(3).replace(".", ",")} kg`;
 };
 
-// Mayor peso semanal registrado (no día 1 / día 4)
+// Peso más reciente registrado (no día 1 / día 4): el de la mayor semana y,
+// si hubo varias tomas esa semana, la última cargada (mismo criterio que la tabla).
 const ultimoPeso = (lote) => {
   const semanales = (lote.pesajes || []).filter((p) => !p.tipo || p.tipo === "semanal");
-  return semanales.length ? Math.max(...semanales.map((p) => p.pesoPromedio)) : null;
+  if (!semanales.length) return null;
+  let elegido = semanales[0];
+  for (const p of semanales) {
+    if (p.semana >= elegido.semana) elegido = p; // mayor semana; empate → última en el array
+  }
+  return elegido.pesoPromedio;
 };
 
 const semanaParaFecha = (fechaIngreso, fechaPesaje) => {
@@ -75,10 +81,8 @@ const buildSemanas = (lote) => {
   for (const p of lote.pesajes || []) {
     if (p.tipo === "dia1" || p.tipo === "dia4") continue;
     if (!mapa[p.semana]) mapa[p.semana] = { semana: p.semana, pesaje: null, mortandad: null };
-    // Varias tomas por semana: mostrar siempre la de mayor peso.
-    if (!mapa[p.semana].pesaje || p.pesoPromedio > mapa[p.semana].pesaje.pesoPromedio) {
-      mapa[p.semana].pesaje = p;
-    }
+    // Varias tomas por semana: mostrar siempre la última cargada (orden del array).
+    mapa[p.semana].pesaje = p;
   }
   for (const m of lote.mortandad || []) {
     if (m.semana === 0) continue; // bajas de ingreso, no semanales
@@ -714,7 +718,7 @@ const GranjaCargaDatosPage = () => {
                             {duplicadoDia
                               ? <><i className="bi bi-exclamation-triangle me-1"></i><strong>{tipoBadge}</strong> ya tiene datos. Usá <strong>Editar datos</strong> para corregir.</>
                               : yaHayPesaje
-                                ? <><i className="bi bi-calendar-check me-1"></i>Ya hay una toma en <strong>{tipoBadge}</strong>. Se agregará otra; la tabla mostrará el <strong>mayor peso</strong>.</>
+                                ? <><i className="bi bi-calendar-check me-1"></i>Ya hay una toma en <strong>{tipoBadge}</strong>. Se agregará otra; la tabla mostrará la <strong>última toma cargada</strong>.</>
                                 : <><i className="bi bi-calendar-check me-1"></i>Cargando <strong>{tipoBadge}</strong>.</>
                             }
                           </div>
