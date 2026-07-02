@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
 import { trozadoLabel } from "../components/TrozadoTable";
-import { crearEnvioCamara, obtenerEnviosCamara, /* obtenerCamiones, */ obtenerChoferes, eliminarEnvioCamara, obtenerResumenStock } from "../services/api";
+import { crearEnvioCamara, obtenerEnviosCamara, obtenerCamiones, obtenerChoferes, eliminarEnvioCamara, obtenerResumenStock } from "../services/api";
 import { ajustarFechaParaGuardar } from "../utils/dateUtils";
 import { escapeHtml } from "../utils/escapeHtml";
 import Swal from "sweetalert2";
@@ -124,7 +124,7 @@ const EnvioCamaraPage = () => {
   const rolUsuario   = localStorage.getItem("rolUsuario");
   const esSuperAdmin = rolUsuario === "superadmin";
 
-  // const [camiones, setCamiones]     = useState([]); // deshabilitado por ahora (no se usa)
+  const [camiones, setCamiones]     = useState([]);
   const [choferes, setChoferes]     = useState([]);
   const [envios, setEnvios]         = useState([]);
   const [loading, setLoading]       = useState(true);
@@ -137,13 +137,13 @@ const EnvioCamaraPage = () => {
 
   const cargarDatos = async () => {
     try {
-      const [choferesData, enviosData, resumenData] = await Promise.all([
-        // obtenerCamiones(), // deshabilitado por ahora (no se usa)
+      const [camionesData, choferesData, enviosData, resumenData] = await Promise.all([
+        obtenerCamiones(),
         obtenerChoferes(),
         obtenerEnviosCamara(),
         obtenerResumenStock(),
       ]);
-      // setCamiones(camionesData.camiones || []);
+      setCamiones(camionesData.camiones || []);
       setChoferes(choferesData.choferes || []);
       setEnvios(enviosData);
       setResumen(resumenData);
@@ -305,8 +305,8 @@ const EnvioCamaraPage = () => {
                   />
                 </div>
 
-                {/* Camión — deshabilitado por ahora (no se usa) */}
-                {/* <div className="col-12 col-sm-6 col-md-3">
+                {/* Camión */}
+                <div className="col-12 col-sm-6 col-md-3">
                   <label className="form-label">Camión (opcional)</label>
                   <select
                     className="form-select"
@@ -321,7 +321,7 @@ const EnvioCamaraPage = () => {
                       </option>
                     ))}
                   </select>
-                </div> */}
+                </div>
 
                 {/* Chofer */}
                 <div className="col-12 col-sm-6 col-md-3">
