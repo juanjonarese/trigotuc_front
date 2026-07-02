@@ -6,7 +6,10 @@ import {
   completarDespachoFrigorifico,
   liberarDespachoFrigorifico,
   revertirDespachoFrigorifico,
+  obtenerEnviosCamara,
+  prepararEnvioCamara,
 } from "../services/api";
+import { imprimirOrdenEnvio } from "../utils/imprimirOrdenEnvio";
 import Swal from "sweetalert2";
 
 const TIPOS_TROZADO = [
@@ -365,16 +368,22 @@ const RecepcionFrigorificoPage = () => {
   const esSuperAdmin   = rolUsuario === "superadmin";
 
   const [despachos, setDespachos]     = useState([]);
+  const [envios, setEnvios]           = useState([]);
   const [loading, setLoading]         = useState(true);
   const [filtroEstado, setFiltroEstado] = useState("pendiente");
   const [busqueda, setBusqueda]       = useState("");
   const [despachoModal, setDespachoModal] = useState(null);
+  const [preparando, setPreparando]   = useState(null);
 
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await obtenerDespachosFrigorifico();
-      setDespachos(data);
+      const [dataDespachos, dataEnvios] = await Promise.all([
+        obtenerDespachosFrigorifico(),
+        obtenerEnviosCamara(),
+      ]);
+      setDespachos(dataDespachos);
+      setEnvios(dataEnvios);
     } catch (err) {
       Swal.fire("Error", err.message, "error");
     } finally {
@@ -424,6 +433,20 @@ const RecepcionFrigorificoPage = () => {
     }
   };
 
+  const handlePrepararEnvio = async (e) => {
+    setPreparando(e._id);
+    try {
+      const actualizado = await prepararEnvioCamara(e._id);
+      imprimirOrdenEnvio(actualizado);
+      await cargar();
+      Swal.fire({ icon: "success", title: "Envío preparado", text: `${e.numeroEnvio} listo para el chofer.`, timer: 1800, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire("Error", err.message || "No se pudo preparar el envío.", "error");
+    } finally {
+      setPreparando(null);
+    }
+  };
+
   const despachosVisibles = despachos
     .filter((d) => filtroEstado === "" || d.estado === filtroEstado)
     .filter((d) => {
@@ -434,6 +457,17 @@ const RecepcionFrigorificoPage = () => {
         (d.cliente?.razonSocial || "").toLowerCase().includes(txt)
       );
     });
+
+  // Envíos entre cámaras a preparar por frigorifico (solo Cañete→Trigotuc).
+  // A preparar = pendiente sin preparar; completada = ya preparado.
+  const enviosVisibles = envios
+    .filter((e) => e.camaraOrigen === "cañete" && e.camaraDestino === "trigotuc")
+    .filter((e) => {
+      if (filtroEstado === "pendiente") return e.estado === "pendiente" && !e.preparado;
+      if (filtroEstado === "completada") return e.preparado;
+      return e.estado === "pendiente" || e.preparado; // "todas"
+    })
+    .filter((e) => !busqueda || e.numeroEnvio?.toLowerCase().includes(busqueda.toLowerCase()));
 
   return (
     <Layout>
@@ -485,12 +519,84 @@ const RecepcionFrigorificoPage = () => {
 
         {loading ? (
           <div className="text-center py-5"><div className="spinner-border text-success"></div></div>
-        ) : despachosVisibles.length === 0 ? (
+        ) : (
+          <>
+
+          {/* ── Envíos entre cámaras (Cañete→Trigotuc) — frigorifico prepara e imprime ── */}
+          {enviosVisibles.length > 0 && (
+            <div className="mb-4">
+              <h5 className="h6 text-muted mb-2">
+                <i className="bi bi-truck me-2 text-primary"></i>
+                Envíos entre cámaras{filtroEstado === "pendiente" ? " — a preparar" : ""}
+              </h5>
+              <div className="row g-3">
+                {enviosVisibles.map((e) => (
+                  <div key={e._id} className="col-12 col-md-6 col-lg-4">
+                    <div className="card border-0 shadow-sm h-100" style={{ borderLeft: "4px solid #6f42c1" }}>
+                      <div className="card-body">
+                        <div className="d-flex justify-content-between align-items-start mb-2">
+                          <span className="badge bg-dark fs-6">{e.numeroEnvio}</span>
+                          <div className="d-flex gap-1 flex-wrap justify-content-end align-items-center">
+                            <span className="badge bg-secondary">{camaraLbl(e.camaraOrigen)}</span>
+                            <i className="bi bi-arrow-right text-muted"></i>
+                            <span className="badge bg-secondary">{camaraLbl(e.camaraDestino)}</span>
+                            {e.preparado
+                              ? <span className="badge bg-success"><i className="bi bi-check2 me-1"></i>Preparado</span>
+                              : <span className="badge bg-warning text-dark"><i className="bi bi-hourglass-split me-1"></i>A preparar</span>}
+                          </div>
+                        </div>
+                        <div className="text-muted small mb-2">
+                          <i className="bi bi-calendar me-1"></i>{fmtFecha(e.fecha)}
+                          {e.chofer?.nombreUsuario && <> · <i className="bi bi-person me-1"></i>{e.chofer.nombreUsuario}</>}
+                          {e.camion && <> · <i className="bi bi-truck me-1"></i>{e.camion.marca} {e.camion.patente}</>}
+                        </div>
+                        {(e.calibres?.length > 0 || e.trozados?.length > 0) && (
+                          <div className="d-flex flex-wrap gap-1 mb-2">
+                            {e.calibres?.map((c, i) => (
+                              <span key={i} className="badge bg-info text-dark">Cal.{c.calibre}: {fmt(c.cajones)} caj</span>
+                            ))}
+                            {e.trozados?.map((t, i) => (
+                              <span key={`t${i}`} className="badge bg-warning text-dark">{tipoLbl(t.tipo)}: {fmt(t.cajas)} caj</span>
+                            ))}
+                          </div>
+                        )}
+                        {e.observaciones && (
+                          <div className="p-2 rounded small" style={{ background: "#fffbeb", border: "1px solid #fde68a" }}>
+                            <i className="bi bi-info-circle me-1 text-warning"></i>{e.observaciones}
+                          </div>
+                        )}
+                      </div>
+                      <div className="card-footer bg-transparent border-top-0 pt-0 pb-3 px-3">
+                        {!e.preparado && puedeConfirmar ? (
+                          <button className="btn btn-primary w-100" disabled={preparando === e._id} onClick={() => handlePrepararEnvio(e)}>
+                            {preparando === e._id
+                              ? <span className="spinner-border spinner-border-sm me-1"></span>
+                              : <i className="bi bi-printer me-1"></i>}
+                            Imprimir y preparar
+                          </button>
+                        ) : !e.preparado ? (
+                          <div className="alert alert-light border py-2 mb-0 small text-center text-muted">
+                            <i className="bi bi-hourglass-split me-1"></i>Esperando preparación de frigorífico
+                          </div>
+                        ) : (
+                          <button className="btn btn-outline-secondary w-100" onClick={() => imprimirOrdenEnvio(e)}>
+                            <i className="bi bi-printer me-1"></i>Reimprimir orden
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {despachosVisibles.length === 0 && enviosVisibles.length === 0 ? (
           <div className="text-center py-5 text-muted">
             <i className="bi bi-inbox fs-1 d-block mb-2"></i>
             {busqueda ? "No se encontró ninguna orden." : "No hay órdenes en este estado."}
           </div>
-        ) : filtroEstado === "pendiente" ? (
+        ) : despachosVisibles.length === 0 ? null : filtroEstado === "pendiente" ? (
 
           /* ── TARJETAS — pendientes ── */
           <div className="row g-3">
@@ -695,6 +801,8 @@ const RecepcionFrigorificoPage = () => {
             </div>
           </div>
 
+        )}
+          </>
         )}
 
       </div>
