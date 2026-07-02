@@ -183,6 +183,14 @@ export const eliminarEnvioCamara = async (id) => {
   return handleResponse(response);
 };
 
+// Frigorifico prepara un envío pendiente (Cañete→Trigotuc) y lo entrega al chofer.
+export const prepararEnvioCamara = async (id) => {
+  const response = await fetch(`${API_URL}/envios-camara/${id}/preparar`, {
+    method: "PATCH", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
 // Granja recibe un envío pendiente (Cañete→Trigotuc): ingresa el stock a Trigotuc.
 export const recibirEnvioCamara = async (id) => {
   const response = await fetch(`${API_URL}/envios-camara/${id}/recibir`, {
