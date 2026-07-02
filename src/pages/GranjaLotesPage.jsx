@@ -56,6 +56,18 @@ const clsPeso = (peso, objetivo) => {
 const pesoEnSemana = (pesajes, sem) =>
   [...pesajes].filter((p) => p.semana === sem).pop() || null;
 
+// Pesaje más reciente: la última toma de la semana más avanzada (ignora día1/día4).
+// No depende del orden del array (que puede estar desordenado en la base).
+const ultimoPesaje = (lote) => {
+  const semanales = (lote?.pesajes || []).filter((p) => !p.tipo || p.tipo === "semanal");
+  if (!semanales.length) return null;
+  let elegido = semanales[0];
+  for (const p of semanales) {
+    if (p.semana >= elegido.semana) elegido = p; // mayor semana; empate → última en el array
+  }
+  return elegido;
+};
+
 // Peso ideal de faena: objetivo de la última semana de la tabla (sem 7 = 3180 g) ±5%.
 const OBJETIVO_FAENA = TABLA_REF[TABLA_REF.length - 1].objetivo;
 const PESO_IDEAL_MIN = Math.round(OBJETIVO_FAENA * (1 - TOL_OK));
@@ -64,14 +76,14 @@ const PESO_IDEAL_MAX = Math.round(OBJETIVO_FAENA * (1 + TOL_OK));
 const estadoEgreso = (lote) => {
   const sem = semana(lote.fechaIngreso);
   if (sem < 6) return null;
-  const lastPesaje = lote.pesajes?.length > 0
-    ? lote.pesajes[lote.pesajes.length - 1]
-    : null;
-  const peso = lastPesaje?.pesoPromedio ?? null;
-  if (peso === null) return sem >= 6 ? "sin-pesaje" : null;
+  const peso = ultimoPesaje(lote)?.pesoPromedio ?? null;
+  if (peso === null) return "sin-pesaje";
   if (peso >= PESO_IDEAL_MIN && peso <= PESO_IDEAL_MAX) return "ideal";
   if (peso > PESO_IDEAL_MAX) return "excede";
-  return "bajo";  // sem >= 6 pero peso aún no alcanzó el ideal
+  // Por debajo del ideal: en sem 6 sigue creciendo (normal); pasados los 45 días
+  // ya es grande y no alcanzó el peso ideal → conviene revisar el egreso.
+  if (diasDeVida(lote.fechaIngreso) >= 45) return "revisar";
+  return "bajo";  // sem 6, aún creciendo
 };
 
 const badgeDif = (objetivo, peso) => {
@@ -122,7 +134,7 @@ const GalponModal = ({ lote, galponLabel, onClose }) => {
                 <i className="bi bi-star-fill fs-5 text-warning"></i>
                 <div>
                   <strong>¡Peso ideal alcanzado!</strong> — Este lote está listo para faena o venta.
-                  <div className="small text-muted">Rango ideal: {(PESO_IDEAL_MIN/1000).toFixed(3)}–{(PESO_IDEAL_MAX/1000).toFixed(3)} kg · Último pesaje: {formatPeso(lote.pesajes[lote.pesajes.length-1]?.pesoPromedio)}</div>
+                  <div className="small text-muted">Rango ideal: {(PESO_IDEAL_MIN/1000).toFixed(3)}–{(PESO_IDEAL_MAX/1000).toFixed(3)} kg · Último pesaje: {formatPeso(ultimoPesaje(lote)?.pesoPromedio)}</div>
                 </div>
               </div>
             )}
@@ -131,7 +143,7 @@ const GalponModal = ({ lote, galponLabel, onClose }) => {
                 <i className="bi bi-exclamation-circle-fill fs-5"></i>
                 <div>
                   <strong>Excede el peso ideal</strong> — Se recomienda sacar urgente para no perder calidad.
-                  <div className="small">Último pesaje: <strong>{formatPeso(lote.pesajes[lote.pesajes.length-1]?.pesoPromedio)}</strong> · Ideal: hasta {(PESO_IDEAL_MAX/1000).toFixed(3)} kg</div>
+                  <div className="small">Último pesaje: <strong>{formatPeso(ultimoPesaje(lote)?.pesoPromedio)}</strong> · Ideal: hasta {(PESO_IDEAL_MAX/1000).toFixed(3)} kg</div>
                 </div>
               </div>
             )}
@@ -140,6 +152,15 @@ const GalponModal = ({ lote, galponLabel, onClose }) => {
                 <i className="bi bi-question-circle fs-5"></i>
                 <div>
                   <strong>Semana 6 sin pesaje registrado</strong> — Registrá un pesaje para evaluar si está listo para egreso.
+                </div>
+              </div>
+            )}
+            {egreso === "revisar" && (
+              <div className="alert alert-warning rounded-0 mb-0 d-flex align-items-center gap-2 px-3 py-2">
+                <i className="bi bi-exclamation-triangle-fill fs-5"></i>
+                <div>
+                  <strong>Revisar egreso</strong> — Ya pasó los 45 días y sigue por debajo del peso ideal.
+                  <div className="small text-muted">Último pesaje: {formatPeso(ultimoPesaje(lote)?.pesoPromedio)} · Ideal: {(PESO_IDEAL_MIN/1000).toFixed(3)}–{(PESO_IDEAL_MAX/1000).toFixed(3)} kg</div>
                 </div>
               </div>
             )}
@@ -278,6 +299,7 @@ const EGRESO_CONFIG = {
   ideal:       { bg: "#fefce8", border: "#ca8a04", text: "#854d0e", badge: "bg-warning text-dark", icono: "bi-star-fill",        label: "¡Peso ideal! Listo para sacar" },
   excede:      { bg: "#fff7ed", border: "#ea580c", text: "#9a3412", badge: "bg-danger",             icono: "bi-exclamation-circle-fill", label: "Excede peso ideal — Sacar urgente" },
   "sin-pesaje":{ bg: "#f5f3ff", border: "#7c3aed", text: "#5b21b6", badge: "bg-primary",            icono: "bi-question-circle", label: "Sem. 6 — Registrar pesaje" },
+  revisar:     { bg: "#fffbeb", border: "#eab308", text: "#854d0e", badge: "bg-warning text-dark", icono: "bi-exclamation-triangle-fill", label: "Revisar egreso — bajo peso para la edad" },
   bajo:        { bg: "#f0fdf4", border: "#16a34a", text: "#166534", badge: null,                    icono: null,                 label: null },
 };
 
@@ -297,13 +319,11 @@ const GalponCard = ({ label, lote, onClick }) => {
   const egreso  = estadoEgreso(lote);
   const cfg     = egreso ? EGRESO_CONFIG[egreso] : null;
 
-  const alerta   = dias >= 45 && !egreso;
-  const barColor = egreso ? cfg.border : (dias < 30 ? "#198754" : dias < 45 ? "#fd7e14" : "#dc3545");
-  const bgColor  = egreso ? cfg.bg : (alerta ? "#fff9e6" : "#f0fdf4");
+  // Sin estado de egreso ⇒ el lote tiene ≤35 días (sem < 6): verde hasta 30 días, ámbar 30-35.
+  const barColor = egreso ? cfg.border : (dias < 30 ? "#198754" : "#fd7e14");
+  const bgColor  = egreso ? cfg.bg : "#f0fdf4";
   const progresoPct = Math.min(100, Math.round((dias / 45) * 100));
-  const lastPeso = lote.pesajes?.length > 0
-    ? lote.pesajes[lote.pesajes.length - 1].pesoPromedio
-    : null;
+  const lastPeso = ultimoPesaje(lote)?.pesoPromedio ?? null;
 
   return (
     <div
@@ -338,7 +358,6 @@ const GalponCard = ({ label, lote, onClick }) => {
             </span>
           </div>
         )}
-        {alerta && <div className="mt-1"><span className="badge bg-warning text-dark">¡Revisar egreso!</span></div>}
       </div>
       <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "5px", background: "#e9ecef" }}>
         <div style={{ height: "100%", width: `${progresoPct}%`, background: barColor, transition: "width 0.4s ease" }} />
@@ -391,34 +410,50 @@ const GranjaLotesPage = () => {
           </h1>
         </div>
 
-        {/* Grid de galpones por granja */}
-        {GRANJAS.map(({ key, label, prefix, galpones }) => (
-          <div key={key} className="mb-4">
-            <h5 className="fw-bold mb-3 text-secondary border-bottom pb-2">
-              <i className="bi bi-geo-alt me-1"></i>{label}
-              <span className="text-muted fw-normal fs-6 ms-2">
-                {lotes.filter((l) => l.granja === key).length} / {galpones} galpones activos
-              </span>
-            </h5>
-            <div className="row g-3">
-              {Array.from({ length: galpones }, (_, i) => i + 1).map((n) => (
-                <div key={n} className="col-6 col-sm-4 col-md-3 col-lg-2">
-                  <GalponCard
-                    label={`${prefix}${n}`}
-                    lote={loteDeGalpon(key, n)}
-                    onClick={setModalLote}
-                  />
-                </div>
-              ))}
+        {/* Grid de galpones: una sola lista combinada, más días primero, vacíos al final */}
+        {(() => {
+          const slots = GRANJAS.flatMap(({ key, prefix, galpones }) =>
+            Array.from({ length: galpones }, (_, i) => i + 1).map((n) => ({
+              key:   `${key}-${n}`,
+              label: `${prefix}${n}`,
+              lote:  loteDeGalpon(key, n),
+            }))
+          );
+          // Ocupados primero, ordenados por más días de vida (ingreso más antiguo);
+          // los vacíos quedan al final, en orden estable por etiqueta.
+          slots.sort((a, b) => {
+            const aOcup = !!a.lote, bOcup = !!b.lote;
+            if (aOcup !== bOcup) return aOcup ? -1 : 1;
+            if (!aOcup) return a.label.localeCompare(b.label);
+            return new Date(a.lote.fechaIngreso) - new Date(b.lote.fechaIngreso);
+          });
+          const totalActivos = slots.filter((s) => s.lote).length;
+
+          return (
+            <div className="mb-4">
+              <h5 className="fw-bold mb-3 text-secondary border-bottom pb-2">
+                <i className="bi bi-geo-alt me-1"></i>Galpones
+                <span className="text-muted fw-normal fs-6 ms-2">
+                  {totalActivos} activos · ordenados por días (más viejos primero)
+                </span>
+              </h5>
+              <div className="row g-3">
+                {slots.map((s) => (
+                  <div key={s.key} className="col-6 col-sm-4 col-md-3 col-lg-2">
+                    <GalponCard label={s.label} lote={s.lote} onClick={setModalLote} />
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })()}
 
         {/* Referencia */}
         <div className="d-flex gap-3 flex-wrap mb-4 small text-muted">
           <span><span className="badge bg-success me-1">●</span>En crianza</span>
-          <span><span className="badge bg-warning text-dark me-1">●</span>≥ 45 días — revisar egreso</span>
+          <span style={{ color: "#7c3aed" }}><i className="bi bi-question-circle me-1"></i>Sem. 6 — Registrar pesaje</span>
           <span style={{ color: "#ca8a04" }}><i className="bi bi-star-fill me-1"></i>Peso ideal — listo para sacar</span>
+          <span style={{ color: "#eab308" }}><i className="bi bi-exclamation-triangle-fill me-1"></i>Revisar egreso — bajo peso para la edad</span>
           <span className="text-danger"><i className="bi bi-exclamation-circle-fill me-1"></i>Excede peso ideal</span>
           <span><span className="badge bg-light text-muted border me-1">●</span>Vacío</span>
         </div>
@@ -430,6 +465,10 @@ const GranjaLotesPage = () => {
             lotes.flatMap((l) => l.pesajes.map((p) => p.semana))
           )].sort((a, b) => a - b);
           const semanasExtra = todasLasSemanas.filter((s) => s > semMaxRef);
+          // Mismo orden que el grid: más días de vida primero.
+          const lotesOrdenados = [...lotes].sort(
+            (a, b) => new Date(a.fechaIngreso) - new Date(b.fechaIngreso)
+          );
 
           return (
             <div className="card border-0 shadow-sm mb-4">
@@ -461,7 +500,7 @@ const GranjaLotesPage = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {lotes.map((lote) => {
+                    {lotesOrdenados.map((lote) => {
                       const prefix = GRANJAS.find((g) => g.key === lote.granja)?.prefix;
                       const semActual = semana(lote.fechaIngreso);
                       return (
