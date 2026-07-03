@@ -145,7 +145,7 @@ const EnvioCamaraPage = () => {
           calibre: Number(calibre), pollos: Number(pollos), cajones,
         })),
         trozados:      trozadosValidos.map((t) => ({
-          tipo: t.tipo, kgCaja: Number(t.kgCaja), cajas: Number(t.cajas), clase: t.clase,
+          tipo: t.tipo, kgCaja: Number(t.kgCaja), cajas: Number(t.cajas), clase: t.clase || "A",
         })),
         observaciones: form.observaciones,
       });
