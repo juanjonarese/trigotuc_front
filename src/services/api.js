@@ -386,6 +386,12 @@ export const obtenerLoteGranjaPorId = async (id) => {
   return handleResponse(response);
 };
 
+// Historial de movimientos reconstruido de un lote/galpón (solo superadmin)
+export const obtenerMovimientosGalpon = async (loteId) => {
+  const response = await fetch(`${API_URL}/lotes-granja/${loteId}/movimientos`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
 export const crearLoteGranja = async (data) => {
   const response = await fetch(`${API_URL}/lotes-granja`, {
     method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),

@@ -238,6 +238,17 @@ const Layout = ({ children }) => {
                   <i className="bi bi-list-ul"></i>
                   <span>Galpones</span>
                 </a>
+                {/* 2b — Movimientos por Galpón (solo superadmin) */}
+                {rolUsuario === "superadmin" && (
+                  <a
+                    href="#"
+                    className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/granja/movimientos") ? "text-white" : "text-white-50"}`}
+                    onClick={(e) => { e.preventDefault(); navigate("/granja/movimientos"); }}
+                  >
+                    <i className="bi bi-clock-history"></i>
+                    <span>Movimientos por Galpón</span>
+                  </a>
+                )}
                 {/* 3 — Datos Semanales */}
                 {(rolUsuario === "superadmin" || rolUsuario === "granja") && (
                   <a
