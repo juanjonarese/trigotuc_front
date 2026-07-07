@@ -19,6 +19,7 @@ import GranjaCargaDatosPage from "./pages/GranjaCargaDatosPage";
 import VentasGranjaPage from "./pages/VentasGranjaPage";
 import GranjaRemitosPage from "./pages/GranjaRemitosPage";
 import GranjaHistorialPage from "./pages/GranjaHistorialPage";
+import GranjaMovimientosPage from "./pages/GranjaMovimientosPage";
 import OrdenCargaListPage from "./pages/OrdenCargaListPage";
 import OrdenCargaDetallePage from "./pages/OrdenCargaDetallePage";
 import RecepcionOrdenCargaPage from "./pages/RecepcionOrdenCargaPage";
@@ -61,6 +62,7 @@ function App() {
         <Route path="/granja/galpones/nuevo" element={<ProtectedRoute><GranjaLoteNuevoPage /></ProtectedRoute>} />
         <Route path="/granja/cargar-datos" element={<ProtectedRoute><GranjaCargaDatosPage /></ProtectedRoute>} />
         <Route path="/granja/historial" element={<ProtectedRoute><GranjaHistorialPage /></ProtectedRoute>} />
+        <Route path="/granja/movimientos" element={<ProtectedRoute><GranjaMovimientosPage /></ProtectedRoute>} />
         <Route path="/granja/ordenes-carga" element={<ProtectedRoute><OrdenCargaListPage /></ProtectedRoute>} />
         <Route path="/granja/ordenes-carga/:id" element={<ProtectedRoute><OrdenCargaDetallePage /></ProtectedRoute>} />
         <Route path="/granja/recepcion-ordenes" element={<ProtectedRoute><RecepcionOrdenCargaPage /></ProtectedRoute>} />
