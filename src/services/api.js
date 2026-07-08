@@ -171,6 +171,29 @@ export const registrarSalidaMostrador = async (data) => {
   return handleResponse(response);
 };
 
+// Lista las salidas de mostrador de un día (fecha "YYYY-MM-DD").
+export const obtenerSalidasMostrador = async (fecha) => {
+  const qs = fecha ? `?fecha=${encodeURIComponent(fecha)}` : "";
+  const response = await fetch(`${API_URL}/ventas-mostrador${qs}`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+// Edita una salida de mostrador (reajusta el stock de cámara). data: { calibres, trozados }
+export const editarSalidaMostrador = async (id, data) => {
+  const response = await fetch(`${API_URL}/ventas-mostrador/${id}`, {
+    method: "PATCH", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+// Borra una salida de mostrador (devuelve el stock a la cámara).
+export const eliminarSalidaMostrador = async (id) => {
+  const response = await fetch(`${API_URL}/ventas-mostrador/${id}`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
 export const obtenerEnviosCamara = async () => {
   const response = await fetch(`${API_URL}/envios-camara`, { headers: getAuthHeaders() });
   return handleResponse(response);
