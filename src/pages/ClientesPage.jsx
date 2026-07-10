@@ -322,7 +322,7 @@ const ClientesPage = () => {
       {showModal && (
         <>
           <div className="modal show d-block" tabIndex="-1">
-            <div className="modal-dialog modal-fullscreen-sm-down modal-lg modal-dialog-scrollable">
+            <div className="modal-dialog modal-lg my-3">
               <div className="modal-content">
                 <div className="modal-header">
                   <h5 className="modal-title">

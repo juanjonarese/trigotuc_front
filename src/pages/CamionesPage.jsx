@@ -14,7 +14,6 @@ const CamionesPage = () => {
   const [choferes, setChoferes] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState("");
-  const [searchTerm, setSearchTerm]   = useState("");
   const [currentPage, setCurrentPage] = useState(1);
 
   // Camión (alta/edición)
@@ -163,14 +162,9 @@ const CamionesPage = () => {
   };
 
   // ── Derivados ──────────────────────────────────────────────────────────────
-  const camionesFiltrados = camiones.filter(
-    (c) => c.marca?.toLowerCase().includes(searchTerm.toLowerCase()) || c.patente?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
   const indexOfLastItem  = currentPage * ITEMS_PER_PAGE;
   const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
-  const currentItems     = camionesFiltrados.slice(indexOfFirstItem, indexOfLastItem);
-
-  useEffect(() => { setCurrentPage(1); }, [searchTerm]);
+  const currentItems     = camiones.slice(indexOfFirstItem, indexOfLastItem);
 
   return (
     <Layout>
@@ -204,9 +198,8 @@ const CamionesPage = () => {
                   )}
                 </div>
                 <div className="card-body">
-                  <input type="text" className="form-control mb-3" placeholder="Buscar por marca o patente..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-                  {camionesFiltrados.length === 0 ? (
-                    <p className="text-center text-muted py-3 mb-0">No se encontraron camiones</p>
+                  {camiones.length === 0 ? (
+                    <p className="text-center text-muted py-3 mb-0">No hay camiones registrados</p>
                   ) : (
                     <div className="table-responsive">
                       <table className="table mb-0 align-middle">
@@ -224,8 +217,8 @@ const CamionesPage = () => {
                               <td>{c.patente}</td>
                               {puedeEditar && (
                                 <td className="text-end">
-                                  <button className="btn btn-sm btn-warning me-2" onClick={() => openCamionModal(c)}><i className="bi bi-pencil"></i></button>
-                                  <button className="btn btn-sm btn-danger" onClick={() => handleDeleteCamion(c._id, `${c.marca} - ${c.patente}`)}><i className="bi bi-trash"></i></button>
+                                  <button className="btn btn-sm btn-outline-warning border-0 me-1" title="Editar camión" onClick={() => openCamionModal(c)}><i className="bi bi-pencil"></i></button>
+                                  <button className="btn btn-sm btn-outline-danger border-0" title="Eliminar camión" onClick={() => handleDeleteCamion(c._id, `${c.marca} - ${c.patente}`)}><i className="bi bi-trash"></i></button>
                                 </td>
                               )}
                             </tr>
@@ -234,7 +227,7 @@ const CamionesPage = () => {
                       </table>
                     </div>
                   )}
-                  <Pagination currentPage={currentPage} totalItems={camionesFiltrados.length} itemsPerPage={ITEMS_PER_PAGE} onPageChange={setCurrentPage} />
+                  <Pagination currentPage={currentPage} totalItems={camiones.length} itemsPerPage={ITEMS_PER_PAGE} onPageChange={setCurrentPage} />
                 </div>
               </div>
             </div>
@@ -254,22 +247,32 @@ const CamionesPage = () => {
                   {choferes.length === 0 ? (
                     <p className="text-center text-muted py-3 mb-0">No hay choferes registrados</p>
                   ) : (
-                    <ul className="list-group list-group-flush">
-                      {choferes.map((c) => (
-                        <li key={c._id} className="list-group-item d-flex justify-content-between align-items-center px-0">
-                          <span>
-                            <i className="bi bi-person-fill me-2 text-success"></i>
-                            {c.nombreUsuario}
-                            {c.telefonoUsuario && <span className="text-muted ms-2 small">· {c.telefonoUsuario}</span>}
-                          </span>
-                          {puedeEditar && (
-                            <button className="btn btn-sm btn-outline-danger border-0" title="Eliminar chofer" onClick={() => handleEliminarChofer(c)}>
-                              <i className="bi bi-trash"></i>
-                            </button>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="table-responsive">
+                      <table className="table mb-0 align-middle">
+                        <thead className="table-light">
+                          <tr>
+                            <th>Nombre</th>
+                            <th>Teléfono</th>
+                            {puedeEditar && <th className="text-end">Acciones</th>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {choferes.map((c) => (
+                            <tr key={c._id}>
+                              <td><i className="bi bi-person-fill me-2 text-success"></i>{c.nombreUsuario}</td>
+                              <td>{c.telefonoUsuario || <span className="text-muted">—</span>}</td>
+                              {puedeEditar && (
+                                <td className="text-end">
+                                  <button className="btn btn-sm btn-outline-danger border-0" title="Eliminar chofer" onClick={() => handleEliminarChofer(c)}>
+                                    <i className="bi bi-trash"></i>
+                                  </button>
+                                </td>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </div>
               </div>

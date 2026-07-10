@@ -330,7 +330,7 @@ const MudarPollosModal = ({ lotes, lotePresel, onClose, onGuardado }) => {
       <div className="modal show d-block" tabIndex="-1">
         <div className="modal-dialog modal-dialog-scrollable">
           <div className="modal-content">
-            <div className="modal-header bg-warning text-dark">
+            <div className="modal-header bg-warning-subtle text-dark">
               <h5 className="modal-title">
                 <i className="bi bi-arrow-left-right me-2"></i>Mudar pollos entre galpones
               </h5>
@@ -458,7 +458,7 @@ const MudarPollosModal = ({ lotes, lotePresel, onClose, onGuardado }) => {
             </div>
             <div className="modal-footer">
               <button className="btn btn-outline-secondary btn-sm" onClick={onClose} disabled={saving}>Cancelar</button>
-              <button type="submit" form="form-mudar" className="btn btn-warning btn-sm px-4" disabled={saving}>
+              <button type="submit" form="form-mudar" className="btn btn-success btn-sm px-4" disabled={saving}>
                 {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
                 <i className="bi bi-arrow-left-right me-1"></i>Confirmar mudanza
               </button>
@@ -620,9 +620,9 @@ const GranjaCargaDatosPage = () => {
           const pesajeDia4  = iniciales.find((p) => p.tipo === "dia4");
 
           return (
-            <div className="card border-0 shadow mb-4 border-start border-4 border-warning">
+            <div className="card border-0 shadow mb-4">
               {/* Header */}
-              <div className="card-header bg-warning text-dark py-2 d-flex align-items-start justify-content-between flex-wrap gap-1">
+              <div className="card-header bg-warning-subtle text-dark py-2 d-flex align-items-start justify-content-between flex-wrap gap-1">
                 <div className="me-2" style={{ minWidth: 0 }}>
                   <span className="fw-bold">Galpón {galponLabel}</span>
                   <div className="small">
@@ -786,7 +786,7 @@ const GranjaCargaDatosPage = () => {
                         </div>
                       </div>
                       <div className="mt-3">
-                        <button className="btn btn-warning btn-sm px-4" disabled={saving}>
+                        <button className="btn btn-success btn-sm px-4" disabled={saving}>
                           {saving
                             ? <span className="spinner-border spinner-border-sm me-1"></span>
                             : <i className="bi bi-check-circle me-1"></i>}
