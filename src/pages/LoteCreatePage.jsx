@@ -59,8 +59,8 @@ const EditarLoteModal = ({ lote, onClose, onGuardado }) => {
     const calibresPayload = lineasFinales
       .map((l) => ({ calibre: Number(l.calibre), pollos: Number(l.pollos), cajones: calcularCajones(l.pollos, l.calibre) }))
       .filter((l) => l.cajones > 0);
-    if (calibresPayload.length === 0) {
-      Swal.fire("Error", "Agregá al menos un calibre con pollos.", "error");
+    if (calibresPayload.length === 0 && !hayTrozados) {
+      Swal.fire("Error", "Agregá al menos un calibre con pollos o cargá trozados.", "error");
       return;
     }
     // Coherencia: faenadas = calibres + trozados (u) + decomisados (u). Advierte y confirma.
