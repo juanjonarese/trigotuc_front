@@ -105,8 +105,8 @@ const LoteFaenaCrearPage = () => {
       Swal.fire("Error", "Seleccioná la recepción de granja que vas a faenar. La faena debe partir de un pedido hecho a granja.", "error");
       return;
     }
-    if (calibresPayload.length === 0) {
-      Swal.fire("Error", "Agregá al menos un calibre con pollos en la tabla de calibres.", "error");
+    if (calibresPayload.length === 0 && !hayTrozados) {
+      Swal.fire("Error", "Agregá al menos un calibre con pollos o cargá trozados.", "error");
       return;
     }
     // Coherencia: faenadas = calibres + trozados (u) + decomisados (u). Advierte y confirma.
@@ -155,8 +155,10 @@ const LoteFaenaCrearPage = () => {
       await Swal.fire({
         icon:  "success",
         title: `Lote #${loteCreado.numeroLote} creado`,
-        html:  `${fmtNum(totalPollosF)} pollos · ${fmtNum(totalCajonesF)} cajones · ${fmtNum(totalKgF)} kg` +
-               `<br><span class="text-success"><i class="bi bi-snow"></i> Enteros ingresados a cámara Cañete.</span>` +
+        html:  (totalCajonesF > 0
+                 ? `${fmtNum(totalPollosF)} pollos · ${fmtNum(totalCajonesF)} cajones · ${fmtNum(totalKgF)} kg` +
+                   `<br><span class="text-success"><i class="bi bi-snow"></i> Enteros ingresados a cámara Cañete.</span>`
+                 : `<span class="text-muted">Faena sin enteros por calibre (solo trozados).</span>`) +
                (kgPendiente > 0
                  ? `<br><span class="text-warning"><i class="bi bi-snow2"></i> ${fmtNum(kgPendiente)} kg de trozados quedan congelando (pendientes de cámara).</span>` +
                    `<br><span class="text-muted small">Pasálos a cámara desde Lotes de Faena → pestaña "Trozados pendientes" cuando estén en condiciones.</span>`
