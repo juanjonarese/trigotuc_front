@@ -5,7 +5,7 @@ import {
   obtenerResumenStock,
   obtenerLotesGranja,
   obtenerLotes,
-  obtenerOrdenesRetiro,
+  obtenerDespachosFrigorifico,
 } from "../services/api";
 import Layout from "../components/Layout";
 import { trozadoLabel } from "../components/TrozadoTable";
@@ -47,7 +47,7 @@ const DashboardPage = () => {
   const [stockGranja, setStockGranja] = useState(null);
   const [lotesGranja, setLotesGranja] = useState([]);
   const [lotesFaena, setLotesFaena]   = useState([]);
-  const [retiroPendiente, setRetiroPendiente] = useState([]);
+  const [despachos, setDespachos]     = useState([]);
 
   useEffect(() => {
     const rol = localStorage.getItem("rolUsuario");
@@ -59,16 +59,16 @@ const DashboardPage = () => {
   const cargarDatos = async () => {
     try {
       setLoading(true);
-      const [resStock, resGranja, resFaena, resRetiro] = await Promise.all([
+      const [resStock, resGranja, resFaena, resDespachos] = await Promise.all([
         obtenerResumenStock().catch(() => null),
         obtenerLotesGranja({ estado: "en_crianza" }).catch(() => []),
         obtenerLotes().catch(() => []),
-        obtenerOrdenesRetiro({ status: "pendiente" }).catch(() => []),
+        obtenerDespachosFrigorifico().catch(() => []),
       ]);
       setStockGranja(resStock);
       setLotesGranja(Array.isArray(resGranja) ? resGranja : []);
       setLotesFaena(Array.isArray(resFaena) ? resFaena : []);
-      setRetiroPendiente(Array.isArray(resRetiro) ? resRetiro : []);
+      setDespachos(Array.isArray(resDespachos) ? resDespachos : []);
       setError("");
     } catch {
       setError("Error al cargar los datos del dashboard");
@@ -120,6 +120,40 @@ const DashboardPage = () => {
   })();
 
   const ultimosFaena = lotesFaena.slice(0, 5);
+
+  // ── Cálculos entregas (órdenes de carga / venta) ───────────────────────────
+  const kgDespacho = (d) => (d.pesoTotalKg || 0) + (d.totalKgTrozados || 0);
+
+  const entregasCompletadas = despachos.filter((d) => d.estado === "completada");
+  const entregasPendientes  = despachos.filter((d) => d.estado === "pendiente");
+  const cajonesDespachados  = entregasCompletadas.reduce((a, d) => a + (d.totalCajones || 0), 0);
+  const kgDespachados       = entregasCompletadas.reduce((a, d) => a + kgDespacho(d), 0);
+
+  // Entregas de los últimos 30 días (para el análisis de actividad reciente)
+  const hace30dias = Date.now() - 30 * 86400000;
+  const entregas30d = despachos.filter((d) => new Date(d.fecha || d.createdAt) >= hace30dias);
+
+  // Reparto por modalidad de entrega
+  const porModalidad = {
+    retiro_cliente:  despachos.filter((d) => d.modalidadEntrega === "retiro_cliente").length,
+    delivery_chofer: despachos.filter((d) => d.modalidadEntrega === "delivery_chofer").length,
+  };
+
+  // Top clientes por cajones despachados (solo entregas completadas)
+  const topClientes = (() => {
+    const map = {};
+    for (const d of entregasCompletadas) {
+      const nombre = d.cliente?.razonSocial || "Sin cliente";
+      if (!map[nombre]) map[nombre] = { cliente: nombre, cajones: 0, kg: 0, entregas: 0 };
+      map[nombre].cajones  += d.totalCajones || 0;
+      map[nombre].kg       += kgDespacho(d);
+      map[nombre].entregas += 1;
+    }
+    return Object.values(map).sort((a, b) => b.cajones - a.cajones).slice(0, 6);
+  })();
+
+  // Últimas entregas (para el detalle)
+  const ultimasEntregas = despachos.slice(0, 5);
 
   // ── Gráfico stock por calibre ──────────────────────────────────────────────
   const dataBarStock = (() => {
@@ -179,18 +213,22 @@ const DashboardPage = () => {
           <div className="col-6 col-md-3">
             <KpiCard icon="egg-fried" label="Pollos en crianza" value={fmtNum(totalPollosGranja)}
               sub={`${lotesGranja.length} galpón${lotesGranja.length !== 1 ? "es" : ""} activo${lotesGranja.length !== 1 ? "s" : ""}`}
-              color="text-success" onClick={() => navigate("/granja/lotes")} />
+              color="text-success" onClick={() => navigate("/granja/galpones")} />
           </div>
           <div className="col-6 col-md-3">
             <KpiCard icon="snow" label="Cajones en cámara" value={fmtNum(stockGranja?.cajonesDisponibles ?? 0)}
               sub={`${fmtNum(stockGranja?.totalKg ?? 0)} kg`}
-              color="text-primary" onClick={() => navigate("/frigorifico/stock")} />
+              color="text-primary" onClick={() => navigate("/frigorifico")} />
           </div>
           <div className="col-6 col-md-3">
-            <KpiCard icon="box-arrow-right" label="Entregas pendientes" value={retiroPendiente.length}
-              sub="órdenes de retiro"
-              color={retiroPendiente.length > 0 ? "text-warning" : "text-secondary"}
-              onClick={() => navigate("/frigorifico/entregas")} />
+            <KpiCard icon="truck" label="Entregas (30 días)" value={fmtNum(entregas30d.length)}
+              sub={`${fmtNum(entregasPendientes.length)} pendiente${entregasPendientes.length !== 1 ? "s" : ""}`}
+              color="text-warning" onClick={() => navigate("/frigorifico/ordenes-carga")} />
+          </div>
+          <div className="col-6 col-md-3">
+            <KpiCard icon="box-seam" label="Cajones despachados" value={fmtNum(cajonesDespachados)}
+              sub={`${fmtNum(kgDespachados)} kg entregados`}
+              color="text-info" onClick={() => navigate("/frigorifico/ordenes-carga")} />
           </div>
         </div>
 
@@ -415,6 +453,114 @@ const DashboardPage = () => {
             </div>
 
           </div>
+        </div>
+
+        {/* ══ ENTREGAS (ÓRDENES DE CARGA / VENTA) ══ */}
+        <div className="mb-4">
+          <SectionTitle icon="truck" title="Entregas — Órdenes de carga (venta)" color="text-warning" />
+
+          {despachos.length === 0 ? (
+            <div className="alert alert-light text-muted small">Todavía no hay órdenes de entrega registradas.</div>
+          ) : (
+            <div className="row g-3">
+
+              {/* Top clientes por cajones */}
+              <div className="col-12 col-lg-7">
+                <div className="card border-0 shadow-sm h-100">
+                  <div className="card-body">
+                    <h6 className="text-muted text-uppercase fw-semibold mb-1" style={{ fontSize: "0.7rem", letterSpacing: "0.05em" }}>
+                      Top clientes por cajones despachados
+                    </h6>
+                    <div className="row g-0 text-center mb-3 mt-2 pb-2" style={{ borderBottom: "1px solid #e9ecef" }}>
+                      <div className="col border-end">
+                        <div className="text-muted" style={{ fontSize: "0.65rem" }}>Entregas totales</div>
+                        <div className="fw-bold text-warning fs-5">{fmtNum(despachos.length)}</div>
+                      </div>
+                      <div className="col border-end">
+                        <div className="text-muted" style={{ fontSize: "0.65rem" }}>Completadas</div>
+                        <div className="fw-bold text-success fs-5">{fmtNum(entregasCompletadas.length)}</div>
+                      </div>
+                      <div className="col">
+                        <div className="text-muted" style={{ fontSize: "0.65rem" }}>Pendientes</div>
+                        <div className="fw-bold text-secondary fs-5">{fmtNum(entregasPendientes.length)}</div>
+                      </div>
+                    </div>
+                    {topClientes.length === 0 ? (
+                      <p className="text-muted small mt-3">Sin entregas completadas todavía.</p>
+                    ) : (
+                      <ResponsiveContainer width="100%" height={Math.max(160, topClientes.length * 38)}>
+                        <BarChart data={topClientes} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                          <XAxis type="number" tick={{ fontSize: 11 }} />
+                          <YAxis type="category" dataKey="cliente" tick={{ fontSize: 11 }} width={110} />
+                          <Tooltip formatter={(v) => [`${fmtNum(v)} caj`, "Cajones"]} contentStyle={{ fontSize: 12 }} />
+                          <Bar dataKey="cajones" fill="#ffc107" radius={[0, 4, 4, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Resumen entregas + últimas */}
+              <div className="col-12 col-lg-5">
+                <div className="card border-0 shadow-sm h-100">
+                  <div className="card-body">
+                    <h6 className="text-muted text-uppercase fw-semibold mb-3" style={{ fontSize: "0.7rem", letterSpacing: "0.05em" }}>
+                      Resumen entregas
+                    </h6>
+                    <div className="d-flex flex-column gap-3 mb-4">
+                      <div className="d-flex justify-content-between align-items-center">
+                        <span className="text-muted small"><i className="bi bi-box-seam me-1 text-info"></i>Cajones despachados</span>
+                        <span className="fw-bold text-info fs-5">{fmtNum(cajonesDespachados)}</span>
+                      </div>
+                      <div className="d-flex justify-content-between align-items-center">
+                        <span className="text-muted small"><i className="bi bi-basket me-1 text-secondary"></i>Kg entregados</span>
+                        <span className="fw-bold">{fmtNum(kgDespachados)} kg</span>
+                      </div>
+                      <hr className="my-1" />
+                      <div className="d-flex justify-content-between align-items-center">
+                        <span className="text-muted small"><i className="bi bi-person-walking me-1 text-primary"></i>Retiro cliente</span>
+                        <span className="fw-semibold">{fmtNum(porModalidad.retiro_cliente)}</span>
+                      </div>
+                      <div className="d-flex justify-content-between align-items-center">
+                        <span className="text-muted small"><i className="bi bi-truck me-1 text-success"></i>Delivery chofer</span>
+                        <span className="fw-semibold">{fmtNum(porModalidad.delivery_chofer)}</span>
+                      </div>
+                    </div>
+
+                    <h6 className="text-muted text-uppercase fw-semibold mb-2" style={{ fontSize: "0.7rem", letterSpacing: "0.05em" }}>
+                      Últimas entregas
+                    </h6>
+                    {ultimasEntregas.length === 0 ? (
+                      <p className="text-muted small">Sin entregas registradas.</p>
+                    ) : (
+                      <div className="d-flex flex-column gap-2">
+                        {ultimasEntregas.map((d) => (
+                          <div key={d._id} className="d-flex justify-content-between align-items-center py-1 px-2 rounded"
+                            style={{ background: "#f8fafc", border: "1px solid #e9ecef" }}>
+                            <div className="text-truncate" style={{ maxWidth: "55%" }}>
+                              <span className="fw-semibold small">{d.cliente?.razonSocial || "Sin cliente"}</span>
+                              <div className="text-muted" style={{ fontSize: "0.65rem" }}>
+                                {new Date(d.fecha || d.createdAt).toLocaleDateString("es-AR")} · {d.camara === "cañete" ? "Cañete" : "Trigotuc"}
+                              </div>
+                            </div>
+                            <div className="d-flex gap-2 align-items-center small">
+                              <span className="fw-semibold">{fmtNum(d.totalCajones)} caj</span>
+                              <span className={`badge ${d.estado === "completada" ? "bg-success" : "bg-secondary"}`} style={{ fontSize: "0.6rem" }}>
+                                {d.estado === "completada" ? "Completada" : "Pendiente"}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          )}
         </div>
 
 

@@ -224,7 +224,6 @@ const LoteCreatePage = () => {
 
   const rolUsuario    = localStorage.getItem("rolUsuario");
   const puedeCrear    = rolUsuario === "superadmin" || rolUsuario === "frigorifico";
-  const esSuperAdmin  = rolUsuario === "superadmin";
 
   const [lotes, setLotes]               = useState([]);
   const [loading, setLoading]           = useState(true);
@@ -491,7 +490,7 @@ const LoteCreatePage = () => {
                             <i className="bi bi-pencil"></i>
                           </button>
                         )}
-                        {esSuperAdmin && (
+                        {puedeCrear && (
                           <button className="btn btn-outline-danger btn-sm" onClick={() => handleEliminar(lote)}>
                             <i className="bi bi-trash"></i>
                           </button>
@@ -748,7 +747,7 @@ const LoteCreatePage = () => {
                                     <i className="bi bi-pencil"></i>
                                   </button>
                                 )}
-                                {esSuperAdmin && (
+                                {puedeCrear && (
                                   <button className="btn btn-outline-danger btn-sm" onClick={() => handleEliminar(lote)}>
                                     <i className="bi bi-trash"></i>
                                   </button>
