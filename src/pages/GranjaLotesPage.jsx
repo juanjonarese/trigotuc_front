@@ -266,7 +266,9 @@ const GalponModal = ({ lote, galponLabel, onClose }) => {
                           <tr><th>Semana</th><th>Fecha</th><th>Bajas</th><th>Causa</th></tr>
                         </thead>
                         <tbody>
-                          {[...lote.mortandad].reverse().map((m) => (
+                          {[...lote.mortandad]
+                            .sort((a, b) => b.semana - a.semana || new Date(b.fecha) - new Date(a.fecha))
+                            .map((m) => (
                             <tr key={m._id}>
                               <td className="fw-semibold">Sem. {m.semana}</td>
                               <td>{formatearFechaLocal(m.fecha)}</td>
