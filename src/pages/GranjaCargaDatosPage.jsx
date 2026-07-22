@@ -554,7 +554,7 @@ const GranjaCargaDatosPage = () => {
           registrarMortandadGranja(loteSeleccionado._id, {
             fecha,
             cantidad: Number(form.mortandad),
-            observaciones: form.observaciones || undefined,
+            causa: form.observaciones || undefined,
           })
         );
       }
@@ -779,9 +779,9 @@ const GranjaCargaDatosPage = () => {
                             min="0" max={loteSeleccionado.cantidadActual} />
                         </div>
                         <div className="col-6 col-md-3">
-                          <label className="form-label small mb-1">Obs. <span className="text-muted">(opcional)</span></label>
+                          <label className="form-label small mb-1">Causa <span className="text-muted">(opcional)</span></label>
                           <input type="text" className="form-control form-control-sm"
-                            placeholder="Nota..." value={form.observaciones}
+                            placeholder="Causa..." value={form.observaciones}
                             onChange={(e) => setForm({ ...form, observaciones: e.target.value })} />
                         </div>
                       </div>
