@@ -485,7 +485,7 @@ const GranjaLoteNuevoPage = () => {
   const [pagina, setPagina]                       = useState(1);
 
   const [filtroGranja, setFiltroGranja] = useState("");
-  const [filtroEstado, setFiltroEstado] = useState("");
+  const [filtroEstado, setFiltroEstado] = useState("en_crianza");
   const [filtroGalpon, setFiltroGalpon] = useState("");
   const [filtroTexto, setFiltroTexto]   = useState("");
 
@@ -532,10 +532,14 @@ const GranjaLoteNuevoPage = () => {
     }
   };
 
-  const lotesCrianza    = lotes.filter((l) => l.estado === "en_crianza");
+  // Un galpón está "en crianza" solo si su lote sigue activo Y tiene pollos (>0).
+  // Al quedar en 0 deja de estar en crianza (cuenta como finalizado/vacío).
+  const estaEnCrianza   = (l) => l.estado === "en_crianza" && l.cantidadActual > 0;
+  const lotesCrianza    = lotes.filter(estaEnCrianza);
   const lotesFiltrados  = lotes.filter((l) => {
     if (filtroGranja && l.granja !== filtroGranja) return false;
-    if (filtroEstado && l.estado !== filtroEstado) return false;
+    if (filtroEstado === "en_crianza" && !estaEnCrianza(l)) return false;
+    if (filtroEstado === "finalizado" && estaEnCrianza(l)) return false;
     if (filtroGalpon && l.galpon !== Number(filtroGalpon)) return false;
     if (filtroTexto) {
       const txt = filtroTexto.toLowerCase();
@@ -548,7 +552,7 @@ const GranjaLoteNuevoPage = () => {
   const totalFiltrados    = lotesFiltrados.length;
   const inicio            = (pagina - 1) * ITEMS_POR_PAGINA;
   const lotesPagina       = lotesFiltrados.slice(inicio, inicio + ITEMS_POR_PAGINA);
-  const hayFiltros        = filtroGranja || filtroEstado || filtroGalpon || filtroTexto;
+  const hayFiltros        = filtroGranja || (filtroEstado && filtroEstado !== "en_crianza") || filtroGalpon || filtroTexto;
   const maxGalponesGranja = filtroGranja
     ? GRANJA_OPTS.find((g) => g.value === filtroGranja)?.galpones || 8
     : 8;
@@ -676,7 +680,7 @@ const GranjaLoteNuevoPage = () => {
                         <div className="col-6 col-sm-4 col-md-2 d-flex align-items-end">
                           {hayFiltros && (
                             <button className="btn btn-outline-secondary btn-sm w-100"
-                              onClick={() => { setFiltroGranja(""); setFiltroEstado(""); setFiltroGalpon(""); setFiltroTexto(""); }}>
+                              onClick={() => { setFiltroGranja(""); setFiltroEstado("en_crianza"); setFiltroGalpon(""); setFiltroTexto(""); }}>
                               <i className="bi bi-x-circle me-1"></i>Limpiar
                             </button>
                           )}
@@ -701,8 +705,8 @@ const GranjaLoteNuevoPage = () => {
                                   <div className="d-flex justify-content-between align-items-start mb-1">
                                     <div>
                                       <span className="badge bg-dark me-1">#{lote.numeroLote}</span>
-                                      <span className={`badge ${lote.estado === "en_crianza" ? "bg-success" : "bg-secondary"}`}>
-                                        {lote.estado === "en_crianza" ? "En crianza" : "Finalizado"}
+                                      <span className={`badge ${estaEnCrianza(lote) ? "bg-success" : "bg-secondary"}`}>
+                                        {estaEnCrianza(lote) ? "En crianza" : "Finalizado"}
                                       </span>
                                     </div>
                                     <div className="d-flex gap-1">

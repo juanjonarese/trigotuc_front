@@ -29,40 +29,48 @@ const GranjaMovimientosPage = () => {
   const rolUsuario = localStorage.getItem("rolUsuario");
   const [granja, setGranja] = useState("");
   const [galpon, setGalpon] = useState("");
-  const [lotes, setLotes] = useState([]);
+  const [lotesGranja, setLotesGranja] = useState([]);
   const [loteSel, setLoteSel] = useState(null);
   const [data, setData] = useState(null);
   const [loadingLotes, setLoadingLotes] = useState(false);
   const [loadingMov, setLoadingMov] = useState(false);
 
-  const maxGalpones = granja
-    ? GRANJA_OPTS.find((g) => g.value === granja)?.galpones || 8
-    : 8;
-
-  // Cargar lotes del galpón elegido
-  const cargarLotes = useCallback(async () => {
-    if (!granja || !galpon) {
-      setLotes([]);
-      setLoteSel(null);
-      setData(null);
-      return;
-    }
+  // Cargar TODOS los lotes de la granja elegida (para saber qué galpones tienen stock)
+  const cargarLotesGranja = useCallback(async () => {
+    if (!granja) { setLotesGranja([]); return; }
     setLoadingLotes(true);
     setData(null);
-    setLoteSel(null);
     try {
-      const res = await obtenerLotesGranja({ granja, galpon });
-      // obtenerLotesGranja ya ordena por fechaIngreso desc → el primero es el más reciente
-      setLotes(res);
-      if (res.length > 0) setLoteSel(res[0]._id);
+      const res = await obtenerLotesGranja({ granja });
+      setLotesGranja(res); // ya viene ordenado por fechaIngreso desc
     } catch (e) {
       Swal.fire("Error", e.message, "error");
     } finally {
       setLoadingLotes(false);
     }
-  }, [granja, galpon]);
+  }, [granja]);
 
-  useEffect(() => { cargarLotes(); }, [cargarLotes]);
+  useEffect(() => { cargarLotesGranja(); }, [cargarLotesGranja]);
+
+  // Solo galpones con un lote en crianza y con pollos (>0)
+  const galponesConStock = [...new Set(
+    lotesGranja
+      .filter((l) => l.estado === "en_crianza" && l.cantidadActual > 0)
+      .map((l) => l.galpon)
+  )].sort((a, b) => a - b);
+
+  // Lotes del galpón elegido (historial completo del galpón)
+  const lotes = galpon
+    ? lotesGranja.filter((l) => l.galpon === Number(galpon))
+    : [];
+
+  // Al cambiar de galpón (o recargar la granja), seleccionar el lote más reciente
+  useEffect(() => {
+    if (!galpon) { setLoteSel(null); setData(null); return; }
+    const delGalpon = lotesGranja.filter((l) => l.galpon === Number(galpon));
+    setLoteSel(delGalpon.length > 0 ? delGalpon[0]._id : null);
+    setData(null);
+  }, [galpon, lotesGranja]);
 
   // Cargar movimientos del lote seleccionado
   useEffect(() => {
@@ -120,12 +128,12 @@ const GranjaMovimientosPage = () => {
                   className="form-select form-select-sm"
                   value={galpon}
                   onChange={(e) => setGalpon(e.target.value)}
-                  disabled={!granja}
+                  disabled={!granja || galponesConStock.length === 0}
                 >
                   <option value="">Elegir galpón…</option>
-                  {Array.from({ length: maxGalpones }, (_, i) => i + 1).map((n) => (
+                  {galponesConStock.map((n) => (
                     <option key={n} value={n}>
-                      {granja ? `${GRANJAS_PREFIX[granja]}${n}` : n}
+                      {GRANJAS_PREFIX[granja]}{n}
                     </option>
                   ))}
                 </select>
@@ -151,14 +159,17 @@ const GranjaMovimientosPage = () => {
         </div>
 
         {/* Estados vacíos / carga */}
-        {(!granja || !galpon) && (
+        {!granja && (
           <p className="text-center text-muted p-4">Elegí una granja y un galpón para ver su historial.</p>
         )}
-        {granja && galpon && loadingLotes && (
+        {granja && loadingLotes && (
           <div className="text-center py-5"><div className="spinner-border text-success"></div></div>
         )}
-        {granja && galpon && !loadingLotes && lotes.length === 0 && (
-          <p className="text-center text-muted p-4">Este galpón no tiene lotes registrados.</p>
+        {granja && !loadingLotes && galponesConStock.length === 0 && (
+          <p className="text-center text-muted p-4">No hay galpones en crianza (con pollos) en esta granja.</p>
+        )}
+        {granja && !loadingLotes && galponesConStock.length > 0 && !galpon && (
+          <p className="text-center text-muted p-4">Elegí un galpón para ver su historial.</p>
         )}
 
         {/* Banner de conciliación */}
