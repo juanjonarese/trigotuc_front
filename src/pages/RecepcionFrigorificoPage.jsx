@@ -465,7 +465,8 @@ const RecepcionFrigorificoPage = () => {
         d.numeroOrden?.toLowerCase().includes(txt) ||
         (d.cliente?.razonSocial || "").toLowerCase().includes(txt)
       );
-    });
+    })
+    .sort((a, b) => new Date(b.fecha) - new Date(a.fecha)); // más recientes arriba
 
   // Envíos entre cámaras a preparar por frigorifico (solo Cañete→Trigotuc).
   // A preparar = pendiente sin preparar; completada = ya preparado.
@@ -476,7 +477,8 @@ const RecepcionFrigorificoPage = () => {
       if (filtroEstado === "completada") return e.preparado;
       return e.estado === "pendiente" || e.preparado; // "todas"
     })
-    .filter((e) => !busqueda || e.numeroEnvio?.toLowerCase().includes(busqueda.toLowerCase()));
+    .filter((e) => !busqueda || e.numeroEnvio?.toLowerCase().includes(busqueda.toLowerCase()))
+    .sort((a, b) => new Date(b.fecha) - new Date(a.fecha)); // más recientes arriba
 
   const despachosPagina = despachosVisibles.slice(
     (paginaDespachos - 1) * ITEMS_POR_PAGINA,
@@ -559,8 +561,10 @@ const RecepcionFrigorificoPage = () => {
                             <span className="badge bg-secondary">{camaraLbl(e.camaraOrigen)}</span>
                             <i className="bi bi-arrow-right text-muted"></i>
                             <span className="badge bg-secondary">{camaraLbl(e.camaraDestino)}</span>
-                            {e.preparado
-                              ? <span className="badge bg-success"><i className="bi bi-check2 me-1"></i>Preparado</span>
+                            {e.estado === "recibido"
+                              ? <span className="badge bg-success"><i className="bi bi-check2-all me-1"></i>Recibido en Trigotuc</span>
+                              : e.preparado
+                              ? <span className="badge bg-primary"><i className="bi bi-truck me-1"></i>Preparado — en viaje</span>
                               : <span className="badge bg-warning text-dark"><i className="bi bi-hourglass-split me-1"></i>A preparar</span>}
                           </div>
                         </div>
@@ -654,8 +658,10 @@ const RecepcionFrigorificoPage = () => {
                               </div>
                             </td>
                             <td>
-                              {e.preparado
-                                ? <span className="badge bg-success"><i className="bi bi-check2 me-1"></i>Preparado</span>
+                              {e.estado === "recibido"
+                                ? <span className="badge bg-success"><i className="bi bi-check2-all me-1"></i>Recibido en Trigotuc</span>
+                                : e.preparado
+                                ? <span className="badge bg-primary"><i className="bi bi-truck me-1"></i>Preparado — en viaje</span>
                                 : <span className="badge bg-warning text-dark"><i className="bi bi-hourglass-split me-1"></i>A preparar</span>}
                             </td>
                             <td>
