@@ -376,6 +376,7 @@ const RecepcionFrigorificoPage = () => {
   const [busqueda, setBusqueda]       = useState("");
   const [despachoModal, setDespachoModal] = useState(null);
   const [preparando, setPreparando]   = useState(null);
+  const [tab, setTab]                 = useState("clientes");
   const [paginaDespachos, setPaginaDespachos] = useState(1);
   const [paginaEnvios, setPaginaEnvios]       = useState(1);
 
@@ -489,6 +490,12 @@ const RecepcionFrigorificoPage = () => {
     paginaEnvios * ITEMS_POR_PAGINA
   );
 
+  // Contadores para las solapas (independientes del filtro de estado)
+  const despachosPendientesCount = despachos.filter((d) => d.estado === "pendiente").length;
+  const enviosAPrepararCount = envios.filter(
+    (e) => e.camaraOrigen === "cañete" && e.camaraDestino === "trigotuc" && e.estado === "pendiente" && !e.preparado
+  ).length;
+
   return (
     <Layout>
       <div className="container-fluid">
@@ -514,6 +521,36 @@ const RecepcionFrigorificoPage = () => {
           </div>
         </div>
 
+        {/* Solapas */}
+        <ul className="nav nav-tabs mb-3">
+          <li className="nav-item">
+            <button
+              className={`nav-link ${tab === "clientes" ? "active" : ""}`}
+              onClick={() => setTab("clientes")}
+            >
+              <i className="bi bi-people me-1"></i>Clientes
+              {despachosPendientesCount > 0 && (
+                <span className="badge bg-primary ms-2" style={{ fontSize: "0.65rem" }}>
+                  {despachosPendientesCount}
+                </span>
+              )}
+            </button>
+          </li>
+          <li className="nav-item">
+            <button
+              className={`nav-link ${tab === "camaras" ? "active" : ""}`}
+              onClick={() => setTab("camaras")}
+            >
+              <i className="bi bi-truck me-1"></i>Envíos entre cámaras
+              {enviosAPrepararCount > 0 && (
+                <span className="badge bg-primary ms-2" style={{ fontSize: "0.65rem" }}>
+                  {enviosAPrepararCount}
+                </span>
+              )}
+            </button>
+          </li>
+        </ul>
+
         {/* Buscador */}
         <div className="card border-0 shadow-sm mb-3">
           <div className="card-body py-2">
@@ -524,7 +561,7 @@ const RecepcionFrigorificoPage = () => {
               <input
                 type="text"
                 className="form-control border-start-0"
-                placeholder="Buscar por número de orden o cliente..."
+                placeholder={tab === "clientes" ? "Buscar por número de orden o cliente..." : "Buscar por número de envío..."}
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
               />
@@ -542,13 +579,14 @@ const RecepcionFrigorificoPage = () => {
         ) : (
           <>
 
-          {/* ── Envíos entre cámaras (Cañete→Trigotuc) — frigorifico prepara e imprime ── */}
-          {enviosVisibles.length > 0 && (
+          {/* ── SOLAPA: Envíos entre cámaras (Cañete→Trigotuc) — frigorifico prepara e imprime ── */}
+          {tab === "camaras" && (enviosVisibles.length === 0 ? (
+            <div className="text-center py-5 text-muted">
+              <i className="bi bi-inbox fs-1 d-block mb-2"></i>
+              {busqueda ? "No se encontró ningún envío." : "No hay envíos en este estado."}
+            </div>
+          ) : (
             <div className="mb-4">
-              <h5 className="h6 text-muted mb-2">
-                <i className="bi bi-truck me-2 text-primary"></i>
-                Envíos entre cámaras{filtroEstado === "pendiente" ? " — a preparar" : ""}
-              </h5>
               {/* TARJETAS — mobile / tablet */}
               <div className="row g-3 d-lg-none">
                 {enviosPagina.map((e) => (
@@ -695,14 +733,15 @@ const RecepcionFrigorificoPage = () => {
                 onPageChange={setPaginaEnvios}
               />
             </div>
-          )}
+          ))}
 
-          {despachosVisibles.length === 0 && enviosVisibles.length === 0 ? (
+          {/* ── SOLAPA: Órdenes a clientes ── */}
+          {tab === "clientes" && (despachosVisibles.length === 0 ? (
           <div className="text-center py-5 text-muted">
             <i className="bi bi-inbox fs-1 d-block mb-2"></i>
             {busqueda ? "No se encontró ninguna orden." : "No hay órdenes en este estado."}
           </div>
-        ) : despachosVisibles.length === 0 ? null : (
+        ) : (
           <>
 
           {/* ── TARJETAS — mobile / tablet ── */}
@@ -980,7 +1019,7 @@ const RecepcionFrigorificoPage = () => {
           />
 
           </>
-        )}
+        ))}
           </>
         )}
 
