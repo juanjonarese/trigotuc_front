@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Layout from "../components/Layout";
+import Pagination from "../components/Pagination";
 import { escapeHtml } from "../utils/escapeHtml";
 import {
   obtenerDespachosFrigorifico,
@@ -19,6 +20,8 @@ const TIPOS_TROZADO = [
   { tipo: "menudo",  label: "Menudo"     },
   { tipo: "carcaza", label: "Carcaza"    },
 ];
+
+const ITEMS_POR_PAGINA = 50;
 
 const fmt       = (n) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n ?? 0);
 const fmtFecha  = (f) => f ? new Date(f).toLocaleDateString("es-AR") : "—";
@@ -365,7 +368,6 @@ const RecepcionFrigorificoPage = () => {
   const rolUsuario     = localStorage.getItem("rolUsuario");
   const puedeLiberar   = ["superadmin", "administracion_frigorifico"].includes(rolUsuario);
   const puedeConfirmar = ["superadmin", "frigorifico"].includes(rolUsuario);
-  const esSuperAdmin   = rolUsuario === "superadmin";
 
   const [despachos, setDespachos]     = useState([]);
   const [envios, setEnvios]           = useState([]);
@@ -374,6 +376,13 @@ const RecepcionFrigorificoPage = () => {
   const [busqueda, setBusqueda]       = useState("");
   const [despachoModal, setDespachoModal] = useState(null);
   const [preparando, setPreparando]   = useState(null);
+  const [paginaDespachos, setPaginaDespachos] = useState(1);
+  const [paginaEnvios, setPaginaEnvios]       = useState(1);
+
+  useEffect(() => {
+    setPaginaDespachos(1);
+    setPaginaEnvios(1);
+  }, [filtroEstado, busqueda]);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -469,6 +478,15 @@ const RecepcionFrigorificoPage = () => {
     })
     .filter((e) => !busqueda || e.numeroEnvio?.toLowerCase().includes(busqueda.toLowerCase()));
 
+  const despachosPagina = despachosVisibles.slice(
+    (paginaDespachos - 1) * ITEMS_POR_PAGINA,
+    paginaDespachos * ITEMS_POR_PAGINA
+  );
+  const enviosPagina = enviosVisibles.slice(
+    (paginaEnvios - 1) * ITEMS_POR_PAGINA,
+    paginaEnvios * ITEMS_POR_PAGINA
+  );
+
   return (
     <Layout>
       <div className="container-fluid">
@@ -529,9 +547,10 @@ const RecepcionFrigorificoPage = () => {
                 <i className="bi bi-truck me-2 text-primary"></i>
                 Envíos entre cámaras{filtroEstado === "pendiente" ? " — a preparar" : ""}
               </h5>
-              <div className="row g-3">
-                {enviosVisibles.map((e) => (
-                  <div key={e._id} className="col-12 col-md-6 col-lg-4">
+              {/* TARJETAS — mobile / tablet */}
+              <div className="row g-3 d-lg-none">
+                {enviosPagina.map((e) => (
+                  <div key={e._id} className="col-12 col-md-6">
                     <div className="card border-0 shadow-sm h-100" style={{ borderLeft: "4px solid #6f42c1" }}>
                       <div className="card-body">
                         <div className="d-flex justify-content-between align-items-start mb-2">
@@ -588,6 +607,87 @@ const RecepcionFrigorificoPage = () => {
                   </div>
                 ))}
               </div>
+
+              {/* TABLA — desktop */}
+              <div className="card border-0 shadow-sm d-none d-lg-block">
+                <div className="card-body p-0">
+                  <div className="table-responsive">
+                    <table className="table table-hover align-middle mb-0">
+                      <thead className="table-light">
+                        <tr>
+                          <th>N° Envío</th>
+                          <th>Fecha</th>
+                          <th>Ruta</th>
+                          <th>Chofer / Camión</th>
+                          <th>Detalle</th>
+                          <th>Estado</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {enviosPagina.map((e) => (
+                          <tr key={e._id}>
+                            <td><span className="badge bg-dark">{e.numeroEnvio}</span></td>
+                            <td className="small">{fmtFecha(e.fecha)}</td>
+                            <td className="small">
+                              <span className="badge bg-secondary">{camaraLbl(e.camaraOrigen)}</span>
+                              <i className="bi bi-arrow-right text-muted mx-1"></i>
+                              <span className="badge bg-secondary">{camaraLbl(e.camaraDestino)}</span>
+                            </td>
+                            <td className="small text-muted">
+                              {e.chofer?.nombreUsuario || "—"}
+                              {e.camion && <> · {e.camion.marca} {e.camion.patente}</>}
+                            </td>
+                            <td>
+                              <div className="d-flex flex-wrap gap-1">
+                                {e.calibres?.map((c, i) => (
+                                  <span key={i} className="badge bg-info text-dark">Cal.{c.calibre}: {fmt(c.cajones)} caj</span>
+                                ))}
+                                {e.trozados?.map((t, i) => (
+                                  <span key={`t${i}`} className="badge bg-warning text-dark">{tipoLbl(t.tipo)}: {fmt(t.cajas)} caj</span>
+                                ))}
+                                {e.observaciones && (
+                                  <span className="badge bg-light text-dark border" title={e.observaciones}>
+                                    <i className="bi bi-info-circle text-warning"></i>
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td>
+                              {e.preparado
+                                ? <span className="badge bg-success"><i className="bi bi-check2 me-1"></i>Preparado</span>
+                                : <span className="badge bg-warning text-dark"><i className="bi bi-hourglass-split me-1"></i>A preparar</span>}
+                            </td>
+                            <td>
+                              {!e.preparado && puedeConfirmar ? (
+                                <button className="btn btn-primary btn-sm" disabled={preparando === e._id} onClick={() => handlePrepararEnvio(e)}>
+                                  {preparando === e._id
+                                    ? <span className="spinner-border spinner-border-sm me-1"></span>
+                                    : <i className="bi bi-printer me-1"></i>}
+                                  Imprimir y preparar
+                                </button>
+                              ) : !e.preparado ? (
+                                <span className="small text-muted"><i className="bi bi-hourglass-split me-1"></i>Esperando frigorífico</span>
+                              ) : (
+                                <button className="btn btn-outline-secondary btn-sm" onClick={() => imprimirOrdenEnvio(e)}>
+                                  <i className="bi bi-printer me-1"></i>Reimprimir
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              <Pagination
+                currentPage={paginaEnvios}
+                totalItems={enviosVisibles.length}
+                itemsPerPage={ITEMS_POR_PAGINA}
+                onPageChange={setPaginaEnvios}
+              />
             </div>
           )}
 
@@ -596,12 +696,13 @@ const RecepcionFrigorificoPage = () => {
             <i className="bi bi-inbox fs-1 d-block mb-2"></i>
             {busqueda ? "No se encontró ninguna orden." : "No hay órdenes en este estado."}
           </div>
-        ) : despachosVisibles.length === 0 ? null : filtroEstado === "pendiente" ? (
+        ) : despachosVisibles.length === 0 ? null : (
+          <>
 
-          /* ── TARJETAS — pendientes ── */
-          <div className="row g-3">
-            {despachosVisibles.map((d) => (
-              <div key={d._id} className="col-12 col-md-6 col-lg-4">
+          {/* ── TARJETAS — mobile / tablet ── */}
+          <div className="row g-3 d-lg-none">
+            {despachosPagina.map((d) => (
+              <div key={d._id} className="col-12 col-md-6">
                 <div className="card border-0 shadow-sm h-100"
                   style={{ borderLeft: "4px solid #198754" }}>
                   <div className="card-body">
@@ -629,9 +730,15 @@ const RecepcionFrigorificoPage = () => {
                             {d.turno === "mañana" ? "Mañana" : "Tarde"}
                           </span>
                         )}
-                        <span className="badge bg-warning text-dark">
-                          <i className="bi bi-hourglass-split me-1"></i>Pendiente
-                        </span>
+                        {d.estado === "completada" ? (
+                          <span className="badge bg-success">
+                            <i className="bi bi-check-circle me-1"></i>Completada
+                          </span>
+                        ) : (
+                          <span className="badge bg-warning text-dark">
+                            <i className="bi bi-hourglass-split me-1"></i>Pendiente
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -642,6 +749,9 @@ const RecepcionFrigorificoPage = () => {
                     </div>
                     <div className="text-muted small mb-2">
                       <i className="bi bi-calendar me-1"></i>{fmtFecha(d.fecha)}
+                      {d.estado === "completada" && d.completadoPor?.nombreUsuario && (
+                        <> · <i className="bi bi-person-check me-1"></i>{d.completadoPor.nombreUsuario}</>
+                      )}
                     </div>
 
                     {/* Detalle calibres + trozados */}
@@ -694,25 +804,44 @@ const RecepcionFrigorificoPage = () => {
                   </div>
 
                   <div className="card-footer bg-transparent border-top-0 pt-0 pb-3 px-3">
-                    {d.liberada && (
-                      <div className="alert alert-warning py-1 px-2 mb-2 small text-center">
-                        <i className="bi bi-unlock-fill me-1"></i>Liberada por administración — sin código
+                    {d.estado === "completada" ? (
+                      <div className="d-flex gap-2">
+                        <button className="btn btn-outline-secondary btn-sm flex-grow-1" onClick={() => imprimirRemito(d)}>
+                          <i className="bi bi-printer me-1"></i>Reimprimir remito
+                        </button>
+                        {puedeConfirmar && (
+                          <button
+                            className="btn btn-outline-danger btn-sm"
+                            title="Revertir recepción (vuelve a pendiente)"
+                            onClick={() => handleRevertir(d)}
+                          >
+                            <i className="bi bi-arrow-counterclockwise"></i>
+                          </button>
+                        )}
                       </div>
-                    )}
-                    {puedeConfirmar ? (
-                      <button className="btn btn-success w-100 mb-2" onClick={() => setDespachoModal(d)}>
-                        <i className={`bi ${d.modalidadEntrega === "delivery_chofer" ? "bi-truck" : "bi-check2-circle"} me-1`}></i>
-                        {d.modalidadEntrega === "delivery_chofer" ? "Confirmar carga" : "Confirmar entrega"}
-                      </button>
                     ) : (
-                      <div className="alert alert-light border py-2 mb-2 small text-center text-muted">
-                        <i className="bi bi-hourglass-split me-1"></i>Esperando confirmación de frigorífico
-                      </div>
-                    )}
-                    {puedeLiberar && !d.liberada && d.modalidadEntrega !== "delivery_chofer" && (
-                      <button className="btn btn-outline-warning btn-sm w-100" onClick={() => handleLiberar(d)}>
-                        <i className="bi bi-unlock me-1"></i>Liberar sin código
-                      </button>
+                      <>
+                        {d.liberada && (
+                          <div className="alert alert-warning py-1 px-2 mb-2 small text-center">
+                            <i className="bi bi-unlock-fill me-1"></i>Liberada por administración — sin código
+                          </div>
+                        )}
+                        {puedeConfirmar ? (
+                          <button className="btn btn-success w-100 mb-2" onClick={() => setDespachoModal(d)}>
+                            <i className={`bi ${d.modalidadEntrega === "delivery_chofer" ? "bi-truck" : "bi-check2-circle"} me-1`}></i>
+                            {d.modalidadEntrega === "delivery_chofer" ? "Confirmar carga" : "Confirmar entrega"}
+                          </button>
+                        ) : (
+                          <div className="alert alert-light border py-2 mb-2 small text-center text-muted">
+                            <i className="bi bi-hourglass-split me-1"></i>Esperando confirmación de frigorífico
+                          </div>
+                        )}
+                        {puedeLiberar && !d.liberada && d.modalidadEntrega !== "delivery_chofer" && (
+                          <button className="btn btn-outline-warning btn-sm w-100" onClick={() => handleLiberar(d)}>
+                            <i className="bi bi-unlock me-1"></i>Liberar sin código
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -720,10 +849,8 @@ const RecepcionFrigorificoPage = () => {
             ))}
           </div>
 
-        ) : (
-
-          /* ── TABLA — completadas / todas ── */
-          <div className="card border-0 shadow-sm">
+          {/* ── TABLA — desktop ── */}
+          <div className="card border-0 shadow-sm d-none d-lg-block">
             <div className="card-body p-0">
               <div className="table-responsive">
                 <table className="table table-hover align-middle mb-0">
@@ -734,6 +861,7 @@ const RecepcionFrigorificoPage = () => {
                       <th>Cliente</th>
                       <th>Cámara</th>
                       <th>Turno</th>
+                      <th>Entrega</th>
                       <th>Detalle</th>
                       <th>Estado</th>
                       <th>Completada por</th>
@@ -741,7 +869,7 @@ const RecepcionFrigorificoPage = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {despachosVisibles.map((d) => (
+                    {despachosPagina.map((d) => (
                       <tr key={d._id}>
                         <td>
                           <span className={`badge ${d.estado === "completada" ? "bg-success" : "bg-warning text-dark"}`}>
@@ -753,6 +881,17 @@ const RecepcionFrigorificoPage = () => {
                         <td><span className="badge bg-secondary">{camaraLbl(d.camara)}</span></td>
                         <td className="small text-muted">{d.turno || "—"}</td>
                         <td>
+                          {d.modalidadEntrega === "delivery_chofer" ? (
+                            <span className="badge bg-info text-dark">
+                              <i className="bi bi-truck me-1"></i>{d.chofer?.nombreUsuario || "Camión"}
+                            </span>
+                          ) : (
+                            <span className="badge bg-light text-dark border">
+                              <i className="bi bi-person-walking me-1"></i>Retiro
+                            </span>
+                          )}
+                        </td>
+                        <td>
                           <div className="d-flex flex-wrap gap-1">
                             {d.calibres?.map((c, i) => (
                               <span key={i} className="badge bg-primary">Cal.{c.calibre}: {fmt(c.cajones)} caj</span>
@@ -762,6 +901,11 @@ const RecepcionFrigorificoPage = () => {
                                 {tipoLbl(t.tipo)}: {fmt(t.cajas)} caj
                               </span>
                             ))}
+                            {d.observaciones && (
+                              <span className="badge bg-light text-dark border" title={d.observaciones}>
+                                <i className="bi bi-info-circle text-warning"></i>
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td>
@@ -769,10 +913,15 @@ const RecepcionFrigorificoPage = () => {
                             ? <span className="badge bg-success">Completada</span>
                             : <span className="badge bg-warning text-dark">Pendiente</span>
                           }
+                          {d.estado !== "completada" && d.liberada && (
+                            <span className="badge bg-warning text-dark ms-1" title="Liberada por administración — sin código">
+                              <i className="bi bi-unlock-fill"></i>
+                            </span>
+                          )}
                         </td>
                         <td className="small text-muted">{d.completadoPor?.nombreUsuario || "—"}</td>
                         <td>
-                          {d.estado === "completada" && (
+                          {d.estado === "completada" ? (
                             <div className="d-flex gap-1">
                               <button
                                 className="btn btn-outline-secondary btn-sm"
@@ -781,13 +930,29 @@ const RecepcionFrigorificoPage = () => {
                               >
                                 <i className="bi bi-printer"></i>
                               </button>
-                              {esSuperAdmin && (
+                              {puedeConfirmar && (
                                 <button
                                   className="btn btn-outline-danger btn-sm"
                                   title="Revertir recepción (vuelve a pendiente)"
                                   onClick={() => handleRevertir(d)}
                                 >
                                   <i className="bi bi-arrow-counterclockwise"></i>
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="d-flex gap-1 flex-wrap">
+                              {puedeConfirmar ? (
+                                <button className="btn btn-success btn-sm" onClick={() => setDespachoModal(d)}>
+                                  <i className={`bi ${d.modalidadEntrega === "delivery_chofer" ? "bi-truck" : "bi-check2-circle"} me-1`}></i>
+                                  {d.modalidadEntrega === "delivery_chofer" ? "Confirmar carga" : "Confirmar entrega"}
+                                </button>
+                              ) : (
+                                <span className="small text-muted"><i className="bi bi-hourglass-split me-1"></i>Esperando frigorífico</span>
+                              )}
+                              {puedeLiberar && !d.liberada && d.modalidadEntrega !== "delivery_chofer" && (
+                                <button className="btn btn-outline-warning btn-sm" title="Liberar sin código" onClick={() => handleLiberar(d)}>
+                                  <i className="bi bi-unlock"></i>
                                 </button>
                               )}
                             </div>
@@ -801,6 +966,14 @@ const RecepcionFrigorificoPage = () => {
             </div>
           </div>
 
+          <Pagination
+            currentPage={paginaDespachos}
+            totalItems={despachosVisibles.length}
+            itemsPerPage={ITEMS_POR_PAGINA}
+            onPageChange={setPaginaDespachos}
+          />
+
+          </>
         )}
           </>
         )}

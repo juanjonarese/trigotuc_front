@@ -1066,7 +1066,6 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado }) => {
 // ── Página principal ─────────────────────────────────────────────────────────
 const DespachoFrigorificoPage = () => {
   const rolUsuario    = localStorage.getItem("rolUsuario");
-  const esSuperAdmin  = rolUsuario === "superadmin";
   const esAdmin       = ["superadmin", "administracion_frigorifico"].includes(rolUsuario);
 
   const [despachos, setDespachos]       = useState([]);
@@ -1286,7 +1285,7 @@ const DespachoFrigorificoPage = () => {
                           <i className="bi bi-pencil"></i>
                         </button>
                       )}
-                      {esSuperAdmin && d.estado === "pendiente" && (
+                      {esAdmin && d.estado === "pendiente" && (
                         <button className="btn btn-outline-danger btn-sm flex-grow-1" title="Eliminar"
                           onClick={() => handleEliminar(d._id)}>
                           <i className="bi bi-trash"></i>
