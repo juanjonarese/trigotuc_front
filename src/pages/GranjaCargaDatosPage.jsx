@@ -74,23 +74,33 @@ const tipoParaFecha = (fechaIngreso, fechaPesaje) => {
   return "semanal";
 };
 
-// Solo pesajes semanales con su mortandad, para la tabla de referencia
+// Pesajes semanales agrupados por semana, con TODAS las bajas diarias de esa
+// semana. La mortandad se carga día por día, así que una semana puede tener
+// varios registros: se guardan en `mortandades[]` y se muestran en acordeón.
 const buildSemanas = (lote) => {
   const mapa = {};
+  const asegurar = (semana) => {
+    if (!mapa[semana]) mapa[semana] = { semana, pesaje: null, mortandades: [] };
+    return mapa[semana];
+  };
 
   for (const p of lote.pesajes || []) {
     if (p.tipo === "dia1" || p.tipo === "dia4") continue;
-    if (!mapa[p.semana]) mapa[p.semana] = { semana: p.semana, pesaje: null, mortandad: null };
     // Varias tomas por semana: mostrar siempre la última cargada (orden del array).
-    mapa[p.semana].pesaje = p;
+    asegurar(p.semana).pesaje = p;
   }
   for (const m of lote.mortandad || []) {
     if (m.semana === 0) continue; // bajas de ingreso, no semanales
-    if (!mapa[m.semana]) mapa[m.semana] = { semana: m.semana, pesaje: null, mortandad: null };
-    if (!mapa[m.semana].mortandad) mapa[m.semana].mortandad = m;
+    asegurar(m.semana).mortandades.push(m);
   }
 
-  return Object.values(mapa).sort((a, b) => a.semana - b.semana);
+  return Object.values(mapa)
+    .map((fila) => ({
+      ...fila,
+      mortandades: [...fila.mortandades].sort((a, b) => new Date(a.fecha) - new Date(b.fecha)),
+      totalBajas: fila.mortandades.reduce((s, m) => s + m.cantidad, 0),
+    }))
+    .sort((a, b) => a.semana - b.semana);
 };
 
 // Pesajes de día 1 y día 4
@@ -244,6 +254,134 @@ const EditarSemanaModal = ({ lote, fila, onClose, onGuardado, puedeEliminar = tr
                 </button>
               )}
               {!puedeEliminar && <div></div>}
+              <div className="d-flex gap-2">
+                <button className="btn btn-outline-secondary btn-sm" onClick={onClose} disabled={saving}>Cancelar</button>
+                <button className="btn btn-primary btn-sm" onClick={handleGuardar} disabled={saving}>
+                  {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
+                  Guardar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="modal-backdrop show"></div>
+    </>
+  );
+};
+
+// ── Modal editar baja de un día ────────────────────────────────────────────
+// La mortandad se carga por día, así que cada registro se edita por separado.
+// Cambiar la fecha puede mover la baja de semana (lo recalcula el backend).
+const EditarBajaDiaModal = ({ lote, baja, onClose, onGuardado, puedeEliminar = true }) => {
+  const [cantidad, setCantidad] = useState(String(baja.cantidad));
+  const [causa, setCausa]       = useState(baja.causa || "");
+  const [fecha, setFecha]       = useState((baja.fecha || "").split("T")[0]);
+  const [saving, setSaving]     = useState(false);
+
+  const fechaIngresoStr = lote.fechaIngreso?.split("T")[0];
+
+  const handleGuardar = async () => {
+    const cantVal = Number(cantidad);
+    if (isNaN(cantVal) || cantVal < 0) {
+      Swal.fire("Error", "Cantidad de bajas inválida.", "warning"); return;
+    }
+    if (!fecha) {
+      Swal.fire("Error", "La fecha es obligatoria.", "warning"); return;
+    }
+    if (fechaIngresoStr && fecha < fechaIngresoStr) {
+      Swal.fire("Error", `La fecha no puede ser anterior al ingreso del lote (${formatearFechaLocal(lote.fechaIngreso)}).`, "warning"); return;
+    }
+
+    setSaving(true);
+    try {
+      // Poner 0 equivale a borrar la baja del día.
+      if (cantVal === 0) {
+        await eliminarMortandadGranja(lote._id, baja._id);
+      } else {
+        await editarMortandadGranja(lote._id, baja._id, {
+          cantidad: cantVal,
+          causa: causa || undefined,
+          fecha: ajustarFechaParaGuardar(fecha),
+        });
+      }
+      onGuardado();
+    } catch (err) {
+      Swal.fire("Error", err.message, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleEliminar = async () => {
+    const ok = await Swal.fire({
+      title: "¿Eliminar esta baja?",
+      text: `Se devolverán ${baja.cantidad} pollos al galpón.`,
+      icon: "warning", showCancelButton: true,
+      confirmButtonColor: "#dc3545", confirmButtonText: "Sí, eliminar", cancelButtonText: "Cancelar",
+    });
+    if (!ok.isConfirmed) return;
+    setSaving(true);
+    try {
+      await eliminarMortandadGranja(lote._id, baja._id);
+      onGuardado();
+    } catch (err) {
+      Swal.fire("Error", err.message, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="modal show d-block" tabIndex="-1">
+        <div className="modal-dialog modal-sm modal-dialog-centered">
+          <div className="modal-content">
+            <div className="modal-header py-2 bg-light">
+              <h6 className="modal-title fw-bold">
+                Baja del {formatearFechaLocal(baja.fecha)}
+              </h6>
+              <button className="btn-close btn-sm" onClick={onClose} disabled={saving}></button>
+            </div>
+            <div className="modal-body">
+              <div className="mb-3">
+                <label className="form-label fw-semibold small mb-1">Fecha</label>
+                <input
+                  type="date" className="form-control"
+                  value={fecha} onChange={(e) => setFecha(e.target.value)}
+                  min={fechaIngresoStr}
+                  max={obtenerFechaHoy()}
+                />
+                <div className="form-text">Cambiar la fecha puede mover la baja de semana.</div>
+              </div>
+              <div className="mb-3">
+                <label className="form-label fw-semibold small mb-1">Bajas</label>
+                <input
+                  type="number" className="form-control" min="0"
+                  value={cantidad} onChange={(e) => setCantidad(e.target.value)}
+                  autoFocus
+                />
+                <div className="form-text">Poné 0 para eliminar esta baja.</div>
+              </div>
+              <div>
+                <label className="form-label fw-semibold small mb-1">
+                  Causa <span className="text-muted fw-normal">(opcional)</span>
+                </label>
+                <input
+                  type="text" className="form-control"
+                  value={causa} onChange={(e) => setCausa(e.target.value)}
+                  placeholder="Causa..."
+                />
+              </div>
+            </div>
+            <div className="modal-footer py-2 d-flex justify-content-between">
+              {puedeEliminar
+                ? (
+                  <button className="btn btn-outline-danger btn-sm" onClick={handleEliminar} disabled={saving}>
+                    <i className="bi bi-trash me-1"></i>Eliminar
+                  </button>
+                )
+                : <div></div>}
               <div className="d-flex gap-2">
                 <button className="btn btn-outline-secondary btn-sm" onClick={onClose} disabled={saving}>Cancelar</button>
                 <button className="btn btn-primary btn-sm" onClick={handleGuardar} disabled={saving}>
@@ -474,7 +612,11 @@ const MudarPollosModal = ({ lotes, lotePresel, onClose, onGuardado }) => {
 // ── Página principal ───────────────────────────────────────────────────────
 const GranjaCargaDatosPage = () => {
   const rolUsuario  = localStorage.getItem("rolUsuario");
-  const puedeEliminar = ["superadmin", "administracion_granja"].includes(rolUsuario);
+  // Mismos roles que habilita el backend en DELETE de pesaje/mortandad
+  // (esSuperAdminOGranjaOAdministracionGranja). Antes `granja` no veía el botón
+  // pero podía borrar igual poniendo la cantidad en 0, así que era una
+  // restricción de fachada.
+  const puedeEliminar = ["superadmin", "administracion_granja", "granja"].includes(rolUsuario);
 
   const [lotes, setLotes]   = useState([]);
   const [loading, setLoading] = useState(true);
@@ -482,6 +624,8 @@ const GranjaCargaDatosPage = () => {
   // modo: null = elegir acción | "cargar" | "editar"
   const [modo, setModo]         = useState(null);
   const [editFila, setEditFila] = useState(null);
+  const [editBaja, setEditBaja] = useState(null);       // baja diaria a editar
+  const [semanasAbiertas, setSemanasAbiertas] = useState([]); // acordeón de bajas por día
   const [editInicial, setEditInicial] = useState(null); // { pesaje, label }
   const [showMudar, setShowMudar]         = useState(false);
   const [lotePreselMudar, setLotePreselMudar] = useState(null);
@@ -510,50 +654,75 @@ const GranjaCargaDatosPage = () => {
   const seleccionar = (lote) => {
     setLoteSeleccionado(lote);
     setModo(null);
+    setSemanasAbiertas([]);
     setForm({ fecha: obtenerFechaHoy(), pesoPromedio: "", mortandad: "", observaciones: "" });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
+
+  const toggleSemana = (semana) =>
+    setSemanasAbiertas((prev) =>
+      prev.includes(semana) ? prev.filter((s) => s !== semana) : [...prev, semana]
+    );
 
   const prefixDeGranja = (g) => GRANJAS.find((x) => x.key === g)?.prefix || "";
 
   const handleGuardar = async (e) => {
     e.preventDefault();
-    if (!form.pesoPromedio) {
-      Swal.fire("Faltan datos", "El peso promedio es obligatorio.", "warning"); return;
+
+    // La mortandad se carga TODOS los días; el pesaje es semanal. Por eso el peso
+    // es opcional: la mayoría de los días solo se cargan las bajas.
+    const pesoCargado = form.pesoPromedio !== "";
+    const bajasVal    = form.mortandad === "" ? null : Number(form.mortandad);
+
+    if (!pesoCargado && (bajasVal === null || bajasVal <= 0)) {
+      Swal.fire(
+        "Faltan datos",
+        "Cargá la mortandad del día, el peso promedio, o ambos.",
+        "warning"
+      ); return;
     }
-    const pesoVal = Number(form.pesoPromedio);
-    if (pesoVal > 15) {
-      Swal.fire({
-        icon: "error", title: "Peso inválido",
-        html: `<strong>${pesoVal} kg</strong> es imposible.<br>El campo es en <strong>kg</strong>. Ej: <strong>0.450</strong> para 450 g`,
-      }); return;
+
+    const pesoVal = pesoCargado ? Number(form.pesoPromedio) : null;
+    if (pesoCargado) {
+      if (pesoVal > 15) {
+        Swal.fire({
+          icon: "error", title: "Peso inválido",
+          html: `<strong>${pesoVal} kg</strong> es imposible.<br>El campo es en <strong>kg</strong>. Ej: <strong>0.450</strong> para 450 g`,
+        }); return;
+      }
+      if (pesoVal > 6) {
+        const { isConfirmed } = await Swal.fire({
+          icon: "warning", title: "Peso inusualmente alto",
+          html: `Ingresaste <strong>${pesoVal} kg</strong>. ¿Es correcto?`,
+          showCancelButton: true, confirmButtonText: "Sí, es correcto", cancelButtonText: "Corregir",
+        });
+        if (!isConfirmed) return;
+      }
+      // Si además se pesa, seguimos exigiendo que declaren las bajas del día
+      // (poner 0 explícito) para que no se saltee el dato sin querer.
+      if (bajasVal === null) {
+        Swal.fire("Faltan datos", "Ingresá la mortandad del día. Si no hubo bajas, poné 0.", "warning"); return;
+      }
     }
-    if (pesoVal > 6) {
-      const { isConfirmed } = await Swal.fire({
-        icon: "warning", title: "Peso inusualmente alto",
-        html: `Ingresaste <strong>${pesoVal} kg</strong>. ¿Es correcto?`,
-        showCancelButton: true, confirmButtonText: "Sí, es correcto", cancelButtonText: "Corregir",
-      });
-      if (!isConfirmed) return;
-    }
-    if (form.mortandad === "") {
-      Swal.fire("Faltan datos", "Ingresá la mortandad. Si no hubo bajas, poné 0.", "warning"); return;
-    }
+
     setSaving(true);
     try {
       const fecha = ajustarFechaParaGuardar(form.fecha);
-      const promesas = [
-        registrarPesajeGranja(loteSeleccionado._id, {
-          fecha,
-          pesoPromedio: Math.round(pesoVal * 1000),
-          observaciones: form.observaciones || undefined,
-        }),
-      ];
-      if (Number(form.mortandad) > 0) {
+      const promesas = [];
+      if (pesoCargado) {
+        promesas.push(
+          registrarPesajeGranja(loteSeleccionado._id, {
+            fecha,
+            pesoPromedio: Math.round(pesoVal * 1000),
+            observaciones: form.observaciones || undefined,
+          })
+        );
+      }
+      if (bajasVal > 0) {
         promesas.push(
           registrarMortandadGranja(loteSeleccionado._id, {
             fecha,
-            cantidad: Number(form.mortandad),
+            cantidad: bajasVal,
             causa: form.observaciones || undefined,
           })
         );
@@ -711,15 +880,21 @@ const GranjaCargaDatosPage = () => {
                         </div>
                       )}
                       {!antesDeLIngreso && tipoBadge && (() => {
+                        const pesoCargado = form.pesoPromedio !== "";
                         // Día 1 / Día 4 siguen siendo únicos; los semanales admiten varias tomas.
-                        const duplicadoDia = yaHayPesaje && tipoPesaje !== "semanal";
+                        // El aviso de duplicado solo aplica si además se está pesando.
+                        const duplicadoDia = pesoCargado && yaHayPesaje && tipoPesaje !== "semanal";
                         return (
                           <div className={`alert py-2 px-3 mb-2 small ${duplicadoDia ? "alert-warning" : "alert-info"}`}>
                             {duplicadoDia
-                              ? <><i className="bi bi-exclamation-triangle me-1"></i><strong>{tipoBadge}</strong> ya tiene datos. Usá <strong>Editar datos</strong> para corregir.</>
-                              : yaHayPesaje
-                                ? <><i className="bi bi-calendar-check me-1"></i>Ya hay una toma en <strong>{tipoBadge}</strong>. Se agregará otra; la tabla mostrará la <strong>última toma cargada</strong>.</>
-                                : <><i className="bi bi-calendar-check me-1"></i>Cargando <strong>{tipoBadge}</strong>.</>
+                              ? <><i className="bi bi-exclamation-triangle me-1"></i>El pesaje de <strong>{tipoBadge}</strong> ya está cargado. Usá <strong>Editar datos</strong> para corregirlo.</>
+                              : pesoCargado && yaHayPesaje
+                                ? <><i className="bi bi-calendar-check me-1"></i>Ya hay una toma de peso en <strong>{tipoBadge}</strong>. Se agregará otra; la tabla mostrará la <strong>última toma cargada</strong>.</>
+                                : <>
+                                    <i className="bi bi-calendar-check me-1"></i>
+                                    Las bajas se registran en la fecha elegida (<strong>{formatearFechaLocal(form.fecha)}</strong>)
+                                    {tipoPesaje === "semanal" && <> y quedan agrupadas en <strong>{tipoBadge}</strong></>}.
+                                  </>
                             }
                           </div>
                         );
@@ -737,7 +912,7 @@ const GranjaCargaDatosPage = () => {
                         </div>
                         <div className="col-6 col-md-3">
                           <label className="form-label fw-semibold small mb-1">
-                            Peso promedio <span className="text-muted fw-normal">(kg)</span>
+                            Peso promedio <span className="text-muted fw-normal">(kg, opcional)</span>
                           </label>
                           {(() => {
                             const nivel = validarPeso(form.pesoPromedio);
@@ -772,7 +947,9 @@ const GranjaCargaDatosPage = () => {
                           })()}
                         </div>
                         <div className="col-6 col-md-3">
-                          <label className="form-label fw-semibold small mb-1">Mortandad <span className="text-muted fw-normal">(cant.)</span></label>
+                          <label className="form-label fw-semibold small mb-1">
+                            Mortandad del día <span className="text-muted fw-normal">(cant.)</span>
+                          </label>
                           <input type="number" className="form-control form-control-sm"
                             placeholder="0" value={form.mortandad}
                             onChange={(e) => setForm({ ...form, mortandad: e.target.value })}
@@ -844,7 +1021,8 @@ const GranjaCargaDatosPage = () => {
                         </div>
                       )}
 
-                      {/* Pesajes semanales */}
+                      {/* Semanas — el peso es semanal, las bajas son diarias.
+                          Click en la semana → despliega las bajas día por día. */}
                       {semanas.length > 0 && (
                         <>
                           <div className="small fw-semibold text-muted text-uppercase mb-1" style={{ letterSpacing: "0.05em" }}>
@@ -854,6 +1032,7 @@ const GranjaCargaDatosPage = () => {
                             <table className="table table-hover align-middle mb-0">
                               <thead className="table-light">
                                 <tr>
+                                  <th style={{ width: "2.5rem" }}></th>
                                   <th className="text-center">Sem.</th>
                                   <th className="text-center">Peso prom.</th>
                                   <th className="text-center">Bajas</th>
@@ -861,25 +1040,67 @@ const GranjaCargaDatosPage = () => {
                                 </tr>
                               </thead>
                               <tbody>
-                                {semanas.map((fila) => (
-                                  <tr key={fila.semana}>
-                                    <td className="text-center fw-semibold">Sem. {fila.semana}</td>
-                                    <td className="text-center">
-                                      {fila.pesaje ? formatPeso(fila.pesaje.pesoPromedio) : <span className="text-muted">—</span>}
-                                    </td>
-                                    <td className="text-center">
-                                      {fila.mortandad
-                                        ? <span className="text-danger fw-semibold">{fila.mortandad.cantidad.toLocaleString("es-AR")}</span>
-                                        : <span className="text-muted">0</span>}
-                                    </td>
-                                    <td className="text-center">
-                                      <button className="btn btn-outline-primary btn-sm"
-                                        onClick={() => setEditFila(fila)}>
-                                        <i className="bi bi-pencil me-1"></i>Editar
-                                      </button>
-                                    </td>
-                                  </tr>
-                                ))}
+                                {semanas.map((fila) => {
+                                  const abierta  = semanasAbiertas.includes(fila.semana);
+                                  const tieneDias = fila.mortandades.length > 0;
+                                  return (
+                                    <React.Fragment key={fila.semana}>
+                                      <tr
+                                        className={abierta ? "table-active" : ""}
+                                        style={{ cursor: tieneDias ? "pointer" : "default" }}
+                                        onClick={() => tieneDias && toggleSemana(fila.semana)}
+                                      >
+                                        <td className="text-center text-muted">
+                                          {tieneDias && <i className={`bi bi-chevron-${abierta ? "down" : "right"}`}></i>}
+                                        </td>
+                                        <td className="text-center fw-semibold">Sem. {fila.semana}</td>
+                                        <td className="text-center">
+                                          {fila.pesaje ? formatPeso(fila.pesaje.pesoPromedio) : <span className="text-muted">—</span>}
+                                        </td>
+                                        <td className="text-center">
+                                          {fila.totalBajas > 0
+                                            ? (
+                                              <>
+                                                <span className="text-danger fw-semibold">{fila.totalBajas.toLocaleString("es-AR")}</span>
+                                                <span className="text-muted small ms-1">
+                                                  ({fila.mortandades.length} {fila.mortandades.length === 1 ? "día" : "días"})
+                                                </span>
+                                              </>
+                                            )
+                                            : <span className="text-muted">0</span>}
+                                        </td>
+                                        <td className="text-center">
+                                          <button className="btn btn-outline-primary btn-sm"
+                                            onClick={(e) => { e.stopPropagation(); setEditFila(fila); }}
+                                            disabled={!fila.pesaje}
+                                            title={fila.pesaje ? "Editar el pesaje de la semana" : "Sin pesaje registrado"}>
+                                            <i className="bi bi-pencil me-1"></i>Peso
+                                          </button>
+                                        </td>
+                                      </tr>
+
+                                      {abierta && fila.mortandades.map((m) => (
+                                        <tr key={m._id} className="small">
+                                          <td></td>
+                                          <td className="text-end text-muted" colSpan={2}>
+                                            <i className="bi bi-calendar-event me-1"></i>
+                                            {formatearFechaLocal(m.fecha)}
+                                            {m.causa && <span className="ms-2 fst-italic">{m.causa}</span>}
+                                          </td>
+                                          <td className="text-center text-danger fw-semibold">
+                                            {m.cantidad.toLocaleString("es-AR")}
+                                          </td>
+                                          <td className="text-center">
+                                            <button className="btn btn-outline-danger btn-sm py-0"
+                                              onClick={(e) => { e.stopPropagation(); setEditBaja(m); }}>
+                                              <i className="bi bi-pencil"></i>
+                                            </button>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </React.Fragment>
+                                  );
+                                })}
                               </tbody>
                             </table>
                           </div>
@@ -958,13 +1179,26 @@ const GranjaCargaDatosPage = () => {
 
       </div>
 
-      {/* Modal editar semana */}
+      {/* Modal editar el pesaje de la semana.
+          Las bajas ya no se editan acá: son diarias y van por EditarBajaDiaModal. */}
       {editFila && loteSeleccionado && (
         <EditarSemanaModal
           lote={loteSeleccionado}
           fila={editFila}
+          hideBajas={true}
           onClose={() => setEditFila(null)}
           onGuardado={() => { setEditFila(null); recargarYSincronizar(); }}
+          puedeEliminar={puedeEliminar}
+        />
+      )}
+
+      {/* Modal editar la baja de un día puntual */}
+      {editBaja && loteSeleccionado && (
+        <EditarBajaDiaModal
+          lote={loteSeleccionado}
+          baja={editBaja}
+          onClose={() => setEditBaja(null)}
+          onGuardado={() => { setEditBaja(null); recargarYSincronizar(); }}
           puedeEliminar={puedeEliminar}
         />
       )}
