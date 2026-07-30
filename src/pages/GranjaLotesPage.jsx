@@ -94,6 +94,24 @@ const badgeDif = (objetivo, peso) => {
   return <span className={`badge ${cls}`}>{dif >= 0 ? "+" : ""}{dif} g</span>;
 };
 
+// Agrupa las bajas diarias por semana, de la más reciente a la más vieja.
+// La semana 0 son las bajas registradas al ingreso del lote.
+const agruparMortandadPorSemana = (mortandad = []) => {
+  const mapa = {};
+  for (const m of mortandad) {
+    const key = m.semana ?? 0;
+    if (!mapa[key]) mapa[key] = { semana: key, dias: [], total: 0 };
+    mapa[key].dias.push(m);
+    mapa[key].total += m.cantidad;
+  }
+  return Object.values(mapa)
+    .map((g) => ({
+      ...g,
+      dias: [...g.dias].sort((a, b) => new Date(b.fecha) - new Date(a.fecha)),
+    }))
+    .sort((a, b) => b.semana - a.semana);
+};
+
 // ── Modal lectura (desde galpón card) ─────────────────────────────────────────
 const GalponModal = ({ lote, galponLabel, onClose }) => {
   const [tab, setTab] = useState("pesaje");
@@ -101,6 +119,16 @@ const GalponModal = ({ lote, galponLabel, onClose }) => {
   const sem    = semana(lote.fechaIngreso);
   const bajas  = lote.mortandad.reduce((s, m) => s + m.cantidad, 0);
   const egreso = estadoEgreso(lote);
+
+  // Arranca con la semana más reciente desplegada.
+  const gruposMortandad = agruparMortandadPorSemana(lote.mortandad);
+  const [semanasAbiertas, setSemanasAbiertas] = useState(
+    gruposMortandad.length ? [gruposMortandad[0].semana] : []
+  );
+  const toggleSemana = (s) =>
+    setSemanasAbiertas((prev) =>
+      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
+    );
 
   return (
     <div
@@ -256,32 +284,74 @@ const GalponModal = ({ lote, galponLabel, onClose }) => {
                   </div>
                 );
               })()}
+              {/* La mortandad se carga día por día, así que la lista plana se hace
+                  larguísima. Se agrupa por semana y cada una despliega sus días. */}
               {tab === "mortandad" && (
                 lote.mortandad.length === 0
                   ? <p className="text-muted text-center py-4">Sin bajas registradas</p>
                   : (
-                    <div className="table-responsive">
-                      <table className="table table-sm align-middle">
-                        <thead className="table-light">
-                          <tr><th>Semana</th><th>Fecha</th><th>Bajas</th><th>Causa</th></tr>
-                        </thead>
-                        <tbody>
-                          {[...lote.mortandad]
-                            .sort((a, b) => b.semana - a.semana || new Date(b.fecha) - new Date(a.fecha))
-                            .map((m) => (
-                            <tr key={m._id}>
-                              <td className="fw-semibold">Sem. {m.semana}</td>
-                              <td>{formatearFechaLocal(m.fecha)}</td>
-                              <td className="text-danger fw-bold">{m.cantidad}</td>
-                              <td>{m.causa || "-"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot className="table-light">
-                          <tr><td colSpan={2} className="fw-semibold">Total bajas</td><td className="text-danger fw-bold">{bajas}</td><td></td></tr>
-                        </tfoot>
-                      </table>
-                    </div>
+                    <>
+                      <div className="d-flex justify-content-between align-items-center mb-2 small">
+                        <span className="text-muted">
+                          Tocá una semana para ver las bajas día por día
+                        </span>
+                        <span className="fw-semibold">
+                          Total: <span className="text-danger">{bajas.toLocaleString("es-AR")}</span>
+                        </span>
+                      </div>
+
+                      <div className="list-group">
+                        {agruparMortandadPorSemana(lote.mortandad).map((grupo) => {
+                          const abierta = semanasAbiertas.includes(grupo.semana);
+                          const titulo  = grupo.semana === 0 ? "Bajas al ingreso" : `Semana ${grupo.semana}`;
+                          return (
+                            <div className="list-group-item p-0 border-0 mb-1" key={grupo.semana}>
+                              <button
+                                type="button"
+                                className={`btn w-100 d-flex align-items-center justify-content-between px-3 py-2 text-start ${
+                                  abierta ? "btn-light border" : "btn-outline-light text-dark border"
+                                }`}
+                                onClick={() => toggleSemana(grupo.semana)}
+                              >
+                                <span className="d-flex align-items-center gap-2">
+                                  <i className={`bi bi-chevron-${abierta ? "down" : "right"} text-muted`}></i>
+                                  <span className="fw-semibold">{titulo}</span>
+                                  <span className="text-muted small">
+                                    {grupo.dias.length} {grupo.dias.length === 1 ? "día" : "días"}
+                                  </span>
+                                </span>
+                                <span className="badge bg-danger">{grupo.total.toLocaleString("es-AR")}</span>
+                              </button>
+
+                              {abierta && (
+                                <div className="table-responsive border border-top-0 rounded-bottom">
+                                  <table className="table table-sm align-middle mb-0">
+                                    <thead className="table-light">
+                                      <tr>
+                                        <th className="small">Fecha</th>
+                                        <th className="small text-center">Bajas</th>
+                                        <th className="small">Causa</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {grupo.dias.map((m) => (
+                                        <tr key={m._id}>
+                                          <td className="small">{formatearFechaLocal(m.fecha)}</td>
+                                          <td className="small text-center text-danger fw-bold">
+                                            {m.cantidad.toLocaleString("es-AR")}
+                                          </td>
+                                          <td className="small text-muted">{m.causa || "—"}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
                   )
               )}
             </div>
