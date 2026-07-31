@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import { obtenerLotesGranja, obtenerMovimientosGalpon } from "../services/api";
 import { formatearFechaLocal } from "../utils/dateUtils";
+import { escapeHtml } from "../utils/escapeHtml";
 import Swal from "sweetalert2";
 
 const GRANJA_OPTS = [
@@ -90,6 +91,121 @@ const GranjaMovimientosPage = () => {
     return () => { activo = false; };
   }, [loteSel]);
 
+  // Imprimir / guardar como PDF el historial del lote seleccionado
+  const imprimirMovimientos = () => {
+    if (!data) return;
+
+    const fmt = (n) => Number(n || 0).toLocaleString("es-AR");
+    const lote = data.lote;
+    const res = data.resumen;
+    const ok = res && res.diferencia === 0;
+    const galponLabel = `${GRANJAS_PREFIX[lote.granja]}${lote.galpon}`;
+
+    const filas = data.movimientos.map((m) => {
+      const meta = TIPO_META[m.tipo] || { label: m.tipo };
+      return `<tr>
+        <td class="nowrap">${formatearFechaLocal(m.fecha)}</td>
+        <td>${escapeHtml(meta.label)}</td>
+        <td>${escapeHtml(m.detalle)}${m.referencia ? ` <span class="ref">(${escapeHtml(m.referencia)})</span>` : ""}</td>
+        <td class="num ${m.signo > 0 ? "pos" : "neg"}">${m.signo > 0 ? "+" : "−"}${fmt(m.cantidad)}</td>
+        <td class="num">${fmt(m.saldoAcumulado)}</td>
+      </tr>`;
+    }).join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Movimientos ${escapeHtml(galponLabel)} — Lote ${lote.numeroLote ? "#" + escapeHtml(lote.numeroLote) : ""}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; font-size: 12px; color: #222; padding: 28px; }
+    .header { display: flex; align-items: center; gap: 20px; border-bottom: 2px solid #222; padding-bottom: 14px; margin-bottom: 18px; }
+    .header img { height: 55px; }
+    .header-text h1 { font-size: 19px; font-weight: bold; }
+    .header-text p { font-size: 12px; color: #555; }
+    .title-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; }
+    .galpon { font-size: 20px; font-weight: bold; }
+    .meta { font-size: 12px; color: #555; }
+    .resumen { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; border: 1px solid #ddd; border-left: 4px solid ${ok ? "#16a34a" : "#dc2626"}; border-radius: 4px; padding: 12px; margin-bottom: 16px; text-align: center; }
+    .resumen .lbl { font-size: 11px; color: #555; }
+    .resumen .val { font-size: 17px; font-weight: bold; }
+    .resumen .sub { font-size: 10px; color: #888; }
+    .ok { color: #16a34a; } .bad { color: #dc2626; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th { background: #f2f2f2; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #555; padding: 6px 8px; border-bottom: 1px solid #ccc; }
+    tbody td { padding: 5px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+    tbody tr:nth-child(even) td { background: #fafafa; }
+    .num { text-align: right; white-space: nowrap; }
+    .nowrap { white-space: nowrap; }
+    .pos { color: #16a34a; font-weight: bold; }
+    .neg { color: #dc2626; font-weight: bold; }
+    .ref { color: #888; font-size: 11px; }
+    .vacio { text-align: center; color: #888; padding: 24px; }
+    footer { margin-top: 26px; border-top: 1px solid #ddd; padding-top: 8px; font-size: 10px; color: #888; text-align: right; }
+    @media print { body { padding: 14px; } thead { display: table-header-group; } tr { page-break-inside: avoid; } }
+  </style>
+</head>
+<body onload="window.print()">
+  <div class="header">
+    <img src="/logo_trigotuc.png" alt="Logo Trigotuc"/>
+    <div class="header-text">
+      <h1>Trigotuc <span style="color:#d97706">Avícola</span></h1>
+      <p>Movimientos por Galpón</p>
+    </div>
+  </div>
+
+  <div class="title-row">
+    <div class="galpon">${escapeHtml(GRANJAS_LABEL[lote.granja] || lote.granja)} — Galpón ${escapeHtml(galponLabel)}</div>
+    <div class="meta">
+      Lote ${lote.numeroLote ? "#" + escapeHtml(lote.numeroLote) : "(sin número)"} ·
+      ingreso ${formatearFechaLocal(lote.fechaIngreso)} ·
+      ${data.movimientos.length} movimientos
+    </div>
+  </div>
+
+  ${res ? `
+  <div class="resumen">
+    <div>
+      <div class="lbl">Saldo teórico</div>
+      <div class="val">${fmt(res.saldoTeorico)}</div>
+      <div class="sub">según movimientos</div>
+    </div>
+    <div>
+      <div class="lbl">Stock real</div>
+      <div class="val">${fmt(res.cantidadActualReal)}</div>
+      <div class="sub">cantidadActual del lote</div>
+    </div>
+    <div>
+      <div class="lbl">Diferencia</div>
+      <div class="val ${ok ? "ok" : "bad"}">${res.diferencia > 0 ? "+" : ""}${fmt(res.diferencia)}</div>
+      <div class="sub">${ok ? "cuadra ✓" : "descuadre ⚠"}</div>
+    </div>
+  </div>` : ""}
+
+  ${data.movimientos.length === 0 ? `<p class="vacio">Sin movimientos.</p>` : `
+  <table>
+    <thead>
+      <tr>
+        <th>Fecha</th>
+        <th>Movimiento</th>
+        <th>Detalle</th>
+        <th class="num">Cantidad</th>
+        <th class="num">Saldo</th>
+      </tr>
+    </thead>
+    <tbody>${filas}</tbody>
+  </table>`}
+
+  <footer>Impreso el ${new Date().toLocaleDateString("es-AR")} — Trigotuc Avícola</footer>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank", "width=900,height=700");
+    win.document.write(html);
+    win.document.close();
+  };
+
   if (rolUsuario !== "superadmin") return <Navigate to="/dashboard" replace />;
 
   const resumen = data?.resumen;
@@ -105,6 +221,16 @@ const GranjaMovimientosPage = () => {
             <i className="bi bi-clock-history me-2 text-success"></i>
             Movimientos por Galpón
           </h1>
+          {data && !loadingMov && (
+            <button
+              className="btn btn-outline-danger btn-sm"
+              onClick={imprimirMovimientos}
+              title="Descargar / imprimir el historial en PDF"
+            >
+              <i className="bi bi-file-earmark-pdf me-1"></i>
+              Descargar PDF
+            </button>
+          )}
         </div>
 
         {/* Selectores */}
