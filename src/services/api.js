@@ -285,19 +285,9 @@ export const eliminarDespachoFrigorifico = async (id) => {
   return handleResponse(response);
 };
 
-export const confirmarCargaDespacho = async (id) => {
-  const response = await fetch(`${API_URL}/despachos-frigorifico/${id}/confirmar-carga`, {
-    method: "PATCH", headers: getAuthHeaders(),
-  });
-  return handleResponse(response);
-};
-
-export const confirmarEntregaDespacho = async (id) => {
-  const response = await fetch(`${API_URL}/despachos-frigorifico/${id}/confirmar-entrega`, {
-    method: "PATCH", headers: getAuthHeaders(),
-  });
-  return handleResponse(response);
-};
+// confirmarCargaDespacho / confirmarEntregaDespacho se dieron de baja junto con
+// "Cargas Camión": las llamaba solo esa pantalla. Los endpoints siguen vivos en
+// el backend por si el flujo de choferes vuelve.
 
 // ============= AUDIT LOG =============
 
@@ -314,7 +304,7 @@ export const obtenerAuditLog = async (filtros = {}) => {
   return handleResponse(response);
 };
 
-// ============= ÓRDENES DE RETIRO (solo para ChoferPage) =============
+// ============= ÓRDENES DE RETIRO (legacy) =============
 
 export const obtenerOrdenesRetiro = async (filtros = {}) => {
   const params = new URLSearchParams();
@@ -787,6 +777,302 @@ export const obtenerMovimientosCamara = async (filtros = {}) => {
   const qs = params.toString();
   const response = await fetch(`${API_URL}/movimientos-camara${qs ? `?${qs}` : ""}`, {
     headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+// ============= REPRODUCTORES (galpones de postura + incubación) =============
+// Sección hermana de Granja y Frigorífico. Flujo: lote reproductor → recría →
+// postura (semana 24) → recolección diaria → incubadora (18 días) → nacedora
+// (3 días) → pollitos. Los tres descartes del camino van a venta.
+
+const buildQuery = (filtros = {}) => {
+  const params = new URLSearchParams(
+    Object.entries(filtros).filter(([, v]) => v != null && v !== "")
+  );
+  const s = params.toString();
+  return s ? `?${s}` : "";
+};
+
+// ── Constantes del módulo (galpones, capacidad, unidades de huevo) ──
+export const obtenerConstantesReproductores = async () => {
+  const response = await fetch(`${API_URL}/lotes-reproductores/constantes`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+// ── Lotes reproductores ──
+export const obtenerLotesReproductores = async (filtros = {}) => {
+  const response = await fetch(`${API_URL}/lotes-reproductores${buildQuery(filtros)}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const obtenerLotesEnProduccion = async () => {
+  const response = await fetch(`${API_URL}/lotes-reproductores/en-produccion`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const crearLoteReproductor = async (data) => {
+  const response = await fetch(`${API_URL}/lotes-reproductores`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const mudarLoteAPostura = async (id, data) => {
+  const response = await fetch(`${API_URL}/lotes-reproductores/${id}/mudar-postura`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const eliminarLoteReproductor = async (id) => {
+  const response = await fetch(`${API_URL}/lotes-reproductores/${id}`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+// ── Mortandad y pesajes (siempre por sexo) ──
+export const registrarMortandadReproductor = async (id, data) => {
+  const response = await fetch(`${API_URL}/lotes-reproductores/${id}/mortandad`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const editarMortandadReproductor = async (id, mortandadId, data) => {
+  const response = await fetch(`${API_URL}/lotes-reproductores/${id}/mortandad/${mortandadId}`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const eliminarMortandadReproductor = async (id, mortandadId) => {
+  const response = await fetch(`${API_URL}/lotes-reproductores/${id}/mortandad/${mortandadId}`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const registrarPesajeReproductor = async (id, data) => {
+  const response = await fetch(`${API_URL}/lotes-reproductores/${id}/pesaje`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const editarPesajeReproductor = async (id, pesajeId, data) => {
+  const response = await fetch(`${API_URL}/lotes-reproductores/${id}/pesaje/${pesajeId}`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const eliminarPesajeReproductor = async (id, pesajeId) => {
+  const response = await fetch(`${API_URL}/lotes-reproductores/${id}/pesaje/${pesajeId}`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+// ── Recolección diaria de huevos ──
+export const obtenerRecoleccionesHuevos = async (filtros = {}) => {
+  const response = await fetch(`${API_URL}/recolecciones-huevos${buildQuery(filtros)}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const obtenerStockIncubable = async () => {
+  const response = await fetch(`${API_URL}/recolecciones-huevos/stock-incubable`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const obtenerResumenProduccion = async (loteId) => {
+  const response = await fetch(`${API_URL}/recolecciones-huevos/resumen/${loteId}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const crearRecoleccionHuevos = async (data) => {
+  const response = await fetch(`${API_URL}/recolecciones-huevos`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const eliminarRecoleccionHuevos = async (id) => {
+  const response = await fetch(`${API_URL}/recolecciones-huevos/${id}`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+// ── Incubación (incubadora → nacedora → nacimiento) ──
+export const obtenerEstadoIncubadora = async () => {
+  const response = await fetch(`${API_URL}/incubacion/estado`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+export const obtenerStockPollitos = async () => {
+  const response = await fetch(`${API_URL}/incubacion/stock-pollitos`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+export const obtenerTandasIncubacion = async (filtros = {}) => {
+  const response = await fetch(`${API_URL}/incubacion/tandas${buildQuery(filtros)}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const crearTandaIncubacion = async (data) => {
+  const response = await fetch(`${API_URL}/incubacion/tandas`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const registrarTransferenciaNacedora = async (id, data) => {
+  const response = await fetch(`${API_URL}/incubacion/tandas/${id}/transferencia`, {
+    method: "PATCH", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const registrarNacimiento = async (id, data) => {
+  const response = await fetch(`${API_URL}/incubacion/tandas/${id}/nacimiento`, {
+    method: "PATCH", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const cancelarTandaIncubacion = async (id, motivo) => {
+  const response = await fetch(`${API_URL}/incubacion/tandas/${id}/cancelar`, {
+    method: "PATCH", headers: getAuthHeaders(), body: JSON.stringify({ motivo }),
+  });
+  return handleResponse(response);
+};
+
+// ── PROYECCIÓN (cruce granja + incubación) ──
+export const obtenerProyeccion = async () => {
+  const response = await fetch(`${API_URL}/proyeccion`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+export const guardarConfigGalpon = async (data) => {
+  const response = await fetch(`${API_URL}/proyeccion/config-galpones`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+// ── Reserva de pollitos por tanda ──
+// El reparto se arma antes de que nazcan: clientes + granjas propias contra los
+// pollitos estimados de cada tanda.
+export const obtenerRepartoPollitos = async (filtros = {}) => {
+  const response = await fetch(`${API_URL}/reservas-pollitos${buildQuery(filtros)}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const crearReservaPollitos = async (data) => {
+  const response = await fetch(`${API_URL}/reservas-pollitos`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const actualizarReservaPollitos = async (id, data) => {
+  const response = await fetch(`${API_URL}/reservas-pollitos/${id}`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const eliminarReservaPollitos = async (id) => {
+  const response = await fetch(`${API_URL}/reservas-pollitos/${id}`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+// ── Ventas del módulo (huevos de descarte y pollitos) ──
+export const obtenerStockHuevosDescarte = async () => {
+  const response = await fetch(`${API_URL}/reproductores/stock-huevos`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+// Salidas de stock sin cliente (provisorio hasta que exista el módulo de ventas)
+export const obtenerSalidasHuevos = async (filtros = {}) => {
+  const response = await fetch(`${API_URL}/reproductores/salidas-huevos${buildQuery(filtros)}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const crearSalidaHuevos = async (data) => {
+  const response = await fetch(`${API_URL}/reproductores/salidas-huevos`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const anularSalidaHuevos = async (id, motivo) => {
+  const response = await fetch(`${API_URL}/reproductores/salidas-huevos/${id}/anular`, {
+    method: "PATCH", headers: getAuthHeaders(), body: JSON.stringify({ motivo }),
+  });
+  return handleResponse(response);
+};
+
+export const obtenerVentasHuevos = async (filtros = {}) => {
+  const response = await fetch(`${API_URL}/reproductores/ventas-huevos${buildQuery(filtros)}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const crearVentaHuevos = async (data) => {
+  const response = await fetch(`${API_URL}/reproductores/ventas-huevos`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const anularVentaHuevos = async (id, motivo) => {
+  const response = await fetch(`${API_URL}/reproductores/ventas-huevos/${id}/anular`, {
+    method: "PATCH", headers: getAuthHeaders(), body: JSON.stringify({ motivo }),
+  });
+  return handleResponse(response);
+};
+
+export const obtenerVentasPollitos = async (filtros = {}) => {
+  const response = await fetch(`${API_URL}/reproductores/ventas-pollitos${buildQuery(filtros)}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const crearVentaPollitos = async (data) => {
+  const response = await fetch(`${API_URL}/reproductores/ventas-pollitos`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const anularVentaPollitos = async (id, motivo) => {
+  const response = await fetch(`${API_URL}/reproductores/ventas-pollitos/${id}/anular`, {
+    method: "PATCH", headers: getAuthHeaders(), body: JSON.stringify({ motivo }),
   });
   return handleResponse(response);
 };
