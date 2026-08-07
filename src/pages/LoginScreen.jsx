@@ -65,8 +65,6 @@ const LoginScreen = () => {
           navigate("/frigorifico/pedidos-granja");
         } else if (data.rolUsuario === "granja") {
           navigate("/granja/galpones");
-        } else if (data.rolUsuario === "chofer") {
-          navigate("/chofer");
         } else {
           navigate("/dashboard");
         }
@@ -158,9 +156,7 @@ const LoginScreen = () => {
                         value={formData.contraseniaUsuario}
                         onChange={handleChange}
                         disabled={loading}
-                        // Los choferes ingresan solo con su teléfono (sin "@"),
-                        // así que la clave no es obligatoria en ese caso.
-                        required={formData.emailUsuario.includes("@")}
+                        required
                       />
                       <button
                         type="button"

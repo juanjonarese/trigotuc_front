@@ -46,9 +46,20 @@ There are no automated tests.
 | `/granja/recepcion-ordenes` | `RecepcionOrdenCargaPage` | Granja |
 | `/granja/ventas` | `VentasGranjaPage` | Granja |
 | `/granja/remitos` | `GranjaRemitosPage` | Granja |
-| `/chofer` | `ChoferPage` (Cargas Camión) | Chofer |
+| `/reproductores/galpones` | `ReproductoresLotesPage` | Reproductores |
+| `/reproductores/galpones/nuevo` | `ReproductorLoteNuevoPage` (ingreso de lote) | Reproductores |
+| `/reproductores/datos-semanales` | `ReproductoresDatosPage` (mortandad/peso por sexo) | Reproductores |
+| `/reproductores/recoleccion` | `RecoleccionHuevosPage` | Reproductores |
+| `/reproductores/incubadora` | `IncubadoraPage` (incubadora + nacedora + nacimientos) | Reproductores |
+| `/reproductores/ventas-huevos` | `VentaHuevosPage` | Reproductores |
+| `/reproductores/ventas-pollitos` | `VentaPollitosPage` | Reproductores |
 
 Default redirect: `/` y rutas desconocidas → `/login`.
+
+> **Baja (agosto 2026):** `/chofer` (`ChoferPage`, "Cargas Camión") se eliminó — los
+> choferes no van a usar la app. Los despachos `delivery_chofer` los sigue
+> manejando administración desde Órdenes de Carga, y los choferes siguen
+> existiendo como usuarios para asignarlos a camiones y despachos.
 
 ### Roles (`localStorage.rolUsuario`)
 
@@ -59,7 +70,9 @@ Default redirect: `/` y rutas desconocidas → `/login`.
 ### Authentication Flow
 
 1. Login con `emailUsuario` + `contraseniaUsuario` → `POST /api/usuarios/login`.
-   - Los choferes pueden loguearse con **teléfono** en lugar de email.
+   - El rol `chofer` **no puede iniciar sesión** (403): el backend lo rechaza desde
+     que se dio de baja "Cargas Camión". El login por teléfono era exclusivo de
+     ellos, así que quedó sin uso.
 2. En éxito se guarda en `localStorage`: `isAuthenticated`, `token`, `rolUsuario`, `emailUsuario`, `nombreUsuario`.
 3. Toda llamada manda `Authorization: Bearer <token>` (helper `getAuthHeaders()` en `api.js`).
 4. `ProtectedRoute` chequea `localStorage.isAuthenticated === "true"`.
@@ -75,9 +88,16 @@ Secciones colapsables, fondo oscuro, auto-expande según la ruta activa. Visibil
 - **Actividad** (`/frigorifico/historial-accesos`) — solo `superadmin`.
 - **Granja** (colapsable) — `superadmin` / `administracion_granja` / `granja`:
   - Ingreso de pollitos, Galpones, Datos Semanales (solo `superadmin`/`granja`), Órdenes de Carga (Venta) (solo `superadmin`/`administracion_granja`), Recepción de Órdenes.
+- **Reproductores** (colapsable) — solo `superadmin` por ahora (hasta definir los roles del módulo):
+  - Ingreso de Lote, Galpones, Datos Semanales, Recolección de Huevos, Incubadora, Reserva de Pollitos.
+  - **Venta de Huevos** y **Venta de Pollitos** están comentadas (sidebar + rutas en
+    `App.jsx`): el cliente no las va a usar por ahora. Las páginas siguen en `src/pages/`.
+  - No hay ítem "Nacimientos": `IncubadoraPage` cubre todo el ciclo (tarjetas de
+    incubadora y de nacedora, y solapas de historial de incubación / nacimientos).
+    `/reproductores/nacimientos` quedó como redirect a `/reproductores/incubadora`.
 - **Frigorífico** (colapsable) — todos menos `granja` y `chofer`:
   - Pedidos a Granja, Faenar, Stock, Órdenes de Carga (Venta), Recepción de Órdenes, Envío Cámara, Stock Empaque (solo `superadmin` / `administracion_frigorifico`). Decomisados está comentado.
-- **Chofer** (`/chofer`, "Cargas Camión") — `chofer` / `superadmin`.
+- ~~**Chofer** (`/chofer`, "Cargas Camión")~~ — dado de baja (agosto 2026).
 
 ### API Service (`src/services/api.js`)
 

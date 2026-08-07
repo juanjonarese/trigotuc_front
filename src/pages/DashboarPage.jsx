@@ -52,7 +52,6 @@ const DashboardPage = () => {
   useEffect(() => {
     const rol = localStorage.getItem("rolUsuario");
     if (rol === "frigorifico") { navigate("/frigorifico/lotes/nuevo"); return; }
-    if (rol === "chofer") { navigate("/chofer"); return; }
     cargarDatos();
   }, []);
 

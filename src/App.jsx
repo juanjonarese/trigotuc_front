@@ -28,7 +28,17 @@ import HistorialAccesosPage from "./pages/HistorialAccesosPage";
 import StockEmpaquePage from "./pages/StockEmpaquePage";
 import DespachoFrigorificoPage from "./pages/DespachoFrigorificoPage";
 import RecepcionFrigorificoPage from "./pages/RecepcionFrigorificoPage";
-import ChoferPage from "./pages/ChoferPage";
+import ReproductoresLotesPage from "./pages/ReproductoresLotesPage";
+import ReproductorLoteNuevoPage from "./pages/ReproductorLoteNuevoPage";
+import ReproductoresDatosPage from "./pages/ReproductoresDatosPage";
+import RecoleccionHuevosPage from "./pages/RecoleccionHuevosPage";
+import IncubadoraPage from "./pages/IncubadoraPage";
+// Ventas de Reproductores: en pausa por pedido del cliente.
+// import VentaHuevosPage from "./pages/VentaHuevosPage";
+// import VentaPollitosPage from "./pages/VentaPollitosPage";
+import ReservaPollitosPage from "./pages/ReservaPollitosPage";
+import AsignacionesPollitosPage from "./pages/AsignacionesPollitosPage";
+import StockHuevosPage from "./pages/StockHuevosPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
@@ -38,6 +48,8 @@ function App() {
         <Route path="/login" element={<LoginScreen />} />
 
         <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+        {/* Proyección pasó a ser la pantalla de Reproductores. */}
+        <Route path="/proyeccion" element={<Navigate to="/reproductores/reserva-pollitos" replace />} />
         <Route path="/clientes" element={<ProtectedRoute><ClientesPage /></ProtectedRoute>} />
         <Route path="/personal" element={<ProtectedRoute><PersonalPage /></ProtectedRoute>} />
         <Route path="/camiones" element={<ProtectedRoute><CamionesPage /></ProtectedRoute>} />
@@ -69,8 +81,25 @@ function App() {
         <Route path="/granja/ventas" element={<ProtectedRoute><VentasGranjaPage /></ProtectedRoute>} />
         <Route path="/granja/remitos" element={<ProtectedRoute><GranjaRemitosPage /></ProtectedRoute>} />
 
-        {/* Chofer */}
-        <Route path="/chofer" element={<ProtectedRoute><ChoferPage /></ProtectedRoute>} />
+        {/* Reproductores (postura + incubación) */}
+        <Route path="/reproductores/galpones" element={<ProtectedRoute><ReproductoresLotesPage /></ProtectedRoute>} />
+        <Route path="/reproductores/galpones/nuevo" element={<ProtectedRoute><ReproductorLoteNuevoPage /></ProtectedRoute>} />
+        <Route path="/reproductores/datos-semanales" element={<ProtectedRoute><ReproductoresDatosPage /></ProtectedRoute>} />
+        <Route path="/reproductores/recoleccion" element={<ProtectedRoute><RecoleccionHuevosPage /></ProtectedRoute>} />
+        <Route path="/reproductores/incubadora" element={<ProtectedRoute><IncubadoraPage /></ProtectedRoute>} />
+        {/* Nacimientos se absorbió en Incubadora (tarjetas de nacedora + solapa). */}
+        <Route path="/reproductores/nacimientos" element={<Navigate to="/reproductores/incubadora" replace />} />
+        <Route path="/reproductores/reserva-pollitos" element={<ProtectedRoute><ReservaPollitosPage /></ProtectedRoute>} />
+        <Route path="/reproductores/asignaciones" element={<ProtectedRoute><AsignacionesPollitosPage /></ProtectedRoute>} />
+        <Route path="/reproductores/stock-huevos" element={<ProtectedRoute><StockHuevosPage /></ProtectedRoute>} />
+        {/* Ventas de Reproductores: en pausa por pedido del cliente.
+        <Route path="/reproductores/ventas-huevos" element={<ProtectedRoute><VentaHuevosPage /></ProtectedRoute>} />
+        <Route path="/reproductores/ventas-pollitos" element={<ProtectedRoute><VentaPollitosPage /></ProtectedRoute>} />
+        */}
+
+        {/* "Cargas Camión" (ChoferPage) se dio de baja: los choferes no van a
+            usar la app. Los despachos delivery_chofer los sigue manejando
+            administración desde Órdenes de Carga. */}
 
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />

@@ -1,18 +1,56 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import "../css/DashboardPage.css";
 import usePushNotification from "../hooks/usePushNotification";
+
+// Qué sección del sidebar le corresponde a una ruta (null = ninguna).
+const seccionDeRuta = (path) => {
+  if (
+    path.startsWith("/clientes") ||
+    path.startsWith("/personal") ||
+    path.startsWith("/camiones")
+  ) {
+    return "altas";
+  }
+  if (path.startsWith("/frigorifico") && path !== "/frigorifico/historial-accesos") {
+    return "frigorifico";
+  }
+  if (
+    path.startsWith("/granja") &&
+    !path.startsWith("/granja/cobros") &&
+    !path.startsWith("/granja/cta-cte")
+  ) {
+    return "granja";
+  }
+  if (path.startsWith("/reproductores")) return "reproductores";
+  return null;
+};
 
 const Layout = ({ children }) => {
   const { estado, activar, rolHabilitado } = usePushNotification();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [altasOpen, setAltasOpen] = useState(false);
-  const [frigorificoOpen, setFrigorificoOpen] = useState(false);
-  const [granjaOpen, setGranjaOpen] = useState(false);
-  const [contableGranjaOpen, setContableGranjaOpen] = useState(false);
+  // Acordeón: una sola sección abierta a la vez ("altas" | "granja" |
+  // "reproductores" | "frigorifico" | null).
+  const [seccionAbierta, setSeccionAbierta] = useState(() =>
+    seccionDeRuta(location.pathname)
+  );
   const rolUsuario = localStorage.getItem("rolUsuario");
+
+  // Auto-expand: al cambiar de ruta se abre la sección que le corresponde
+  // (y se cierra la anterior). Ajuste de estado durante el render, no en un
+  // efecto: https://react.dev/learn/you-might-not-need-an-effect
+  const [rutaPrevia, setRutaPrevia] = useState(location.pathname);
+  if (rutaPrevia !== location.pathname) {
+    setRutaPrevia(location.pathname);
+    const seccion = seccionDeRuta(location.pathname);
+    if (seccion) setSeccionAbierta(seccion);
+  }
+
+  // Abre la sección y cierra la que estuviera abierta; si ya está abierta, cierra.
+  const toggleSeccion = (seccion) =>
+    setSeccionAbierta((actual) => (actual === seccion ? null : seccion));
 
   // Helper function to check if a route is active
   const isActive = (path) => {
@@ -30,50 +68,6 @@ const Layout = ({ children }) => {
     localStorage.clear();
     navigate("/login");
   };
-
-  // Auto-expand menus based on active route
-  useEffect(() => {
-    const path = location.pathname;
-
-    // Altas submenu
-    if (
-      path.startsWith("/clientes") ||
-      path.startsWith("/personal") ||
-      path.startsWith("/camiones")
-    ) {
-      setAltasOpen(true);
-    }
-
-    // Contable Granja (top-level)
-    if (
-      path.startsWith("/granja/ventas") ||
-      path.startsWith("/granja/ordenes-carga") ||
-      path.startsWith("/granja/cobros") ||
-      path.startsWith("/granja/cta-cte")
-    ) {
-      setContableGranjaOpen(true);
-    }
-
-    // Frigorifico submenu
-    if (path.startsWith("/frigorifico") && path !== "/frigorifico/historial-accesos") {
-      setFrigorificoOpen(true);
-    }
-
-    // Granja (crianza) submenu
-    if (
-      path.startsWith("/granja") &&
-      !path.startsWith("/granja/cobros") &&
-      !path.startsWith("/granja/cta-cte")
-    ) {
-      setGranjaOpen(true);
-    }
-
-
-
-
-
-
-}, [location.pathname]);
 
   return (
     <div className="dashboard-wrapper">
@@ -106,6 +100,9 @@ const Layout = ({ children }) => {
             </a>
           )}
 
+          {/* Proyección vive dentro de Reproductores: es el cruce de los
+              nacimientos contra los galpones de engorde. */}
+
           {(rolUsuario === "superadmin" || rolUsuario === "administracion_frigorifico" || rolUsuario === "administracion_granja") && (
           <div className="nav-section mb-2">
             <a
@@ -113,7 +110,7 @@ const Layout = ({ children }) => {
               className="nav-link text-white-50 d-flex align-items-center justify-content-between rounded"
               onClick={(e) => {
                 e.preventDefault();
-                setAltasOpen(!altasOpen);
+                toggleSeccion("altas");
               }}
             >
               <div className="d-flex align-items-center gap-2">
@@ -121,12 +118,12 @@ const Layout = ({ children }) => {
                 <span>Altas</span>
               </div>
               <i
-                className={`bi bi-chevron-${altasOpen ? "down" : "right"}`}
+                className={`bi bi-chevron-${seccionAbierta === "altas" ? "down" : "right"}`}
               ></i>
             </a>
 
             {/* Submenu de Altas */}
-            {altasOpen && (
+            {seccionAbierta === "altas" && (
               <div className="ps-4 mt-2">
                 <a
                   href="#"
@@ -210,15 +207,15 @@ const Layout = ({ children }) => {
             <a
               href="#"
               className="nav-link text-white-50 d-flex align-items-center justify-content-between rounded"
-              onClick={(e) => { e.preventDefault(); setGranjaOpen(!granjaOpen); }}
+              onClick={(e) => { e.preventDefault(); toggleSeccion("granja"); }}
             >
               <div className="d-flex align-items-center gap-2">
                 <i className="bi bi-house-door fs-5"></i>
                 <span>Granja</span>
               </div>
-              <i className={`bi bi-chevron-${granjaOpen ? "down" : "right"}`}></i>
+              <i className={`bi bi-chevron-${seccionAbierta === "granja" ? "down" : "right"}`}></i>
             </a>
-            {granjaOpen && (
+            {seccionAbierta === "granja" && (
               <div className="ps-4 mt-2">
                 {/* 1 — Ingreso de pollitos */}
                 <a
@@ -288,6 +285,119 @@ const Layout = ({ children }) => {
           </div>
           )}
 
+          {/* Reproductores (postura + incubación) — sección hermana de Granja y Frigorífico.
+              Por ahora solo superadmin: cuando se definan los roles del módulo, agregarlos acá. */}
+          {rolUsuario === "superadmin" && (
+          <div className="nav-section mb-2">
+            <a
+              href="#"
+              className="nav-link text-white-50 d-flex align-items-center justify-content-between rounded"
+              onClick={(e) => { e.preventDefault(); toggleSeccion("reproductores"); }}
+            >
+              <div className="d-flex align-items-center gap-2">
+                <i className="bi bi-egg fs-5"></i>
+                <span>Reproductoras</span>
+              </div>
+              <i className={`bi bi-chevron-${seccionAbierta === "reproductores" ? "down" : "right"}`}></i>
+            </a>
+            {seccionAbierta === "reproductores" && (
+              <div className="ps-4 mt-2">
+                {/* 1 — Ingreso de Lote */}
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/galpones/nuevo") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/galpones/nuevo"); }}
+                >
+                  <i className="bi bi-plus-circle"></i>
+                  <span>Ingreso de Lote</span>
+                </a>
+                {/* 2 — Galpones */}
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${location.pathname === "/reproductores/galpones" ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/galpones"); }}
+                >
+                  <i className="bi bi-list-ul"></i>
+                  <span>Galpones</span>
+                </a>
+                {/* 3 — Datos Semanales (mortandad y peso por sexo) */}
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/datos-semanales") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/datos-semanales"); }}
+                >
+                  <i className="bi bi-pencil-square"></i>
+                  <span>Datos Semanales</span>
+                </a>
+                {/* 4 — Recolección de Huevos */}
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/recoleccion") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/recoleccion"); }}
+                >
+                  <i className="bi bi-basket"></i>
+                  <span>Recolección de Huevos</span>
+                </a>
+                {/* 5 — Incubadora */}
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/incubadora") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/incubadora"); }}
+                >
+                  <i className="bi bi-thermometer-half"></i>
+                  <span>Incubadora</span>
+                </a>
+                {/* 6 — Reserva de Pollitos (reparto por tanda, antes de que nazcan) */}
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/reserva-pollitos") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/reserva-pollitos"); }}
+                >
+                  <i className="bi bi-graph-up-arrow"></i>
+                  <span>Proyección</span>
+                </a>
+                {/* 7 — Asignaciones: lo que ya tiene destino (clientes y galpones) */}
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/asignaciones") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/asignaciones"); }}
+                >
+                  <i className="bi bi-list-check"></i>
+                  <span>Asignaciones</span>
+                </a>
+                {/* 8 — Stock de huevos de descarte + salidas sin cliente */}
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/stock-huevos") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/stock-huevos"); }}
+                >
+                  <i className="bi bi-egg"></i>
+                  <span>Stock de Huevos</span>
+                </a>
+                {/* 8 y 9 — Venta de Huevos y Venta de Pollitos: ocultas por ahora,
+                    el cliente todavía no las va a usar. Las páginas siguen existiendo.
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/ventas-huevos") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/ventas-huevos"); }}
+                >
+                  <i className="bi bi-cash-coin"></i>
+                  <span>Venta de Huevos</span>
+                </a>
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/ventas-pollitos") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/ventas-pollitos"); }}
+                >
+                  <i className="bi bi-cash-stack"></i>
+                  <span>Venta de Pollitos</span>
+                </a>
+                */}
+              </div>
+            )}
+          </div>
+          )}
+
           {/* Frigorifico */}
           {rolUsuario !== "granja" && rolUsuario !== "chofer" && (
           <div className="nav-section mb-2">
@@ -296,7 +406,7 @@ const Layout = ({ children }) => {
               className="nav-link text-white-50 d-flex align-items-center justify-content-between rounded"
               onClick={(e) => {
                 e.preventDefault();
-                setFrigorificoOpen(!frigorificoOpen);
+                toggleSeccion("frigorifico");
               }}
             >
               <div className="d-flex align-items-center gap-2">
@@ -304,11 +414,11 @@ const Layout = ({ children }) => {
                 <span>Frigorífico</span>
               </div>
               <i
-                className={`bi bi-chevron-${frigorificoOpen ? "down" : "right"}`}
+                className={`bi bi-chevron-${seccionAbierta === "frigorifico" ? "down" : "right"}`}
               ></i>
             </a>
 
-            {frigorificoOpen && (
+            {seccionAbierta === "frigorifico" && (
               <div className="ps-4 mt-2">
                 {/* 1 — Pedidos a Granja */}
                 {(rolUsuario === "superadmin" || rolUsuario === "frigorifico") && (
@@ -445,22 +555,6 @@ const Layout = ({ children }) => {
                 */}
               </div>
             )}
-          </div>
-          )}
-
-          {/* Chofer */}
-          {(rolUsuario === "chofer" || rolUsuario === "superadmin") && (
-          <div className="nav-section mb-2">
-            <a
-              href="#"
-              className={`nav-link d-flex align-items-center gap-2 mb-1 rounded ${
-                isActive("/chofer") ? "text-white" : "text-white-50"
-              }`}
-              onClick={(e) => { e.preventDefault(); navigate("/chofer"); }}
-            >
-              <i className="bi bi-truck fs-5"></i>
-              <span>Cargas Camión</span>
-            </a>
           </div>
           )}
 
