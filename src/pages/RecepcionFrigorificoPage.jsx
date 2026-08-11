@@ -9,6 +9,7 @@ import {
   revertirDespachoFrigorifico,
   obtenerEnviosCamara,
   prepararEnvioCamara,
+  eliminarEnvioCamara,
 } from "../services/api";
 import { imprimirOrdenEnvio } from "../utils/imprimirOrdenEnvio";
 import Swal from "sweetalert2";
@@ -368,6 +369,9 @@ const RecepcionFrigorificoPage = () => {
   const rolUsuario     = localStorage.getItem("rolUsuario");
   const puedeLiberar   = ["superadmin", "administracion_frigorifico"].includes(rolUsuario);
   const puedeConfirmar = ["superadmin", "frigorifico"].includes(rolUsuario);
+  // Baja de envíos cargados por error (ej. el mismo envío mandado dos veces).
+  // Solo mientras siga pendiente de recepción en destino — el backend valida igual.
+  const puedeEliminarEnvios = ["superadmin", "frigorifico", "administracion_frigorifico"].includes(rolUsuario);
 
   const [despachos, setDespachos]     = useState([]);
   const [envios, setEnvios]           = useState([]);
@@ -454,6 +458,31 @@ const RecepcionFrigorificoPage = () => {
       Swal.fire("Error", err.message || "No se pudo preparar el envío.", "error");
     } finally {
       setPreparando(null);
+    }
+  };
+
+  const handleEliminarEnvio = async (e) => {
+    const { isConfirmed } = await Swal.fire({
+      title: "¿Eliminar envío?",
+      html:
+        `Se va a eliminar el envío <strong>${e.numeroEnvio}</strong> y el stock volverá a <strong>${camaraLbl(e.camaraOrigen)}</strong>.` +
+        `<br><br>Usalo solo para dar de baja un envío cargado por error (por ejemplo, el mismo envío mandado dos veces).` +
+        (e.preparado
+          ? `<br><br>⚠️ Este envío ya figura <strong>preparado</strong>. Si la mercadería salió en el camión, no lo elimines: el stock volvería a ${camaraLbl(e.camaraOrigen)} sin estar ahí.`
+          : ""),
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#dc3545",
+      confirmButtonText: "Sí, eliminar",
+      cancelButtonText: "Cancelar",
+    });
+    if (!isConfirmed) return;
+    try {
+      await eliminarEnvioCamara(e._id);
+      await cargar();
+      Swal.fire({ icon: "success", title: "Envío eliminado", text: `${e.numeroEnvio} se dio de baja y el stock volvió a ${camaraLbl(e.camaraOrigen)}.`, timer: 2200, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire("Error", err.message || "No se pudo eliminar el envío.", "error");
     }
   };
 
@@ -644,6 +673,11 @@ const RecepcionFrigorificoPage = () => {
                             <i className="bi bi-printer me-1"></i>Reimprimir orden
                           </button>
                         )}
+                        {puedeEliminarEnvios && e.estado === "pendiente" && (
+                          <button className="btn btn-outline-danger w-100 mt-2" onClick={() => handleEliminarEnvio(e)}>
+                            <i className="bi bi-trash me-1"></i>Eliminar envío
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -703,20 +737,27 @@ const RecepcionFrigorificoPage = () => {
                                 : <span className="badge bg-warning text-dark"><i className="bi bi-hourglass-split me-1"></i>A preparar</span>}
                             </td>
                             <td>
-                              {!e.preparado && puedeConfirmar ? (
-                                <button className="btn btn-primary btn-sm" disabled={preparando === e._id} onClick={() => handlePrepararEnvio(e)}>
-                                  {preparando === e._id
-                                    ? <span className="spinner-border spinner-border-sm me-1"></span>
-                                    : <i className="bi bi-printer me-1"></i>}
-                                  Imprimir y preparar
-                                </button>
-                              ) : !e.preparado ? (
-                                <span className="small text-muted"><i className="bi bi-hourglass-split me-1"></i>Esperando frigorífico</span>
-                              ) : (
-                                <button className="btn btn-outline-secondary btn-sm" onClick={() => imprimirOrdenEnvio(e)}>
-                                  <i className="bi bi-printer me-1"></i>Reimprimir
-                                </button>
-                              )}
+                              <div className="d-flex gap-1 align-items-center">
+                                {!e.preparado && puedeConfirmar ? (
+                                  <button className="btn btn-primary btn-sm" disabled={preparando === e._id} onClick={() => handlePrepararEnvio(e)}>
+                                    {preparando === e._id
+                                      ? <span className="spinner-border spinner-border-sm me-1"></span>
+                                      : <i className="bi bi-printer me-1"></i>}
+                                    Imprimir y preparar
+                                  </button>
+                                ) : !e.preparado ? (
+                                  <span className="small text-muted"><i className="bi bi-hourglass-split me-1"></i>Esperando frigorífico</span>
+                                ) : (
+                                  <button className="btn btn-outline-secondary btn-sm" onClick={() => imprimirOrdenEnvio(e)}>
+                                    <i className="bi bi-printer me-1"></i>Reimprimir
+                                  </button>
+                                )}
+                                {puedeEliminarEnvios && e.estado === "pendiente" && (
+                                  <button className="btn btn-outline-danger btn-sm" onClick={() => handleEliminarEnvio(e)} title="Eliminar envío">
+                                    <i className="bi bi-trash"></i>
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))}
