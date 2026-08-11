@@ -10,7 +10,7 @@ import {
   enviarLoteACamara,
 } from "../services/api";
 import { obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
-import { confirmarCoherenciaFaena } from "../utils/faenaValidacion";
+import { validarDestinoFaena, advertirRestosDeCajon } from "../utils/faenaValidacion";
 import Swal from "sweetalert2";
 
 const fmtNum = (n) =>
@@ -58,21 +58,26 @@ const EditarLoteModal = ({ lote, onClose, onGuardado }) => {
     const lineasFinales = calibreRef.current?.getLineas() ?? lineas;
     const calibresPayload = lineasFinales
       .map((l) => ({ calibre: Number(l.calibre), pollos: Number(l.pollos), cajones: calcularCajones(l.pollos, l.calibre) }))
-      .filter((l) => l.cajones > 0);
+      // Filtra por pollos, NO por cajones: una línea con menos pollos que un cajón
+      // (ej. 3 pollos de calibre 9) igual es stock y se perdía al descartarla acá.
+      .filter((l) => l.pollos > 0);
     if (calibresPayload.length === 0 && !hayTrozados) {
       Swal.fire("Error", "Agregá al menos un calibre con pollos o cargá trozados.", "error");
       return;
     }
-    // Coherencia: faenadas = calibres + trozados (u) + decomisados (u). Advierte y confirma.
+    // Todo pollo faenado tiene que tener destino: calibres + trozados + decomisados.
+    // Bloqueante — el backend aplica la misma regla.
     const pollosCalibres = calibresPayload.reduce((a, c) => a + c.pollos, 0);
-    const coherente = await confirmarCoherenciaFaena({
+    const coherente = await validarDestinoFaena({
       unidadesFaenadas:    form.unidadesFaenadas,
       pollosCalibres,
       unidadesTrozadas:    form.unidadesTrozadas,
       unidadesDecomisadas: form.unidadesDecomisadas,
-      confirmText:         "Guardar igual",
     });
     if (!coherente) return;
+    // Aviso NO bloqueante: pollos que no completan cajón quedan como stock que no
+    // se puede despachar y se arrastra de lote en lote.
+    if (!(await advertirRestosDeCajon({ calibres: calibresPayload, confirmText: "Guardar igual" }))) return;
     setSaving(true);
     try {
       const payload = {
