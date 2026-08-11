@@ -113,9 +113,16 @@ const DashboardPage = () => {
     const c = lotesFaenaConDatos.filter((l) => l.unidadesDecomisadas > 0);
     return c.length ? c.reduce((a, l) => a + (l.unidadesDecomisadas / l.unidadesFaenadas * 100), 0) / c.length : null;
   })();
+  // La mortandad de transporte va sobre lo que bajó del camión, no sobre los que
+  // llegaron vivos: dividir por `unidadesFaenadas` la infla (10 de 100 → 11,1%).
   const promMuertos = (() => {
     const c = lotesFaenaConDatos.filter((l) => l.muertos > 0);
-    return c.length ? c.reduce((a, l) => a + (l.muertos / l.unidadesFaenadas * 100), 0) / c.length : null;
+    return c.length
+      ? c.reduce((a, l) => {
+          const recibidas = (l.unidadesFaenadas || 0) + (l.muertos || 0) + (l.pollosSinFaenar || 0);
+          return a + (recibidas > 0 ? l.muertos / recibidas * 100 : 0);
+        }, 0) / c.length
+      : null;
   })();
 
   const ultimosFaena = lotesFaena.slice(0, 5);
