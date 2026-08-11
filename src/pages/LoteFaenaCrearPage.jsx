@@ -5,7 +5,7 @@ import CalibreTable, { calcularCajones } from "../components/CalibreTable";
 import { TrozadoTable, trozadosVacios, trozadosAPayload } from "../components/TrozadoTable";
 import { crearLote, obtenerOrdenesCarga } from "../services/api";
 import { obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
-import { validarDestinoFaena } from "../utils/faenaValidacion";
+import { validarDestinoFaena, advertirRestosDeCajon } from "../utils/faenaValidacion";
 import Swal from "sweetalert2";
 
 const fmtNum = (n) =>
@@ -121,6 +121,9 @@ const LoteFaenaCrearPage = () => {
       unidadesDecomisadas: form.unidadesDecomisadas,
     });
     if (!coherente) return;
+    // Aviso NO bloqueante: pollos que no completan cajón quedan como stock que no
+    // se puede despachar y se arrastra de lote en lote.
+    if (!(await advertirRestosDeCajon({ calibres: calibresPayload, confirmText: "Crear igual" }))) return;
     setSaving(true);
     try {
 

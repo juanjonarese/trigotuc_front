@@ -104,3 +104,66 @@ export const validarDestinoFaena = async ({
   });
   return false;
 };
+
+/**
+ * Advertencia (NO bloqueante) por pollos que no llegan a completar un cajón.
+ *
+ * Un calibre cargado en un número que no es múltiplo del calibre deja un resto
+ * que queda como stock imposible de encajonar: no se puede despachar solo, y en
+ * cada descuento FIFO se muda de lote arrastrándose para siempre. Caso real: la
+ * faena del lote #38 declaró 579 pollos de calibre 9 (64 cajones + 3 sueltos);
+ * esos 3 anduvieron dando vueltas dos semanas hasta que hubo que ajustarlos a
+ * mano porque físicamente no existían.
+ *
+ * Se avisa y se deja seguir: puede ser correcto (a veces sobran pollos de verdad).
+ *
+ * @returns {Promise<boolean>} true si se puede continuar.
+ */
+export const advertirRestosDeCajon = async ({ calibres = [], confirmText = "Continuar igual" }) => {
+  const restos = calibres
+    .map((c) => {
+      const calibre = Number(c.calibre) || 0;
+      const pollos  = Number(c.pollos) || 0;
+      return { calibre, pollos, cajones: Math.floor(pollos / calibre), resto: pollos % calibre };
+    })
+    .filter((c) => c.calibre > 0 && c.resto > 0);
+
+  if (restos.length === 0) return true;
+
+  const totalResto = restos.reduce((a, c) => a + c.resto, 0);
+
+  const res = await Swal.fire({
+    icon: "warning",
+    width: 600,
+    title: `Quedan ${fmt(totalResto)} pollos sin completar cajón`,
+    html:
+      `<div class="text-start">` +
+
+      `<p class="mb-2">Estos calibres no dan cajones enteros:</p>` +
+
+      `<div class="small border rounded p-2 mb-2 bg-light">` +
+        restos.map((c) =>
+          `<div class="d-flex justify-content-between border-bottom py-1">` +
+          `<span>Calibre <strong>${c.calibre}</strong></span>` +
+          `<span>${fmt(c.pollos)} pollos = ${fmt(c.cajones)} cajones ` +
+          `<span class="text-danger">+ ${fmt(c.resto)} sueltos</span></span>` +
+          `</div>`
+        ).join("") +
+      `</div>` +
+
+      `<p class="small mb-2">Los pollos sueltos quedan como stock que <strong>no se puede ` +
+      `despachar</strong>: no completan un cajón, así que se van arrastrando de lote en lote ` +
+      `en cada venta y nunca salen solos.</p>` +
+
+      `<p class="small mb-0 text-muted">Si esos pollos no van a quedar realmente en cámara, ` +
+      `conviene mandarlos a <strong>trozado</strong> en vez de dejarlos como enteros. Si de ` +
+      `verdad sobran, podés continuar.</p>` +
+
+      `</div>`,
+    showCancelButton: true,
+    confirmButtonText: confirmText,
+    cancelButtonText: "Revisar",
+    confirmButtonColor: "#198754",
+  });
+  return res.isConfirmed;
+};

@@ -10,7 +10,7 @@ import {
   enviarLoteACamara,
 } from "../services/api";
 import { obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
-import { validarDestinoFaena } from "../utils/faenaValidacion";
+import { validarDestinoFaena, advertirRestosDeCajon } from "../utils/faenaValidacion";
 import Swal from "sweetalert2";
 
 const fmtNum = (n) =>
@@ -75,6 +75,9 @@ const EditarLoteModal = ({ lote, onClose, onGuardado }) => {
       unidadesDecomisadas: form.unidadesDecomisadas,
     });
     if (!coherente) return;
+    // Aviso NO bloqueante: pollos que no completan cajón quedan como stock que no
+    // se puede despachar y se arrastra de lote en lote.
+    if (!(await advertirRestosDeCajon({ calibres: calibresPayload, confirmText: "Guardar igual" }))) return;
     setSaving(true);
     try {
       const payload = {
