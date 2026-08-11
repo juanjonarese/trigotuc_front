@@ -26,6 +26,12 @@ const EnvioCamaraPage = () => {
   const navigate = useNavigate();
   const rolUsuario   = localStorage.getItem("rolUsuario");
   const esSuperAdmin = rolUsuario === "superadmin";
+  // Administración puede dar de baja un envío cargado por error, pero solo mientras
+  // esté pendiente de recepción. Los ya recibidos quedan para superadmin (el backend
+  // aplica el mismo límite).
+  const puedeEliminar = (e) =>
+    esSuperAdmin ||
+    (rolUsuario === "administracion_frigorifico" && e.estado === "pendiente");
 
   const [camiones, setCamiones]     = useState([]);
   const [choferes, setChoferes]     = useState([]);
@@ -59,10 +65,16 @@ const EnvioCamaraPage = () => {
 
   useEffect(() => { cargarDatos(); }, []);
 
-  const handleEliminar = async (id) => {
+  const handleEliminar = async (e) => {
+    const destino = camaraLabel(e.camaraDestino);
+    const origen  = camaraLabel(e.camaraOrigen);
     const confirm = await Swal.fire({
       title: "¿Eliminar envío?",
-      text: "Se revertirá el stock en las cámaras.",
+      html:
+        `Se va a eliminar el envío <strong>${e.numeroEnvio}</strong> y el stock volverá a <strong>${origen}</strong>.` +
+        (e.estado === "recibido"
+          ? `<br><br>⚠️ Este envío ya está <strong>recibido en ${destino}</strong>: el stock se descuenta de ${destino}. Si ya se vendió o despachó, la operación se rechaza.`
+          : ""),
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#dc3545",
@@ -71,8 +83,8 @@ const EnvioCamaraPage = () => {
     });
     if (!confirm.isConfirmed) return;
     try {
-      await eliminarEnvioCamara(id);
-      Swal.fire("Eliminado", "El envío fue eliminado y el stock revertido.", "success");
+      await eliminarEnvioCamara(e._id);
+      Swal.fire("Eliminado", `El envío ${e.numeroEnvio} fue eliminado y el stock revertido.`, "success");
       cargarDatos();
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudo eliminar el envío.", "error");
@@ -411,10 +423,10 @@ const EnvioCamaraPage = () => {
                             >
                               <i className="bi bi-file-earmark-pdf"></i>
                             </button>
-                            {esSuperAdmin && (
+                            {puedeEliminar(e) && (
                               <button
                                 className="btn btn-outline-danger btn-sm"
-                                onClick={() => handleEliminar(e._id)}
+                                onClick={() => handleEliminar(e)}
                                 title="Eliminar"
                               >
                                 <i className="bi bi-trash"></i>
@@ -544,10 +556,10 @@ const EnvioCamaraPage = () => {
                               >
                                 <i className="bi bi-file-earmark-pdf"></i>
                               </button>
-                              {esSuperAdmin && (
+                              {puedeEliminar(e) && (
                                 <button
                                   className="btn btn-outline-danger btn-sm"
-                                  onClick={() => handleEliminar(e._id)}
+                                  onClick={() => handleEliminar(e)}
                                   title="Eliminar"
                                 >
                                   <i className="bi bi-trash"></i>
