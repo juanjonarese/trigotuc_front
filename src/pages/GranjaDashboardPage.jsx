@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import { escapeHtml } from "../utils/escapeHtml";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
+import DesgloseFaena from "../components/DesgloseFaena";
 import { obtenerResumenStock, obtenerLotes, eliminarLote, actualizarLote, sincronizarVentasDropbox, obtenerMovimientosCamara } from "../services/api";
 import Swal from "sweetalert2";
 
@@ -18,7 +19,13 @@ const EditarLoteModal = ({ lote, onClose, onGuardado }) => {
     (lote.calibres || []).map((c) => ({ calibre: c.calibre, pollos: c.pollos }))
   );
   const [form, setForm] = useState({
-    unidadesFaenadas:    lote.unidadesFaenadas    != null ? String(lote.unidadesFaenadas)    : "",
+    // Se guarda `unidadesFaenadas`; lo recibido se reconstruye sumándole de vuelta
+    // los muertos y los que volvieron a granja. Este modal no edita muertos: el
+    // backend usa los del lote para volver a derivar las faenadas.
+    unidadesRecibidas:
+      lote.unidadesFaenadas != null
+        ? String(Number(lote.unidadesFaenadas) + Number(lote.muertos || 0) + Number(lote.pollosSinFaenar || 0))
+        : "",
     kgVivos:             lote.kgVivos             != null ? String(lote.kgVivos)             : "",
     unidadesDecomisadas: lote.unidadesDecomisadas != null ? String(lote.unidadesDecomisadas) : "",
     kgDecomisados:       lote.kgDecomisados       != null ? String(lote.kgDecomisados)       : "",
@@ -40,7 +47,7 @@ const EditarLoteModal = ({ lote, onClose, onGuardado }) => {
     try {
       await actualizarLote(lote._id, {
         calibres:            calibresPayload,
-        unidadesFaenadas:    form.unidadesFaenadas    !== "" ? Number(form.unidadesFaenadas)    : undefined,
+        unidadesRecibidas:   form.unidadesRecibidas   !== "" ? Number(form.unidadesRecibidas)   : undefined,
         kgVivos:             form.kgVivos             !== "" ? Number(form.kgVivos)             : undefined,
         unidadesDecomisadas: form.unidadesDecomisadas !== "" ? Number(form.unidadesDecomisadas) : undefined,
         kgDecomisados:       form.kgDecomisados       !== "" ? Number(form.kgDecomisados)       : undefined,
@@ -89,9 +96,10 @@ const EditarLoteModal = ({ lote, onClose, onGuardado }) => {
                   </div>
                   <div className="row g-3">
                     <div className="col-6 col-md-3">
-                      <label className="form-label fw-semibold small">Pollos faenados</label>
+                      <label className="form-label fw-semibold small">Unidades recibidas</label>
                       <input type="number" className="form-control" min="0" placeholder="0"
-                        value={form.unidadesFaenadas} onChange={(e) => set("unidadesFaenadas", e.target.value)} />
+                        value={form.unidadesRecibidas} onChange={(e) => set("unidadesRecibidas", e.target.value)} />
+                      <div className="form-text small">Todo lo que bajó del camión, muertos incluidos.</div>
                     </div>
                     <div className="col-6 col-md-3">
                       <label className="form-label fw-semibold small">Kg vivos</label>
@@ -119,6 +127,18 @@ const EditarLoteModal = ({ lote, onClose, onGuardado }) => {
                         value={form.kgTrozados} onChange={(e) => set("kgTrozados", e.target.value)} />
                     </div>
                   </div>
+
+                  {/* Cierre de faena en vivo. Los muertos no se editan acá: se
+                      muestran los del lote, que son los que usa el backend. */}
+                  <DesgloseFaena
+                    className="mt-3"
+                    unidadesRecibidas={form.unidadesRecibidas}
+                    muertos={lote.muertos || 0}
+                    pollosSinFaenar={lote.pollosSinFaenar || 0}
+                    pollosCalibres={lineas.reduce((a, l) => a + (Number(l.pollos) || 0), 0)}
+                    unidadesTrozadas={form.unidadesTrozadas}
+                    unidadesDecomisadas={form.unidadesDecomisadas}
+                  />
                 </div>
 
                 {/* Observaciones */}

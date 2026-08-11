@@ -11,6 +11,7 @@ import {
 } from "../services/api";
 import { obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
 import { validarDestinoFaena, advertirRestosDeCajon } from "../utils/faenaValidacion";
+import DesgloseFaena from "../components/DesgloseFaena";
 import Swal from "sweetalert2";
 
 const fmtNum = (n) =>
@@ -20,7 +21,12 @@ const fmtNum = (n) =>
 const EditarLoteModal = ({ lote, onClose, onGuardado }) => {
   const [form, setForm] = useState({
     fechaIngreso:        lote.fechaIngreso?.slice(0, 10) ?? obtenerFechaHoy(),
-    unidadesFaenadas:    lote.unidadesFaenadas    != null ? String(lote.unidadesFaenadas)    : "",
+    // Se guarda `unidadesFaenadas`; lo recibido se reconstruye sumándole de vuelta
+    // los muertos y los que volvieron a granja.
+    unidadesRecibidas:
+      lote.unidadesFaenadas != null
+        ? String(Number(lote.unidadesFaenadas) + Number(lote.muertos || 0) + Number(lote.pollosSinFaenar || 0))
+        : "",
     kgVivos:             lote.kgVivos             != null ? String(lote.kgVivos)             : "",
     muertos:             lote.muertos             != null ? String(lote.muertos)             : "",
     kgMuertos:           lote.kgMuertos           != null ? String(lote.kgMuertos)           : "",
@@ -69,7 +75,9 @@ const EditarLoteModal = ({ lote, onClose, onGuardado }) => {
     // Bloqueante — el backend aplica la misma regla.
     const pollosCalibres = calibresPayload.reduce((a, c) => a + c.pollos, 0);
     const coherente = await validarDestinoFaena({
-      unidadesFaenadas:    form.unidadesFaenadas,
+      unidadesRecibidas:   form.unidadesRecibidas,
+      muertos:             form.muertos,
+      pollosSinFaenar:     lote.pollosSinFaenar || 0,
       pollosCalibres,
       unidadesTrozadas:    form.unidadesTrozadas,
       unidadesDecomisadas: form.unidadesDecomisadas,
@@ -85,7 +93,8 @@ const EditarLoteModal = ({ lote, onClose, onGuardado }) => {
         calibres:     calibresPayload,
         observaciones: form.observaciones || undefined,
       };
-      if (form.unidadesFaenadas)    payload.unidadesFaenadas    = Number(form.unidadesFaenadas);
+      // El backend deriva `unidadesFaenadas` restando muertos y sin faenar.
+      if (form.unidadesRecibidas)   payload.unidadesRecibidas   = Number(form.unidadesRecibidas);
       if (form.kgVivos)             payload.kgVivos             = Number(form.kgVivos);
       if (form.muertos)             payload.muertos             = Number(form.muertos);
       if (form.kgMuertos)           payload.kgMuertos           = Number(form.kgMuertos);
@@ -129,8 +138,9 @@ const EditarLoteModal = ({ lote, onClose, onGuardado }) => {
                     <input type="date" className="form-control" value={form.fechaIngreso} onChange={f("fechaIngreso")} required />
                   </div>
                   <div className="col-6 col-md-3">
-                    <label className="form-label fw-semibold">Unidades faenadas</label>
-                    <input type="number" className="form-control" value={form.unidadesFaenadas} onChange={f("unidadesFaenadas")} min="0" placeholder="0" />
+                    <label className="form-label fw-semibold">Unidades recibidas</label>
+                    <input type="number" className="form-control" value={form.unidadesRecibidas} onChange={f("unidadesRecibidas")} min="0" placeholder="0" />
+                    <div className="form-text">Todo lo que bajó del camión, muertos incluidos.</div>
                   </div>
                   <div className="col-6 col-md-3">
                     <label className="form-label fw-semibold">Kg vivos</label>
@@ -165,6 +175,18 @@ const EditarLoteModal = ({ lote, onClose, onGuardado }) => {
                     <input type="text" className="form-control" value={form.observaciones} onChange={f("observaciones")} />
                   </div>
                 </div>
+
+                {/* Cierre de faena en vivo: la resta hecha, para no descubrir el
+                    desvío recién al apretar Guardar. */}
+                <DesgloseFaena
+                  className="mb-3"
+                  unidadesRecibidas={form.unidadesRecibidas}
+                  muertos={form.muertos}
+                  pollosSinFaenar={lote.pollosSinFaenar || 0}
+                  pollosCalibres={lineas.reduce((a, l) => a + (Number(l.pollos) || 0), 0)}
+                  unidadesTrozadas={form.unidadesTrozadas}
+                  unidadesDecomisadas={form.unidadesDecomisadas}
+                />
 
                 <label className="form-label fw-semibold">
                   <i className="bi bi-scissors me-1 text-warning"></i>Distribución de trozados
@@ -656,9 +678,13 @@ const LoteCreatePage = () => {
                         const kgTrozadosReal  = (lote.trozados || []).reduce((s, t) => s + (t.kgTotal || 0), 0) || Number(lote.kgTrozados) || 0;
                         const kgTotalCamara   = kgCalibes + kgTrozadosReal;
                         const base            = Number(lote.unidadesFaenadas) || 0;
+                        // La mortandad de transporte se mide contra lo que bajó del camión,
+                        // no contra los que llegaron vivos: dividir por `base` la infla
+                        // (10 muertos de 100 daban 11,1% en vez de 10%).
+                        const recibidas       = base + (Number(lote.muertos) || 0) + (Number(lote.pollosSinFaenar) || 0);
                         const calibresPollos  = (lote.calibres || []).reduce((a, c) => a + (c.pollos || 0), 0);
                         const pctVivos        = base > 0 && calibresPollos > 0 ? +(calibresPollos / base * 100).toFixed(1) : null;
-                        const pctMuertos      = base > 0 && lote.muertos        ? +(lote.muertos / base * 100).toFixed(1)               : null;
+                        const pctMuertos      = recibidas > 0 && lote.muertos   ? +(lote.muertos / recibidas * 100).toFixed(1)          : null;
                         const pctDecomisados  = base > 0 && lote.unidadesDecomisadas ? +(lote.unidadesDecomisadas / base * 100).toFixed(1) : null;
                         const pctTrozados     = base > 0 && lote.unidadesTrozadas    ? +(lote.unidadesTrozadas / base * 100).toFixed(1)    : null;
                         return (

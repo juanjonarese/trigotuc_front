@@ -6,6 +6,7 @@ import { TrozadoTable, trozadosVacios, trozadosAPayload } from "../components/Tr
 import { crearLote, obtenerOrdenesCarga } from "../services/api";
 import { obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
 import { validarDestinoFaena, advertirRestosDeCajon } from "../utils/faenaValidacion";
+import DesgloseFaena from "../components/DesgloseFaena";
 import Swal from "sweetalert2";
 
 const fmtNum = (n) =>
@@ -13,7 +14,9 @@ const fmtNum = (n) =>
 
 const FORM_VACIO = {
   fechaIngreso:        obtenerFechaHoy(),
-  unidadesFaenadas:    "",
+  // Lo que bajó del camión. Las faenadas las deriva el backend restando muertos
+  // y, si es faena parcial, los que vuelven a granja.
+  unidadesRecibidas:   "",
   kgVivos:             "",
   muertos:             "",
   kgMuertos:           "",
@@ -67,15 +70,15 @@ const LoteFaenaCrearPage = () => {
     const id = e.target.value;
     if (!id) {
       setRecepcionSel(null);
-      setForm((f) => ({ ...f, kgVivos: "", unidadesFaenadas: "" }));
+      setForm((f) => ({ ...f, kgVivos: "", unidadesRecibidas: "" }));
       return;
     }
     const rec = recepciones.find((o) => o._id === id) || null;
     setRecepcionSel(rec);
     if (rec) {
-      // kgVivos y unidadesFaenadas no se autofill:
+      // kgVivos y unidadesRecibidas no se autofill:
       // esos datos reales solo se conocen al terminar la faena (no en la recepción).
-      setForm((f) => ({ ...f, kgVivos: "", unidadesFaenadas: "" }));
+      setForm((f) => ({ ...f, kgVivos: "", unidadesRecibidas: "" }));
     }
   };
 
@@ -115,7 +118,9 @@ const LoteFaenaCrearPage = () => {
     // Bloqueante — el backend aplica la misma regla.
     const pollosCalibres = calibresPayload.reduce((a, c) => a + c.pollos, 0);
     const coherente = await validarDestinoFaena({
-      unidadesFaenadas:    form.unidadesFaenadas,
+      unidadesRecibidas:   form.unidadesRecibidas,
+      muertos:             form.muertos,
+      pollosSinFaenar:     form.faenaParcial ? form.pollosSinFaenar : 0,
       pollosCalibres,
       unidadesTrozadas:    form.unidadesTrozadas,
       unidadesDecomisadas: form.unidadesDecomisadas,
@@ -140,7 +145,8 @@ const LoteFaenaCrearPage = () => {
         trozadosACamara: false,
       };
       if (form.kgVivos)             payload.kgVivos             = Number(form.kgVivos);
-      if (form.unidadesFaenadas)    payload.unidadesFaenadas    = Number(form.unidadesFaenadas);
+      // El backend deriva `unidadesFaenadas` restando muertos y sin faenar.
+      if (form.unidadesRecibidas)   payload.unidadesRecibidas   = Number(form.unidadesRecibidas);
       if (form.muertos)             payload.muertos             = Number(form.muertos);
       if (form.kgMuertos)           payload.kgMuertos           = Number(form.kgMuertos);
       if (form.unidadesDecomisadas) payload.unidadesDecomisadas = Number(form.unidadesDecomisadas);
@@ -281,11 +287,12 @@ const LoteFaenaCrearPage = () => {
                     required />
                 </div>
                 <div className="col-6 col-md-3">
-                  <label className="form-label fw-semibold">Unidades faenadas</label>
+                  <label className="form-label fw-semibold">Unidades recibidas</label>
                   <input type="number" className="form-control"
-                    value={form.unidadesFaenadas}
-                    onChange={(e) => setForm({ ...form, unidadesFaenadas: e.target.value })}
+                    value={form.unidadesRecibidas}
+                    onChange={(e) => setForm({ ...form, unidadesRecibidas: e.target.value })}
                     min="0" placeholder={recepcionSel ? fmtNum(recepcionSel.cantidadReal) : "0"} />
+                  <div className="form-text">Todo lo que bajó del camión, muertos incluidos.</div>
                 </div>
                 <div className="col-6 col-md-3">
                   <label className="form-label fw-semibold">Kg vivos</label>
@@ -377,6 +384,19 @@ const LoteFaenaCrearPage = () => {
                   )}
                 </div>
               )}
+
+              {/* Cierre de faena en vivo: la resta hecha, para no descubrir el
+                  desvío recién al apretar Crear. */}
+              <div className="mb-3">
+                <DesgloseFaena
+                  unidadesRecibidas={form.unidadesRecibidas}
+                  muertos={form.muertos}
+                  pollosSinFaenar={form.faenaParcial ? form.pollosSinFaenar : 0}
+                  pollosCalibres={totalPollos}
+                  unidadesTrozadas={form.unidadesTrozadas}
+                  unidadesDecomisadas={form.unidadesDecomisadas}
+                />
+              </div>
 
               {/* Trozados — desglose por tipo */}
               {(form.kgTrozados || form.unidadesTrozadas) && (
