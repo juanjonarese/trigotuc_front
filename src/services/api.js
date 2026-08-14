@@ -199,6 +199,15 @@ export const obtenerEnviosCamara = async () => {
   return handleResponse(response);
 };
 
+// Corrige un envío ya cargado. El backend mueve solo la DIFERENCIA de stock
+// contra lo que tenía guardado; no se puede cambiar origen/destino.
+export const editarEnvioCamara = async (id, data) => {
+  const response = await fetch(`${API_URL}/envios-camara/${id}`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
 export const eliminarEnvioCamara = async (id) => {
   const response = await fetch(`${API_URL}/envios-camara/${id}`, {
     method: "DELETE", headers: getAuthHeaders(),
@@ -301,18 +310,6 @@ export const obtenerAuditLog = async (filtros = {}) => {
   if (filtros.fechaDesde)    params.append("fechaDesde",    filtros.fechaDesde);
   if (filtros.fechaHasta)    params.append("fechaHasta",    filtros.fechaHasta);
   const response = await fetch(`${API_URL}/audit-log?${params.toString()}`, { headers: getAuthHeaders() });
-  return handleResponse(response);
-};
-
-// ============= ÓRDENES DE RETIRO (legacy) =============
-
-export const obtenerOrdenesRetiro = async (filtros = {}) => {
-  const params = new URLSearchParams();
-  if (filtros.status)    params.append("status",    filtros.status);
-  if (filtros.clienteId) params.append("clienteId", filtros.clienteId);
-  if (filtros.camara)    params.append("camara",    filtros.camara);
-  if (filtros.modalidad) params.append("modalidad", filtros.modalidad);
-  const response = await fetch(`${API_URL}/ordenes-retiro?${params.toString()}`, { headers: getAuthHeaders() });
   return handleResponse(response);
 };
 
@@ -677,13 +674,6 @@ export const obtenerStockMovimientos = async (articuloId) => {
   return handleResponse(response);
 };
 
-export const resetearBaseDeDatos = async () => {
-  const response = await fetch(`${API_URL}/system/reset`, {
-    method: "POST", headers: getAuthHeaders(),
-  });
-  return handleResponse(response);
-};
-
 export const consumirStockLote = async (data) => {
   const response = await fetch(`${API_URL}/stock-empaque/consumo-lote`, {
     method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
@@ -910,6 +900,15 @@ export const crearRecoleccionHuevos = async (data) => {
   return handleResponse(response);
 };
 
+// El backend valida que no se baje por debajo de lo ya incubado o ya vendido, y
+// reacomoda el stock de descarte con el nuevo número.
+export const editarRecoleccionHuevos = async (id, data) => {
+  const response = await fetch(`${API_URL}/recolecciones-huevos/${id}`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
 export const eliminarRecoleccionHuevos = async (id) => {
   const response = await fetch(`${API_URL}/recolecciones-huevos/${id}`, {
     method: "DELETE", headers: getAuthHeaders(),
@@ -964,8 +963,24 @@ export const cancelarTandaIncubacion = async (id, motivo) => {
 };
 
 // ── PROYECCIÓN (cruce granja + incubación) ──
-export const obtenerProyeccion = async () => {
-  const response = await fetch(`${API_URL}/proyeccion`, { headers: getAuthHeaders() });
+// Almanaque de faena: los tres carriles (nacimientos / galpones / faena) sobre
+// un mismo eje de días. Las fechas vienen además como clave "AAAA-MM-DD" ya
+// resuelta por el backend — posicionar SIEMPRE por clave, nunca parseando el ISO
+// (el server corre en UTC y el navegador en UTC−3: se corre un día).
+export const obtenerAlmanaqueFaena = async (filtros = {}) => {
+  const response = await fetch(`${API_URL}/proyeccion/almanaque${buildQuery(filtros)}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+// Los 14 galpones de engorde con capacidad y si están fuera de servicio. La usan
+// los selectores de galpón (ingreso de pollitos, reserva de pollitos) para no
+// ofrecer uno que no puede recibir pollitos.
+export const obtenerConfigGalpones = async () => {
+  const response = await fetch(`${API_URL}/proyeccion/config-galpones`, {
+    headers: getAuthHeaders(),
+  });
   return handleResponse(response);
 };
 

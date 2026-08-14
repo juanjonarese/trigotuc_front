@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { obtenerUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario, resetearBaseDeDatos, estadoPush, testPush } from "../services/api";
+import { obtenerUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario, estadoPush, testPush } from "../services/api";
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
 import Swal from "sweetalert2";
@@ -27,51 +27,8 @@ const PersonalPage = () => {
   const [confirmarContrasenia, setConfirmarContrasenia] = useState("");
   const [showPass, setShowPass]         = useState(false);
   const [showConfirm, setShowConfirm]   = useState(false);
-  const [resetting, setResetting]       = useState(false);
   const [pushEstado, setPushEstado]     = useState(null);
   const [pushTesting, setPushTesting]   = useState(false);
-
-  const handleReset = async () => {
-    const { value } = await Swal.fire({
-      title: "⚠️ BORRAR TODOS LOS DATOS",
-      html: `<p class="text-danger fw-bold">Esta acción eliminará <u>todos</u> los datos operativos de la base de datos.</p>
-             <p class="small text-muted">Se conservan: usuarios, clientes, camiones, listas de precios y artículos de stock.</p>
-             <p class="mb-1">Para confirmar, escribí <strong>BORRAR TODO</strong>:</p>`,
-      input: "text",
-      inputPlaceholder: "BORRAR TODO",
-      inputAttributes: { autocomplete: "off" },
-      showCancelButton: true,
-      confirmButtonColor: "#dc3545",
-      confirmButtonText: "Borrar todo",
-      cancelButtonText: "Cancelar",
-      preConfirm: (val) => {
-        if (val !== "BORRAR TODO") {
-          Swal.showValidationMessage("Escribí exactamente: BORRAR TODO");
-          return false;
-        }
-        return true;
-      },
-    });
-    if (!value) return;
-
-    setResetting(true);
-    try {
-      const { resultado } = await resetearBaseDeDatos();
-      const total = Object.values(resultado).reduce((s, grupo) =>
-        s + Object.values(grupo).reduce((a, n) => a + n, 0), 0);
-      Swal.fire({
-        icon: "success",
-        title: "Base de datos reseteada",
-        html: `<p class="mb-1">Se eliminaron <strong>${total}</strong> registros en total.</p>
-               <p class="text-muted small">Contadores reseteados. Stock de empaque en 0.</p>`,
-        confirmButtonText: "OK",
-      });
-    } catch (err) {
-      Swal.fire("Error", err.message, "error");
-    } finally {
-      setResetting(false);
-    }
-  };
 
   // Verificar que el usuario sea superadmin
   const rolUsuario = localStorage.getItem("rolUsuario");
@@ -363,7 +320,6 @@ const PersonalPage = () => {
                             usuario.rolUsuario === 'administracion_granja' ? 'bg-success-subtle text-success' :
                             usuario.rolUsuario === 'frigorifico' ? 'bg-info text-dark' :
                             usuario.rolUsuario === 'granja' ? 'bg-success' :
-                            usuario.rolUsuario === 'camaras' ? 'bg-warning text-dark' :
                             usuario.rolUsuario === 'chofer' ? 'bg-dark' :
                             'bg-secondary'
                           }`}>
@@ -396,7 +352,8 @@ const PersonalPage = () => {
                                 usuario.rolUsuario === 'administracion_frigorifico' ? 'bg-primary' :
                                 usuario.rolUsuario === 'administracion_granja' ? 'bg-success-subtle text-success' :
                                 usuario.rolUsuario === 'frigorifico' ? 'bg-info text-dark' :
-                                usuario.rolUsuario === 'camaras' ? 'bg-success' :
+                                usuario.rolUsuario === 'granja' ? 'bg-success' :
+                                usuario.rolUsuario === 'chofer' ? 'bg-dark' :
                                 'bg-secondary'
                               }`}>
                                 {usuario.rolUsuario}
@@ -497,34 +454,6 @@ const PersonalPage = () => {
                 )}
               </div>
             )}
-          </div>
-        </div>
-
-        {/* Zona peligrosa */}
-        <div className="card border-danger mt-4">
-          <div className="card-header bg-danger text-white d-flex align-items-center gap-2">
-            <i className="bi bi-exclamation-triangle-fill"></i>
-            <span className="fw-semibold">Zona peligrosa</span>
-          </div>
-          <div className="card-body">
-            <div className="d-flex align-items-center justify-content-between flex-wrap gap-3">
-              <div>
-                <p className="fw-semibold mb-1">Resetear base de datos</p>
-                <p className="text-muted small mb-0">
-                  Elimina todos los datos operativos (granja, frigorifico, contable, stock).
-                  Conserva usuarios, clientes, camiones, listas de precios y artículos de empaque.
-                </p>
-              </div>
-              <button
-                className="btn btn-danger"
-                onClick={handleReset}
-                disabled={resetting}
-              >
-                {resetting
-                  ? <><span className="spinner-border spinner-border-sm me-2"></span>Reseteando...</>
-                  : <><i className="bi bi-trash3 me-2"></i>Borrar todos los datos</>}
-              </button>
-            </div>
           </div>
         </div>
 
@@ -681,7 +610,6 @@ const PersonalPage = () => {
                             <option value="administracion_granja">Administración Granja (Clientes, camiones, granja)</option>
                             <option value="frigorifico">Frigorífico (Lotes y envíos cámara)</option>
                             <option value="granja">Granja (Ingreso pollitos, galpones, datos semanales)</option>
-                            <option value="camaras">Cámaras (Entregas)</option>
                             <option value="chofer">Chofer (Carga y entrega de pedidos)</option>
                             <option value="superadmin">Super Admin (Acceso total)</option>
                           </select>

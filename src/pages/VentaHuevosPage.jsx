@@ -191,7 +191,7 @@ const VentaHuevosPage = () => {
                   <div className="alert alert-warning mb-0 small">
                     <i className="bi bi-exclamation-triangle me-1"></i>
                     No hay huevos de descarte en stock. Se generan al cargar recolecciones, al
-                    inocular una tanda y en el miraje de la transferencia.
+                    cargar una tanda a la incubadora y en el miraje de la transferencia.
                   </div>
                 )}
               </div>

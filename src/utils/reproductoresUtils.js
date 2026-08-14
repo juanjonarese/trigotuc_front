@@ -53,13 +53,15 @@ export const ESTADO_LOTE = {
 export const ESTADO_TANDA = {
   en_incubadora: { label: "En incubadora", clase: "bg-warning text-dark", icono: "bi-thermometer-half" },
   en_nacedora:   { label: "En nacedora",   clase: "bg-info text-dark",    icono: "bi-egg" },
-  nacida:        { label: "Nacida",        clase: "bg-success",           icono: "bi-egg-fried" },
+  nacida:        { label: "Nacida",        clase: "bg-success",           icono: "bi-sunrise" },
   cancelada:     { label: "Cancelada",     clase: "bg-secondary",         icono: "bi-x-circle" },
 };
 
+// Las claves son los valores guardados en stockHuevo.origen — no se tocan.
+// Solo cambian las etiquetas que ve el usuario.
 export const ORIGEN_DESCARTE = {
   clasificacion: "Descarte de clasificación",
-  inoculacion:   "Descarte de inoculación",
+  inoculacion:   "Descarte de carga a incubadora",
   miraje:        "Descarte de miraje",
 };
 

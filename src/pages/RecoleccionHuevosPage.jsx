@@ -6,9 +6,16 @@ import {
   obtenerLotesEnProduccion,
   obtenerRecoleccionesHuevos,
   crearRecoleccionHuevos,
+  editarRecoleccionHuevos,
   eliminarRecoleccionHuevos,
 } from "../services/api";
-import { formatearFechaLocal, ajustarFechaParaGuardar, obtenerFechaHoy } from "../utils/dateUtils";
+import {
+  formatearFechaLocal,
+  formatearHoraLocal,
+  ajustarFechaParaGuardar,
+  obtenerFechaHoy,
+  obtenerHoraAhora,
+} from "../utils/dateUtils";
 import {
   formatearNumero,
   formatearPorcentaje,
@@ -19,37 +26,56 @@ import Swal from "sweetalert2";
 
 const ITEMS_POR_PAGINA = 20;
 
-// Lo recolectado en el día se reparte en tres destinos. El total es la suma:
-// no se carga aparte, así no puede quedar descuadrado.
+// Lo recolectado se reparte en tres destinos y los tres se cargan en unidades
+// (huevos), que es como se cuenta en el galpón y la unidad en la que se lleva el
+// stock. El total es la suma: no se carga aparte, así no puede quedar
+// descuadrado. Cajones y bandejas quedan solo como lectura derivada.
 const FORM_VACIO = {
   fecha: obtenerFechaHoy(),
-  // A incubadora: se cuenta como viene del galpón (cajones + bandejas + sueltos)
-  cajones: "",
-  bandejas: "",
-  sueltos: "",
-  aVenta: "",   // con algún problema pero vendibles (sucios, etc.)
-  perdida: "",  // rotos y demás: se tiran
+  hora: "",      // hora de la pasada; se precarga con la de ahora
+  aIncubar: "",  // los que están bien, van a la incubadora
+  aVenta: "",    // con algún problema pero vendibles (sucios, etc.)
+  perdida: "",   // rotos y demás: se tiran
   observaciones: "",
 };
 
-// ── Modal: carga de la recolección de un galpón ─────────────────────────────
+// ── Modal: carga y edición de la recolección de un galpón ───────────────────
 // El galpón ya viene elegido desde la tarjeta, así que el formulario no vuelve
-// a preguntarlo.
-const RecoleccionModal = ({ lote, galponLabel, constantes, onClose, onHecho }) => {
-  // La fecha se toma en el momento de abrir el modal, no al cargar la página.
-  const [form, setForm] = useState({ ...FORM_VACIO, fecha: obtenerFechaHoy() });
+// a preguntarlo. Con `recoleccion` edita esa carga; sin ella, da de alta una.
+// `previoDelDia` son los huevos ya cargados ese mismo día en otras pasadas: el
+// límite del 100% de postura se mide contra el total del día, igual que en el
+// backend, no contra cada carga suelta.
+const RecoleccionModal = ({
+  lote,
+  galponLabel,
+  constantes,
+  recoleccion,
+  previoDelDia = 0,
+  onClose,
+  onHecho,
+}) => {
+  const edicion = !!recoleccion;
+
+  // En alta la fecha se toma al abrir el modal, no al cargar la página.
+  const [form, setForm] = useState(() =>
+    edicion
+      ? {
+          fecha: (recoleccion.fecha || "").slice(0, 10),
+          // Las cargas viejas no tienen hora: se cae al horario del alta.
+          hora: formatearHoraLocal(recoleccion.fechaHora || recoleccion.createdAt),
+          aIncubar: recoleccion.inoculables ? String(recoleccion.inoculables) : "",
+          aVenta: recoleccion.descarte1 ? String(recoleccion.descarte1) : "",
+          perdida: recoleccion.descartePerdida ? String(recoleccion.descartePerdida) : "",
+          observaciones: recoleccion.observaciones || "",
+        }
+      : { ...FORM_VACIO, fecha: obtenerFechaHoy(), hora: obtenerHoraAhora() }
+  );
   const [saving, setSaving] = useState(false);
 
   const huevosPorCajon = constantes?.huevosPorCajon ?? 144;
   const huevosPorBandeja = constantes?.huevosPorBandeja ?? 12;
-  const bandejasPorCajon = constantes?.bandejasPorCajon ?? 12;
 
-  // Los huevos a incubar se cuentan como llegan del galpón (cajones y bandejas)
-  // y el sistema los convierte a unidades, que es la unidad de stock.
-  const inoculables =
-    (Number(form.cajones) || 0) * huevosPorCajon +
-    (Number(form.bandejas) || 0) * huevosPorBandeja +
-    (Number(form.sueltos) || 0);
+  const inoculables = Number(form.aIncubar) || 0;
   const aVenta = Number(form.aVenta) || 0;
   const perdida = Number(form.perdida) || 0;
   const huevosTotales = inoculables + aVenta + perdida;
@@ -57,9 +83,14 @@ const RecoleccionModal = ({ lote, galponLabel, constantes, onClose, onHecho }) =
   // Una gallina pone como mucho un huevo por día: más del 100% de postura es
   // imposible y casi siempre significa que el plantel del lote está mal cargado.
   // Se avisa acá para no tener que esperar el rechazo del backend.
-  const hembras = lote?.hembras?.actual ?? 0;
-  const porcentajePostura = hembras > 0 ? (huevosTotales / hembras) * 100 : null;
-  const posturaImposible = huevosTotales > 0 && hembras > 0 && huevosTotales > hembras;
+  // Al editar se usa el plantel congelado en la recolección, que es contra el que
+  // valida el backend: el actual pudo cambiar por mortandad posterior.
+  const hembras = edicion
+    ? recoleccion.hembrasEnPostura ?? 0
+    : lote?.hembras?.actual ?? 0;
+  const totalDelDia = huevosTotales + previoDelDia;
+  const porcentajePostura = hembras > 0 ? (totalDelDia / hembras) * 100 : null;
+  const posturaImposible = totalDelDia > 0 && hembras > 0 && totalDelDia > hembras;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -75,9 +106,13 @@ const RecoleccionModal = ({ lote, galponLabel, constantes, onClose, onHecho }) =
     if (posturaImposible) {
       Swal.fire(
         "Postura imposible",
-        `${formatearNumero(huevosTotales)} huevos con ${formatearNumero(hembras)} hembras da ` +
-          `${porcentajePostura.toFixed(2)}% de postura. Una gallina pone como máximo un huevo por día ` +
-          `(100%). Revisá el plantel del lote o la cantidad recolectada.`,
+        `${formatearNumero(totalDelDia)} huevos en el día` +
+          (previoDelDia > 0
+            ? ` (${formatearNumero(previoDelDia)} ya cargados + ${formatearNumero(huevosTotales)})`
+            : "") +
+          ` con ${formatearNumero(hembras)} hembras da ${porcentajePostura.toFixed(2)}% de postura. ` +
+          `Una gallina pone como máximo un huevo por día (100%). ` +
+          `Revisá el plantel del lote o la cantidad recolectada.`,
         "warning"
       );
       return;
@@ -85,24 +120,41 @@ const RecoleccionModal = ({ lote, galponLabel, constantes, onClose, onHecho }) =
 
     setSaving(true);
     try {
-      await crearRecoleccionHuevos({
-        lote: lote._id,
-        fecha: ajustarFechaParaGuardar(form.fecha),
-        inoculables,
-        descarte1: aVenta,
-        descartePerdida: perdida,
-        observaciones: form.observaciones || undefined,
-      });
+      if (edicion) {
+        // La fecha no se toca en la edición: define la partida FIFO y el índice
+        // único (lote, fecha). Para corregirla hay que borrar y volver a cargar.
+        await editarRecoleccionHuevos(recoleccion._id, {
+          hora: form.hora || undefined,
+          inoculables,
+          descarte1: aVenta,
+          descartePerdida: perdida,
+          observaciones: form.observaciones || undefined,
+        });
+      } else {
+        await crearRecoleccionHuevos({
+          lote: lote._id,
+          fecha: ajustarFechaParaGuardar(form.fecha),
+          hora: form.hora || undefined,
+          inoculables,
+          descarte1: aVenta,
+          descartePerdida: perdida,
+          observaciones: form.observaciones || undefined,
+        });
+      }
       await onHecho();
       Swal.fire({
         icon: "success",
-        title: "Recolección cargada",
+        title: edicion ? "Recolección corregida" : "Recolección cargada",
         text: `${formatearNumero(inoculables)} a incubar · ${formatearNumero(aVenta)} a venta · ${formatearNumero(perdida)} descarte`,
         timer: 2400,
         showConfirmButton: false,
       });
     } catch (err) {
-      Swal.fire("Error", err.message || "No se pudo cargar la recolección.", "error");
+      Swal.fire(
+        "Error",
+        err.message || `No se pudo ${edicion ? "corregir" : "cargar"} la recolección.`,
+        "error"
+      );
       setSaving(false);
     }
   };
@@ -112,91 +164,80 @@ const RecoleccionModal = ({ lote, galponLabel, constantes, onClose, onHecho }) =
       <div className="modal show d-block" tabIndex="-1">
         <div className="modal-dialog modal-lg modal-dialog-scrollable">
           <div className="modal-content">
-            <div className="modal-header bg-success text-white">
+            <div className={`modal-header text-white ${edicion ? "bg-primary" : "bg-success"}`}>
               <h5 className="modal-title">
-                <i className="bi bi-basket me-2"></i>
+                <i className={`bi ${edicion ? "bi-pencil-square" : "bi-basket"} me-2`}></i>
+                {edicion ? "Corregir recolección — " : ""}
                 {galponLabel} — Lote #{lote.numeroLote}
               </h5>
               <button className="btn-close btn-close-white" onClick={onClose} disabled={saving}></button>
             </div>
             <div className="modal-body">
               <div className="text-muted small mb-3">
-                Semana {lote.semanaVida} de vida · {formatearNumero(hembras)} hembras en el galpón
+                Semana {lote.semanaVida} de vida · {formatearNumero(hembras)} hembras
+                {edicion ? " al momento de la carga" : " en el galpón"}
               </div>
               <form id="form-recoleccion" onSubmit={handleSubmit}>
-                <div className="mb-3">
-                  <label className="form-label fw-semibold">Fecha</label>
-                  <input
-                    type="date"
-                    name="fecha"
-                    className="form-control"
-                    value={form.fecha}
-                    onChange={handleChange}
-                    required
-                  />
+                <div className="row g-3 mb-3">
+                  <div className="col-md-8">
+                    <label className="form-label fw-semibold">Fecha</label>
+                    <input
+                      type="date"
+                      name="fecha"
+                      className="form-control"
+                      value={form.fecha}
+                      onChange={handleChange}
+                      required
+                      disabled={edicion}
+                    />
+                    {edicion && (
+                      <div className="form-text">
+                        La fecha no se puede cambiar: define el orden de consumo de los huevos.
+                        Si está mal, borrá la recolección y volvé a cargarla.
+                      </div>
+                    )}
+                  </div>
+                  <div className="col-md-4">
+                    <label className="form-label fw-semibold">Hora</label>
+                    <input
+                      type="time"
+                      name="hora"
+                      className="form-control"
+                      value={form.hora}
+                      onChange={handleChange}
+                      required
+                    />
+                    <div className="form-text">De qué pasada del día es</div>
+                  </div>
                 </div>
 
                 <h6 className="fw-bold text-secondary mb-2">Huevos recolectados</h6>
 
-                {/* A incubadora: se cuenta como viene del galpón. */}
-                <div className="border rounded p-3 mb-3">
-                  <div className="fw-semibold mb-2">
-                    <i className="bi bi-thermometer-half text-primary me-1"></i>A incubadora
-                    <span className="text-muted fw-normal small"> — los que están bien</span>
-                  </div>
-                  <div className="row g-3">
-                    <div className="col-md-4">
-                      <label className="form-label fw-semibold small">Cajones</label>
-                      <input
-                        type="number"
-                        name="cajones"
-                        className="form-control"
-                        min="0"
-                        value={form.cajones}
-                        onChange={handleChange}
-                        placeholder="0"
-                      />
-                      <div className="form-text">{huevosPorCajon} huevos c/u</div>
-                    </div>
-                    <div className="col-md-4">
-                      <label className="form-label fw-semibold small">Bandejas sueltas</label>
-                      <input
-                        type="number"
-                        name="bandejas"
-                        className="form-control"
-                        min="0"
-                        max={bandejasPorCajon - 1}
-                        value={form.bandejas}
-                        onChange={handleChange}
-                        placeholder="0"
-                      />
-                      <div className="form-text">{huevosPorBandeja} huevos c/u</div>
-                    </div>
-                    <div className="col-md-4">
-                      <label className="form-label fw-semibold small">Huevos sueltos</label>
-                      <input
-                        type="number"
-                        name="sueltos"
-                        className="form-control"
-                        min="0"
-                        value={form.sueltos}
-                        onChange={handleChange}
-                        placeholder="0"
-                      />
-                      <div className="form-text">unidades</div>
-                    </div>
-                  </div>
-                  {inoculables > 0 && (
-                    <div className="small text-primary mt-2">
-                      <i className="bi bi-egg me-1"></i>
-                      {formatearNumero(inoculables)} huevos ={" "}
-                      {textoDesglose(inoculables, huevosPorCajon, huevosPorBandeja)}
-                    </div>
-                  )}
-                </div>
-
                 <div className="row g-3 mb-3">
-                  <div className="col-md-6">
+                  <div className="col-md-4">
+                    <div className="border rounded p-3 h-100">
+                      <div className="fw-semibold mb-2">
+                        <i className="bi bi-thermometer-half text-primary me-1"></i>A incubadora
+                        <span className="text-muted fw-normal small"> — los que están bien</span>
+                      </div>
+                      <label className="form-label fw-semibold small">Huevos (unidades)</label>
+                      <input
+                        type="number"
+                        name="aIncubar"
+                        className="form-control"
+                        min="0"
+                        value={form.aIncubar}
+                        onChange={handleChange}
+                        placeholder="0"
+                      />
+                      <div className="form-text">
+                        {inoculables > 0
+                          ? textoDesglose(inoculables, huevosPorCajon, huevosPorBandeja)
+                          : "Van al stock incubable."}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-md-4">
                     <div className="border rounded p-3 h-100">
                       <div className="fw-semibold mb-2">
                         <i className="bi bi-cart text-warning me-1"></i>A venta
@@ -217,7 +258,7 @@ const RecoleccionModal = ({ lote, galponLabel, constantes, onClose, onHecho }) =
                       </div>
                     </div>
                   </div>
-                  <div className="col-md-6">
+                  <div className="col-md-4">
                     <div className="border rounded p-3 h-100">
                       <div className="fw-semibold mb-2">
                         <i className="bi bi-trash text-danger me-1"></i>Descarte
@@ -244,12 +285,21 @@ const RecoleccionModal = ({ lote, galponLabel, constantes, onClose, onHecho }) =
                   <div className={`alert py-2 mb-3 ${posturaImposible ? "alert-danger" : "alert-success"}`}>
                     <div className="row g-2 small">
                       <div className="col-md-6">
-                        <strong>Total del día:</strong> {formatearNumero(huevosTotales)}
+                        <strong>Esta carga:</strong> {formatearNumero(huevosTotales)}
                         <span className="text-muted">
                           {" "}
                           ({textoDesglose(huevosTotales, huevosPorCajon, huevosPorBandeja)})
                         </span>
                       </div>
+                      {previoDelDia > 0 && (
+                        <div className="col-12">
+                          <strong>Total del día:</strong> {formatearNumero(totalDelDia)}
+                          <span className="text-muted">
+                            {" "}
+                            — ya había {formatearNumero(previoDelDia)} cargados en otras pasadas
+                          </span>
+                        </div>
+                      )}
                       <div className="col-md-6">
                         <strong>A incubadora:</strong> {formatearNumero(inoculables)}
                         <span className="text-muted">
@@ -302,11 +352,12 @@ const RecoleccionModal = ({ lote, galponLabel, constantes, onClose, onHecho }) =
               <button
                 type="submit"
                 form="form-recoleccion"
-                className="btn btn-success"
+                className={`btn ${edicion ? "btn-primary" : "btn-success"}`}
                 disabled={saving || posturaImposible}
               >
                 {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
-                <i className="bi bi-check-lg me-1"></i>Cargar recolección
+                <i className="bi bi-check-lg me-1"></i>
+                {edicion ? "Guardar cambios" : "Cargar recolección"}
               </button>
             </div>
           </div>
@@ -324,6 +375,7 @@ const RecoleccionHuevosPage = () => {
   const [loading, setLoading] = useState(true);
   const [pagina, setPagina] = useState(1);
   const [galponAbierto, setGalponAbierto] = useState(null);
+  const [editando, setEditando] = useState(null); // { recoleccion, lote }
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -352,16 +404,50 @@ const RecoleccionHuevosPage = () => {
 
   // Un galpón de postura por tarjeta. Solo los que tienen lote poniendo se
   // pueden abrir: el resto queda a la vista pero sin acción.
+  // En el galpón se junta varias veces al día, así que la tarjeta muestra la
+  // suma de todas las pasadas de hoy y cuántas fueron.
   const hoy = obtenerFechaHoy();
   const galponesPostura = (constantes?.galpones?.postura || []).map((g) => {
     const lote = lotes.find((l) => l.galpon === g.numero);
-    const recHoy = lote
-      ? recolecciones.find(
+    const delDia = lote
+      ? recolecciones.filter(
           (r) => (r.lote?._id || r.lote) === lote._id && String(r.fecha).slice(0, 10) === hoy
         )
+      : [];
+    const sumar = (campo) => delDia.reduce((s, r) => s + (r[campo] || 0), 0);
+    const hoyResumen = delDia.length
+      ? {
+          pasadas: delDia.length,
+          huevosTotales: sumar("huevosTotales"),
+          inoculables: sumar("inoculables"),
+          descarte1: sumar("descarte1"),
+          descartePerdida: sumar("descartePerdida"),
+        }
       : null;
-    return { galpon: g, lote, recHoy };
+    return { galpon: g, lote, hoyResumen };
   });
+
+  // Huevos cargados para ese lote en esa fecha, sin contar una recolección dada.
+  const totalDelDia = (loteId, fecha, excluirId = null) =>
+    recolecciones
+      .filter(
+        (r) =>
+          (r.lote?._id || r.lote) === loteId &&
+          String(r.fecha).slice(0, 10) === String(fecha).slice(0, 10) &&
+          r._id !== excluirId
+      )
+      .reduce((s, r) => s + (r.huevosTotales || 0), 0);
+
+  // Para editar se arma el lote a partir de la propia recolección: la semana y el
+  // plantel son los del día de la carga, no los de hoy.
+  const handleEditar = (rec) => {
+    const loteRec = rec.lote || {};
+    setEditando({
+      recoleccion: rec,
+      lote: { ...loteRec, semanaVida: rec.semanaVida },
+      previoDelDia: totalDelDia(loteRec._id || rec.lote, rec.fecha, rec._id),
+    });
+  };
 
   const handleEliminar = async (rec) => {
     const { isConfirmed } = await Swal.fire({
@@ -418,7 +504,7 @@ const RecoleccionHuevosPage = () => {
                   </span>
                 </h5>
                 <div className="row g-3 mb-4">
-                  {galponesPostura.map(({ galpon, lote, recHoy }) => {
+                  {galponesPostura.map(({ galpon, lote, hoyResumen }) => {
                     if (!lote) {
                       return (
                         <div className="col-12 col-md-6 col-xl-3" key={galpon.numero}>
@@ -443,9 +529,12 @@ const RecoleccionHuevosPage = () => {
                         >
                           <div className="card-header bg-white d-flex justify-content-between align-items-center">
                             <span className="fw-bold">{galpon.nombre}</span>
-                            {recHoy ? (
+                            {hoyResumen ? (
                               <span className="badge bg-success">
-                                <i className="bi bi-check-lg me-1"></i>Cargado hoy
+                                <i className="bi bi-check-lg me-1"></i>
+                                {hoyResumen.pasadas === 1
+                                  ? "1 recolección hoy"
+                                  : `${hoyResumen.pasadas} recolecciones hoy`}
                               </span>
                             ) : (
                               <span className="badge bg-warning text-dark">Sin cargar hoy</span>
@@ -461,22 +550,28 @@ const RecoleccionHuevosPage = () => {
                               {formatearNumero(lote.hembras?.actual)} hembras
                             </div>
 
-                            {recHoy ? (
+                            {hoyResumen ? (
                               <div className="border rounded p-2 small mb-3">
                                 <div className="fw-semibold mb-1">
-                                  Hoy: {formatearNumero(recHoy.huevosTotales)} huevos
+                                  Hoy: {formatearNumero(hoyResumen.huevosTotales)} huevos
+                                  {hoyResumen.pasadas > 1 && (
+                                    <span className="text-muted fw-normal">
+                                      {" "}
+                                      en {hoyResumen.pasadas} pasadas
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="text-muted">
                                   <span className="text-success">
-                                    {formatearNumero(recHoy.inoculables)} a incubar
+                                    {formatearNumero(hoyResumen.inoculables)} a incubar
                                   </span>{" "}
                                   ·{" "}
                                   <span className="text-warning">
-                                    {formatearNumero(recHoy.descarte1)} a venta
+                                    {formatearNumero(hoyResumen.descarte1)} a venta
                                   </span>{" "}
                                   ·{" "}
                                   <span className="text-danger">
-                                    {formatearNumero(recHoy.descartePerdida || 0)} descarte
+                                    {formatearNumero(hoyResumen.descartePerdida)} descarte
                                   </span>
                                 </div>
                               </div>
@@ -489,7 +584,7 @@ const RecoleccionHuevosPage = () => {
                             <div className="d-grid">
                               <span className="btn btn-sm btn-success">
                                 <i className="bi bi-basket me-1"></i>
-                                {recHoy ? "Cargar otra recolección" : "Cargar recolección"}
+                                {hoyResumen ? "Cargar otra recolección" : "Cargar recolección"}
                               </span>
                             </div>
                           </div>
@@ -533,7 +628,13 @@ const RecoleccionHuevosPage = () => {
                       <tbody>
                         {recsPagina.map((r) => (
                           <tr key={r._id}>
-                            <td>{formatearFechaLocal(r.fecha)}</td>
+                            <td>
+                              {formatearFechaLocal(r.fecha)}
+                              <span className="text-muted small d-block">
+                                <i className="bi bi-clock me-1"></i>
+                                {formatearHoraLocal(r.fechaHora || r.createdAt)}
+                              </span>
+                            </td>
                             <td>
                               #{r.lote?.numeroLote ?? "?"}
                               <span className="text-muted small"> · G{r.galpon}</span>
@@ -557,13 +658,22 @@ const RecoleccionHuevosPage = () => {
                               )}
                             </td>
                             <td className="text-end">
-                              <button
-                                className="btn btn-sm btn-outline-danger"
-                                onClick={() => handleEliminar(r)}
-                                title="Eliminar"
-                              >
-                                <i className="bi bi-trash"></i>
-                              </button>
+                              <div className="btn-group btn-group-sm">
+                                <button
+                                  className="btn btn-outline-primary"
+                                  onClick={() => handleEditar(r)}
+                                  title="Corregir"
+                                >
+                                  <i className="bi bi-pencil"></i>
+                                </button>
+                                <button
+                                  className="btn btn-outline-danger"
+                                  onClick={() => handleEliminar(r)}
+                                  title="Eliminar"
+                                >
+                                  <i className="bi bi-trash"></i>
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -578,7 +688,13 @@ const RecoleccionHuevosPage = () => {
                     <div className="card shadow-sm mb-2" key={r._id}>
                       <div className="card-body">
                         <div className="d-flex justify-content-between mb-2">
-                          <strong>{formatearFechaLocal(r.fecha)}</strong>
+                          <strong>
+                            {formatearFechaLocal(r.fecha)}
+                            <span className="text-muted fw-normal small ms-2">
+                              <i className="bi bi-clock me-1"></i>
+                              {formatearHoraLocal(r.fechaHora || r.createdAt)}
+                            </span>
+                          </strong>
                           <span className="text-muted small">
                             Lote #{r.lote?.numeroLote ?? "?"} · G{r.galpon}
                           </span>
@@ -607,12 +723,20 @@ const RecoleccionHuevosPage = () => {
                             {formatearPorcentaje(r.porcentajeFertilidad)}
                           </div>
                         </div>
-                        <button
-                          className="btn btn-sm btn-outline-danger w-100 mt-3"
-                          onClick={() => handleEliminar(r)}
-                        >
-                          <i className="bi bi-trash me-1"></i>Eliminar
-                        </button>
+                        <div className="d-flex gap-2 mt-3">
+                          <button
+                            className="btn btn-sm btn-outline-primary flex-fill"
+                            onClick={() => handleEditar(r)}
+                          >
+                            <i className="bi bi-pencil me-1"></i>Corregir
+                          </button>
+                          <button
+                            className="btn btn-sm btn-outline-danger flex-fill"
+                            onClick={() => handleEliminar(r)}
+                          >
+                            <i className="bi bi-trash me-1"></i>Eliminar
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -635,9 +759,25 @@ const RecoleccionHuevosPage = () => {
           lote={galponAbierto}
           galponLabel={nombreGalpon(constantes?.galpones, "postura", galponAbierto.galpon)}
           constantes={constantes}
+          previoDelDia={totalDelDia(galponAbierto._id, hoy)}
           onClose={() => setGalponAbierto(null)}
           onHecho={async () => {
             setGalponAbierto(null);
+            await cargar();
+          }}
+        />
+      )}
+
+      {editando && (
+        <RecoleccionModal
+          lote={editando.lote}
+          galponLabel={nombreGalpon(constantes?.galpones, "postura", editando.lote.galpon)}
+          constantes={constantes}
+          recoleccion={editando.recoleccion}
+          previoDelDia={editando.previoDelDia}
+          onClose={() => setEditando(null)}
+          onHecho={async () => {
+            setEditando(null);
             await cargar();
           }}
         />

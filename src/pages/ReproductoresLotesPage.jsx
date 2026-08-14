@@ -18,6 +18,58 @@ import {
 } from "../utils/reproductoresUtils";
 import Swal from "sweetalert2";
 
+// ── Semáforo de las tarjetas ────────────────────────────────────────────────
+// Cada tramo se mide contra sí mismo, no contra las 65 semanas del ciclo de
+// vida: en recría lo que importa es cuánto falta para mudar a postura, y en
+// postura cuánto le queda de vida útil al lote. Mismo criterio visual que los
+// galpones de Granja: fondo tintado y barra de progreso, con el color escalando
+// a medida que se acerca el final del tramo. El estado nunca va por color solo
+// — siempre lleva ícono y texto.
+const PALETA = {
+  ok:      { bg: "#f0fdf4", border: "#16a34a", badge: null },
+  aviso:   { bg: "#fefce8", border: "#ca8a04", badge: "bg-warning text-dark" },
+  ultima:  { bg: "#fff7ed", border: "#ea580c", badge: "bg-warning text-dark" },
+  vencido: { bg: "#fef2f2", border: "#dc2626", badge: "bg-danger" },
+  espera:  { bg: "#eff6ff", border: "#2563eb", badge: "bg-primary" },
+};
+
+const RECRIA_CONFIG = {
+  encurso:  { ...PALETA.ok,      icono: null,                           label: null },
+  proxima:  { ...PALETA.aviso,   icono: "bi-hourglass-split",           label: null }, // el label se arma con las semanas que faltan
+  lista:    { ...PALETA.ultima,  icono: "bi-star-fill",                 label: "Última semana de recría — mudar a postura" },
+  atrasada: { ...PALETA.vencido, icono: "bi-exclamation-triangle-fill", label: "Pasó el tiempo de recría — mudar ya" },
+};
+
+const POSTURA_CONFIG = {
+  espera:   { ...PALETA.espera,  icono: "bi-hourglass-split",           label: null }, // el label se arma con las semanas que faltan
+  encurso:  { ...PALETA.ok,      icono: null,                           label: null },
+  proxima:  { ...PALETA.aviso,   icono: "bi-hourglass-split",           label: null }, // idem
+  ultima:   { ...PALETA.ultima,  icono: "bi-star-fill",                 label: "Última semana de postura — programar la baja del lote" },
+  vencida:  { ...PALETA.vencido, icono: "bi-exclamation-triangle-fill", label: "Pasó el ciclo de vida — dar de baja el lote" },
+};
+
+// Semanas antes del final del tramo en las que la tarjeta empieza a avisar.
+const SEMANAS_AVISO = 3;
+
+// semanaMudanza = primera semana de postura (24) ⇒ la recría termina en la 23.
+const estadoRecria = (semana, semanaMudanza) => {
+  const ultimaSemana = semanaMudanza - 1;
+  if (semana > ultimaSemana)                   return "atrasada";
+  if (semana === ultimaSemana)                 return "lista";
+  if (semana >= ultimaSemana - SEMANAS_AVISO)  return "proxima";
+  return "encurso";
+};
+
+// El lote puede estar mudado a postura y todavía no haber llegado a la semana en
+// que arranca a poner: ese caso se marca aparte ("espera").
+const estadoPostura = (semana, semanaInicio, semanaFin) => {
+  if (semana < semanaInicio)                return "espera";
+  if (semana > semanaFin)                   return "vencida";
+  if (semana === semanaFin)                 return "ultima";
+  if (semana >= semanaFin - SEMANAS_AVISO)  return "proxima";
+  return "encurso";
+};
+
 // ── Modal: detalle de producción del lote ───────────────────────────────────
 const ProduccionModal = ({ lote, constantes, onClose }) => {
   const [resumen, setResumen] = useState(null);
@@ -299,13 +351,41 @@ const ReproductoresLotesPage = () => {
 
     const estado = ESTADO_LOTE[lote.estado] || {};
     const semana = lote.semanaVida ?? 0;
-    const progreso = Math.min(100, Math.round((semana / semanasCiclo) * 100));
-    const enProduccion = lote.sector === "postura" && semana >= semanaPostura;
-    const faltanSemanas = semanaPostura - semana;
+    const esRecria = lote.sector === "recria";
+
+    // Cada tramo se mide contra sí mismo: recría va de la semana 1 a la
+    // semanaPostura - 1, y postura de la semanaPostura a la última del ciclo.
+    const semanasRecria  = semanaPostura - 1;
+    const semanasPostura = semanasCiclo - semanaPostura + 1;
+
+    const tope = esRecria ? semanasRecria : semanasPostura;
+    // En postura la semana se cuenta desde el inicio de la postura, no desde el
+    // ingreso: "semana 5 de postura" es la lectura que usa el cliente.
+    const semanaTramo = esRecria ? semana : Math.max(0, semana - semanaPostura + 1);
+    const progreso = Math.min(100, Math.round((semanaTramo / tope) * 100));
+
+    const nivel = esRecria
+      ? estadoRecria(semana, semanaPostura)
+      : estadoPostura(semana, semanaPostura, semanasCiclo);
+    const cfg = esRecria ? RECRIA_CONFIG[nivel] : POSTURA_CONFIG[nivel];
+
+    // Los estados de cuenta regresiva arman su texto con las semanas que faltan.
+    const faltanParaPoner = semanaPostura - semana;
+    const faltanParaFin   = semanasCiclo - semana;
+    const plural = (n) => `${n} semana${n === 1 ? "" : "s"}`;
+    const aviso =
+      nivel === "espera"  ? `Empieza a poner en ${plural(faltanParaPoner)}`
+      : nivel === "proxima"
+        ? esRecria
+          ? `Mudanza a postura en ${plural(faltanParaPoner)}`
+          : `Fin del ciclo en ${plural(faltanParaFin)}`
+        : cfg?.label;
+
+    const barColor = cfg.border;
 
     return (
       <div className="col-12 col-md-6 col-xl-3" key={`${sector}-${galpon.numero}`}>
-        <div className="card shadow-sm h-100">
+        <div className="card shadow-sm h-100" style={{ background: cfg.bg }}>
           <div className="card-header bg-white d-flex justify-content-between align-items-center">
             <span className="fw-bold">{galpon.nombre}</span>
             <span className={`badge ${estado.clase}`}>{estado.label}</span>
@@ -314,16 +394,26 @@ const ReproductoresLotesPage = () => {
             <div className="d-flex justify-content-between align-items-baseline mb-2">
               <span className="fw-bold">Lote #{lote.numeroLote}</span>
               <small className="text-muted">
-                Semana {semana}/{semanasCiclo}
+                Semana {semanaTramo}/{tope} de {esRecria ? "recría" : "postura"}
               </small>
             </div>
 
-            <div className="progress mb-3" style={{ height: "6px" }}>
+            <div className={`progress ${aviso ? "mb-2" : "mb-3"}`} style={{ height: "6px" }}>
               <div
-                className={`progress-bar ${enProduccion ? "bg-success" : "bg-info"}`}
-                style={{ width: `${progreso}%` }}
+                className="progress-bar"
+                style={{ width: `${progreso}%`, background: barColor, transition: "width .4s ease" }}
               ></div>
             </div>
+
+            {/* El estado va con ícono y texto, nunca color solo. */}
+            {aviso && (
+              <div className="mb-3">
+                <span className={`badge ${cfg.badge}`} style={{ whiteSpace: "normal" }}>
+                  <i className={`bi ${cfg.icono} me-1`}></i>
+                  {aviso}
+                </span>
+              </div>
+            )}
 
             <div className="row g-2 small mb-3">
               <div className="col-6">
@@ -355,12 +445,7 @@ const ReproductoresLotesPage = () => {
                   {formatearFechaLocal(lote.fechaInicioPostura)}
                 </div>
               )}
-              {lote.sector === "postura" && !enProduccion && faltanSemanas > 0 && (
-                <div className="text-warning">
-                  <i className="bi bi-hourglass-split me-1"></i>
-                  Empieza a poner en {faltanSemanas} semana{faltanSemanas === 1 ? "" : "s"}
-                </div>
-              )}
+              {/* "Empieza a poner en N semanas" ahora lo dice el badge de arriba. */}
             </div>
 
             <div className="d-grid gap-2">
@@ -393,8 +478,8 @@ const ReproductoresLotesPage = () => {
               <i className="bi bi-list-ul text-success me-2"></i>Galpones Reproductores
             </h1>
             <p className="text-muted mb-0 small">
-              Recría y postura — ciclo de {semanasCiclo} semanas, postura desde la semana{" "}
-              {semanaPostura}
+              Recría de {semanaPostura - 1} semanas, postura desde la semana {semanaPostura} —
+              ciclo de vida de {semanasCiclo} semanas
             </p>
           </div>
           <button className="btn btn-outline-secondary" onClick={cargar} disabled={loading}>
