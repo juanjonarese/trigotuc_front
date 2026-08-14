@@ -63,7 +63,7 @@ Default redirect: `/` y rutas desconocidas → `/login`.
 
 ### Roles (`localStorage.rolUsuario`)
 
-`superadmin`, `administracion_frigorifico`, `administracion_granja`, `frigorifico`, `camaras`, `granja`, `chofer`.
+`superadmin`, `administracion_frigorifico`, `administracion_granja`, `frigorifico`, `granja`, `chofer`.
 
 > El gateo por rol en el frontend es **cosmético** (oculta secciones del sidebar). La autorización real la aplica el backend con JWT + middleware. No confiar en el front para seguridad.
 

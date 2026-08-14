@@ -9,6 +9,7 @@ import {
   crearPedidoIngresoPollitos,
   confirmarPedidoIngresoPollitos,
   cancelarPedidoIngresoPollitos,
+  obtenerConfigGalpones,
 } from "../services/api";
 import { formatearFechaLocal, ajustarFechaParaGuardar, obtenerFechaHoy } from "../utils/dateUtils";
 import Swal from "sweetalert2";
@@ -28,12 +29,16 @@ const FORM_PEDIDO_VACIO = {
 };
 
 // ── Modal nuevo pedido (admin crea el envío) ────────────────────────────────
-const NuevoPedidoModal = ({ onClose, onCreado, ocupados }) => {
+const NuevoPedidoModal = ({ onClose, onCreado, ocupados, fueraServicio }) => {
   const [form, setForm]     = useState(FORM_PEDIDO_VACIO);
   const [saving, setSaving] = useState(false);
 
   const maxGalpones = form.granja ? GALPONES[form.granja] : 0;
   const estaOcupado = (granja, galpon) => !!(ocupados[granja]?.has(galpon));
+  // Fuera de servicio ≠ ocupado: el galpón está vacío pero no puede recibir
+  // pollitos. Se bloquea igual, con otro color, porque el motivo es distinto y
+  // la solución también (a uno lo vaciás, al otro lo tenés que rehabilitar).
+  const estaFueraDeServicio = (granja, galpon) => !!(fueraServicio?.[granja]?.has(galpon));
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -109,19 +114,41 @@ const NuevoPedidoModal = ({ onClose, onCreado, ocupados }) => {
                     <>
                       <div className="d-flex flex-wrap gap-2">
                         {Array.from({ length: maxGalpones }, (_, i) => i + 1).map((n) => {
-                          const ocupado     = estaOcupado(form.granja, n);
+                          const ocupado      = estaOcupado(form.granja, n);
+                          const fuera        = estaFueraDeServicio(form.granja, n);
+                          const bloqueado    = ocupado || fuera;
                           const seleccionado = form.galpon == n;
                           return (
                             <button
                               key={n}
                               type="button"
-                              className={`btn ${ocupado ? "btn-danger disabled" : seleccionado ? "btn-success" : "btn-outline-secondary"}`}
+                              className={`btn ${
+                                ocupado
+                                  ? "btn-danger disabled"
+                                  : fuera
+                                  ? "btn-secondary disabled"
+                                  : seleccionado
+                                  ? "btn-success"
+                                  : "btn-outline-secondary"
+                              }`}
                               style={{ minWidth: "3rem" }}
-                              disabled={ocupado}
-                              onClick={() => !ocupado && setForm((p) => ({ ...p, galpon: n }))}
-                              title={ocupado ? "Galpón ocupado" : `Galpón ${n}`}
+                              disabled={bloqueado}
+                              onClick={() => !bloqueado && setForm((p) => ({ ...p, galpon: n }))}
+                              title={
+                                ocupado
+                                  ? "Galpón ocupado"
+                                  : fuera
+                                  ? "Galpón fuera de servicio — no puede recibir pollitos"
+                                  : `Galpón ${n}`
+                              }
                             >
-                              {ocupado ? <i className="bi bi-lock-fill"></i> : n}
+                              {ocupado ? (
+                                <i className="bi bi-lock-fill"></i>
+                              ) : fuera ? (
+                                <i className="bi bi-slash-circle"></i>
+                              ) : (
+                                n
+                              )}
                             </button>
                           );
                         })}
@@ -130,6 +157,12 @@ const NuevoPedidoModal = ({ onClose, onCreado, ocupados }) => {
                         <div className="mt-2 small text-muted">
                           <span className="badge bg-danger me-1"><i className="bi bi-lock-fill"></i></span>
                           Galpón ocupado — en crianza activa
+                        </div>
+                      )}
+                      {fueraServicio?.[form.granja]?.size > 0 && (
+                        <div className="mt-1 small text-muted">
+                          <span className="badge bg-secondary me-1"><i className="bi bi-slash-circle"></i></span>
+                          Fuera de servicio — no puede recibir pollitos
                         </div>
                       )}
                     </>
@@ -479,6 +512,9 @@ const GranjaLoteNuevoPage = () => {
   const [pedidosPendientes, setPedidosPendientes] = useState([]);
   const [loading, setLoading]                     = useState(true);
   const [ocupados, setOcupados]                   = useState({});
+  // { cañete: Set(1), los_pinos: Set(3) } — galpones que no pueden recibir
+  // pollitos porque están fuera de servicio.
+  const [fueraServicio, setFueraServicio]         = useState({});
   const [showNuevo, setShowNuevo]                 = useState(false);
   const [editLote, setEditLote]                   = useState(null);
   const [tab, setTab]                             = useState("envios");
@@ -492,9 +528,12 @@ const GranjaLoteNuevoPage = () => {
   const cargarDatos = useCallback(async () => {
     setLoading(true);
     try {
-      const [lotesData, pedidosData] = await Promise.all([
+      // La config no es crítica para la pantalla: si falla, la grilla sigue
+      // andando sin marcar los fuera de servicio (el backend igual los rechaza).
+      const [lotesData, pedidosData, configData] = await Promise.all([
         obtenerLotesGranja(),
         listarPedidosIngresoPollitos({ estado: "pendiente" }),
+        obtenerConfigGalpones().catch(() => []),
       ]);
       setLotes(lotesData);
       setPedidosPendientes(pedidosData);
@@ -505,6 +544,14 @@ const GranjaLoteNuevoPage = () => {
         mapa[l.granja].add(l.galpon);
       }
       setOcupados(mapa);
+
+      const fuera = {};
+      for (const g of configData) {
+        if (!g.fueraDeServicio) continue;
+        if (!fuera[g.granja]) fuera[g.granja] = new Set();
+        fuera[g.granja].add(g.galpon);
+      }
+      setFueraServicio(fuera);
     } catch (e) {
       Swal.fire("Error", e.message, "error");
     } finally {
@@ -814,6 +861,7 @@ const GranjaLoteNuevoPage = () => {
       {showNuevo && (
         <NuevoPedidoModal
           ocupados={ocupados}
+          fueraServicio={fueraServicio}
           onClose={() => setShowNuevo(false)}
           onCreado={() => { setShowNuevo(false); cargarDatos(); }}
         />

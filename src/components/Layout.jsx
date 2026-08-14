@@ -476,7 +476,7 @@ const Layout = ({ children }) => {
                   </a>
                 )}
                 {/* 5 — Recepción de Órdenes (frigorifico confirma) */}
-                {(rolUsuario === "superadmin" || rolUsuario === "frigorifico" || rolUsuario === "camaras" || rolUsuario === "administracion_frigorifico") && (
+                {(rolUsuario === "superadmin" || rolUsuario === "frigorifico" || rolUsuario === "administracion_frigorifico") && (
                   <a
                     href="#"
                     className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${

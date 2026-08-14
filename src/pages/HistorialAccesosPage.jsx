@@ -20,7 +20,6 @@ const ENTIDAD_LABEL = {
   envio:                "Envío cámara",
   despachoFrigorifico:  "Orden de carga",
   ordenCarga:           "Orden de carga",
-  ordenRetiro:          "Retiro",
 };
 
 const AREA_CFG = {

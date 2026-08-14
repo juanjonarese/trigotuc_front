@@ -217,7 +217,9 @@ const DashboardPage = () => {
         {/* ── KPIs ── */}
         <div className="row g-3 mb-4">
           <div className="col-6 col-md-3">
-            <KpiCard icon="egg-fried" label="Pollos en crianza" value={fmtNum(totalPollosGranja)}
+            {/* Reloj de arena y no un huevo: son pollos creciendo, con los 50
+                días de crianza corriendo. */}
+            <KpiCard icon="hourglass-split" label="Pollos en crianza" value={fmtNum(totalPollosGranja)}
               sub={`${lotesGranja.length} galpón${lotesGranja.length !== 1 ? "es" : ""} activo${lotesGranja.length !== 1 ? "s" : ""}`}
               color="text-success" onClick={() => navigate("/granja/galpones")} />
           </div>

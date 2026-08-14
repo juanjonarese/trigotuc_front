@@ -254,8 +254,8 @@ const StockHuevosPage = () => {
               <i className="bi bi-egg text-success me-2"></i>Stock de Huevos
             </h1>
             <p className="text-muted mb-0 small">
-              Huevos de descarte disponibles para la venta — de la clasificación, la inoculación y
-              el miraje
+              Huevos de descarte disponibles para la venta — de la clasificación, la carga a
+              incubadora y el miraje
             </p>
           </div>
           <div className="d-flex gap-2">

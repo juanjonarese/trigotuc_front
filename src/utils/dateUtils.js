@@ -42,3 +42,33 @@ export const formatearFechaLocal = (fechaISO, locale = 'es-AR') => {
   if (!fechaISO) return '-';
   return new Date(fechaISO).toLocaleDateString(locale);
 };
+
+/**
+ * Zona horaria del negocio. Se fija explícitamente en vez de usar la del
+ * navegador: los horarios que se cargan y se muestran son siempre los de la
+ * granja, sin importar desde dónde se abra el sistema.
+ */
+export const ZONA_AR = 'America/Argentina/Buenos_Aires';
+
+/**
+ * Hora del día (HH:MM) de una fecha ISO, en hora argentina.
+ *
+ * @param {string} fechaISO - Fecha en formato ISO
+ * @returns {string} - "07:30", o '-' si no hay fecha
+ */
+export const formatearHoraLocal = (fechaISO) => {
+  if (!fechaISO) return '-';
+  return new Date(fechaISO).toLocaleTimeString('es-AR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: ZONA_AR,
+  });
+};
+
+/**
+ * Hora actual (HH:MM) en Argentina, para precargar inputs tipo time.
+ *
+ * @returns {string} - "07:30"
+ */
+export const obtenerHoraAhora = () => formatearHoraLocal(new Date().toISOString());

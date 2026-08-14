@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Layout from "../components/Layout";
-import PanelGalpones from "../components/GraficoGalpones";
+import AlmanaqueFaena from "../components/AlmanaqueFaena";
+import ConfigGalponesModal from "../components/ConfigGalponesModal";
 import {
   obtenerRepartoPollitos,
   obtenerClientes,
-  obtenerProyeccion,
+  obtenerAlmanaqueFaena,
   crearReservaPollitos,
   actualizarReservaPollitos,
   eliminarReservaPollitos,
@@ -44,7 +45,7 @@ const FORM_VACIO = {
 // ── Modal: dar curso a pollitos de una fecha ────────────────────────────────
 // Se elige el destino (granja propia o cliente) y la cantidad; esa cantidad se
 // descuenta de los disponibles de esa fecha.
-const AsignarModal = ({ reparto, reserva, clientes, onClose, onGuardado }) => {
+const AsignarModal = ({ reparto, reserva, clientes, galponesFuera, onClose, onGuardado }) => {
   const edicion = !!reserva;
   const [form, setForm] = useState(
     edicion
@@ -60,12 +61,12 @@ const AsignarModal = ({ reparto, reserva, clientes, onClose, onGuardado }) => {
         }
       : FORM_VACIO
   );
-  const [verPrecio, setVerPrecio] = useState(
-    edicion && (reserva.precioUnitario != null || reserva.anticipo > 0)
-  );
   const [saving, setSaving] = useState(false);
 
   const cantidad = Number(form.cantidad) || 0;
+  // El formulario de precio se sacó de la pantalla, pero los valores siguen
+  // viajando en el form: en una edición hay que devolver los que la reserva ya
+  // tenía en vez de borrárselos.
   const precio = form.precioUnitario === "" ? null : Number(form.precioUnitario);
   const anticipo = Number(form.anticipo) || 0;
   const total = precio != null ? precio * cantidad : 0;
@@ -131,6 +132,10 @@ const AsignarModal = ({ reparto, reserva, clientes, onClose, onGuardado }) => {
   };
 
   const galponesDisp = GRANJAS.find((g) => g.key === form.granja)?.galpones || 0;
+  // Un galpón fuera de servicio no puede recibir pollitos. Se deja en la lista
+  // pero deshabilitado y con el motivo al lado: sacarlo del todo hacía que el
+  // usuario se preguntara por qué le faltaba un número en el medio.
+  const estaFuera = (n) => !!galponesFuera?.[form.granja]?.has(n);
 
   return (
     <>
@@ -238,9 +243,10 @@ const AsignarModal = ({ reparto, reserva, clientes, onClose, onGuardado }) => {
                       >
                         <option value="">A definir</option>
                         {Array.from({ length: galponesDisp }, (_, i) => i + 1).map((n) => (
-                          <option key={n} value={n}>
+                          <option key={n} value={n} disabled={estaFuera(n)}>
                             {prefijoGranja(form.granja)}
                             {n}
+                            {estaFuera(n) ? " — fuera de servicio" : ""}
                           </option>
                         ))}
                       </select>
@@ -261,67 +267,15 @@ const AsignarModal = ({ reparto, reserva, clientes, onClose, onGuardado }) => {
                     onChange={(e) => setCampo("cantidad", e.target.value)}
                     placeholder="0"
                   />
-                  {libre > 0 && (
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-link px-0"
-                      onClick={() => setCampo("cantidad", String(libre))}
-                    >
-                      Asignar todo lo disponible ({formatearNumero(libre)})
-                    </button>
-                  )}
                 </div>
 
-                {/* La plata queda opcional y escondida: el precio todavía no está
-                    definido con el cliente. */}
-                {form.destino === "cliente" && (
-                  <>
-                    {!verPrecio ? (
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-outline-secondary"
-                        onClick={() => setVerPrecio(true)}
-                      >
-                        <i className="bi bi-cash-coin me-1"></i>Agregar precio y anticipo
-                      </button>
-                    ) : (
-                      <div className="border rounded p-2">
-                        <div className="row g-2">
-                          <div className="col-6">
-                            <label className="form-label fw-semibold small">Precio por pollito</label>
-                            <input
-                              type="number"
-                              className="form-control"
-                              min="0"
-                              step="0.01"
-                              value={form.precioUnitario}
-                              onChange={(e) => setCampo("precioUnitario", e.target.value)}
-                              placeholder="Ej: 900"
-                            />
-                          </div>
-                          <div className="col-6">
-                            <label className="form-label fw-semibold small">Anticipo</label>
-                            <input
-                              type="number"
-                              className="form-control"
-                              min="0"
-                              step="0.01"
-                              value={form.anticipo}
-                              onChange={(e) => setCampo("anticipo", e.target.value)}
-                              placeholder="0"
-                            />
-                          </div>
-                        </div>
-                        {cantidad > 0 && precio != null && (
-                          <div className="small text-muted mt-2">
-                            Total {formatearMoneda(total)} · saldo{" "}
-                            {formatearMoneda(total - anticipo)}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </>
-                )}
+                {/* Acá había un bloque de precio por pollito + anticipo para las
+                    reservas a cliente. Se sacó a pedido del usuario el
+                    2026-08-12: el precio del pollito todavía no está definido y
+                    cargar plata desde este modal confundía más de lo que servía.
+                    El modelo `reservaPollitos` conserva los campos y el service
+                    los sigue aceptando, así que volver a mostrarlo es sumar el
+                    formulario de nuevo — no hace falta migrar nada. */}
 
                 <div className="mt-3">
                   <label className="form-label fw-semibold small">
@@ -379,6 +333,14 @@ const FechaCard = ({ reparto, onAsignar, onEditar, onBorrar }) => {
               {textoDias(dias)} · {formatearFechaLocal(t.fechaNacimiento)}
             </div>
             <div className="mt-2 d-flex flex-wrap gap-1">
+              {/* Pollitos que ya existen y no tienen a dónde ir: es lo único
+                  de esta pantalla que no puede esperar. */}
+              {t.nacio && libre > 0 && (
+                <span className="badge bg-danger">
+                  <i className="bi bi-exclamation-triangle-fill me-1"></i>
+                  ya nacieron · sin destino
+                </span>
+              )}
               <span className={`badge ${estado.clase}`}>{estado.label}</span>
               <span className="badge bg-light text-dark border">Tanda #{t.numeroTanda}</span>
               <span className="badge bg-light text-dark border">
@@ -510,23 +472,28 @@ const FechaCard = ({ reparto, onAsignar, onEditar, onBorrar }) => {
 const ReservaPollitosPage = () => {
   const [repartos, setRepartos] = useState([]);
   const [clientes, setClientes] = useState([]);
-  const [proyeccion, setProyeccion] = useState(null);
+  const [almanaque, setAlmanaque] = useState(null);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null); // { reparto, reserva? }
+  const [showConfig, setShowConfig] = useState(false);
+  const esSuperAdmin = localStorage.getItem("rolUsuario") === "superadmin";
+  // El almanaque es la vista principal desde el rediseño: es la foto de la
+  // situación. El reparto por tanda pasa a ser el detalle.
+  const [vista, setVista] = useState("almanaque");
 
   const cargar = useCallback(async () => {
     try {
-      // La proyección de galpones se pide acá mismo: sin saber qué galpón se
-      // libera y cuándo, no se puede decidir a dónde mandar los pollitos.
-      const [data, cli, proy] = await Promise.all([
+      // El estado de los galpones ya lo muestra el almanaque, que además dice
+      // cuándo se libera cada uno: el panel viejo quedó de más.
+      const [data, cli, alm] = await Promise.all([
         obtenerRepartoPollitos(),
         obtenerClientes(),
-        obtenerProyeccion(),
+        obtenerAlmanaqueFaena(),
       ]);
       setRepartos(Array.isArray(data) ? data : []);
       const listaClientes = Array.isArray(cli) ? cli : cli?.clientes || [];
       setClientes(listaClientes.filter((c) => c.activo !== false));
-      setProyeccion(proy);
+      setAlmanaque(alm);
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudo cargar el panorama.", "error");
     } finally {
@@ -538,15 +505,39 @@ const ReservaPollitosPage = () => {
     cargar();
   }, [cargar]);
 
+  // { cañete: Set(1), los_pinos: Set(3) }. Sale del almanaque, que ya trae los
+  // 14 galpones con su config: no hace falta pedirla por separado.
+  const galponesFuera = useMemo(() => {
+    const mapa = {};
+    for (const g of almanaque?.galpones || []) {
+      if (!g.fueraDeServicio) continue;
+      if (!mapa[g.granja]) mapa[g.granja] = new Set();
+      mapa[g.granja].add(g.galpon);
+    }
+    return mapa;
+  }, [almanaque]);
+
   // Lo próximo primero: la decisión que corre es la de la fecha más cercana.
-  // Las tandas que ya nacieron no se muestran: acá se decide sobre lo que viene.
-  const visibles = useMemo(
-    () =>
-      repartos
-        .filter((r) => !r.tanda.nacio)
-        .sort((a, b) => new Date(a.tanda.fechaNacimiento) - new Date(b.tanda.fechaNacimiento)),
-    [repartos]
-  );
+  //
+  // Antes se escondía TODA tanda que ya hubiera nacido ("acá se decide sobre lo
+  // que viene"), y eso tapaba el caso más urgente que hay: pollitos que ya
+  // existen, están vivos y todavía no tienen a dónde ir. Pasó de verdad el
+  // 2026-08-12 — la tanda #1 nació con 12.000 pollitos sin asignar y no se veía
+  // por ningún lado. Ahora se esconde solo la tanda nacida que YA está repartida
+  // entera, que es la que efectivamente no pide nada.
+  const visibles = useMemo(() => {
+    const pendiente = (r) => r.disponibles - r.aGranja - r.aClientes > 0;
+    return repartos
+      .filter((r) => !r.tanda.nacio || pendiente(r))
+      .sort((a, b) => {
+        // Lo ya nacido y sin destino va arriba de todo: los pollitos están
+        // comiendo mientras se decide.
+        const urgA = a.tanda.nacio ? 0 : 1;
+        const urgB = b.tanda.nacio ? 0 : 1;
+        if (urgA !== urgB) return urgA - urgB;
+        return new Date(a.tanda.fechaNacimiento) - new Date(b.tanda.fechaNacimiento);
+      });
+  }, [repartos]);
 
   const totales = useMemo(
     () =>
@@ -588,20 +579,60 @@ const ReservaPollitosPage = () => {
       <div className="container-fluid py-4">
         <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
           <div>
-            <h1 className="h3 fw-bold mb-1">
+            <h1 className="h3 fw-bold mb-0">
               <i className="bi bi-graph-up-arrow text-success me-2"></i>Proyección
             </h1>
-            <p className="text-muted mb-0 small">
-              Qué día y cuántos pollitos vamos a tener, y contra qué galpones se libera lugar
-              para mandarlos a granja o reservarlos a un cliente
-            </p>
           </div>
+          {/* La capacidad y el fuera de servicio cambian todos los números del
+              almanaque, así que los edita solo el superadmin — igual que el PUT
+              del backend. */}
+          {esSuperAdmin && (
+            <button
+              className="btn btn-outline-secondary btn-sm"
+              onClick={() => setShowConfig(true)}
+              disabled={!almanaque?.galpones}
+            >
+              <i className="bi bi-sliders me-1"></i>Capacidades
+            </button>
+          )}
         </div>
+
+        {/* El almanaque contesta "¿voy a tener pollos todos los días para
+            faenar?"; el reparto, "¿a quién le doy los pollitos de esta tanda?".
+            Son dos preguntas distintas y por eso son dos vistas. */}
+        {!loading && (
+          <ul className="nav nav-tabs mb-3">
+            {[
+              { id: "almanaque", icono: "calendar3", texto: "Almanaque de faena" },
+              { id: "reparto", icono: "list-check", texto: "Reparto por tanda" },
+            ].map((t) => (
+              <li className="nav-item" key={t.id}>
+                <button
+                  className={`nav-link ${vista === t.id ? "active fw-semibold" : ""}`}
+                  onClick={() => setVista(t.id)}
+                >
+                  <i className={`bi bi-${t.icono} me-1`}></i>
+                  {t.texto}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
 
         {loading ? (
           <div className="text-center py-5">
             <div className="spinner-border text-success"></div>
           </div>
+        ) : vista === "almanaque" ? (
+          almanaque ? (
+            <AlmanaqueFaena data={almanaque} />
+          ) : (
+            <div className="card shadow-sm">
+              <div className="card-body text-center py-5 text-muted">
+                No se pudo armar el almanaque.
+              </div>
+            </div>
+          )
         ) : visibles.length === 0 ? (
           <div className="card shadow-sm">
             <div className="card-body text-center py-5 text-muted">
@@ -678,35 +709,6 @@ const ReservaPollitosPage = () => {
           </>
         )}
 
-        {/* Contra qué se decide: qué galpones están libres y cuántos días le
-            faltan a los ocupados. Va fuera del bloque de tandas a propósito:
-            el estado de los galpones se mira igual aunque no haya nacimientos
-            previstos. */}
-        {!loading && proyeccion && (
-          <div className="mt-4">
-            <h5 className="fw-bold text-secondary mb-3">
-              <i className="bi bi-grid-3x3-gap me-1"></i>Galpones de engorde
-            </h5>
-            {proyeccion.resumen?.galponesLibres?.length > 0 && (
-              <div className="alert alert-success py-2 small">
-                <i className="bi bi-door-open me-1"></i>
-                <strong>Libres ahora:</strong>{" "}
-                {proyeccion.resumen.galponesLibres.map((g) => g.etiqueta).join(", ")}
-                {proyeccion.resumen.capacidadLibre > 0 && (
-                  <>
-                    {" "}
-                    · capacidad {formatearNumero(proyeccion.resumen.capacidadLibre)} pollitos
-                  </>
-                )}
-              </div>
-            )}
-            <PanelGalpones
-              galpones={proyeccion.galpones}
-              diasCrianza={proyeccion.parametros?.diasCrianza}
-              compacto
-            />
-          </div>
-        )}
       </div>
 
       {modal && (
@@ -714,9 +716,23 @@ const ReservaPollitosPage = () => {
           reparto={modal.reparto}
           reserva={modal.reserva}
           clientes={clientes}
+          galponesFuera={galponesFuera}
           onClose={() => setModal(null)}
           onGuardado={() => {
             setModal(null);
+            cargar();
+          }}
+        />
+      )}
+
+      {showConfig && almanaque?.galpones && (
+        <ConfigGalponesModal
+          // El almanaque ya devuelve los 14 galpones con etiqueta, capacidad y
+          // fueraDeServicio, que es exactamente lo que el modal necesita.
+          galpones={almanaque.galpones}
+          onClose={() => setShowConfig(false)}
+          onGuardado={() => {
+            setShowConfig(false);
             cargar();
           }}
         />
