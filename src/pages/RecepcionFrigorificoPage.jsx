@@ -10,8 +10,12 @@ import {
   obtenerEnviosCamara,
   prepararEnvioCamara,
   eliminarEnvioCamara,
+  obtenerCamiones,
+  obtenerChoferes,
+  obtenerResumenStock,
 } from "../services/api";
 import { imprimirOrdenEnvio } from "../utils/imprimirOrdenEnvio";
+import EditarEnvioModal from "../components/EditarEnvioModal";
 import Swal from "sweetalert2";
 
 const TIPOS_TROZADO = [
@@ -372,9 +376,19 @@ const RecepcionFrigorificoPage = () => {
   // Baja de envíos cargados por error (ej. el mismo envío mandado dos veces).
   // Solo mientras siga pendiente de recepción en destino — el backend valida igual.
   const puedeEliminarEnvios = ["superadmin", "frigorifico", "administracion_frigorifico"].includes(rolUsuario);
+  // Corregir un envío cargado mal. Mismo alcance que eliminarlo — editar es menos
+  // destructivo — y con el mismo corte: solo mientras siga pendiente de recepción,
+  // salvo superadmin. El backend valida igual.
+  const puedeEditarEnvio = (e) =>
+    rolUsuario === "superadmin" ||
+    (puedeEliminarEnvios && e.estado === "pendiente");
 
   const [despachos, setDespachos]     = useState([]);
   const [envios, setEnvios]           = useState([]);
+  const [camiones, setCamiones]       = useState([]);
+  const [choferes, setChoferes]       = useState([]);
+  const [resumen, setResumen]         = useState(null);
+  const [envioEditando, setEnvioEditando] = useState(null);
   const [loading, setLoading]         = useState(true);
   const [filtroEstado, setFiltroEstado] = useState("pendiente");
   const [busqueda, setBusqueda]       = useState("");
@@ -398,6 +412,18 @@ const RecepcionFrigorificoPage = () => {
       ]);
       setDespachos(dataDespachos);
       setEnvios(dataEnvios);
+
+      // Datos auxiliares del modal de edición de envíos. Van aparte y tolerando
+      // el fallo a propósito: son secundarios, y si alguno diera 403 para el rol
+      // que esté mirando, la pantalla entera se quedaría sin despachos ni envíos.
+      const [resCamiones, resChoferes, resResumen] = await Promise.allSettled([
+        obtenerCamiones(),
+        obtenerChoferes(),
+        obtenerResumenStock(),
+      ]);
+      if (resCamiones.status === "fulfilled") setCamiones(resCamiones.value.camiones || []);
+      if (resChoferes.status === "fulfilled") setChoferes(resChoferes.value.choferes || []);
+      if (resResumen.status  === "fulfilled") setResumen(resResumen.value);
     } catch (err) {
       Swal.fire("Error", err.message, "error");
     } finally {
@@ -673,6 +699,11 @@ const RecepcionFrigorificoPage = () => {
                             <i className="bi bi-printer me-1"></i>Reimprimir orden
                           </button>
                         )}
+                        {puedeEditarEnvio(e) && (
+                          <button className="btn btn-outline-warning w-100 mt-2" onClick={() => setEnvioEditando(e)}>
+                            <i className="bi bi-pencil me-1"></i>Editar envío
+                          </button>
+                        )}
                         {puedeEliminarEnvios && e.estado === "pendiente" && (
                           <button className="btn btn-outline-danger w-100 mt-2" onClick={() => handleEliminarEnvio(e)}>
                             <i className="bi bi-trash me-1"></i>Eliminar envío
@@ -750,6 +781,11 @@ const RecepcionFrigorificoPage = () => {
                                 ) : (
                                   <button className="btn btn-outline-secondary btn-sm" onClick={() => imprimirOrdenEnvio(e)}>
                                     <i className="bi bi-printer me-1"></i>Reimprimir
+                                  </button>
+                                )}
+                                {puedeEditarEnvio(e) && (
+                                  <button className="btn btn-outline-warning btn-sm" onClick={() => setEnvioEditando(e)} title="Editar envío">
+                                    <i className="bi bi-pencil"></i>
                                   </button>
                                 )}
                                 {puedeEliminarEnvios && e.estado === "pendiente" && (
@@ -1072,6 +1108,18 @@ const RecepcionFrigorificoPage = () => {
           esAdmin={puedeLiberar}
           onClose={() => setDespachoModal(null)}
           onConfirmado={() => { setDespachoModal(null); cargar(); }}
+        />
+      )}
+
+      {envioEditando && (
+        <EditarEnvioModal
+          key={envioEditando._id}
+          envio={envioEditando}
+          camiones={camiones}
+          choferes={choferes}
+          resumen={resumen}
+          onCerrar={() => setEnvioEditando(null)}
+          onGuardado={cargar}
         />
       )}
     </Layout>
