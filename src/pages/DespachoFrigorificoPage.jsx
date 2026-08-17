@@ -158,7 +158,9 @@ const renderCopiaDespacho = (doc, d, etiqueta) => {
     trozados.forEach((t, i) => {
       if (i % 2 === 1) { doc.setFillColor(250, 250, 250); doc.rect(14, y, W - 28, 7, "F"); }
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(0);
-      doc.text(tipoLbl(t.tipo), 16, y + 5);
+      // Con la clase: una orden puede llevar pata A y pata B, y en el papel se
+      // veían dos renglones idénticos.
+      doc.text(`${tipoLbl(t.tipo)} ${t.clase || "A"}`, 16, y + 5);
       doc.text(fmt(t.cajas), W / 2, y + 5, { align: "right" });
       doc.text(`${fmt(t.kgTotal)} kg`, W - 16, y + 5, { align: "right" });
       y += 7;
@@ -1237,7 +1239,7 @@ const DespachoFrigorificoPage = () => {
                               borderBottom: idx < d.trozados.length - 1 ? "1px solid #fef9c3" : "none",
                               background: "#fffbeb",
                             }}>
-                            <span className="fw-semibold text-warning">{tipoLbl(t.tipo)}</span>
+                            <span className="fw-semibold text-warning">{tipoLbl(t.tipo)} {t.clase || "A"}</span>
                             <span className="text-muted small">{fmt(t.cajas)} cajas · {fmt(t.kgTotal)} kg</span>
                           </div>
                         ))}

@@ -5,7 +5,7 @@ import Layout from "../components/Layout";
 import { escapeHtml } from "../utils/escapeHtml";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
 import DesgloseFaena from "../components/DesgloseFaena";
-import { obtenerResumenStock, obtenerLotes, eliminarLote, actualizarLote, sincronizarVentasDropbox, obtenerMovimientosCamara } from "../services/api";
+import { obtenerResumenStock, obtenerLotes, eliminarLote, actualizarLote, obtenerMovimientosCamara } from "../services/api";
 import Swal from "sweetalert2";
 
 const fmtNum = (n) =>
@@ -171,10 +171,6 @@ const GranjaDashboardPage = () => {
   const rolUsuario = localStorage.getItem("rolUsuario");
   const esSuperAdmin = rolUsuario === "superadmin";
   const puedeGestionar = rolUsuario === "superadmin" || rolUsuario === "frigorifico";
-  const puedeActualizarStock = [
-    "superadmin", "frigorifico",
-    "administracion_frigorifico", "administracion_granja",
-  ].includes(rolUsuario);
 
   const [resumen, setResumen] = useState({
     totalPollosVivos: 0,
@@ -190,7 +186,6 @@ const GranjaDashboardPage = () => {
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState(null);
   const [loteEditar, setLoteEditar] = useState(null);
-  const [actualizandoStock, setActualizandoStock] = useState(false);
 
   const [mostrarHistorial, setMostrarHistorial] = useState(false);
   const [historial, setHistorial] = useState([]);
@@ -220,30 +215,6 @@ const GranjaDashboardPage = () => {
   }, [cargarDatos]);
 
   const formatNum = fmtNum;
-
-  // Trae las ventas nuevas del POS desde Dropbox y descuenta el stock
-  const handleActualizarStock = async () => {
-    setActualizandoStock(true);
-    try {
-      const r = await sincronizarVentasDropbox("trigotuc");
-      const nuevos = r.procesados?.length || 0;
-      const fallidos = r.fallidos?.length || 0;
-      await cargarDatos();
-      if (nuevos === 0 && fallidos === 0) {
-        Swal.fire({ icon: "info", title: "Stock al día", text: "No hay ventas nuevas para descontar.", timer: 2000, showConfirmButton: false });
-      } else {
-        Swal.fire(
-          "Stock actualizado",
-          `Ventas nuevas descontadas: ${nuevos}${fallidos ? ` · No aplicadas: ${fallidos}` : ""}`,
-          fallidos ? "warning" : "success"
-        );
-      }
-    } catch (err) {
-      Swal.fire("Error", err.message || "No se pudo actualizar el stock.", "error");
-    } finally {
-      setActualizandoStock(false);
-    }
-  };
 
   // Historial de movimientos de stock (solo superadmin)
   const cargarHistorial = async (origen = filtroOrigen) => {
@@ -464,18 +435,6 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
           Frigorífico — Stock
         </h1>
         <div className="d-flex flex-wrap gap-2">
-          {puedeActualizarStock && (
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={handleActualizarStock}
-              disabled={actualizandoStock}
-              title="Trae las ventas del POS y descuenta el stock"
-            >
-              {actualizandoStock
-                ? <><span className="spinner-border spinner-border-sm me-1"></span>Actualizando…</>
-                : <><i className="bi bi-arrow-repeat me-1"></i>Actualizar stock</>}
-            </button>
-          )}
           {puedeGestionar && (
               <button
                 className="btn btn-success btn-sm"
@@ -701,7 +660,6 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
                 >
                   <option value="">Todos los orígenes</option>
                   <option value="usuario">Usuario (app)</option>
-                  <option value="dropbox">Dropbox (POS)</option>
                 </select>
               )}
               <button className="btn btn-outline-secondary btn-sm" onClick={toggleHistorial}>
@@ -749,8 +707,12 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
                           <tr key={m._id}>
                             <td className="text-nowrap small">{new Date(m.fecha).toLocaleString("es-AR")}</td>
                             <td>
+                              {/* "dropbox" es histórico: la integración con el POS
+                                  se dio de baja en agosto 2026 y ya nada la escribe,
+                                  pero quedan movimientos de junio con ese origen y
+                                  etiquetarlos como "Usuario" sería mentir. */}
                               <span className={`badge ${m.origen === "dropbox" ? "bg-dark" : "bg-light text-dark border"}`}>
-                                {m.origen === "dropbox" ? "Dropbox (POS)" : "Usuario"}
+                                {m.origen === "dropbox" ? "POS (histórico)" : "Usuario"}
                               </span>
                             </td>
                             <td className="small">

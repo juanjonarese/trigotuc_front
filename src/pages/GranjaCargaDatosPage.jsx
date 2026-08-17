@@ -103,6 +103,16 @@ const buildSemanas = (lote) => {
     .sort((a, b) => a.semana - b.semana);
 };
 
+// Bajas registradas al ingresar los pollitos (`semana: 0`). No pertenecen a
+// ninguna semana, así que `buildSemanas` las deja afuera; se muestran en su
+// propia fila para que el total de la cabecera cierre con el de la tabla.
+const buildBajasIngreso = (lote) => {
+  const bajas = (lote.mortandad || [])
+    .filter((m) => m.semana === 0)
+    .sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+  return { bajas, total: bajas.reduce((s, m) => s + m.cantidad, 0) };
+};
+
 // Pesajes de día 1 y día 4
 const buildIniciales = (lote) =>
   (lote.pesajes || [])
@@ -831,7 +841,15 @@ const GranjaCargaDatosPage = () => {
                       className="btn btn-outline-primary px-4 py-3"
                       style={{ minWidth: "150px" }}
                       onClick={() => setModo("editar")}
-                      disabled={buildSemanas(loteSeleccionado).length === 0}
+                      // Habilitado si hay algo que ver: semanas, pesajes iniciales o
+                      // las bajas del ingreso. Antes miraba solo las semanas, así que
+                      // un galpón recién ingresado no dejaba abrir la vista aunque ya
+                      // tuviera datos cargados.
+                      disabled={
+                        buildSemanas(loteSeleccionado).length === 0 &&
+                        buildIniciales(loteSeleccionado).length === 0 &&
+                        buildBajasIngreso(loteSeleccionado).total === 0
+                      }
                     >
                       <i className="bi bi-pencil-square fs-4 d-block mb-1"></i>
                       Editar datos
@@ -978,6 +996,7 @@ const GranjaCargaDatosPage = () => {
                 {modo === "editar" && (() => {
                   const semanas  = buildSemanas(loteSeleccionado);
                   const inicalesEdit = buildIniciales(loteSeleccionado);
+                  const ingreso  = buildBajasIngreso(loteSeleccionado);
                   return (
                     <div>
                       <button type="button" className="btn btn-link btn-sm text-muted p-0 mb-3"
@@ -1023,7 +1042,7 @@ const GranjaCargaDatosPage = () => {
 
                       {/* Semanas — el peso es semanal, las bajas son diarias.
                           Click en la semana → despliega las bajas día por día. */}
-                      {semanas.length > 0 && (
+                      {(semanas.length > 0 || ingreso.total > 0) && (
                         <>
                           <div className="small fw-semibold text-muted text-uppercase mb-1" style={{ letterSpacing: "0.05em" }}>
                             Semanas
@@ -1040,6 +1059,55 @@ const GranjaCargaDatosPage = () => {
                                 </tr>
                               </thead>
                               <tbody>
+                                {/* Bajas del ingreso. Va como fila propia y no dentro
+                                    de Sem. 1 porque son de otra naturaleza: los pollitos
+                                    que llegaron muertos, no mortandad de crianza.
+                                    Es solo informativa — editarla desde acá la sacaría
+                                    de su lugar, porque el backend re-deriva la semana a
+                                    partir de la fecha y nunca devuelve 0. */}
+                                {ingreso.total > 0 && (() => {
+                                  const abierta = semanasAbiertas.includes(0);
+                                  return (
+                                    <React.Fragment key="ingreso">
+                                      <tr
+                                        className={abierta ? "table-active" : ""}
+                                        style={{ cursor: "pointer" }}
+                                        onClick={() => toggleSemana(0)}
+                                      >
+                                        <td className="text-center text-muted">
+                                          <i className={`bi bi-chevron-${abierta ? "down" : "right"}`}></i>
+                                        </td>
+                                        <td className="text-center fw-semibold text-muted">Ingreso</td>
+                                        <td className="text-center text-muted">—</td>
+                                        <td className="text-center">
+                                          <span className="text-danger fw-semibold">{ingreso.total.toLocaleString("es-AR")}</span>
+                                          <span className="text-muted small ms-1">
+                                            ({ingreso.bajas.length} {ingreso.bajas.length === 1 ? "registro" : "registros"})
+                                          </span>
+                                        </td>
+                                        <td className="text-center">
+                                          <span className="badge bg-light text-muted border">al recibir</span>
+                                        </td>
+                                      </tr>
+
+                                      {abierta && ingreso.bajas.map((m) => (
+                                        <tr key={m._id} className="small">
+                                          <td></td>
+                                          <td className="text-end text-muted" colSpan={2}>
+                                            <i className="bi bi-calendar-event me-1"></i>
+                                            {formatearFechaLocal(m.fecha)}
+                                            {m.causa && <span className="ms-2 fst-italic">{m.causa}</span>}
+                                          </td>
+                                          <td className="text-center text-danger fw-semibold">
+                                            {m.cantidad.toLocaleString("es-AR")}
+                                          </td>
+                                          <td></td>
+                                        </tr>
+                                      ))}
+                                    </React.Fragment>
+                                  );
+                                })()}
+
                                 {semanas.map((fila) => {
                                   const abierta  = semanasAbiertas.includes(fila.semana);
                                   const tieneDias = fila.mortandades.length > 0;
@@ -1107,7 +1175,7 @@ const GranjaCargaDatosPage = () => {
                         </>
                       )}
 
-                      {semanas.length === 0 && inicalesEdit.length === 0 && (
+                      {semanas.length === 0 && inicalesEdit.length === 0 && ingreso.total === 0 && (
                         <p className="text-muted small">No hay datos cargados aún.</p>
                       )}
                     </div>

@@ -747,18 +747,6 @@ export const testPush = async () => {
   return handleResponse(response);
 };
 
-// ============= INTEGRACIÓN POS (Dropbox / FoxPro) =============
-
-// Lee la carpeta de Dropbox y descuenta los tickets nuevos (idempotente).
-export const sincronizarVentasDropbox = async (camara = "trigotuc") => {
-  const response = await fetch(`${API_URL}/prueba-dropbox/sync`, {
-    method: "POST",
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ camara }),
-  });
-  return handleResponse(response);
-};
-
 // Historial de movimientos de stock de cámara (solo superadmin).
 export const obtenerMovimientosCamara = async (filtros = {}) => {
   const params = new URLSearchParams(
@@ -970,6 +958,29 @@ export const cancelarTandaIncubacion = async (id, motivo) => {
 export const obtenerAlmanaqueFaena = async (filtros = {}) => {
   const response = await fetch(`${API_URL}/proyeccion/almanaque${buildQuery(filtros)}`, {
     headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+// ── Reset del módulo Reproductores ──────────────────────────────────────────
+// Deja en cero SOLO Reproductores: lotes, recolecciones, tandas, stock de huevos,
+// salidas, ventas y reservas, más sus contadores. No toca Granja ni Frigorífico.
+// El backend guarda un respaldo completo antes de borrar.
+
+// Qué se borraría, sin tocar nada. Sirve para mostrarlo en la confirmación.
+export const previewResetReproductores = async () => {
+  const response = await fetch(`${API_URL}/reproductores/reset`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+// `confirmacion` tiene que ser exactamente "RESETEAR": lo valida el backend.
+export const resetearReproductores = async (confirmacion) => {
+  const response = await fetch(`${API_URL}/reproductores/reset`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ confirmacion }),
   });
   return handleResponse(response);
 };
