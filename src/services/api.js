@@ -747,18 +747,6 @@ export const testPush = async () => {
   return handleResponse(response);
 };
 
-// ============= INTEGRACIÓN POS (Dropbox / FoxPro) =============
-
-// Lee la carpeta de Dropbox y descuenta los tickets nuevos (idempotente).
-export const sincronizarVentasDropbox = async (camara = "trigotuc") => {
-  const response = await fetch(`${API_URL}/prueba-dropbox/sync`, {
-    method: "POST",
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ camara }),
-  });
-  return handleResponse(response);
-};
-
 // Historial de movimientos de stock de cámara (solo superadmin).
 export const obtenerMovimientosCamara = async (filtros = {}) => {
   const params = new URLSearchParams(
