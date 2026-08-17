@@ -33,6 +33,13 @@ const fmtFecha  = (f) => f ? new Date(f).toLocaleDateString("es-AR") : "—";
 const camaraLbl = (v) => v === "cañete" ? "Cañete" : v === "trigotuc" ? "Trigotuc" : v;
 const tipoLbl   = (tipo) => TIPOS_TROZADO.find((x) => x.tipo === tipo)?.label || tipo;
 
+// El trozado se carga y se descuenta POR CLASE (A/B), así que una orden puede traer
+// dos líneas del mismo tipo con distinta calidad — "Pata muslo A 21 cajas" y "Pata
+// muslo B 32". Sin la clase se ven dos filas idénticas y quien recibe no sabe cuál
+// es cuál. La clase ausente se lee como "A", igual que en el resto del sistema.
+const claseLbl   = (t) => t?.clase || "A";
+const trozadoLbl = (t) => `${tipoLbl(t.tipo)} ${claseLbl(t)}`;
+
 // ── Imprimir remito de entrega ────────────────────────────────────────────────
 const imprimirRemito = (despacho) => {
   const cliente  = escapeHtml(despacho.cliente?.razonSocial || "—");
@@ -53,7 +60,7 @@ const imprimirRemito = (despacho) => {
 
   const filasTrozados = (despacho.trozados || []).map((t) => `
     <tr>
-      <td style="padding:3px 8px;border:1px solid #dee2e6">${tipoLbl(t.tipo)}</td>
+      <td style="padding:3px 8px;border:1px solid #dee2e6">${trozadoLbl(t)}</td>
       <td style="padding:3px 8px;border:1px solid #dee2e6;text-align:right">${fmt(t.cajas)} cajas</td>
       <td style="padding:3px 8px;border:1px solid #dee2e6;text-align:right">${fmt(t.kgTotal)} kg</td>
     </tr>`).join("");
@@ -323,7 +330,10 @@ const ConfirmarModal = ({ despacho, onClose, onConfirmado, esAdmin }) => {
                         <tbody>
                           {despacho.trozados.map((t, i) => (
                             <tr key={i}>
-                              <td className="fw-semibold">{tipoLbl(t.tipo)}</td>
+                              <td className="fw-semibold">
+                                {tipoLbl(t.tipo)}
+                                <span className="badge bg-secondary ms-2">Clase {claseLbl(t)}</span>
+                              </td>
                               <td className="text-end">{fmt(t.cajas)}</td>
                               <td className="text-end text-muted">{fmt(t.kgTotal)} kg</td>
                             </tr>
@@ -672,7 +682,7 @@ const RecepcionFrigorificoPage = () => {
                               <span key={i} className="badge bg-info text-dark">Cal.{c.calibre}: {fmt(c.cajones)} caj</span>
                             ))}
                             {e.trozados?.map((t, i) => (
-                              <span key={`t${i}`} className="badge bg-warning text-dark">{tipoLbl(t.tipo)}: {fmt(t.cajas)} caj</span>
+                              <span key={`t${i}`} className="badge bg-warning text-dark">{trozadoLbl(t)}: {fmt(t.cajas)} caj</span>
                             ))}
                           </div>
                         )}
@@ -751,7 +761,7 @@ const RecepcionFrigorificoPage = () => {
                                   <span key={i} className="badge bg-info text-dark">Cal.{c.calibre}: {fmt(c.cajones)} caj</span>
                                 ))}
                                 {e.trozados?.map((t, i) => (
-                                  <span key={`t${i}`} className="badge bg-warning text-dark">{tipoLbl(t.tipo)}: {fmt(t.cajas)} caj</span>
+                                  <span key={`t${i}`} className="badge bg-warning text-dark">{trozadoLbl(t)}: {fmt(t.cajas)} caj</span>
                                 ))}
                                 {e.observaciones && (
                                   <span className="badge bg-light text-dark border" title={e.observaciones}>
@@ -899,7 +909,7 @@ const RecepcionFrigorificoPage = () => {
                               borderBottom: idx < d.trozados.length - 1 ? "1px solid #fef9c3" : "none",
                               background: "#fffbeb",
                             }}>
-                            <span className="fw-semibold text-warning">{tipoLbl(t.tipo)}</span>
+                            <span className="fw-semibold text-warning">{trozadoLbl(t)}</span>
                             <span className="text-muted small">{fmt(t.cajas)} cajas · {fmt(t.kgTotal)} kg</span>
                           </div>
                         ))}
@@ -1020,7 +1030,7 @@ const RecepcionFrigorificoPage = () => {
                             ))}
                             {d.trozados?.map((t, i) => (
                               <span key={`t${i}`} className="badge bg-warning text-dark">
-                                {tipoLbl(t.tipo)}: {fmt(t.cajas)} caj
+                                {trozadoLbl(t)}: {fmt(t.cajas)} caj
                               </span>
                             ))}
                             {d.observaciones && (
