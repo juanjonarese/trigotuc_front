@@ -962,6 +962,29 @@ export const obtenerAlmanaqueFaena = async (filtros = {}) => {
   return handleResponse(response);
 };
 
+// ── Reset del módulo Reproductores ──────────────────────────────────────────
+// Deja en cero SOLO Reproductores: lotes, recolecciones, tandas, stock de huevos,
+// salidas, ventas y reservas, más sus contadores. No toca Granja ni Frigorífico.
+// El backend guarda un respaldo completo antes de borrar.
+
+// Qué se borraría, sin tocar nada. Sirve para mostrarlo en la confirmación.
+export const previewResetReproductores = async () => {
+  const response = await fetch(`${API_URL}/reproductores/reset`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+// `confirmacion` tiene que ser exactamente "RESETEAR": lo valida el backend.
+export const resetearReproductores = async (confirmacion) => {
+  const response = await fetch(`${API_URL}/reproductores/reset`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ confirmacion }),
+  });
+  return handleResponse(response);
+};
+
 // Los 14 galpones de engorde con capacidad y si están fuera de servicio. La usan
 // los selectores de galpón (ingreso de pollitos, reserva de pollitos) para no
 // ofrecer uno que no puede recibir pollitos.

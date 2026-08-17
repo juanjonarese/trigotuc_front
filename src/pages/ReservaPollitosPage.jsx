@@ -9,6 +9,8 @@ import {
   crearReservaPollitos,
   actualizarReservaPollitos,
   eliminarReservaPollitos,
+  previewResetReproductores,
+  resetearReproductores,
 } from "../services/api";
 import { formatearFechaLocal } from "../utils/dateUtils";
 import {
@@ -480,6 +482,7 @@ const ReservaPollitosPage = () => {
   // El almanaque es la vista principal desde el rediseño: es la foto de la
   // situación. El reparto por tanda pasa a ser el detalle.
   const [vista, setVista] = useState("almanaque");
+  const [reseteando, setReseteando] = useState(false);
 
   const cargar = useCallback(async () => {
     try {
@@ -574,6 +577,64 @@ const ReservaPollitosPage = () => {
     }
   };
 
+  // ── Resetear el módulo Reproductores ──────────────────────────────────────
+  // Borra el módulo entero, así que la confirmación muestra primero QUÉ se va a
+  // borrar (traído del backend, no estimado acá) y recién después pide escribir
+  // RESETEAR. El backend vuelve a exigir esa palabra y guarda un respaldo completo
+  // antes de tocar nada.
+  const handleResetear = async () => {
+    let previo;
+    try {
+      previo = await previewResetReproductores();
+    } catch (err) {
+      return Swal.fire("Error", err.message || "No se pudo consultar qué hay para borrar.", "error");
+    }
+
+    const filas = Object.entries(previo.conteo || {})
+      .filter(([, n]) => n > 0)
+      .map(([nombre, n]) => `<tr><td class="text-start">${nombre}</td><td class="text-end fw-bold">${n}</td></tr>`)
+      .join("");
+
+    const { value: confirmacion } = await Swal.fire({
+      icon: "warning",
+      title: "Resetear proyección",
+      html: `
+        <p class="mb-2">Se va a borrar <b>todo el módulo Reproductores</b> y los contadores vuelven a cero:
+        el próximo lote será el #1 y la próxima tanda la #1.</p>
+        ${filas
+          ? `<table class="table table-sm mb-2"><tbody>${filas}</tbody></table>
+             <p class="mb-2"><b>${previo.total}</b> documento(s) en total.</p>`
+          : `<p class="mb-2 text-muted">No hay nada cargado: el módulo ya está vacío.</p>`}
+        <p class="small text-muted mb-2">Granja y Frigorífico no se tocan. Se guarda un respaldo antes de borrar.</p>
+        <p class="mb-1">Escribí <b>RESETEAR</b> para confirmar:</p>
+      `,
+      input: "text",
+      inputPlaceholder: "RESETEAR",
+      showCancelButton: true,
+      confirmButtonText: "Resetear",
+      confirmButtonColor: "#dc3545",
+      cancelButtonText: "Cancelar",
+      inputValidator: (v) => (v !== "RESETEAR" ? "Escribí RESETEAR tal cual para confirmar." : undefined),
+    });
+
+    if (confirmacion !== "RESETEAR") return;
+
+    setReseteando(true);
+    try {
+      const r = await resetearReproductores(confirmacion);
+      await cargar();
+      Swal.fire(
+        "Módulo reseteado",
+        `Se borraron ${r.total} documento(s). El respaldo quedó guardado en la base.`,
+        "success"
+      );
+    } catch (err) {
+      Swal.fire("Error", err.message || "No se pudo resetear el módulo.", "error");
+    } finally {
+      setReseteando(false);
+    }
+  };
+
   return (
     <Layout>
       <div className="container-fluid py-4">
@@ -583,18 +644,34 @@ const ReservaPollitosPage = () => {
               <i className="bi bi-graph-up-arrow text-success me-2"></i>Proyección
             </h1>
           </div>
-          {/* La capacidad y el fuera de servicio cambian todos los números del
-              almanaque, así que los edita solo el superadmin — igual que el PUT
-              del backend. */}
-          {esSuperAdmin && (
-            <button
-              className="btn btn-outline-secondary btn-sm"
-              onClick={() => setShowConfig(true)}
-              disabled={!almanaque?.galpones}
-            >
-              <i className="bi bi-sliders me-1"></i>Capacidades
-            </button>
-          )}
+          <div className="d-flex flex-wrap gap-2">
+            {/* La capacidad y el fuera de servicio cambian todos los números del
+                almanaque, así que los edita solo el superadmin — igual que el PUT
+                del backend. */}
+            {esSuperAdmin && (
+              <button
+                className="btn btn-outline-secondary btn-sm"
+                onClick={() => setShowConfig(true)}
+                disabled={!almanaque?.galpones}
+              >
+                <i className="bi bi-sliders me-1"></i>Capacidades
+              </button>
+            )}
+            {/* Deja Reproductores en cero para volver a probar el flujo desde el
+                principio. Borra el módulo entero, así que va aparte del resto de
+                los botones y en rojo. */}
+            {esSuperAdmin && (
+              <button
+                className="btn btn-outline-danger btn-sm"
+                onClick={handleResetear}
+                disabled={reseteando}
+              >
+                {reseteando
+                  ? <><span className="spinner-border spinner-border-sm me-1"></span>Reseteando…</>
+                  : <><i className="bi bi-arrow-counterclockwise me-1"></i>Resetear proyección</>}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* El almanaque contesta "¿voy a tener pollos todos los días para
