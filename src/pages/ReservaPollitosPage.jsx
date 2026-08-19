@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Layout from "../components/Layout";
-import AlmanaqueFaena from "../components/AlmanaqueFaena";
+import Almanaque from "../components/Almanaque";
 import ConfigGalponesModal from "../components/ConfigGalponesModal";
 import {
   obtenerRepartoPollitos,
   obtenerClientes,
-  obtenerAlmanaqueFaena,
+  obtenerAlmanaque,
   crearReservaPollitos,
   actualizarReservaPollitos,
   eliminarReservaPollitos,
@@ -346,7 +346,7 @@ const FechaCard = ({ reparto, onAsignar, onEditar, onBorrar }) => {
               <span className={`badge ${estado.clase}`}>{estado.label}</span>
               <span className="badge bg-light text-dark border">Tanda #{t.numeroTanda}</span>
               <span className="badge bg-light text-dark border">
-                Lote #{t.lote?.numeroLote ?? "?"}
+                Plantel #{t.lote?.numeroLote ?? "?"}
               </span>
             </div>
           </div>
@@ -491,7 +491,7 @@ const ReservaPollitosPage = () => {
       const [data, cli, alm] = await Promise.all([
         obtenerRepartoPollitos(),
         obtenerClientes(),
-        obtenerAlmanaqueFaena(),
+        obtenerAlmanaque(),
       ]);
       setRepartos(Array.isArray(data) ? data : []);
       const listaClientes = Array.isArray(cli) ? cli : cli?.clientes || [];
@@ -600,7 +600,7 @@ const ReservaPollitosPage = () => {
       title: "Resetear proyección",
       html: `
         <p class="mb-2">Se va a borrar <b>todo el módulo Reproductores</b> y los contadores vuelven a cero:
-        el próximo lote será el #1 y la próxima tanda la #1.</p>
+        el próximo plantel será el #1 y la próxima tanda la #1.</p>
         ${filas
           ? `<table class="table table-sm mb-2"><tbody>${filas}</tbody></table>
              <p class="mb-2"><b>${previo.total}</b> documento(s) en total.</p>`
@@ -643,6 +643,25 @@ const ReservaPollitosPage = () => {
             <h1 className="h3 fw-bold mb-0">
               <i className="bi bi-graph-up-arrow text-success me-2"></i>Proyección
             </h1>
+            {/* De dónde sale el largo de todo lo que se ve abajo. Sin esto, el
+                "en 131 días" de las tarjetas parece un número elegido a ojo, y
+                en realidad es la unidad con la que trabaja la granja: el ciclo
+                del galpón. Los valores salen del backend, así que si el cliente
+                confirma otros tiempos el texto se corrige solo. */}
+            {almanaque?.parametros?.ventana && (
+              <p className="text-muted mb-0 small">
+                Los cálculos se basan en{" "}
+                <strong>
+                  {almanaque.parametros.ventana.ciclosGalpon} ciclos de{" "}
+                  {almanaque.parametros.ventana.diasCicloGalpon} días
+                </strong>{" "}
+                — {almanaque.parametros.diasCrianza} de crianza +{" "}
+                {almanaque.parametros.diasVaciamiento} de saneamiento — o sea{" "}
+                {almanaque.parametros.ventana.dias} días hacia adelante, más{" "}
+                {almanaque.parametros.ventana.contextoPrevio} previos de contexto que no suman
+                a los totales.
+              </p>
+            )}
           </div>
           <div className="d-flex flex-wrap gap-2">
             {/* La capacidad y el fuera de servicio cambian todos los números del
@@ -654,7 +673,7 @@ const ReservaPollitosPage = () => {
                 onClick={() => setShowConfig(true)}
                 disabled={!almanaque?.galpones}
               >
-                <i className="bi bi-sliders me-1"></i>Capacidades
+                <i className="bi bi-sliders me-1"></i>Parámetros
               </button>
             )}
             {/* Deja Reproductores en cero para volver a probar el flujo desde el
@@ -680,8 +699,8 @@ const ReservaPollitosPage = () => {
         {!loading && (
           <ul className="nav nav-tabs mb-3">
             {[
-              { id: "almanaque", icono: "calendar3", texto: "Almanaque de faena" },
-              { id: "reparto", icono: "list-check", texto: "Reparto por tanda" },
+              { id: "almanaque", icono: "calendar3", texto: "Almanaque" },
+              { id: "reparto", icono: "list-check", texto: "Reparto nacimientos" },
             ].map((t) => (
               <li className="nav-item" key={t.id}>
                 <button
@@ -702,7 +721,7 @@ const ReservaPollitosPage = () => {
           </div>
         ) : vista === "almanaque" ? (
           almanaque ? (
-            <AlmanaqueFaena data={almanaque} />
+            <Almanaque data={almanaque} />
           ) : (
             <div className="card shadow-sm">
               <div className="card-body text-center py-5 text-muted">
@@ -807,6 +826,14 @@ const ReservaPollitosPage = () => {
           // El almanaque ya devuelve los 14 galpones con etiqueta, capacidad y
           // fueraDeServicio, que es exactamente lo que el modal necesita.
           galpones={almanaque.galpones}
+          // Y también el objetivo de faena vigente, con el dato de si todavía es
+          // el valor de fábrica. No hace falta un fetch aparte.
+          objetivoFaena={{
+            objetivoFaenaDiario: almanaque.parametros?.objetivoDiario,
+            porDefecto: almanaque.parametros?.objetivoDiarioPorDefecto,
+            valorPorDefecto: almanaque.parametros?.objetivoDiarioDeFabrica,
+          }}
+          mortandadEngorde={almanaque.parametros?.mortandadEngorde}
           onClose={() => setShowConfig(false)}
           onGuardado={() => {
             setShowConfig(false);

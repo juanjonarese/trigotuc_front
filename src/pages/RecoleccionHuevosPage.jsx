@@ -81,9 +81,9 @@ const RecoleccionModal = ({
   const huevosTotales = inoculables + aVenta + perdida;
 
   // Una gallina pone como mucho un huevo por día: más del 100% de postura es
-  // imposible y casi siempre significa que el plantel del lote está mal cargado.
+  // imposible y casi siempre significa que las hembras del plantel están mal cargadas.
   // Se avisa acá para no tener que esperar el rechazo del backend.
-  // Al editar se usa el plantel congelado en la recolección, que es contra el que
+  // Al editar se usa la cantidad de hembras congelada en la recolección, contra la que
   // valida el backend: el actual pudo cambiar por mortandad posterior.
   const hembras = edicion
     ? recoleccion.hembrasEnPostura ?? 0
@@ -112,7 +112,7 @@ const RecoleccionModal = ({
             : "") +
           ` con ${formatearNumero(hembras)} hembras da ${porcentajePostura.toFixed(2)}% de postura. ` +
           `Una gallina pone como máximo un huevo por día (100%). ` +
-          `Revisá el plantel del lote o la cantidad recolectada.`,
+          `Revisá las hembras del plantel o la cantidad recolectada.`,
         "warning"
       );
       return;
@@ -122,7 +122,7 @@ const RecoleccionModal = ({
     try {
       if (edicion) {
         // La fecha no se toca en la edición: define la partida FIFO y el índice
-        // único (lote, fecha). Para corregirla hay que borrar y volver a cargar.
+        // único (plantel, fecha). Para corregirla hay que borrar y volver a cargar.
         await editarRecoleccionHuevos(recoleccion._id, {
           hora: form.hora || undefined,
           inoculables,
@@ -168,7 +168,7 @@ const RecoleccionModal = ({
               <h5 className="modal-title">
                 <i className={`bi ${edicion ? "bi-pencil-square" : "bi-basket"} me-2`}></i>
                 {edicion ? "Corregir recolección — " : ""}
-                {galponLabel} — Lote #{lote.numeroLote}
+                {galponLabel} — Plantel #{lote.numeroLote}
               </h5>
               <button className="btn-close btn-close-white" onClick={onClose} disabled={saving}></button>
             </div>
@@ -324,8 +324,8 @@ const RecoleccionModal = ({
                       <div className="mt-2 pt-2 border-top small">
                         <i className="bi bi-exclamation-triangle-fill me-1"></i>
                         <strong>Esto no puede ser:</strong> una gallina pone como máximo un huevo
-                        por día, así que la postura no puede pasar del 100%. Revisá el plantel del
-                        lote o la cantidad recolectada.
+                        por día, así que la postura no puede pasar del 100%. Revisá las hembras
+                        del plantel o la cantidad recolectada.
                       </div>
                     )}
                   </div>
@@ -402,7 +402,7 @@ const RecoleccionHuevosPage = () => {
   const huevosPorCajon = constantes?.huevosPorCajon ?? 144;
   const bandejasPorCajon = constantes?.bandejasPorCajon ?? 12;
 
-  // Un galpón de postura por tarjeta. Solo los que tienen lote poniendo se
+  // Un galpón de postura por tarjeta. Solo los que tienen plantel poniendo se
   // pueden abrir: el resto queda a la vista pero sin acción.
   // En el galpón se junta varias veces al día, así que la tarjeta muestra la
   // suma de todas las pasadas de hoy y cuántas fueron.
@@ -427,7 +427,7 @@ const RecoleccionHuevosPage = () => {
     return { galpon: g, lote, hoyResumen };
   });
 
-  // Huevos cargados para ese lote en esa fecha, sin contar una recolección dada.
+  // Huevos cargados para ese plantel en esa fecha, sin contar una recolección dada.
   const totalDelDia = (loteId, fecha, excluirId = null) =>
     recolecciones
       .filter(
@@ -438,7 +438,7 @@ const RecoleccionHuevosPage = () => {
       )
       .reduce((s, r) => s + (r.huevosTotales || 0), 0);
 
-  // Para editar se arma el lote a partir de la propia recolección: la semana y el
+  // Para editar se arma el plantel a partir de la propia recolección: la semana y el
   // plantel son los del día de la carga, no los de hoy.
   const handleEditar = (rec) => {
     const loteRec = rec.lote || {};
@@ -512,7 +512,7 @@ const RecoleccionHuevosPage = () => {
                             <div className="card-body text-center text-muted py-4">
                               <i className="bi bi-door-open fs-2 d-block mb-2"></i>
                               <div className="fw-semibold">{galpon.nombre}</div>
-                              <small>Sin lote en producción</small>
+                              <small>Sin plantel en producción</small>
                             </div>
                           </div>
                         </div>
@@ -542,7 +542,7 @@ const RecoleccionHuevosPage = () => {
                           </div>
                           <div className="card-body">
                             <div className="d-flex justify-content-between align-items-baseline mb-2">
-                              <span className="fw-bold">Lote #{lote.numeroLote}</span>
+                              <span className="fw-bold">Plantel #{lote.numeroLote}</span>
                               <small className="text-muted">Semana {lote.semanaVida}</small>
                             </div>
                             <div className="small text-muted mb-3">
@@ -613,7 +613,7 @@ const RecoleccionHuevosPage = () => {
                       <thead className="table-light">
                         <tr>
                           <th>Fecha</th>
-                          <th>Lote</th>
+                          <th>Plantel</th>
                           <th className="text-center">Sem. prod.</th>
                           <th className="text-end">Total</th>
                           <th className="text-end">A incubar</th>
@@ -696,7 +696,7 @@ const RecoleccionHuevosPage = () => {
                             </span>
                           </strong>
                           <span className="text-muted small">
-                            Lote #{r.lote?.numeroLote ?? "?"} · G{r.galpon}
+                            Plantel #{r.lote?.numeroLote ?? "?"} · G{r.galpon}
                           </span>
                         </div>
                         <div className="row g-2 small">
