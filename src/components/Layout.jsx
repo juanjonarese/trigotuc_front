@@ -302,14 +302,14 @@ const Layout = ({ children }) => {
             </a>
             {seccionAbierta === "reproductores" && (
               <div className="ps-4 mt-2">
-                {/* 1 — Ingreso de Lote */}
+                {/* 1 — Ingreso de Plantel */}
                 <a
                   href="#"
                   className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/galpones/nuevo") ? "text-white" : "text-white-50"}`}
                   onClick={(e) => { e.preventDefault(); navigate("/reproductores/galpones/nuevo"); }}
                 >
                   <i className="bi bi-plus-circle"></i>
-                  <span>Ingreso de Lote</span>
+                  <span>Ingreso de Plantel</span>
                 </a>
                 {/* 2 — Galpones */}
                 <a

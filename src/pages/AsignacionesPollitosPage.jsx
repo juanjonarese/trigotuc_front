@@ -283,7 +283,7 @@ const AsignacionesPollitosPage = () => {
                           <th>Nace</th>
                           <th>Destino</th>
                           <th className="text-center">Tanda</th>
-                          <th className="text-center">Lote</th>
+                          <th className="text-center">Plantel</th>
                           <th className="text-end">Pollitos</th>
                           <th className="text-end">Total</th>
                           <th className="text-center">Estado</th>

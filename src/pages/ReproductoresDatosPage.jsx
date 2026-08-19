@@ -62,7 +62,7 @@ const GalponCard = ({ galpon, sector, lote, seleccionado, onSelect }) => {
         </div>
         {lote ? (
           <>
-            <div className="small text-muted">Lote #{lote.numeroLote}</div>
+            <div className="small text-muted">Plantel #{lote.numeroLote}</div>
             <div className="small text-muted">Semana {lote.semanaVida ?? "?"}</div>
             <div className="small text-muted">
               {formatearNumero(lote.hembras?.actual)} H / {formatearNumero(lote.machos?.actual)} M
@@ -105,7 +105,7 @@ const EditarMortandadModal = ({ lote, entrada, onClose, onGuardado }) => {
     if (fecha < soloFecha(lote.fechaIngreso)) {
       Swal.fire(
         "Fecha inválida",
-        `No puede ser anterior al ingreso del lote (${formatearFechaLocal(lote.fechaIngreso)}).`,
+        `No puede ser anterior al ingreso del plantel (${formatearFechaLocal(lote.fechaIngreso)}).`,
         "warning"
       );
       return;
@@ -209,7 +209,7 @@ const EditarPesajeModal = ({ lote, pesaje, onClose, onGuardado }) => {
     if (fecha < soloFecha(lote.fechaIngreso)) {
       Swal.fire(
         "Fecha inválida",
-        `No puede ser anterior al ingreso del lote (${formatearFechaLocal(lote.fechaIngreso)}).`,
+        `No puede ser anterior al ingreso del plantel (${formatearFechaLocal(lote.fechaIngreso)}).`,
         "warning"
       );
       return;
@@ -310,10 +310,10 @@ const ReproductoresDatosPage = () => {
       setConstantes(cons);
       const activos = Array.isArray(data) ? data : [];
       setLotes(activos);
-      // Se mantiene el galpón elegido mientras el lote siga activo.
+      // Se mantiene el galpón elegido mientras el plantel siga activo.
       setLoteId((prev) => (activos.some((l) => l._id === prev) ? prev : ""));
     } catch (err) {
-      Swal.fire("Error", err.message || "No se pudieron cargar los lotes.", "error");
+      Swal.fire("Error", err.message || "No se pudieron cargar los planteles.", "error");
     } finally {
       setLoading(false);
     }
@@ -384,7 +384,7 @@ const ReproductoresDatosPage = () => {
     if (form.fecha < soloFecha(lote.fechaIngreso)) {
       Swal.fire(
         "Fecha inválida",
-        `No puede ser anterior al ingreso del lote (${formatearFechaLocal(lote.fechaIngreso)}).`,
+        `No puede ser anterior al ingreso del plantel (${formatearFechaLocal(lote.fechaIngreso)}).`,
         "warning"
       );
       return;
@@ -394,7 +394,7 @@ const ReproductoresDatosPage = () => {
     try {
       const fecha = ajustarFechaParaGuardar(form.fecha);
 
-      // Todas las llamadas escriben el MISMO documento de lote (mortandad y
+      // Todas las llamadas escriben el MISMO documento de plantel (mortandad y
       // pesajes son subdocumentos), así que van una por una: en paralelo se
       // pisan entre ellas.
       const pasos = [];
@@ -528,7 +528,7 @@ const ReproductoresDatosPage = () => {
           <div className="card shadow-sm">
             <div className="card-body text-center py-5 text-muted">
               <i className="bi bi-inbox fs-1 d-block mb-2"></i>
-              No hay lotes reproductores activos.
+              No hay planteles activos.
             </div>
           </div>
         ) : (
@@ -539,7 +539,7 @@ const ReproductoresDatosPage = () => {
                 <div className="card-header bg-warning-subtle text-dark py-2 d-flex align-items-start justify-content-between flex-wrap gap-1">
                   <div className="me-2" style={{ minWidth: 0 }}>
                     <span className="fw-bold">
-                      {nombreGalpon(constantes?.galpones, lote.sector, lote.galpon)} — Lote #
+                      {nombreGalpon(constantes?.galpones, lote.sector, lote.galpon)} — Plantel #
                       {lote.numeroLote}
                     </span>
                     <div className="small">

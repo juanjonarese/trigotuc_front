@@ -5,7 +5,7 @@ import { formatearNumero, nombreGalpon } from "../utils/reproductoresUtils";
 import Swal from "sweetalert2";
 
 /**
- * Mudanza de recría a postura. Ocurre una sola vez por lote: el lote entero
+ * Mudanza de recría a postura. Ocurre una sola vez por plantel: el plantel entero
  * cambia de galpón conservando su número. Se usa desde Galpones y desde la
  * pantalla de carga de datos semanales.
  */
@@ -36,8 +36,8 @@ const MudanzaPosturaModal = ({ lote, constantes, lotes = [], onClose, onHecho })
       onHecho();
       Swal.fire({
         icon: "success",
-        title: "Lote mudado a postura",
-        text: `Lote #${lote.numeroLote} → ${nombreGalpon(constantes?.galpones, "postura", galponDestino)}`,
+        title: "Plantel mudado a postura",
+        text: `Plantel #${lote.numeroLote} → ${nombreGalpon(constantes?.galpones, "postura", galponDestino)}`,
         timer: 2400,
         showConfirmButton: false,
       });
@@ -62,9 +62,9 @@ const MudanzaPosturaModal = ({ lote, constantes, lotes = [], onClose, onHecho })
             <div className="modal-body">
               <form id="form-mudanza" onSubmit={handleSubmit}>
                 <div className="alert alert-light border small">
-                  Se muda el <strong>lote #{lote.numeroLote}</strong> completo:{" "}
+                  Se muda el <strong>plantel #{lote.numeroLote}</strong> completo:{" "}
                   {formatearNumero(lote.hembras?.actual)} hembras y{" "}
-                  {formatearNumero(lote.machos?.actual)} machos. El lote conserva su número y
+                  {formatearNumero(lote.machos?.actual)} machos. El plantel conserva su número y
                   queda habilitado para cargar recolección de huevos desde la semana{" "}
                   {constantes?.semanaInicioPostura ?? 24}.
                 </div>

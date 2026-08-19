@@ -3,7 +3,7 @@ import { formatearFechaLocal } from "../utils/dateUtils";
 import { formatearNumero, SEXO_LABEL } from "../utils/reproductoresUtils";
 
 /**
- * Historial de datos semanales de un lote reproductor: pesajes y mortandad,
+ * Historial de datos semanales de un plantel: pesajes y mortandad,
  * siempre agrupados por semana y discriminados por sexo.
  *
  * Se usa en dos lugares con la misma pinta:
@@ -29,7 +29,7 @@ const agruparPesajesPorSemana = (pesajes = []) => {
 };
 
 // La mortandad se carga día por día: se agrupa por semana y cada una despliega
-// sus días. La semana 0 son las bajas registradas al ingreso del lote.
+// sus días. La semana 0 son las bajas registradas al ingreso del plantel.
 const agruparMortandadPorSemana = (mortandad = []) => {
   const mapa = {};
   for (const m of mortandad) {

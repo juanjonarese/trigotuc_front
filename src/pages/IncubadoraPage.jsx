@@ -23,13 +23,13 @@ import Swal from "sweetalert2";
 const ITEMS_POR_PAGINA = 15;
 
 // ── Modal: cargar tanda en la incubadora ────────────────────────────────────
-// La tanda es homogénea (un solo lote) y consume los inoculables más viejos
+// La tanda es homogénea (un solo plantel) y consume los inoculables más viejos
 // primero. El descarte de inoculación se carga acá y va directo a venta.
 const CargarTandaModal = ({ stock, estado, constantes, onClose, onHecho }) => {
   const [loteSel, setLoteSel] = useState(stock[0]?.lote || "");
   const [fecha, setFecha] = useState(obtenerFechaHoy());
   // Se cargan los dos destinos —los que entran a la máquina y los que se
-  // descartan— y el total sale de la suma: eso es lo que se saca del lote, así
+  // descartan— y el total sale de la suma: eso es lo que se saca del plantel, así
   // que no puede quedar descuadrado. Mismo criterio que la recolección.
   // Todo en unidades; cajones y bandejas quedan como lectura derivada.
   const [aIncubadora, setAIncubadora] = useState("");
@@ -42,7 +42,7 @@ const CargarTandaModal = ({ stock, estado, constantes, onClose, onHecho }) => {
 
   const incubando = Number(aIncubadora) || 0;
   const desc = Number(descarte) || 0;
-  const huevos = incubando + desc; // total que se saca del lote
+  const huevos = incubando + desc; // total que se saca del plantel
 
   // La máquina es de carga continua: no hay tope de ocupación total. Lo que se
   // controla es el tamaño de la carga y cuántas van en la semana.
@@ -57,7 +57,7 @@ const CargarTandaModal = ({ stock, estado, constantes, onClose, onHecho }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!loteSel) {
-      Swal.fire("Falta el lote", "Elegí de qué lote son los huevos.", "warning");
+      Swal.fire("Falta el plantel", "Elegí de qué plantel son los huevos.", "warning");
       return;
     }
     if (incubando <= 0) {
@@ -68,7 +68,7 @@ const CargarTandaModal = ({ stock, estado, constantes, onClose, onHecho }) => {
       Swal.fire(
         "Stock insuficiente",
         `Entre lo que va a la incubadora y el descarte se sacan ${formatearNumero(huevos)} huevos del ` +
-          `lote, y tiene ${formatearNumero(entrada.huevosDisponibles)} incubables disponibles.`,
+          `plantel, y tiene ${formatearNumero(entrada.huevosDisponibles)} incubables disponibles.`,
         "warning"
       );
       return;
@@ -140,17 +140,17 @@ const CargarTandaModal = ({ stock, estado, constantes, onClose, onHecho }) => {
 
                 <div className="alert alert-light border small mb-3">
                   <i className="bi bi-info-circle me-1"></i>
-                  La tanda es de un <strong>solo lote</strong>. Se consumen los huevos incubables
+                  La tanda es de un <strong>solo plantel</strong>. Se consumen los huevos incubables
                   más viejos primero (FIFO). A los {constantes?.diasIncubacion ?? 18} días se
                   transfieren a la nacedora.
                 </div>
 
                 <div className="mb-3">
-                  <label className="form-label fw-semibold">Lote de origen</label>
+                  <label className="form-label fw-semibold">Plantel de origen</label>
                   <select className="form-select" value={loteSel} onChange={(e) => setLoteSel(e.target.value)}>
                     {stock.map((s) => (
                       <option key={s.lote} value={s.lote}>
-                        Lote #{s.numeroLote} — {formatearNumero(s.huevosDisponibles)} huevos
+                        Plantel #{s.numeroLote} — {formatearNumero(s.huevosDisponibles)} huevos
                         disponibles
                       </option>
                     ))}
@@ -234,18 +234,18 @@ const CargarTandaModal = ({ stock, estado, constantes, onClose, onHecho }) => {
                     <div>
                       <strong>Incubando:</strong> {formatearNumero(incubando)} +{" "}
                       <strong>descarte:</strong> {formatearNumero(desc)} ={" "}
-                      <strong>{formatearNumero(huevos)}</strong> huevos que se sacan del lote
+                      <strong>{formatearNumero(huevos)}</strong> huevos que se sacan del plantel
                     </div>
                     {entrada && (
                       <div className="mt-1">
-                        Del lote quedan {formatearNumero(entrada.huevosDisponibles - huevos)} de{" "}
+                        Del plantel quedan {formatearNumero(entrada.huevosDisponibles - huevos)} de{" "}
                         {formatearNumero(entrada.huevosDisponibles)} incubables.
                       </div>
                     )}
                     {excedeStock && (
                       <div className="mt-1">
                         <i className="bi bi-exclamation-triangle me-1"></i>
-                        Supera los incubables disponibles del lote.
+                        Supera los incubables disponibles del plantel.
                       </div>
                     )}
                     {excedeCarga && (
@@ -282,7 +282,7 @@ const CargarTandaModal = ({ stock, estado, constantes, onClose, onHecho }) => {
                 disabled={saving || excedeStock || excedeCarga || semanaCompleta}
               >
                 {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
-                <i className="bi bi-box-arrow-in-down me-1"></i>Cargar tanda
+                <i className="bi bi-box-arrow-in-down me-1"></i>Cargar plantel
               </button>
             </div>
           </div>
@@ -695,7 +695,7 @@ const IncubadoraPage = () => {
     const { isConfirmed, value } = await Swal.fire({
       icon: "warning",
       title: `¿Cancelar la tanda #${tanda.numeroTanda}?`,
-      text: "Los huevos vuelven al stock incubable del lote.",
+      text: "Los huevos vuelven al stock incubable del plantel.",
       input: "text",
       inputPlaceholder: "Motivo (opcional)",
       showCancelButton: true,
@@ -747,7 +747,7 @@ const IncubadoraPage = () => {
               onClick={() => setModalCarga(true)}
               disabled={loading || stock.length === 0}
             >
-              <i className="bi bi-box-arrow-in-down me-1"></i>Cargar tanda
+              <i className="bi bi-box-arrow-in-down me-1"></i>Cargar plantel
             </button>
           </div>
         </div>
@@ -840,7 +840,7 @@ const IncubadoraPage = () => {
                         <div className="text-muted">Stock incubable</div>
                         <div className="fw-bold text-info">{formatearNumero(totalIncubable)}</div>
                         <div className="text-muted" style={{ fontSize: ".75rem" }}>
-                          en {stock.length} lote{stock.length === 1 ? "" : "s"}
+                          en {stock.length} plantel{stock.length === 1 ? "" : "es"}
                         </div>
                       </div>
                     </div>
@@ -896,7 +896,7 @@ const IncubadoraPage = () => {
                             </div>
                             <div className="small mb-3">
                               <div>
-                                <span className="text-muted">Lote:</span>{" "}
+                                <span className="text-muted">Plantel:</span>{" "}
                                 <strong>#{t.lote?.numeroLote ?? "?"}</strong>
                               </div>
                               <div>
@@ -981,7 +981,7 @@ const IncubadoraPage = () => {
                             </div>
                             <div className="small mb-3">
                               <div>
-                                <span className="text-muted">Lote:</span>{" "}
+                                <span className="text-muted">Plantel:</span>{" "}
                                 <strong>#{t.lote?.numeroLote ?? "?"}</strong>
                                 {t.lote?.galpon && (
                                   <span className="text-muted"> · galpón {t.lote.galpon}</span>
@@ -1066,7 +1066,7 @@ const IncubadoraPage = () => {
                         <thead className="table-light">
                           <tr>
                             <th>Tanda</th>
-                            <th>Lote</th>
+                            <th>Plantel</th>
                             <th>Fecha</th>
                             <th className="text-end">Ingreso</th>
                             <th className="text-end" title="Descarte de inoculación: va a venta">
@@ -1143,7 +1143,7 @@ const IncubadoraPage = () => {
                             </div>
                             <div className="row g-2 small">
                               <div className="col-6">
-                                <span className="text-muted">Lote:</span> #
+                                <span className="text-muted">Plantel:</span> #
                                 {t.lote?.numeroLote ?? "?"}
                               </div>
                               <div className="col-6">

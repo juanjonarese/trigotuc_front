@@ -951,11 +951,29 @@ export const cancelarTandaIncubacion = async (id, motivo) => {
 };
 
 // ── PROYECCIÓN (cruce granja + incubación) ──
-// Almanaque de faena: los tres carriles (nacimientos / galpones / faena) sobre
+// Almanaque: los cuatro carriles (huevos / nacimientos / galpones / faena) sobre
 // un mismo eje de días. Las fechas vienen además como clave "AAAA-MM-DD" ya
 // resuelta por el backend — posicionar SIEMPRE por clave, nunca parseando el ISO
 // (el server corre en UTC y el navegador en UTC−3: se corre un día).
-export const obtenerAlmanaqueFaena = async (filtros = {}) => {
+// Objetivo diario de faena. Es un parámetro de negocio que el cliente cambia
+// cuando la planta da para más, así que vive en base y no en el código.
+export const obtenerConfigFaena = async () => {
+  const response = await fetch(`${API_URL}/proyeccion/config-faena`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const guardarConfigFaena = async (data) => {
+  const response = await fetch(`${API_URL}/proyeccion/config-faena`, {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const obtenerAlmanaque = async (filtros = {}) => {
   const response = await fetch(`${API_URL}/proyeccion/almanaque${buildQuery(filtros)}`, {
     headers: getAuthHeaders(),
   });

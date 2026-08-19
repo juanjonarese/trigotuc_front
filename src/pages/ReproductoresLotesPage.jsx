@@ -21,7 +21,7 @@ import Swal from "sweetalert2";
 // ── Semáforo de las tarjetas ────────────────────────────────────────────────
 // Cada tramo se mide contra sí mismo, no contra las 65 semanas del ciclo de
 // vida: en recría lo que importa es cuánto falta para mudar a postura, y en
-// postura cuánto le queda de vida útil al lote. Mismo criterio visual que los
+// postura cuánto le queda de vida útil al plantel. Mismo criterio visual que los
 // galpones de Granja: fondo tintado y barra de progreso, con el color escalando
 // a medida que se acerca el final del tramo. El estado nunca va por color solo
 // — siempre lleva ícono y texto.
@@ -44,8 +44,8 @@ const POSTURA_CONFIG = {
   espera:   { ...PALETA.espera,  icono: "bi-hourglass-split",           label: null }, // el label se arma con las semanas que faltan
   encurso:  { ...PALETA.ok,      icono: null,                           label: null },
   proxima:  { ...PALETA.aviso,   icono: "bi-hourglass-split",           label: null }, // idem
-  ultima:   { ...PALETA.ultima,  icono: "bi-star-fill",                 label: "Última semana de postura — programar la baja del lote" },
-  vencida:  { ...PALETA.vencido, icono: "bi-exclamation-triangle-fill", label: "Pasó el ciclo de vida — dar de baja el lote" },
+  ultima:   { ...PALETA.ultima,  icono: "bi-star-fill",                 label: "Última semana de postura — programar la baja del plantel" },
+  vencida:  { ...PALETA.vencido, icono: "bi-exclamation-triangle-fill", label: "Pasó el ciclo de vida — dar de baja el plantel" },
 };
 
 // Semanas antes del final del tramo en las que la tarjeta empieza a avisar.
@@ -60,7 +60,7 @@ const estadoRecria = (semana, semanaMudanza) => {
   return "encurso";
 };
 
-// El lote puede estar mudado a postura y todavía no haber llegado a la semana en
+// El plantel puede estar mudado a postura y todavía no haber llegado a la semana en
 // que arranca a poner: ese caso se marca aparte ("espera").
 const estadoPostura = (semana, semanaInicio, semanaFin) => {
   if (semana < semanaInicio)                return "espera";
@@ -70,7 +70,7 @@ const estadoPostura = (semana, semanaInicio, semanaFin) => {
   return "encurso";
 };
 
-// ── Modal: detalle de producción del lote ───────────────────────────────────
+// ── Modal: detalle de producción del plantel ────────────────────────────────
 const ProduccionModal = ({ lote, constantes, onClose }) => {
   const [resumen, setResumen] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -98,7 +98,7 @@ const ProduccionModal = ({ lote, constantes, onClose }) => {
           <div className="modal-content">
             <div className="modal-header bg-success text-white">
               <h5 className="modal-title">
-                <i className="bi bi-graph-up me-2"></i>Producción — lote #{lote.numeroLote}
+                <i className="bi bi-graph-up me-2"></i>Producción — plantel #{lote.numeroLote}
               </h5>
               <button className="btn-close btn-close-white" onClick={onClose}></button>
             </div>
@@ -164,7 +164,7 @@ const ProduccionModal = ({ lote, constantes, onClose }) => {
                   <h6 className="fw-bold text-secondary mb-2">Por semana de producción</h6>
                   {resumen.semanas.length === 0 ? (
                     <p className="text-muted small mb-0">
-                      Todavía no hay recolecciones cargadas para este lote.
+                      Todavía no hay recolecciones cargadas para este plantel.
                     </p>
                   ) : (
                     <div className="table-responsive">
@@ -234,7 +234,7 @@ const DatosGalponModal = ({ lote, galponLabel, constantes, onClose }) => {
           <div className="modal-header bg-success text-white">
             <div>
               <h5 className="modal-title mb-0">
-                {galponLabel} — Lote #{lote.numeroLote}
+                {galponLabel} — Plantel #{lote.numeroLote}
               </h5>
               <div className="small mt-1 opacity-75">
                 Ingreso: {formatearFechaLocal(lote.fechaIngreso)} · Semana{" "}
@@ -321,7 +321,7 @@ const ReproductoresLotesPage = () => {
   const semanasCiclo = constantes?.semanasCicloVida ?? 65;
   const semanaPostura = constantes?.semanaInicioPostura ?? 24;
 
-  // Un galpón por tarjeta: si tiene lote activo muestra el lote, si no queda libre.
+  // Un galpón por tarjeta: si tiene plantel activo lo muestra, si no queda libre.
   const tarjetasSector = (sector) => {
     const galpones = constantes?.galpones?.[sector] || [];
     return galpones.map((g) => ({
@@ -392,7 +392,7 @@ const ReproductoresLotesPage = () => {
           </div>
           <div className="card-body">
             <div className="d-flex justify-content-between align-items-baseline mb-2">
-              <span className="fw-bold">Lote #{lote.numeroLote}</span>
+              <span className="fw-bold">Plantel #{lote.numeroLote}</span>
               <small className="text-muted">
                 Semana {semanaTramo}/{tope} de {esRecria ? "recría" : "postura"}
               </small>
@@ -515,7 +515,7 @@ const ReproductoresLotesPage = () => {
                   onClick={() => setVerFinalizados(!verFinalizados)}
                 >
                   <span className="fw-bold text-muted">
-                    <i className="bi bi-archive me-1"></i>Lotes finalizados ({finalizados.length})
+                    <i className="bi bi-archive me-1"></i>Planteles finalizados ({finalizados.length})
                   </span>
                   <i className={`bi bi-chevron-${verFinalizados ? "up" : "down"}`}></i>
                 </div>
@@ -524,7 +524,7 @@ const ReproductoresLotesPage = () => {
                     <table className="table table-sm table-hover align-middle mb-0">
                       <thead className="table-light">
                         <tr>
-                          <th>Lote</th>
+                          <th>Plantel</th>
                           <th>Último galpón</th>
                           <th>Ingreso</th>
                           <th>Egreso</th>

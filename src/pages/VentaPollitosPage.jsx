@@ -176,7 +176,7 @@ const VentaPollitosPage = () => {
                       <thead className="table-light">
                         <tr>
                           <th>Tanda</th>
-                          <th>Lote</th>
+                          <th>Plantel</th>
                           <th>Nacimiento</th>
                           <th className="text-end">Nacidos</th>
                           <th className="text-end">Disponibles</th>

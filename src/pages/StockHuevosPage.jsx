@@ -336,7 +336,7 @@ const StockHuevosPage = () => {
                       <tr>
                         <th>Fecha</th>
                         <th>Origen</th>
-                        <th className="text-center">Lote</th>
+                        <th className="text-center">Plantel</th>
                         <th className="text-end">Ingresaron</th>
                         <th className="text-end">Disponibles</th>
                         <th>Equivale a</th>
