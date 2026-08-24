@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Layout from "../components/Layout";
+import BotonExcel from "../components/BotonExcel";
 import { obtenerOrdenesCarga, enviarOrdenCarga, entregarOrdenCarga, liberarOrdenCarga, revertirOrdenCarga } from "../services/api";
 import { formatearFechaLocal, obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
+import { exportarTablaExcel } from "../utils/exportarExcel";
 import Swal from "sweetalert2";
 import { escapeHtml } from "../utils/escapeHtml";
 
@@ -508,6 +510,38 @@ const RecepcionOrdenCargaPage = () => {
     );
   });
 
+  // Excel: una fila por orden, tal cual la tabla — filtro de estado + buscador.
+  const exportarExcel = () => exportarTablaExcel({
+    filas: ordenesFiltradas,
+    nombreHoja: "Recepción de órdenes",
+    nombreArchivo: "Recepcion_de_ordenes",
+    columnas: [
+      { header: "N° Orden",        valor: (o) => o.numero },
+      { header: "Tipo",            valor: (o) => (o.tipo === "pedido_frigorifico" ? "Pedido frigorífico" : "Venta gordos") },
+      { header: "Cliente",         valor: (o) => (o.tipo === "pedido_frigorifico"
+          ? o.registradoPor?.nombreUsuario
+          : o.cliente?.razonSocial || o.cliente?.nombre) },
+      { header: "Granja",          valor: (o) => (o.granja === "cañete" ? "Cañete" : "Los Pinos") },
+      { header: "Galpón",          valor: (o) => (o.galpon ? (o.granja === "cañete" ? "C" : "P") + o.galpon : "") },
+      { header: "Fecha pedido",    valor: (o) => formatearFechaLocal(o.fechaEmision) },
+      { header: "Cant. pedida",    valor: (o) => o.cantidadEstimada ?? 0 },
+      { header: "Cant. recibida",  valor: (o) => (o.cantidadReal != null ? o.cantidadReal : "") },
+      { header: "Dif. cantidad",   valor: (o) => (o.cantidadReal != null
+          ? (o.diferenciaCantidad ?? (o.cantidadReal - o.cantidadEstimada)) : "") },
+      { header: "Peso ped. (kg)",  valor: (o) => o.pesoEstimadoKg ?? 0 },
+      { header: "Peso rec. (kg)",  valor: (o) => (o.pesoRealKg != null ? o.pesoRealKg : "") },
+      { header: "Dif. kg",         valor: (o) => (o.pesoRealKg != null
+          ? (o.diferenciaKg ?? (o.pesoRealKg - o.pesoEstimadoKg)) : "") },
+      { header: "Fecha entrega",   valor: (o) => (o.fechaEntrega ? formatearFechaLocal(o.fechaEntrega) : "") },
+      { header: "Estado",          valor: (o) => (o.estado === "entregada" ? "Entregada"
+          : o.estado === "enviada" ? "En camino"
+          : o.liberada ? "Liberada" : "Pendiente") },
+      { header: "Código retiro",   valor: (o) => o.codigoRetiro },
+      { header: "Obs. entrega",    valor: (o) => o.observacionesEntrega },
+      { header: "Recibida por",    valor: (o) => o.entregadaPor?.nombreUsuario },
+    ],
+  });
+
   return (
     <Layout>
       <div className="container-fluid">
@@ -517,7 +551,12 @@ const RecepcionOrdenCargaPage = () => {
             <i className="bi bi-box-arrow-in-down me-2 text-success"></i>
             Recepción de Órdenes
           </h1>
-          <div className="d-flex gap-2">
+          <div className="d-flex gap-2 align-items-center">
+            <BotonExcel
+              onClick={exportarExcel}
+              disabled={ordenesFiltradas.length === 0}
+              titulo="Descargar órdenes (según filtros y búsqueda)"
+            />
             {["pendiente", "entregada", ""].map((e) => (
               <button
                 key={e}

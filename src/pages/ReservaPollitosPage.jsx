@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Layout from "../components/Layout";
 import Almanaque from "../components/Almanaque";
 import ConfigGalponesModal from "../components/ConfigGalponesModal";
+import BotonExcel from "../components/BotonExcel";
 import {
   obtenerRepartoPollitos,
   obtenerClientes,
@@ -23,6 +24,7 @@ import {
   diasHasta,
   textoDias,
 } from "../utils/reproductoresUtils";
+import { exportarLibroExcel } from "../utils/exportarExcel";
 import Swal from "sweetalert2";
 
 // "mar 12 ago" — encabezado de la tarjeta, que es lo primero que se mira.
@@ -555,6 +557,201 @@ const ReservaPollitosPage = () => {
     [visibles]
   );
   const disponibles = totales.estimados - totales.aGranja - totales.aClientes;
+  // ── Excel ──────────────────────────────────────────────────────────────────
+  // El Gantt no se puede bajar como imagen útil, pero sí los números que lo
+  // dibujan: cada carril del gráfico es una hoja del libro. Así el cliente puede
+  // hacer sus propias cuentas sobre la misma proyección que ve en pantalla.
+  const exportarAlmanaqueExcel = () => {
+    if (!almanaque) return;
+    const par = almanaque.parametros || {};
+    const res = almanaque.resumen || {};
+    const parH = almanaque.huevos?.parametros || {};
+    const resH = almanaque.huevos?.resumen || {};
+
+    // Hoja de resumen: concepto / valor, para que los supuestos viajen con los datos.
+    const resumen = [
+      ["Ventana — desde", par.desdeClave],
+      ["Ventana — hasta", par.hastaClave],
+      ["Hoy", par.hoyClave],
+      ["Días proyectados", par.ventana?.proyectados],
+      ["Días de contexto previo (no suman)", par.ventana?.contextoPrevio],
+      ["Ciclo de galpón (días)", par.ventana?.diasCicloGalpon],
+      ["Días de crianza", par.diasCrianza],
+      ["Días de saneamiento", par.diasVaciamiento],
+      ["Objetivo de faena diario", par.objetivoDiario],
+      ["Mortandad de engorde asumida", par.mortandadEngorde],
+      ["FAENA — días de faena en la ventana", res.diasFaenaEnVentana],
+      ["FAENA — pollos programados", res.pollosProgramados],
+      ["FAENA — de stock real", res.pollosProgramadosReales],
+      ["FAENA — proyectados (aún sin nacer)", res.pollosProgramadosProyectados],
+      ["FAENA — objetivo total", res.objetivoTotal],
+      ["FAENA — cobertura", res.cobertura],
+      ["FAENA — días con hueco", res.diasConHueco],
+      ["FAENA — días sin nada que faenar", res.diasSinNadaQueFaenar],
+      ["FAENA — pollos que no entran en la agenda", res.pollosSinFaenar],
+      ["GALPONES — capacidad instalada", res.capacidadInstalada],
+      ["GALPONES — disponibles hoy", res.galponesDisponiblesHoy],
+      ["GALPONES — capacidad disponible hoy", res.capacidadDisponibleHoy],
+      ["POLLITOS — sin asignar", res.pollitosSinAsignar],
+      ["HUEVOS — objetivo incubables por día", parH.objetivoIncubablesDiario],
+      ["HUEVOS — días proyectados", resH.diasProyectados],
+      ["HUEVOS — totales en la ventana", resH.huevosTotales],
+      ["HUEVOS — incubables en la ventana", resH.huevosIncubables],
+      ["HUEVOS — promedio diario de incubables", resH.promedioDiarioIncubables],
+      ["HUEVOS — cobertura de la incubadora", resH.coberturaIncubadora],
+      ["HUEVOS — días bajo objetivo", resH.diasBajoObjetivo],
+      ["HUEVOS — planteles aportando", resH.plantelesAportando],
+    ].map(([concepto, valor]) => ({ concepto, valor }));
+
+    // Huevos por plantel: se aplana día × plantel para poder hacer tabla
+    // dinámica. Es la curva de cada color del gráfico.
+    const huevosPorPlantel = (almanaque.huevos?.dias || []).flatMap((d) =>
+      (d.porPlantel || []).map((pl) => ({ ...pl, clave: d.clave, esPasado: d.esPasado }))
+    );
+
+    exportarLibroExcel({
+      nombreArchivo: "Proyeccion_almanaque",
+      hojas: [
+        {
+          nombre: "Resumen",
+          filas: resumen,
+          columnas: [
+            { header: "Concepto", valor: (f) => f.concepto, ancho: 42 },
+            { header: "Valor",    valor: (f) => (f.valor ?? "") },
+          ],
+        },
+        {
+          nombre: "Faena por día",
+          filas: almanaque.faena || [],
+          columnas: [
+            { header: "Fecha",           valor: (d) => d.clave },
+            { header: "Es día de faena", valor: (d) => (d.esFaena ? "Sí" : "No") },
+            { header: "Cerrado por",     valor: (d) => d.cerradoPor },
+            { header: "Feriado",         valor: (d) => d.feriado },
+            { header: "Objetivo",        valor: (d) => d.objetivo ?? 0 },
+            { header: "Pollos",          valor: (d) => d.pollos ?? 0 },
+            { header: "De stock real",   valor: (d) => d.pollosReales ?? 0 },
+            { header: "Proyectados",     valor: (d) => d.pollosProyectados ?? 0 },
+            { header: "Déficit",         valor: (d) => d.deficit ?? 0 },
+            {
+              header: "Galpones que aportan",
+              valor: (d) =>
+                (d.porGalpon || []).map((g) => (g.etiqueta || g.galpon) + ": " + g.pollos).join(" · "),
+              ancho: 40,
+            },
+          ],
+        },
+        {
+          nombre: "Huevos por día",
+          filas: almanaque.huevos?.dias || [],
+          columnas: [
+            { header: "Fecha",               valor: (d) => d.clave },
+            { header: "Pasado",              valor: (d) => (d.esPasado ? "Sí" : "No") },
+            { header: "Totales proyect.",    valor: (d) => d.totales ?? 0 },
+            { header: "Incubables proyect.", valor: (d) => d.incubables ?? 0 },
+            { header: "Descarte proyect.",   valor: (d) => d.descarte ?? 0 },
+            { header: "Objetivo incubables", valor: (d) => d.objetivoIncubables ?? 0 },
+            { header: "Déficit incubables",  valor: (d) => d.deficitIncubables ?? 0 },
+            { header: "Planteles aportando", valor: (d) => d.planteles ?? 0 },
+            { header: "Real — totales",      valor: (d) => (d.real ? d.real.totales : "") },
+            { header: "Real — incubables",   valor: (d) => (d.real ? d.real.incubables : "") },
+            { header: "Desvío real vs proy.", valor: (d) => (d.real ? d.real.desvio : "") },
+          ],
+        },
+        {
+          nombre: "Huevos por plantel",
+          filas: huevosPorPlantel,
+          columnas: [
+            { header: "Fecha",           valor: (f) => f.clave },
+            { header: "Pasado",          valor: (f) => (f.esPasado ? "Sí" : "No") },
+            { header: "Plantel",         valor: (f) => f.numeroLote ?? "" },
+            { header: "Galpón",          valor: (f) => f.etiqueta },
+            { header: "Semana vida",     valor: (f) => f.semanaVida ?? "" },
+            { header: "Hembras",         valor: (f) => f.hembras ?? 0 },
+            { header: "Totales",         valor: (f) => f.totales ?? 0 },
+            { header: "Incubables",      valor: (f) => f.incubables ?? 0 },
+            { header: "Sigue en recría", valor: (f) => (f.enRecriaHoy ? "Sí" : "") },
+          ],
+        },
+        {
+          nombre: "Nacimientos",
+          filas: almanaque.nacimientos || [],
+          columnas: [
+            { header: "Fecha",             valor: (n) => n.fechaClave },
+            { header: "Tanda",             valor: (n) => n.numeroTanda ?? "" },
+            { header: "Plantel",           valor: (n) => n.lote?.numeroLote ?? "" },
+            { header: "Ya nació",          valor: (n) => (n.nacio ? "Sí" : "No") },
+            { header: "Días para nacer",   valor: (n) => n.diasParaNacer ?? "" },
+            { header: "Pollitos",          valor: (n) => n.pollitos ?? 0 },
+            { header: "A galpón propio",   valor: (n) => n.asignadoAGalpon ?? 0 },
+            { header: "A granja s/galpón", valor: (n) => n.asignadoAGranjaSinGalpon ?? 0 },
+            { header: "A clientes",        valor: (n) => n.asignadoAClientes ?? 0 },
+            { header: "Con destino",       valor: (n) => n.conDestino ?? 0 },
+            { header: "Sin asignar",       valor: (n) => n.sinAsignar ?? 0 },
+            { header: "Sobreasignado",     valor: (n) => n.sobreasignado ?? 0 },
+            { header: "Estado",            valor: (n) => ESTADO_TANDA[n.estado]?.label || n.estado },
+          ],
+        },
+        {
+          nombre: "Galpones",
+          filas: almanaque.galpones || [],
+          columnas: [
+            { header: "Galpón",            valor: (g) => g.etiqueta },
+            { header: "Granja",            valor: (g) => labelGranja(g.granja) },
+            { header: "Número",            valor: (g) => g.galpon ?? "" },
+            { header: "Capacidad",         valor: (g) => g.capacidad ?? "" },
+            { header: "Días de faena que cubre", valor: (g) => g.diasFaenaQueCubre ?? "" },
+            { header: "Fuera de servicio", valor: (g) => (g.fueraDeServicio ? "Sí" : "") },
+            { header: "Ocupado",           valor: (g) => (g.ocupado ? "Sí" : "") },
+            { header: "Lote actual",       valor: (g) => g.loteActual?.numeroLote ?? "" },
+            { header: "Pollos del lote",   valor: (g) => g.loteActual?.pollos ?? "" },
+            { header: "Excede tiempo",     valor: (g) => (g.atrasado ? "Sí" : "") },
+            { header: "Días de atraso",    valor: (g) => g.diasAtraso ?? 0 },
+            { header: "Libre desde",       valor: (g) => g.libreDesdeClave },
+            { header: "Fecha estimada",    valor: (g) => (g.libreDesdeEstimada ? "Sí" : "") },
+          ],
+        },
+        {
+          nombre: "Huecos de faena",
+          filas: almanaque.huecos || [],
+          columnas: [
+            { header: "Desde",               valor: (h) => h.desdeClave },
+            { header: "Hasta",               valor: (h) => h.hastaClave },
+            { header: "Días de faena",       valor: (h) => h.diasFaena ?? 0 },
+            { header: "Pollos faltantes",    valor: (h) => h.faltante ?? 0 },
+            { header: "Sin nada que faenar", valor: (h) => (h.vacio ? "Sí" : "") },
+          ],
+        },
+      ],
+    });
+  };
+
+  // Reparto: una fila por tanda, los mismos números de las tarjetas.
+  const exportarRepartoExcel = () => exportarLibroExcel({
+    nombreArchivo: "Proyeccion_reparto_nacimientos",
+    hojas: [
+      {
+        nombre: "Reparto por tanda",
+        filas: visibles,
+        columnas: [
+          { header: "Nace",         valor: (r) => formatearFechaLocal(r.tanda.fechaNacimiento) },
+          { header: "Ya nació",     valor: (r) => (r.tanda.nacio ? "Sí" : "No") },
+          { header: "Días para nacer", valor: (r) => (r.tanda.nacio ? "" : diasHasta(r.tanda.fechaNacimiento)) },
+          { header: "Tanda",        valor: (r) => r.tanda.numeroTanda ?? "" },
+          { header: "Plantel",      valor: (r) => r.tanda.lote?.numeroLote ?? "" },
+          { header: "Estado tanda", valor: (r) => ESTADO_TANDA[r.tanda.estado]?.label || r.tanda.estado },
+          { header: "Pollitos (nacidos o estimados)", valor: (r) => r.disponibles ?? 0 },
+          { header: "Rendimiento estimado (%)", valor: (r) => (r.tanda.nacio ? "" : r.rendimientoEstimado ?? "") },
+          { header: "Asignados",    valor: (r) => r.comprometidos ?? 0 },
+          { header: "A granja",     valor: (r) => r.aGranja ?? 0 },
+          { header: "A clientes",   valor: (r) => r.aClientes ?? 0 },
+          { header: "Sin asignar",  valor: (r) => (r.saldo > 0 ? r.saldo : 0) },
+          { header: "Comprometidos de más", valor: (r) => (r.saldo < 0 ? Math.abs(r.saldo) : "") },
+        ],
+      },
+    ],
+  });
+
 
   const borrar = async (reserva) => {
     const quien =
@@ -663,7 +860,16 @@ const ReservaPollitosPage = () => {
               </p>
             )}
           </div>
-          <div className="d-flex flex-wrap gap-2">
+          <div className="d-flex flex-wrap gap-2 align-items-center">
+            {/* El gráfico no se puede bajar como imagen útil, pero sus números
+                sí: cada carril del Gantt es una hoja del libro. */}
+            <BotonExcel
+              onClick={vista === "almanaque" ? exportarAlmanaqueExcel : exportarRepartoExcel}
+              disabled={loading || (vista === "almanaque" ? !almanaque : visibles.length === 0)}
+              titulo={vista === "almanaque"
+                ? "Descargar los datos del almanaque"
+                : "Descargar el reparto de nacimientos"}
+            />
             {/* La capacidad y el fuera de servicio cambian todos los números del
                 almanaque, así que los edita solo el superadmin — igual que el PUT
                 del backend. */}

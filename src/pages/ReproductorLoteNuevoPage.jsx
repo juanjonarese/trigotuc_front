@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
+import BotonExcel from "../components/BotonExcel";
 import {
   obtenerConstantesReproductores,
   obtenerLotesReproductores,
@@ -10,6 +11,7 @@ import {
 } from "../services/api";
 import { formatearFechaLocal, ajustarFechaParaGuardar, obtenerFechaHoy } from "../utils/dateUtils";
 import { formatearNumero, ESTADO_LOTE, nombreGalpon } from "../utils/reproductoresUtils";
+import { exportarTablaExcel } from "../utils/exportarExcel";
 import Swal from "sweetalert2";
 
 const ITEMS_POR_PAGINA = 15;
@@ -403,6 +405,28 @@ const ReproductorLoteNuevoPage = () => {
     lotes.reduce((max, l) => Math.max(max, Number(l.numeroLote) || 0), 0) + 1;
 
   const lotesPagina = lotes.slice((pagina - 1) * ITEMS_POR_PAGINA, pagina * ITEMS_POR_PAGINA);
+  // Excel: todos los planteles cargados, no solo la página que se está viendo.
+  const exportarExcel = () => exportarTablaExcel({
+    filas: lotes,
+    nombreHoja: "Planteles",
+    nombreArchivo: "Reproductoras_planteles",
+    columnas: [
+      { header: "Plantel",          valor: (l) => l.numeroLote ?? "" },
+      { header: "Ubicación",        valor: (l) => nombreGalpon(constantes?.galpones, l.sector, l.galpon) },
+      { header: "Sector",           valor: (l) => l.sector },
+      { header: "Fecha ingreso",    valor: (l) => formatearFechaLocal(l.fechaIngreso) },
+      { header: "Hembras ingreso",  valor: (l) => l.hembras?.ingreso ?? 0 },
+      { header: "Hembras actual",   valor: (l) => l.hembras?.actual ?? 0 },
+      { header: "Machos ingreso",   valor: (l) => l.machos?.ingreso ?? 0 },
+      { header: "Machos actual",    valor: (l) => l.machos?.actual ?? 0 },
+      { header: "Aves actuales",    valor: (l) => (l.hembras?.actual || 0) + (l.machos?.actual || 0) },
+      { header: "Semana de vida",   valor: (l) => l.semanaVida ?? "" },
+      { header: "Estado",           valor: (l) => (ESTADO_LOTE[l.estado]?.label || l.estado) },
+      { header: "Proveedor",        valor: (l) => l.proveedor },
+      { header: "Observaciones",    valor: (l) => l.observaciones },
+    ],
+  });
+
 
   return (
     <Layout>
@@ -416,9 +440,16 @@ const ReproductorLoteNuevoPage = () => {
               Alta de planteles de reproductoras (machos y hembras) en los galpones de recría
             </p>
           </div>
-          <button className="btn btn-success" onClick={() => setModalAbierto(true)}>
-            <i className="bi bi-plus-lg me-1"></i>Nuevo plantel
-          </button>
+          <div className="d-flex gap-2 align-items-center">
+            <BotonExcel
+              onClick={exportarExcel}
+              disabled={lotes.length === 0}
+              titulo="Descargar todos los planteles"
+            />
+            <button className="btn btn-success" onClick={() => setModalAbierto(true)}>
+              <i className="bi bi-plus-lg me-1"></i>Nuevo plantel
+            </button>
+          </div>
         </div>
 
         {loading ? (

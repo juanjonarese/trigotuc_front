@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
+import BotonExcel from "../components/BotonExcel";
 import {
   obtenerConstantesReproductores,
   obtenerEstadoIncubadora,
@@ -18,6 +19,7 @@ import {
   textoDesglose,
   ESTADO_TANDA,
 } from "../utils/reproductoresUtils";
+import { exportarTablaExcel } from "../utils/exportarExcel";
 import Swal from "sweetalert2";
 
 const ITEMS_POR_PAGINA = 15;
@@ -724,6 +726,33 @@ const IncubadoraPage = () => {
     paginaHistorial * ITEMS_POR_PAGINA
   );
 
+
+  // Excel: el historial completo de tandas — el ciclo entero de cada una, del
+  // ingreso a la incubadora hasta el nacimiento. No solo la página visible.
+  const exportarHistorialExcel = () => exportarTablaExcel({
+    filas: tandas,
+    nombreHoja: "Tandas",
+    nombreArchivo: "Reproductoras_incubacion",
+    columnas: [
+      { header: "Tanda",              valor: (t) => t.numeroTanda ?? "" },
+      { header: "Plantel",            valor: (t) => t.lote?.numeroLote ?? "" },
+      { header: "Fecha ingreso",      valor: (t) => formatearFechaLocal(t.fechaIngreso) },
+      { header: "Huevos ingresados",  valor: (t) => t.huevosIngresados ?? 0 },
+      { header: "Desc. inoculación",  valor: (t) => t.descarteInoculacion ?? 0 },
+      { header: "Huevos incubando",   valor: (t) => t.huevosIncubando ?? 0 },
+      { header: "Fecha miraje",       valor: (t) => (t.transferencia?.fecha ? formatearFechaLocal(t.transferencia.fecha) : "") },
+      { header: "A nacedora",         valor: (t) => (t.transferencia ? t.transferencia.huevosTransferidos : "") },
+      { header: "Desc. miraje",       valor: (t) => (t.transferencia ? (t.transferencia.descarteMirajePerdida || 0) : "") },
+      { header: "Nacimiento previsto", valor: (t) => (t.fechaNacimientoPrevista ? formatearFechaLocal(t.fechaNacimientoPrevista) : "") },
+      { header: "Fecha nacimiento",   valor: (t) => (t.nacimiento?.fecha ? formatearFechaLocal(t.nacimiento.fecha) : "") },
+      { header: "Pollitos nacidos",   valor: (t) => (t.nacimiento ? t.nacimiento.pollitosNacidos : "") },
+      { header: "Rendimiento (%)",    valor: (t) => (t.nacimiento && t.rendimiento != null ? t.rendimiento : "") },
+      { header: "Pollitos disponibles", valor: (t) => t.pollitosDisponibles ?? 0 },
+      { header: "Estado",             valor: (t) => (ESTADO_TANDA[t.estado]?.label || t.estado) },
+      { header: "Observaciones",      valor: (t) => t.observaciones },
+    ],
+  });
+
   return (
     <Layout>
       <div className="container-fluid py-4">
@@ -738,7 +767,14 @@ const IncubadoraPage = () => {
               {formatearNumero(constantes?.huevosPorCarga)} huevos
             </p>
           </div>
-          <div className="d-flex gap-2">
+          <div className="d-flex gap-2 align-items-center">
+            {solapa === "historial" && (
+              <BotonExcel
+                onClick={exportarHistorialExcel}
+                disabled={tandas.length === 0}
+                titulo="Descargar el historial de tandas"
+              />
+            )}
             <button className="btn btn-outline-secondary" onClick={cargar} disabled={loading}>
               <i className="bi bi-arrow-clockwise"></i>
             </button>

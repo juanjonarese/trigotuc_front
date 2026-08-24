@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
+import BotonExcel from "../components/BotonExcel";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
 import { trozadoLabel } from "../components/TrozadoTable";
 import EditarEnvioModal from "../components/EditarEnvioModal";
@@ -8,6 +9,7 @@ import { crearEnvioCamara, obtenerEnviosCamara, obtenerCamiones, obtenerChoferes
 import { ajustarFechaParaGuardar } from "../utils/dateUtils";
 import { imprimirOrdenEnvio, descargarPDFOrdenEnvio } from "../utils/imprimirOrdenEnvio";
 import Swal from "sweetalert2";
+import { exportarTablaExcel } from "../utils/exportarExcel";
 
 const CAMARAS = [
   { value: "cañete", label: "Cañete" },
@@ -112,6 +114,33 @@ const EnvioCamaraPage = () => {
   const formatNum   = (n) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n);
   const formatFecha = (f) => new Date(f).toLocaleDateString("es-AR");
   const camaraLabel = (v) => CAMARAS.find((c) => c.value === v)?.label || v;
+  // Excel: el historial de envíos, una fila por envío con su detalle en texto.
+  const exportarExcel = () => exportarTablaExcel({
+    filas: envios,
+    nombreHoja: "Envíos entre cámaras",
+    nombreArchivo: "Frigorifico_envios_camara",
+    columnas: [
+      { header: "N° Envío",    valor: (e) => e.numeroEnvio },
+      { header: "Fecha",       valor: (e) => formatFecha(e.fecha) },
+      { header: "Origen",      valor: (e) => camaraLabel(e.camaraOrigen) },
+      { header: "Destino",     valor: (e) => camaraLabel(e.camaraDestino) },
+      { header: "Camión",      valor: (e) => (e.camion ? e.camion.marca + " — " + e.camion.patente : "") },
+      { header: "Chofer",      valor: (e) => e.chofer?.nombreUsuario },
+      { header: "Calibres",    valor: (e) => (e.calibres || [])
+          .map((c) => "Cal." + c.calibre + ": " + c.cajones + " caj").join(" · "), ancho: 36 },
+      { header: "Trozados",    valor: (e) => (e.trozados || [])
+          .map((t) => trozadoLabel(t.tipo) + (t.clase ? " " + t.clase : "") + ": " + t.cajas + " cajas").join(" · "), ancho: 36 },
+      { header: "Pollos",      valor: (e) => e.totalPollos ?? 0 },
+      { header: "Cajones",     valor: (e) => e.totalCajones ?? 0 },
+      { header: "Kg enteros",  valor: (e) => e.pesoTotalKg ?? 0 },
+      { header: "Kg trozados", valor: (e) => e.totalKgTrozados ?? 0 },
+      { header: "Estado",      valor: (e) => (e.estado === "recibido" ? "Recibido" : "Pendiente") },
+      { header: "Fecha recepción", valor: (e) => (e.fechaRecepcion ? formatFecha(e.fechaRecepcion) : "") },
+      { header: "Recibido por", valor: (e) => e.recibidoPor?.nombreUsuario },
+      { header: "Observaciones", valor: (e) => e.observaciones },
+    ],
+  });
+
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -207,6 +236,12 @@ const EnvioCamaraPage = () => {
             <i className="bi bi-truck me-2 text-secondary"></i>
             Envío entre Cámaras
           </h1>
+          <BotonExcel
+            onClick={exportarExcel}
+            disabled={envios.length === 0}
+            className="ms-auto"
+            titulo="Descargar el historial de envíos"
+          />
         </div>
 
         {/* ── Formulario ── */}

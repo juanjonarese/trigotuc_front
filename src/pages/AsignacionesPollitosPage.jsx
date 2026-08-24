@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
+import BotonExcel from "../components/BotonExcel";
 import {
   obtenerRepartoPollitos,
   actualizarReservaPollitos,
@@ -15,6 +16,7 @@ import {
   diasHasta,
   textoDias,
 } from "../utils/reproductoresUtils";
+import { exportarTablaExcel } from "../utils/exportarExcel";
 import Swal from "sweetalert2";
 
 const ITEMS_POR_PAGINA = 20;
@@ -101,6 +103,31 @@ const AsignacionesPollitosPage = () => {
   }, [asignaciones, filtro, busqueda]);
 
   const pagActual = filtradas.slice((pagina - 1) * ITEMS_POR_PAGINA, pagina * ITEMS_POR_PAGINA);
+  // Excel: lo que quedó después del filtro y la búsqueda, completo — no solo la
+  // página. Una fila por asignación, igual que la tabla.
+  const exportarExcel = () => exportarTablaExcel({
+    filas: filtradas,
+    nombreHoja: "Asignaciones",
+    nombreArchivo: "Reproductoras_asignaciones",
+    columnas: [
+      { header: "Nace",          valor: (r) => formatearFechaLocal(r.fechaNacimiento) },
+      { header: "Ya nació",      valor: (r) => (r.nacio ? "Sí" : "No") },
+      { header: "Días para nacer", valor: (r) => (r.nacio ? "" : diasHasta(r.fechaNacimiento)) },
+      { header: "Destino",       valor: (r) => (r.destino === "granja" ? "Granja propia" : "Cliente") },
+      { header: "Granja",        valor: (r) => (r.destino === "granja" ? labelGranja(r.granja) : "") },
+      { header: "Galpón",        valor: (r) => (r.destino === "granja" && r.galpon ? `${prefijoGranja(r.granja)}${r.galpon}` : "") },
+      { header: "Cliente",       valor: (r) => (r.destino === "cliente" ? r.cliente?.razonSocial : "") },
+      { header: "Teléfono",      valor: (r) => (r.destino === "cliente" ? r.cliente?.telefono : "") },
+      { header: "Tanda",         valor: (r) => r.numeroTanda ?? "" },
+      { header: "Plantel",       valor: (r) => r.numeroLote ?? "" },
+      { header: "Pollitos",      valor: (r) => r.cantidad ?? 0 },
+      { header: "Precio unit.",  valor: (r) => (r.precioUnitario != null ? r.precioUnitario : "") },
+      { header: "Total",         valor: (r) => (r.total != null ? r.total : "") },
+      { header: "Estado",        valor: (r) => (ESTADO_RESERVA[r.estado]?.label || r.estado) },
+      { header: "Observaciones", valor: (r) => r.observaciones },
+    ],
+  });
+
 
   // Los totales acompañan al filtro: si mirás solo clientes, los números son de
   // clientes. Las canceladas no suman.
@@ -178,9 +205,16 @@ const AsignacionesPollitosPage = () => {
               cargan desde <strong>Proyección</strong>.
             </p>
           </div>
-          <button className="btn btn-outline-secondary btn-sm" onClick={cargar} disabled={loading}>
-            <i className="bi bi-arrow-clockwise me-1"></i>Actualizar
-          </button>
+          <div className="d-flex gap-2 align-items-center">
+            <BotonExcel
+              onClick={exportarExcel}
+              disabled={filtradas.length === 0}
+              titulo="Descargar asignaciones (según filtro y búsqueda)"
+            />
+            <button className="btn btn-outline-secondary btn-sm" onClick={cargar} disabled={loading}>
+              <i className="bi bi-arrow-clockwise me-1"></i>Actualizar
+            </button>
+          </div>
         </div>
 
         {loading ? (

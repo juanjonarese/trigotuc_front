@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
+import BotonExcel from "../components/BotonExcel";
 import CalibreTable from "../components/CalibreTable";
 import {
   obtenerResumenStock,
@@ -10,6 +11,7 @@ import {
   eliminarSalidaMostrador,
 } from "../services/api";
 import Swal from "sweetalert2";
+import { exportarLibroExcel } from "../utils/exportarExcel";
 
 const TIPOS_LABEL = { filet: "Filet", pata: "Pata muslo", alita: "Alita", menudo: "Menudo", carcaza: "Carcaza" };
 const fmt = (n) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n);
@@ -57,6 +59,48 @@ const SalidaMostradorPage = () => {
   const [loadingSalidas, setLoadingSalidas] = useState(false);
   const [editSalida, setEditSalida] = useState(null); // { _id, enteros, trozados }
   const [editSaving, setEditSaving] = useState(false);
+  // Excel: las salidas del día elegido. Dos hojas porque son dos preguntas
+  // distintas — "qué salidas hubo" y "cuánto salió de cada producto", que es la
+  // que se usa para cuadrar el mostrador.
+  const exportarExcel = () => {
+    const lineas = salidas.flatMap((s) =>
+      (s.detalle || []).map((d) => ({ s, d }))
+    );
+
+    exportarLibroExcel({
+      nombreArchivo: "Frigorifico_salidas_mostrador",
+      hojas: [
+        {
+          nombre: "Salidas",
+          filas: salidas,
+          columnas: [
+            { header: "Fecha",   valor: (s) => new Date(s.fecha).toLocaleDateString("es-AR") },
+            { header: "Hora",    valor: (s) => new Date(s.fecha).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }) },
+            { header: "Detalle", valor: (s) => resumenLineas(s.detalle).join(" · "), ancho: 45 },
+            { header: "Registró", valor: (s) => s.registradoPor?.nombreUsuario },
+          ],
+        },
+        {
+          nombre: "Líneas",
+          filas: lineas,
+          columnas: [
+            { header: "Fecha",   valor: (f) => new Date(f.s.fecha).toLocaleDateString("es-AR") },
+            { header: "Hora",    valor: (f) => new Date(f.s.fecha).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }) },
+            { header: "Producto", valor: (f) => (f.d.clase === "entero"
+                ? "Entero Cal." + f.d.calibre
+                : (TIPOS_LABEL[f.d.tipo] || f.d.tipo) + (f.d.claseTrozado ? " " + f.d.claseTrozado : "")) },
+            { header: "Clase",   valor: (f) => f.d.clase },
+            { header: "Calibre", valor: (f) => (f.d.clase === "entero" ? f.d.calibre : "") },
+            { header: "Cajones", valor: (f) => (f.d.clase === "entero" ? f.d.cajones ?? 0 : "") },
+            { header: "Cajas",   valor: (f) => (f.d.clase === "trozado" ? f.d.cajas ?? 0 : "") },
+            { header: "Kg",      valor: (f) => (f.d.kg != null ? f.d.kg : "") },
+            { header: "Registró", valor: (f) => f.s.registradoPor?.nombreUsuario },
+          ],
+        },
+      ],
+    });
+  };
+
 
   const cargar = async () => {
     try {
@@ -323,6 +367,11 @@ const SalidaMostradorPage = () => {
                 <button className="btn btn-outline-secondary btn-sm" onClick={cargarSalidas} disabled={loadingSalidas}>
                   <i className="bi bi-arrow-clockwise me-1"></i> Actualizar
                 </button>
+                <BotonExcel
+                  onClick={exportarExcel}
+                  disabled={loadingSalidas || salidas.length === 0}
+                  titulo="Descargar las salidas de esta fecha"
+                />
               </div>
 
               {loadingSalidas ? (
