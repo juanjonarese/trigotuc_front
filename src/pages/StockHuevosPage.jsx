@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
+import BotonExcel from "../components/BotonExcel";
 import {
   obtenerStockHuevosDescarte,
   obtenerSalidasHuevos,
@@ -9,6 +10,7 @@ import {
 } from "../services/api";
 import { formatearFechaLocal, ajustarFechaParaGuardar, obtenerFechaHoy } from "../utils/dateUtils";
 import { formatearNumero, textoDesglose, ORIGEN_DESCARTE } from "../utils/reproductoresUtils";
+import { exportarLibroExcel } from "../utils/exportarExcel";
 import Swal from "sweetalert2";
 
 const ITEMS_POR_PAGINA = 15;
@@ -244,6 +246,41 @@ const StockHuevosPage = () => {
   };
 
   const salidasPagina = salidas.slice((pagina - 1) * ITEMS_POR_PAGINA, pagina * ITEMS_POR_PAGINA);
+  // Excel: las dos tablas de la pantalla en un mismo libro — las partidas que
+  // forman el stock y las salidas que lo descontaron. Separarlas en dos hojas
+  // porque son dos cosas distintas: una es saldo, la otra es movimiento.
+  const exportarExcel = () => exportarLibroExcel({
+    nombreArchivo: "Reproductoras_stock_huevos",
+    hojas: [
+      {
+        nombre: "Stock",
+        filas: stock?.partidas || [],
+        columnas: [
+          { header: "Fecha",       valor: (p) => formatearFechaLocal(p.fecha) },
+          { header: "Origen",      valor: (p) => ORIGEN_DESCARTE[p.origen] || p.etiqueta || p.origen },
+          { header: "Plantel",     valor: (p) => p.numeroLote ?? "" },
+          { header: "Ingresaron",  valor: (p) => p.cantidad ?? 0 },
+          { header: "Disponibles", valor: (p) => p.disponible ?? 0 },
+          { header: "Equivale a",  valor: (p) => textoDesglose(p.disponible) },
+        ],
+      },
+      {
+        nombre: "Salidas",
+        filas: salidas,
+        columnas: [
+          { header: "Salida",        valor: (s) => s.numeroSalida },
+          { header: "Fecha",         valor: (s) => formatearFechaLocal(s.fecha) },
+          { header: "Motivo",        valor: (s) => MOTIVOS[s.motivo]?.label || s.motivo },
+          { header: "Huevos",        valor: (s) => s.huevosTotales ?? 0 },
+          { header: "Maples",        valor: (s) => s.maples ?? 0 },
+          { header: "Anulada",       valor: (s) => (s.anulada ? "Sí" : "") },
+          { header: "Fecha anulación", valor: (s) => (s.fechaAnulada ? formatearFechaLocal(s.fechaAnulada) : "") },
+          { header: "Observaciones", valor: (s) => s.observaciones },
+        ],
+      },
+    ],
+  });
+
 
   return (
     <Layout>
@@ -259,6 +296,11 @@ const StockHuevosPage = () => {
             </p>
           </div>
           <div className="d-flex gap-2">
+            <BotonExcel
+              onClick={exportarExcel}
+              disabled={loading || (!stock?.partidas?.length && !salidas.length)}
+              titulo="Descargar stock y salidas"
+            />
             <button className="btn btn-outline-secondary btn-sm" onClick={cargar} disabled={loading}>
               <i className="bi bi-arrow-clockwise me-1"></i>Actualizar
             </button>

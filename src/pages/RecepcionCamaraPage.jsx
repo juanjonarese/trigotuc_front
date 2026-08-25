@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
+import BotonExcel from "../components/BotonExcel";
 import { obtenerEnviosCamara, recibirEnvioCamara } from "../services/api";
 import Swal from "sweetalert2";
+import { exportarLibroExcel } from "../utils/exportarExcel";
 
 const TIPOS_LABEL = { filet: "Filet", pata: "Pata muslo", alita: "Alita", menudo: "Menudo", carcaza: "Carcaza" };
 const camaraLbl = (c) => (c === "cañete" ? "Cañete" : c === "trigotuc" ? "Trigotuc" : c);
@@ -30,6 +32,40 @@ const RecepcionCamaraPage = () => {
   // Solo los pendientes que entran a Trigotuc (los que recibe granja).
   const pendientes = envios.filter((e) => e.estado === "pendiente" && e.camaraDestino === "trigotuc");
   const recibidos  = envios.filter((e) => e.estado === "recibido" && e.recibidoPor);
+  // Excel: las dos listas de la pantalla — lo que está en camino y lo que ya se
+  // recibió — en dos hojas, porque son dos estados distintos del mismo envío.
+  const columnasEnvio = (conRecepcion) => [
+    { header: "N° Envío",    valor: (e) => e.numeroEnvio },
+    { header: "Fecha",       valor: (e) => fmtFecha(e.fecha) },
+    { header: "Origen",      valor: (e) => camaraLbl(e.camaraOrigen) },
+    { header: "Destino",     valor: (e) => camaraLbl(e.camaraDestino) },
+    { header: "Calibres",    valor: (e) => (e.calibres || [])
+        .map((c) => "Cal." + c.calibre + ": " + c.cajones + " caj").join(" · "), ancho: 36 },
+    { header: "Trozados",    valor: (e) => (e.trozados || [])
+        .map((t) => (TIPOS_LABEL[t.tipo] || t.tipo) + (t.clase ? " " + t.clase : "") + ": " + t.cajas + " cajas").join(" · "), ancho: 36 },
+    { header: "Pollos",      valor: (e) => e.totalPollos ?? 0 },
+    { header: "Cajones",     valor: (e) => e.totalCajones ?? 0 },
+    { header: "Kg enteros",  valor: (e) => e.pesoTotalKg ?? 0 },
+    { header: "Kg trozados", valor: (e) => e.totalKgTrozados ?? 0 },
+    { header: "Camión",      valor: (e) => (e.camion ? e.camion.marca + " " + e.camion.patente : "") },
+    { header: "Chofer",      valor: (e) => e.chofer?.nombreUsuario },
+    ...(conRecepcion
+      ? [
+          { header: "Fecha recepción", valor: (e) => fmtFecha(e.fechaRecepcion) },
+          { header: "Recibido por",    valor: (e) => e.recibidoPor?.nombreUsuario },
+        ]
+      : []),
+    { header: "Observaciones", valor: (e) => e.observaciones },
+  ];
+
+  const exportarExcel = () => exportarLibroExcel({
+    nombreArchivo: "Frigorifico_recepcion_camara",
+    hojas: [
+      { nombre: "Pendientes", filas: pendientes, columnas: columnasEnvio(false) },
+      { nombre: "Recibidos",  filas: recibidos,  columnas: columnasEnvio(true) },
+    ],
+  });
+
 
   const handleRecibir = async (envio) => {
     const confirm = await Swal.fire({
@@ -76,6 +112,12 @@ const RecepcionCamaraPage = () => {
             <i className="bi bi-box-arrow-in-down me-2 text-primary"></i>
             Recepción de Cámara — Trigotuc
           </h1>
+          <BotonExcel
+            onClick={exportarExcel}
+            disabled={loading || (pendientes.length === 0 && recibidos.length === 0)}
+            className="ms-auto"
+            titulo="Descargar pendientes y recibidos"
+          />
         </div>
 
         <div className="alert alert-info py-2 small">

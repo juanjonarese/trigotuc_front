@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
+import BotonExcel from "../components/BotonExcel";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
 import { TrozadoTable, trozadosDesdeLote, trozadosAPayload, trozadoLabel } from "../components/TrozadoTable";
 import {
@@ -11,6 +12,7 @@ import {
 } from "../services/api";
 import { obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
 import { validarDestinoFaena, advertirRestosDeCajon } from "../utils/faenaValidacion";
+import { exportarLibroExcel } from "../utils/exportarExcel";
 import DesgloseFaena from "../components/DesgloseFaena";
 import Swal from "sweetalert2";
 
@@ -348,6 +350,78 @@ const LoteCreatePage = () => {
 
   const totalPaginas  = Math.ceil(lotesFiltrados.length / POR_PAGINA);
   const lotesPagina   = lotesFiltrados.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
+  // Excel: el resultado de faena en tres hojas. Una fila por lote no alcanza —
+  // el resultado ES la composición por calibre y por corte, así que cada una va
+  // en su propia hoja, aplanada para poder hacer tabla dinámica.
+  const exportarFaenaExcel = () => {
+    const calibres = lotesFiltrados.flatMap((l) =>
+      (l.calibres || []).map((c) => ({ lote: l, c }))
+    );
+    const trozados = lotesFiltrados.flatMap((l) =>
+      (l.trozados || []).map((t) => ({ lote: l, t }))
+    );
+
+    exportarLibroExcel({
+      nombreArchivo: "Frigorifico_resultado_faena",
+      hojas: [
+        {
+          nombre: "Lotes",
+          filas: lotesFiltrados,
+          columnas: [
+            { header: "N° Lote",          valor: (l) => l.numeroLote ?? "" },
+            { header: "Fecha",            valor: (l) => new Date(l.fechaIngreso).toLocaleDateString("es-AR") },
+            { header: "Estado",           valor: (l) => (l.estado === "activo" ? "Activo" : "Cerrado") },
+            { header: "Faena parcial",    valor: (l) => (l.faenaParcial ? "Sí" : "") },
+            { header: "Pollos faenados",  valor: (l) => l.unidadesFaenadas ?? 0 },
+            { header: "Kg vivos",         valor: (l) => l.kgVivos ?? 0 },
+            { header: "Kg/pollo vivo",    valor: (l) => (l.unidadesFaenadas > 0
+                ? Math.round((l.kgVivos / l.unidadesFaenadas) * 1000) / 1000 : "") },
+            { header: "Muertos (u)",      valor: (l) => l.muertos || 0 },
+            { header: "Muertos (kg)",     valor: (l) => l.kgMuertos || 0 },
+            { header: "Decomisados (u)",  valor: (l) => l.unidadesDecomisadas || 0 },
+            { header: "Decomisados (kg)", valor: (l) => l.kgDecomisados || 0 },
+            { header: "Trozados (u)",     valor: (l) => l.unidadesTrozadas || 0 },
+            { header: "Trozados (kg)",    valor: (l) => l.kgTrozados || 0 },
+            { header: "Sin faenar (u)",   valor: (l) => l.pollosSinFaenar || 0 },
+            { header: "Cajones enteros",  valor: (l) => (l.calibres || []).reduce((a, c) => a + (c.cajones || 0), 0) },
+            { header: "Kg enteros",       valor: (l) => (l.calibres || []).reduce((a, c) => a + (c.cajones || 0), 0) * 20 },
+            { header: "Kg totales a cámara", valor: (l) =>
+                (l.calibres || []).reduce((a, c) => a + (c.cajones || 0), 0) * 20 +
+                ((l.trozados || []).reduce((a, t) => a + (t.kgTotal || 0), 0) || Number(l.kgTrozados) || 0) },
+            { header: "Rendimiento faena (%)", valor: (l) => (l.rendimientoFaena != null ? l.rendimientoFaena : "") },
+            { header: "Trozados pendientes", valor: (l) => (l.trozadosPendientes?.length ? "Sí" : "") },
+            { header: "Observaciones",    valor: (l) => l.observaciones },
+          ],
+        },
+        {
+          nombre: "Calibres",
+          filas: calibres,
+          columnas: [
+            { header: "N° Lote", valor: (f) => f.lote.numeroLote ?? "" },
+            { header: "Fecha",   valor: (f) => new Date(f.lote.fechaIngreso).toLocaleDateString("es-AR") },
+            { header: "Calibre", valor: (f) => f.c.calibre },
+            { header: "Pollos",  valor: (f) => f.c.pollos ?? 0 },
+            { header: "Cajones", valor: (f) => f.c.cajones ?? 0 },
+            { header: "Kg",      valor: (f) => (f.c.cajones || 0) * 20 },
+          ],
+        },
+        {
+          nombre: "Trozados",
+          filas: trozados,
+          columnas: [
+            { header: "N° Lote",  valor: (f) => f.lote.numeroLote ?? "" },
+            { header: "Fecha",    valor: (f) => new Date(f.lote.fechaIngreso).toLocaleDateString("es-AR") },
+            { header: "Tipo",     valor: (f) => trozadoLabel(f.t.tipo) },
+            { header: "Clase",    valor: (f) => f.t.clase },
+            { header: "Cajas",    valor: (f) => f.t.cajas ?? 0 },
+            { header: "kg/caja",  valor: (f) => f.t.kgCaja ?? 0 },
+            { header: "Kg total", valor: (f) => f.t.kgTotal ?? 0 },
+          ],
+        },
+      ],
+    });
+  };
+
 
   const paginador = totalPaginas > 1 && (
     <div className="d-flex justify-content-center align-items-center gap-2 mt-3">
@@ -378,11 +452,18 @@ const LoteCreatePage = () => {
             <i className="bi bi-box-seam me-2 text-success"></i>
             Lotes de Faena
           </h1>
-          {puedeCrear && (
-            <button className="btn btn-success btn-sm" onClick={() => navigate("/frigorifico/lotes/crear")}>
-              <i className="bi bi-plus-circle me-1"></i>Nuevo Lote
-            </button>
-          )}
+          <div className="d-flex gap-2 align-items-center">
+            <BotonExcel
+              onClick={exportarFaenaExcel}
+              disabled={lotesFiltrados.length === 0}
+              titulo="Descargar el resultado de faena (lotes, calibres y trozados)"
+            />
+            {puedeCrear && (
+              <button className="btn btn-success btn-sm" onClick={() => navigate("/frigorifico/lotes/crear")}>
+                <i className="bi bi-plus-circle me-1"></i>Nuevo Lote
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Pestañas */}

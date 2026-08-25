@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
+import BotonExcel from "../components/BotonExcel";
 import {
   obtenerConstantesReproductores,
   obtenerLotesEnProduccion,
@@ -22,6 +23,7 @@ import {
   textoDesglose,
   nombreGalpon,
 } from "../utils/reproductoresUtils";
+import { exportarTablaExcel } from "../utils/exportarExcel";
 import Swal from "sweetalert2";
 
 const ITEMS_POR_PAGINA = 20;
@@ -470,6 +472,30 @@ const RecoleccionHuevosPage = () => {
   };
 
   const recsPagina = recolecciones.slice((pagina - 1) * ITEMS_POR_PAGINA, pagina * ITEMS_POR_PAGINA);
+  // Excel: el historial entero, no solo la página. Los porcentajes van con el
+  // mismo número que muestra la pantalla (85,3 = 85,3%), no como fracción.
+  const exportarExcel = () => exportarTablaExcel({
+    filas: recolecciones,
+    nombreHoja: "Recolecciones",
+    nombreArchivo: "Reproductoras_recoleccion",
+    columnas: [
+      { header: "Fecha",              valor: (r) => formatearFechaLocal(r.fecha) },
+      { header: "Hora",               valor: (r) => formatearHoraLocal(r.fechaHora || r.createdAt) },
+      { header: "Plantel",            valor: (r) => r.lote?.numeroLote ?? "" },
+      { header: "Galpón",             valor: (r) => r.galpon ?? "" },
+      { header: "Sem. producción",    valor: (r) => r.semanaProduccion ?? "" },
+      { header: "Sem. vida",          valor: (r) => r.semanaVida ?? "" },
+      { header: "Total huevos",       valor: (r) => r.huevosTotales ?? 0 },
+      { header: "Inoculables",        valor: (r) => r.inoculables ?? 0 },
+      { header: "Descarte a venta",   valor: (r) => r.descarte1 ?? 0 },
+      { header: "Descarte pérdida",   valor: (r) => r.descartePerdida || 0 },
+      { header: "Fertilidad (%)",     valor: (r) => r.porcentajeFertilidad ?? "" },
+      { header: "Postura (%)",        valor: (r) => r.porcentajeProduccion ?? "" },
+      { header: "Sin incubar",        valor: (r) => r.inoculablesDisponibles ?? 0 },
+      { header: "Observaciones",      valor: (r) => r.observaciones },
+    ],
+  });
+
 
   return (
     <Layout>
@@ -596,7 +622,14 @@ const RecoleccionHuevosPage = () => {
               </>
             )}
 
-            <h5 className="fw-bold text-secondary mb-3">Historial</h5>
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <h5 className="fw-bold text-secondary mb-0">Historial</h5>
+              <BotonExcel
+                onClick={exportarExcel}
+                disabled={recolecciones.length === 0}
+                titulo="Descargar el historial de recolecciones"
+              />
+            </div>
             {recolecciones.length === 0 ? (
               <div className="card shadow-sm">
                 <div className="card-body text-center py-5 text-muted">

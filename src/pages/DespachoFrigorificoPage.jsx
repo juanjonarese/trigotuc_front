@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { jsPDF } from "jspdf";
 import Layout from "../components/Layout";
+import BotonExcel from "../components/BotonExcel";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
 import {
   obtenerDespachosFrigorifico,
@@ -15,6 +16,7 @@ import {
 import { normalizarWhatsapp } from "../utils/whatsappUtils";
 import { ajustarFechaParaGuardar } from "../utils/dateUtils";
 import Swal from "sweetalert2";
+import { exportarTablaExcel } from "../utils/exportarExcel";
 
 const TIPOS_TROZADO = [
   { tipo: "filet",   label: "Filet"      },
@@ -1135,6 +1137,37 @@ const DespachoFrigorificoPage = () => {
   };
 
   const despachosVisibles = filtro ? despachos.filter((d) => d.estado === filtro) : despachos;
+  // Excel: una fila por orden, con el detalle de calibres y cortes concatenado.
+  const exportarExcel = () => exportarTablaExcel({
+    filas: despachosVisibles,
+    nombreHoja: "Órdenes de carga",
+    nombreArchivo: "Frigorifico_ordenes_carga",
+    columnas: [
+      { header: "N° Orden",      valor: (d) => d.numeroOrden },
+      { header: "Fecha",         valor: (d) => new Date(d.fecha).toLocaleDateString("es-AR") },
+      { header: "Cliente",       valor: (d) => d.cliente?.razonSocial || d.cliente?.nombre },
+      { header: "CUIT",          valor: (d) => d.cliente?.cuit },
+      { header: "Cámara",        valor: (d) => camaraLbl(d.camara) },
+      { header: "Turno",         valor: (d) => d.turno },
+      { header: "Calibres",      valor: (d) => (d.calibres || [])
+          .map((c) => "Cal." + c.calibre + ": " + c.cajones + " caj").join(" · "), ancho: 36 },
+      { header: "Trozados",      valor: (d) => (d.trozados || [])
+          .map((t) => t.tipo + (t.clase ? " " + t.clase : "") + ": " + t.cajas + " cajas").join(" · "), ancho: 36 },
+      { header: "Cajones",       valor: (d) => d.totalCajones ?? 0 },
+      { header: "Kg enteros",    valor: (d) => d.pesoTotalKg ?? 0 },
+      { header: "Kg trozados",   valor: (d) => d.totalKgTrozados ?? 0 },
+      { header: "Modalidad",     valor: (d) => (d.modalidadEntrega === "delivery_chofer" ? "Delivery chofer" : "Retiro cliente") },
+      { header: "Camión",        valor: (d) => (d.camion ? d.camion.marca + " " + d.camion.patente : "") },
+      { header: "Chofer",        valor: (d) => d.chofer?.nombreUsuario },
+      { header: "Código retiro", valor: (d) => d.codigoRetiro },
+      { header: "Liberada",      valor: (d) => (d.liberada ? "Sí" : "") },
+      { header: "Estado",        valor: (d) => (d.estado === "completada" ? "Completada" : "Pendiente") },
+      { header: "Fecha completada", valor: (d) => (d.fechaCompletada ? new Date(d.fechaCompletada).toLocaleDateString("es-AR") : "") },
+      { header: "Completada por", valor: (d) => d.completadoPor?.nombreUsuario },
+      { header: "Observaciones", valor: (d) => d.observaciones },
+    ],
+  });
+
 
   return (
     <Layout>
@@ -1157,6 +1190,11 @@ const DespachoFrigorificoPage = () => {
                 {l}
               </button>
             ))}
+            <BotonExcel
+              onClick={exportarExcel}
+              disabled={despachosVisibles.length === 0}
+              titulo="Descargar órdenes (según el filtro de estado)"
+            />
             {esAdmin && (
               <button className="btn btn-success btn-sm" onClick={() => setModalAbierto(true)}>
                 <i className="bi bi-plus-circle me-1"></i>Nueva orden

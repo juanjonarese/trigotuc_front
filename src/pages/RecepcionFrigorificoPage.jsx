@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Layout from "../components/Layout";
+import BotonExcel from "../components/BotonExcel";
 import Pagination from "../components/Pagination";
 import { escapeHtml } from "../utils/escapeHtml";
 import {
@@ -17,6 +18,7 @@ import {
 import { imprimirOrdenEnvio } from "../utils/imprimirOrdenEnvio";
 import EditarEnvioModal from "../components/EditarEnvioModal";
 import Swal from "sweetalert2";
+import { exportarTablaExcel } from "../utils/exportarExcel";
 
 const TIPOS_TROZADO = [
   { tipo: "filet",   label: "Filet"      },
@@ -31,6 +33,13 @@ const ITEMS_POR_PAGINA = 50;
 const fmt       = (n) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n ?? 0);
 const fmtFecha  = (f) => f ? new Date(f).toLocaleDateString("es-AR") : "—";
 const camaraLbl = (v) => v === "cañete" ? "Cañete" : v === "trigotuc" ? "Trigotuc" : v;
+
+// Calibres y cortes de un envío en una sola línea, para que entren en una celda.
+const detalleCalibresTxt = (e) => (e.calibres || [])
+  .map((c) => "Cal." + c.calibre + ": " + c.cajones + " caj").join(" · ");
+const detalleTrozadosTxt = (e) => (e.trozados || [])
+  .map((t) => t.tipo + (t.clase ? " " + t.clase : "") + ": " + t.cajas + " cajas").join(" · ");
+
 const tipoLbl   = (tipo) => TIPOS_TROZADO.find((x) => x.tipo === tipo)?.label || tipo;
 
 // El trozado se carga y se descuenta POR CLASE (A/B), así que una orden puede traer
@@ -560,6 +569,54 @@ const RecepcionFrigorificoPage = () => {
   const enviosAPrepararCount = envios.filter(
     (e) => e.camaraOrigen === "cañete" && e.camaraDestino === "trigotuc" && e.estado === "pendiente" && !e.preparado
   ).length;
+  // Excel: cada solapa exporta su propia lista, ya filtrada por estado y búsqueda.
+  const exportarDespachosExcel = () => exportarTablaExcel({
+    filas: despachosVisibles,
+    nombreHoja: "Órdenes de clientes",
+    nombreArchivo: "Frigorifico_recepcion_clientes",
+    columnas: [
+      { header: "N° Orden",      valor: (d) => d.numeroOrden },
+      { header: "Fecha",         valor: (d) => new Date(d.fecha).toLocaleDateString("es-AR") },
+      { header: "Cliente",       valor: (d) => d.cliente?.razonSocial || d.cliente?.nombre },
+      { header: "Cámara",        valor: (d) => camaraLbl(d.camara) },
+      { header: "Turno",         valor: (d) => d.turno },
+      { header: "Calibres",      valor: (d) => detalleCalibresTxt(d), ancho: 36 },
+      { header: "Trozados",      valor: (d) => detalleTrozadosTxt(d), ancho: 36 },
+      { header: "Cajones",       valor: (d) => d.totalCajones ?? 0 },
+      { header: "Kg enteros",    valor: (d) => d.pesoTotalKg ?? 0 },
+      { header: "Kg trozados",   valor: (d) => d.totalKgTrozados ?? 0 },
+      { header: "Modalidad",     valor: (d) => (d.modalidadEntrega === "delivery_chofer" ? "Delivery chofer" : "Retiro cliente") },
+      { header: "Estado",        valor: (d) => (d.estado === "completada" ? "Completada" : "Pendiente") },
+      { header: "Fecha completada", valor: (d) => (d.fechaCompletada ? new Date(d.fechaCompletada).toLocaleDateString("es-AR") : "") },
+      { header: "Completada por", valor: (d) => d.completadoPor?.nombreUsuario },
+      { header: "Observaciones", valor: (d) => d.observaciones },
+    ],
+  });
+
+  const exportarEnviosExcel = () => exportarTablaExcel({
+    filas: enviosVisibles,
+    nombreHoja: "Envíos a preparar",
+    nombreArchivo: "Frigorifico_recepcion_camaras",
+    columnas: [
+      { header: "N° Envío",     valor: (e) => e.numeroEnvio },
+      { header: "Fecha",        valor: (e) => new Date(e.fecha).toLocaleDateString("es-AR") },
+      { header: "Origen",       valor: (e) => camaraLbl(e.camaraOrigen) },
+      { header: "Destino",      valor: (e) => camaraLbl(e.camaraDestino) },
+      { header: "Camión",       valor: (e) => (e.camion ? e.camion.marca + " " + e.camion.patente : "") },
+      { header: "Chofer",       valor: (e) => e.chofer?.nombreUsuario },
+      { header: "Calibres",     valor: (e) => detalleCalibresTxt(e), ancho: 36 },
+      { header: "Trozados",     valor: (e) => detalleTrozadosTxt(e), ancho: 36 },
+      { header: "Pollos",       valor: (e) => e.totalPollos ?? 0 },
+      { header: "Cajones",      valor: (e) => e.totalCajones ?? 0 },
+      { header: "Kg enteros",   valor: (e) => e.pesoTotalKg ?? 0 },
+      { header: "Kg trozados",  valor: (e) => e.totalKgTrozados ?? 0 },
+      { header: "Preparado",    valor: (e) => (e.preparado ? "Sí" : "") },
+      { header: "Fecha preparación", valor: (e) => (e.fechaPreparacion ? new Date(e.fechaPreparacion).toLocaleDateString("es-AR") : "") },
+      { header: "Estado",       valor: (e) => (e.estado === "recibido" ? "Recibido" : "Pendiente") },
+      { header: "Observaciones", valor: (e) => e.observaciones },
+    ],
+  });
+
 
   return (
     <Layout>
@@ -571,7 +628,14 @@ const RecepcionFrigorificoPage = () => {
             <i className="bi bi-box-arrow-in-down me-2 text-success"></i>
             Recepción de Órdenes
           </h1>
-          <div className="d-flex gap-2">
+          <div className="d-flex gap-2 align-items-center">
+            <BotonExcel
+              onClick={tab === "clientes" ? exportarDespachosExcel : exportarEnviosExcel}
+              disabled={tab === "clientes" ? despachosVisibles.length === 0 : enviosVisibles.length === 0}
+              titulo={tab === "clientes"
+                ? "Descargar órdenes de clientes (según filtros)"
+                : "Descargar envíos entre cámaras (según filtros)"}
+            />
             {["pendiente", "completada", ""].map((e) => (
               <button key={e}
                 className={`btn btn-sm ${filtroEstado === e ? "btn-dark" : "btn-outline-secondary"}`}

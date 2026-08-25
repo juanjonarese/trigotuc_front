@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Layout from "../components/Layout";
+import BotonExcel from "../components/BotonExcel";
 import {
   obtenerLotesGranja,
   obtenerOrdenesCarga,
@@ -9,6 +10,7 @@ import {
   eliminarOrdenCarga,
 } from "../services/api";
 import { formatearFechaLocal, ajustarFechaParaGuardar, obtenerFechaHoy } from "../utils/dateUtils";
+import { exportarTablaExcel } from "../utils/exportarExcel";
 import Swal from "sweetalert2";
 
 const GRANJAS = [
@@ -710,16 +712,57 @@ const PedidosGranjaPage = () => {
     : pedidos;
 
   const pendientesCount = pedidos.filter((p) => p.estado === "pendiente" || p.estado === "enviada").length;
+  // Excel: los pedidos del filtro de estado activo, con lo pedido y lo recibido
+  // en la misma fila para poder ver las diferencias de un vistazo.
+  const exportarPedidosExcel = () => exportarTablaExcel({
+    filas: pedidosFiltrados,
+    nombreHoja: "Pedidos a granja",
+    nombreArchivo: "Frigorifico_pedidos_granja",
+    columnas: [
+      { header: "N° Pedido",       valor: (o) => o.numero },
+      { header: "Granja",          valor: (o) => (o.granja === "cañete" ? "Cañete" : "Los Pinos") },
+      { header: "Galpón",          valor: (o) => (o.galpon ? (o.granja === "cañete" ? "C" : "P") + o.galpon : "") },
+      { header: "Fecha pedido",    valor: (o) => formatearFechaLocal(o.fechaEmision) },
+      { header: "Turno",           valor: (o) => o.turno },
+      { header: "Cant. pedida",    valor: (o) => o.cantidadEstimada ?? 0 },
+      { header: "Cant. recibida",  valor: (o) => (o.cantidadReal != null ? o.cantidadReal : "") },
+      { header: "Dif. unidades",   valor: (o) => (o.cantidadReal != null
+          ? (o.diferenciaCantidad ?? (o.cantidadReal - o.cantidadEstimada)) : "") },
+      { header: "Kg pedidos",      valor: (o) => o.pesoEstimadoKg ?? 0 },
+      { header: "Kg recibidos",    valor: (o) => (o.pesoRealKg != null ? o.pesoRealKg : "") },
+      { header: "Dif. kg",         valor: (o) => (o.pesoRealKg != null
+          ? (o.diferenciaKg ?? (o.pesoRealKg - o.pesoEstimadoKg)) : "") },
+      { header: "Fecha recepción", valor: (o) => (o.fechaEntrega ? formatearFechaLocal(o.fechaEntrega) : "") },
+      { header: "Estado",          valor: (o) => (o.estado === "entregada" ? "Entregada"
+          : o.estado === "enviada" ? "En camino" : "Pendiente") },
+      { header: "Faena pendiente", valor: (o) => (o.faenaPendiente ? "Sí" : "") },
+      { header: "Motivo de la diferencia", valor: (o) => o.observacionesEntrega },
+      { header: "Observaciones",   valor: (o) => o.observaciones },
+      { header: "Registrado por",  valor: (o) => o.registradoPor?.nombreUsuario },
+    ],
+  });
+
 
   return (
     <Layout>
       <div className="container-fluid">
 
         {/* Encabezado */}
-        <h1 className="h3 mb-3">
-          <i className="bi bi-clipboard2-check me-2 text-success"></i>
-          Pedidos a Granja
-        </h1>
+        <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+          <h1 className="h3 mb-0">
+            <i className="bi bi-clipboard2-check me-2 text-success"></i>
+            Pedidos a Granja
+          </h1>
+          {/* Solo en "Mis Pedidos": es la solapa que tiene una lista que exportar.
+              La de Granja son tarjetas de galpones, que ya se bajan desde Granja. */}
+          {tab === "pedidos" && (
+            <BotonExcel
+              onClick={exportarPedidosExcel}
+              disabled={pedidosFiltrados.length === 0}
+              titulo="Descargar pedidos (según el filtro de estado)"
+            />
+          )}
+        </div>
 
         {/* Solapas */}
         <ul className="nav nav-tabs mb-4">

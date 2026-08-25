@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
+import BotonExcel from "../components/BotonExcel";
 import {
   obtenerLotesGranja,
   actualizarLoteGranja,
@@ -12,6 +13,7 @@ import {
   obtenerConfigGalpones,
 } from "../services/api";
 import { formatearFechaLocal, ajustarFechaParaGuardar, obtenerFechaHoy } from "../utils/dateUtils";
+import { exportarTablaExcel } from "../utils/exportarExcel";
 import Swal from "sweetalert2";
 
 const GALPONES        = { cañete: 6, los_pinos: 8 };
@@ -604,6 +606,45 @@ const GranjaLoteNuevoPage = () => {
     ? GRANJA_OPTS.find((g) => g.value === filtroGranja)?.galpones || 8
     : 8;
 
+  // Excel: exporta lo que se está viendo — los envíos pendientes en una solapa,
+  // los lotes ya filtrados en la otra (todos, no solo la página de la grilla).
+  const exportarEnviosExcel = () => exportarTablaExcel({
+    filas: pedidosPendientes,
+    nombreHoja: "Envíos pendientes",
+    nombreArchivo: "Ingreso_pollitos_envios",
+    columnas: [
+      { header: "Granja",           valor: (p) => GRANJAS_LABEL[p.granja] || p.granja },
+      { header: "Galpón",           valor: (p) => `${GRANJAS_PREFIX[p.granja] || ""}${p.galpon}` },
+      { header: "Fecha ingreso",    valor: (p) => formatearFechaLocal(p.fechaIngreso) },
+      { header: "Cantidad enviada", valor: (p) => p.cantidadEnviada ?? 0 },
+      { header: "Proveedor",        valor: (p) => p.proveedor },
+      { header: "Observaciones",    valor: (p) => p.observaciones },
+      { header: "Creado por",       valor: (p) => p.creadoPor?.nombreUsuario },
+      { header: "Creado el",        valor: (p) => formatearFechaLocal(p.createdAt) },
+    ],
+  });
+
+  const exportarCrianzaExcel = () => exportarTablaExcel({
+    filas: lotesFiltrados,
+    nombreHoja: "En crianza",
+    nombreArchivo: "Ingreso_pollitos_lotes",
+    columnas: [
+      { header: "N° Lote",         valor: (l) => l.numeroLote ?? "" },
+      { header: "Granja",          valor: (l) => GRANJAS_LABEL[l.granja] || l.granja },
+      { header: "Galpón",          valor: (l) => `${GRANJAS_PREFIX[l.granja] || ""}${l.galpon}` },
+      { header: "Fecha ingreso",   valor: (l) => formatearFechaLocal(l.fechaIngreso) },
+      { header: "Enviados",        valor: (l) => l.cantidadIngreso ?? 0 },
+      { header: "Bajas ingreso",   valor: (l) => l.bajasIngreso || 0 },
+      { header: "Ingresados",      valor: (l) => (l.cantidadIngreso || 0) - (l.bajasIngreso || 0) },
+      { header: "Motivo bajas",    valor: (l) => l.motivoBajas },
+      { header: "Pollos actuales", valor: (l) => l.cantidadActual ?? 0 },
+      { header: "Estado",          valor: (l) => (estaEnCrianza(l) ? "En crianza" : "Finalizado") },
+      { header: "Proveedor",       valor: (l) => l.proveedor },
+      { header: "Registrado por",  valor: (l) => l.registradoPor?.nombreUsuario },
+    ],
+  });
+
+
   return (
     <Layout>
       <div className="container-fluid">
@@ -614,11 +655,18 @@ const GranjaLoteNuevoPage = () => {
             <i className="bi bi-box-seam me-2 text-success"></i>
             Ingreso de Pollitos
           </h1>
-          {puedeCrear && (
-            <button className="btn btn-success btn-sm" onClick={() => setShowNuevo(true)}>
-              <i className="bi bi-plus-circle me-1"></i>Nuevo ingreso
-            </button>
-          )}
+          <div className="d-flex gap-2">
+            <BotonExcel
+              onClick={tab === "envios" ? exportarEnviosExcel : exportarCrianzaExcel}
+              disabled={tab === "envios" ? pedidosPendientes.length === 0 : lotesFiltrados.length === 0}
+              titulo={tab === "envios" ? "Descargar envíos pendientes" : "Descargar lotes (según filtros)"}
+            />
+            {puedeCrear && (
+              <button className="btn btn-success btn-sm" onClick={() => setShowNuevo(true)}>
+                <i className="bi bi-plus-circle me-1"></i>Nuevo ingreso
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Solapas */}

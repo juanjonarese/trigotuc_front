@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { jsPDF } from "jspdf";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
+import BotonExcel from "../components/BotonExcel";
 import {
   obtenerOrdenesCarga,
   crearOrdenCarga,
@@ -11,6 +12,7 @@ import {
   obtenerLotesGranja,
 } from "../services/api";
 import { formatearFechaLocal, obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
+import { exportarTablaExcel } from "../utils/exportarExcel";
 import { normalizarWhatsapp } from "../utils/whatsappUtils";
 import Swal from "sweetalert2";
 
@@ -821,6 +823,34 @@ const OrdenCargaListPage = () => {
       .catch(console.error);
   }, []);
 
+  // Excel: una fila por orden, con lo que se está viendo (respeta el filtro de estado).
+  const exportarExcel = () => exportarTablaExcel({
+    filas: ordenes,
+    nombreHoja: "Órdenes de carga",
+    nombreArchivo: "Ordenes_de_carga",
+    columnas: [
+      { header: "N° Orden",       valor: (o) => o.numero },
+      { header: "Cliente",        valor: (o) => o.cliente?.razonSocial || o.cliente?.nombre },
+      { header: "CUIT",           valor: (o) => o.cliente?.cuit },
+      { header: "Granja",         valor: (o) => (o.granja === "cañete" ? "Cañete" : "Los Pinos") },
+      { header: "Galpón",         valor: (o) => o.galpon ?? "" },
+      { header: "Fecha emisión",  valor: (o) => formatearFechaLocal(o.fechaEmision) },
+      { header: "Turno",          valor: (o) => o.turno },
+      { header: "Cant. estimada", valor: (o) => o.cantidadEstimada ?? 0 },
+      { header: "Peso est. (kg)", valor: (o) => o.pesoEstimadoKg ?? 0 },
+      { header: "Cant. real",     valor: (o) => (o.cantidadReal != null ? o.cantidadReal : "") },
+      { header: "Peso real (kg)", valor: (o) => (o.pesoRealKg != null ? o.pesoRealKg : "") },
+      { header: "Dif. cantidad",  valor: (o) => (o.diferenciaCantidad != null ? o.diferenciaCantidad : "") },
+      { header: "Dif. kg",        valor: (o) => (o.diferenciaKg != null ? o.diferenciaKg : "") },
+      { header: "Alerta dif.",    valor: (o) => (tieneDiferencia(o) ? "Sí" : "") },
+      { header: "Estado",         valor: (o) => (o.estado === "entregada" ? "Entregada" : "Pendiente") },
+      { header: "Fecha entrega",  valor: (o) => (o.fechaEntrega ? formatearFechaLocal(o.fechaEntrega) : "") },
+      { header: "Observaciones",  valor: (o) => o.observaciones },
+      { header: "Registrado por", valor: (o) => o.registradoPor?.nombreUsuario },
+    ],
+  });
+
+
   const handleEliminar = async (orden) => {
     const ok = await Swal.fire({
       title: `¿Eliminar orden ${orden.numero}?`,
@@ -846,11 +876,18 @@ const OrdenCargaListPage = () => {
             <i className="bi bi-file-earmark-text me-2 text-success"></i>
             Órdenes de Carga
           </h1>
-          {puedeCrear && (
-            <button className="btn btn-success" onClick={() => setShowModal(true)}>
-              <i className="bi bi-plus-circle me-1"></i>Nueva orden
-            </button>
-          )}
+          <div className="d-flex align-items-center gap-2">
+            <BotonExcel
+              onClick={exportarExcel}
+              disabled={ordenes.length === 0}
+              titulo="Descargar órdenes (según filtro de estado)"
+            />
+            {puedeCrear && (
+              <button className="btn btn-success" onClick={() => setShowModal(true)}>
+                <i className="bi bi-plus-circle me-1"></i>Nueva orden
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Filtro estado */}

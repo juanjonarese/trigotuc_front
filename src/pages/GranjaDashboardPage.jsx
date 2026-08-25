@@ -2,11 +2,13 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import * as XLSX from "xlsx";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
+import BotonExcel from "../components/BotonExcel";
 import { escapeHtml } from "../utils/escapeHtml";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
 import DesgloseFaena from "../components/DesgloseFaena";
 import { obtenerResumenStock, obtenerLotes, eliminarLote, actualizarLote, obtenerMovimientosCamara } from "../services/api";
 import Swal from "sweetalert2";
+import { exportarTablaExcel } from "../utils/exportarExcel";
 
 const fmtNum = (n) =>
   n != null ? new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n) : "—";
@@ -234,6 +236,44 @@ const GranjaDashboardPage = () => {
     setMostrarHistorial(abrir);
     if (abrir) cargarHistorial();
   };
+  // Excel: el historial de movimientos tal cual la tabla, con el detalle de
+  // líneas concatenado en una columna (cada movimiento puede tener varias).
+  const exportarHistorialExcel = () => {
+    const OP_LABEL = {
+      faena: "Faena (ingreso)", venta_pos: "Venta POS", venta_mostrador: "Venta mostrador",
+      despacho: "Despacho", envio_camara: "Envío entre cámaras", ajuste_manual: "Ajuste manual",
+    };
+    const TIPOS = { filet: "Filet", pata: "Pata muslo", alita: "Alita", menudo: "Menudo", carcaza: "Carcaza" };
+    const detalleTxt = (m) => (m.detalle || []).map((d) =>
+      d.clase === "entero"
+        ? "Cal." + d.calibre + ": " + d.cajones + " caj"
+        : (TIPOS[d.tipo] || d.tipo) + ": " + d.cajas + " cajas"
+    ).join(" · ");
+
+    exportarTablaExcel({
+      filas: historial,
+      nombreHoja: "Movimientos de stock",
+      nombreArchivo: "Frigorifico_historial_stock",
+      columnas: [
+        { header: "Fecha",     valor: (m) => new Date(m.fecha).toLocaleString("es-AR") },
+        { header: "Origen",    valor: (m) => (m.origen === "dropbox" ? "POS (histórico)" : "Usuario") },
+        { header: "Tipo",      valor: (m) => m.tipo },
+        { header: "Operación", valor: (m) => OP_LABEL[m.operacion] || m.operacion },
+        { header: "Cámara",    valor: (m) => m.camara },
+        { header: "Cámara destino", valor: (m) => m.camaraDestino },
+        { header: "Producto",  valor: (m) => m.producto },
+        { header: "Detalle",   valor: (m) => detalleTxt(m), ancho: 40 },
+        { header: "Referencia", valor: (m) => {
+            const r = m.referencia || {};
+            return [r.numeroLote != null ? "Lote #" + r.numeroLote : null, r.numeroEnvio, r.ticket]
+              .filter(Boolean).join(" · ");
+          } },
+        { header: "Usuario",       valor: (m) => m.registradoPorNombre || m.registradoPor?.nombreUsuario },
+        { header: "Observaciones", valor: (m) => m.observaciones },
+      ],
+    });
+  };
+
 
   const cambiarFiltroOrigen = (origen) => {
     setFiltroOrigen(origen);
@@ -661,6 +701,13 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
                   <option value="">Todos los orígenes</option>
                   <option value="usuario">Usuario (app)</option>
                 </select>
+              )}
+              {mostrarHistorial && (
+                <BotonExcel
+                  onClick={exportarHistorialExcel}
+                  disabled={historial.length === 0}
+                  titulo="Descargar el historial de movimientos"
+                />
               )}
               <button className="btn btn-outline-secondary btn-sm" onClick={toggleHistorial}>
                 {mostrarHistorial ? "Ocultar" : "Ver historial"}
