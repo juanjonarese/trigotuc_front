@@ -49,7 +49,8 @@ There are no automated tests.
 | `/reproductores/galpones` | `ReproductoresLotesPage` | Reproductores |
 | `/reproductores/galpones/nuevo` | `ReproductorLoteNuevoPage` (ingreso de lote) | Reproductores |
 | `/reproductores/datos-semanales` | `ReproductoresDatosPage` (mortandad/peso por sexo) | Reproductores |
-| `/reproductores/recoleccion` | `RecoleccionHuevosPage` | Reproductores |
+| `/reproductores/recoleccion` | `RecoleccionHuevosPage` (clasifica en 4 tipos; queda en la granja) | Reproductores |
+| `/reproductores/remitos` | `RemitosHuevosPage` (envío granja → Trigotuc) | Reproductores |
 | `/reproductores/incubadora` | `IncubadoraPage` (incubadora + nacedora + nacimientos) | Reproductores |
 | `/reproductores/ventas-huevos` | `VentaHuevosPage` | Reproductores |
 | `/reproductores/ventas-pollitos` | `VentaPollitosPage` | Reproductores |
@@ -89,7 +90,7 @@ Secciones colapsables, fondo oscuro, auto-expande según la ruta activa. Visibil
 - **Granja** (colapsable) — `superadmin` / `administracion_granja` / `granja`:
   - Ingreso de pollitos, Galpones, Datos Semanales (solo `superadmin`/`granja`), Órdenes de Carga (Venta) (solo `superadmin`/`administracion_granja`), Recepción de Órdenes.
 - **Reproductores** (colapsable) — solo `superadmin` por ahora (hasta definir los roles del módulo):
-  - Ingreso de Lote, Galpones, Datos Semanales, Recolección de Huevos, Incubadora, Reserva de Pollitos.
+  - Ingreso de Lote, Galpones, Datos Semanales, Recolección de Huevos, Remitos de Huevos, Incubadora, Reserva de Pollitos.
   - **Venta de Huevos** y **Venta de Pollitos** están comentadas (sidebar + rutas en
     `App.jsx`): el cliente no las va a usar por ahora. Las páginas siguen en `src/pages/`.
   - No hay ítem "Nacimientos": `IncubadoraPage` cubre todo el ciclo (tarjetas de

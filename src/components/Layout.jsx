@@ -338,7 +338,16 @@ const Layout = ({ children }) => {
                   <i className="bi bi-basket"></i>
                   <span>Recolección de Huevos</span>
                 </a>
-                {/* 5 — Incubadora */}
+                {/* 5 — Remitos de huevos: granja → Trigotuc */}
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/remitos") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/remitos"); }}
+                >
+                  <i className="bi bi-truck"></i>
+                  <span>Remitos de Huevos</span>
+                </a>
+                {/* 6 — Incubadora */}
                 <a
                   href="#"
                   className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/incubadora") ? "text-white" : "text-white-50"}`}
@@ -347,7 +356,7 @@ const Layout = ({ children }) => {
                   <i className="bi bi-thermometer-half"></i>
                   <span>Incubadora</span>
                 </a>
-                {/* 6 — Reserva de Pollitos (reparto por tanda, antes de que nazcan) */}
+                {/* 7 — Reserva de Pollitos (reparto por tanda, antes de que nazcan) */}
                 <a
                   href="#"
                   className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/reserva-pollitos") ? "text-white" : "text-white-50"}`}
@@ -356,7 +365,7 @@ const Layout = ({ children }) => {
                   <i className="bi bi-graph-up-arrow"></i>
                   <span>Proyección</span>
                 </a>
-                {/* 7 — Asignaciones: lo que ya tiene destino (clientes y galpones) */}
+                {/* 8 — Asignaciones: lo que ya tiene destino (clientes y galpones) */}
                 <a
                   href="#"
                   className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/asignaciones") ? "text-white" : "text-white-50"}`}

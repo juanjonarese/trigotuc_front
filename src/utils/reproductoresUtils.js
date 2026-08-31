@@ -44,6 +44,32 @@ export const textoDesglose = (huevos, huevosPorCajon, huevosPorBandeja) => {
 
 export const SECTOR_LABEL = { recria: "Recría", postura: "Postura" };
 
+// ── Tipos de huevo ──────────────────────────────────────────────────────────
+// Los cuatro tipos que se clasifican en el galpón y viajan en el remito a
+// Trigotuc. Las claves son las de recoleccion.tipos y remito.lineas[].tipo —
+// espejo de utils/reproductores.js en el backend, no cambiar de un lado solo.
+// El huevo roto no es un tipo: se tira en la granja (descartePerdida).
+export const TIPOS_HUEVO = [
+  { key: "api",       label: "API",        corto: "API",   ayuda: "Incubable — es el único que entra a la incubadora", clase: "text-success",       icono: "bi-thermometer-half" },
+  { key: "dobleYema", label: "Doble yema", corto: "D.yema", ayuda: "No incubable, va a venta",                          clase: "text-warning",       icono: "bi-egg-fried" },
+  { key: "regular",   label: "Regular",    corto: "Reg.",   ayuda: "No incubable, va a venta",                          clase: "text-primary",       icono: "bi-egg" },
+  { key: "bebe",      label: "Huevo bebé", corto: "Bebé",   ayuda: "No incubable, va a venta",                          clase: "text-info",          icono: "bi-egg-fill" },
+];
+
+export const TIPOS_HUEVO_KEYS = TIPOS_HUEVO.map((t) => t.key);
+export const TIPO_HUEVO_INCUBABLE = "api";
+
+export const etiquetaTipoHuevo = (key) =>
+  TIPOS_HUEVO.find((t) => t.key === key)?.label || key;
+
+/** { api: 0, dobleYema: 0, regular: 0, bebe: 0 } */
+export const tiposHuevoEnCero = () =>
+  TIPOS_HUEVO_KEYS.reduce((acc, k) => ({ ...acc, [k]: 0 }), {});
+
+/** Suma de un objeto por tipo, tolerando campos vacíos. */
+export const sumarTiposHuevo = (porTipo = {}) =>
+  TIPOS_HUEVO_KEYS.reduce((acc, k) => acc + (Number(porTipo[k]) || 0), 0);
+
 export const ESTADO_LOTE = {
   recria:     { label: "En recría",  clase: "bg-info text-dark" },
   postura:    { label: "En postura", clase: "bg-success" },
