@@ -320,6 +320,7 @@ const PersonalPage = () => {
                             usuario.rolUsuario === 'administracion_granja' ? 'bg-success-subtle text-success' :
                             usuario.rolUsuario === 'frigorifico' ? 'bg-info text-dark' :
                             usuario.rolUsuario === 'granja' ? 'bg-success' :
+                            usuario.rolUsuario === 'reproductoras' ? 'bg-warning text-dark' :
                             usuario.rolUsuario === 'chofer' ? 'bg-dark' :
                             'bg-secondary'
                           }`}>
@@ -353,6 +354,7 @@ const PersonalPage = () => {
                                 usuario.rolUsuario === 'administracion_granja' ? 'bg-success-subtle text-success' :
                                 usuario.rolUsuario === 'frigorifico' ? 'bg-info text-dark' :
                                 usuario.rolUsuario === 'granja' ? 'bg-success' :
+                                usuario.rolUsuario === 'reproductoras' ? 'bg-warning text-dark' :
                                 usuario.rolUsuario === 'chofer' ? 'bg-dark' :
                                 'bg-secondary'
                               }`}>
@@ -610,6 +612,7 @@ const PersonalPage = () => {
                             <option value="administracion_granja">Administración Granja (Clientes, camiones, granja)</option>
                             <option value="frigorifico">Frigorífico (Lotes y envíos cámara)</option>
                             <option value="granja">Granja (Ingreso pollitos, galpones, datos semanales)</option>
+                            <option value="reproductoras">Reproductoras (Planteles, recolección, remitos, incubadora)</option>
                             <option value="chofer">Chofer (Carga y entrega de pedidos)</option>
                             <option value="superadmin">Super Admin (Acceso total)</option>
                           </select>

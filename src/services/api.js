@@ -802,6 +802,13 @@ export const crearLoteReproductor = async (data) => {
   return handleResponse(response);
 };
 
+export const actualizarLoteReproductor = async (id, data) => {
+  const response = await fetch(`${API_URL}/lotes-reproductores/${id}`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
 export const mudarLoteAPostura = async (id, data) => {
   const response = await fetch(`${API_URL}/lotes-reproductores/${id}/mudar-postura`, {
     method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
@@ -867,8 +874,18 @@ export const obtenerRecoleccionesHuevos = async (filtros = {}) => {
   return handleResponse(response);
 };
 
+// Huevos API que ya están en Trigotuc, listos para incubar. Lo que sigue en la
+// granja no entra acá: primero tiene que llegar con un remito.
 export const obtenerStockIncubable = async () => {
-  const response = await fetch(`${API_URL}/recolecciones-huevos/stock-incubable`, {
+  const response = await fetch(`${API_URL}/incubacion/stock-incubable`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+// Lo recolectado que todavía está en la granja, sin remitir, por plantel y tipo.
+export const obtenerStockGranja = async () => {
+  const response = await fetch(`${API_URL}/recolecciones-huevos/stock-granja`, {
     headers: getAuthHeaders(),
   });
   return handleResponse(response);
@@ -900,6 +917,45 @@ export const editarRecoleccionHuevos = async (id, data) => {
 export const eliminarRecoleccionHuevos = async (id) => {
   const response = await fetch(`${API_URL}/recolecciones-huevos/${id}`, {
     method: "DELETE", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+// ── Remitos de huevos (granja → Trigotuc) ──
+// Lo recolectado queda en stock en la granja; el remito es lo que lo mueve a
+// Trigotuc. El número lo carga el usuario, del talonario de papel.
+export const obtenerRemitosHuevos = async (filtros = {}) => {
+  const response = await fetch(`${API_URL}/remitos-huevos${buildQuery(filtros)}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const obtenerRemitoHuevosPorId = async (id) => {
+  const response = await fetch(`${API_URL}/remitos-huevos/${id}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const obtenerStockTrigotuc = async () => {
+  const response = await fetch(`${API_URL}/remitos-huevos/stock-trigotuc`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const crearRemitoHuevos = async (data) => {
+  const response = await fetch(`${API_URL}/remitos-huevos`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+// El remito no se edita: se anula y se vuelve a cargar, como el papel.
+export const anularRemitoHuevos = async (id, motivo) => {
+  const response = await fetch(`${API_URL}/remitos-huevos/${id}/anular`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify({ motivo }),
   });
   return handleResponse(response);
 };

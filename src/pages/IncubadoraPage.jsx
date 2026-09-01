@@ -70,7 +70,8 @@ const CargarTandaModal = ({ stock, estado, constantes, onClose, onHecho }) => {
       Swal.fire(
         "Stock insuficiente",
         `Entre lo que va a la incubadora y el descarte se sacan ${formatearNumero(huevos)} huevos del ` +
-          `plantel, y tiene ${formatearNumero(entrada.huevosDisponibles)} incubables disponibles.`,
+          `plantel, y tiene ${formatearNumero(entrada.huevosDisponibles)} huevos API en Trigotuc. ` +
+          `Si los huevos están en la granja, cargá primero el remito.`,
         "warning"
       );
       return;
@@ -142,8 +143,9 @@ const CargarTandaModal = ({ stock, estado, constantes, onClose, onHecho }) => {
 
                 <div className="alert alert-light border small mb-3">
                   <i className="bi bi-info-circle me-1"></i>
-                  La tanda es de un <strong>solo plantel</strong>. Se consumen los huevos incubables
-                  más viejos primero (FIFO). A los {constantes?.diasIncubacion ?? 18} días se
+                  La tanda es de un <strong>solo plantel</strong>. Solo se puede incubar el huevo
+                  API que ya <strong>llegó a Trigotuc</strong> con un remito; se consumen los más
+                  viejos primero (FIFO). A los {constantes?.diasIncubacion ?? 18} días se
                   transfieren a la nacedora.
                 </div>
 
@@ -170,7 +172,7 @@ const CargarTandaModal = ({ stock, estado, constantes, onClose, onHecho }) => {
                       </thead>
                       <tbody>
                         {entrada.partidas.map((p) => (
-                          <tr key={p.recoleccion}>
+                          <tr key={p.stockHuevo || p.recoleccion}>
                             <td className="small">{formatearFechaLocal(p.fecha)}</td>
                             <td className="small text-end">{formatearNumero(p.disponibles)}</td>
                           </tr>

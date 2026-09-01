@@ -7,10 +7,11 @@ import {
   obtenerConstantesReproductores,
   obtenerLotesReproductores,
   crearLoteReproductor,
+  actualizarLoteReproductor,
   eliminarLoteReproductor,
 } from "../services/api";
 import { formatearFechaLocal, ajustarFechaParaGuardar, obtenerFechaHoy } from "../utils/dateUtils";
-import { formatearNumero, ESTADO_LOTE, nombreGalpon } from "../utils/reproductoresUtils";
+import { formatearNumero, ESTADO_LOTE, SECTOR_LABEL, nombreGalpon } from "../utils/reproductoresUtils";
 import { exportarTablaExcel } from "../utils/exportarExcel";
 import Swal from "sweetalert2";
 
@@ -29,14 +30,38 @@ const FORM_VACIO = {
   observaciones: "",
 };
 
-// ── Modal de ingreso de lote reproductor ────────────────────────────────────
+// Un plantel ya cargado vuelve al mismo formulario que lo dio de alta.
+const formDesdeLote = (lote) => ({
+  numeroLote: String(lote.numeroLote ?? ""),
+  galpon: lote.galpon ?? "",
+  fechaIngreso: lote.fechaIngreso
+    ? new Date(lote.fechaIngreso).toISOString().split("T")[0]
+    : obtenerFechaHoy(),
+  hembrasIngreso: String(lote.hembras?.ingreso ?? ""),
+  machosIngreso: String(lote.machos?.ingreso ?? ""),
+  bajasIngresoHembras: String(lote.bajasIngresoHembras ?? 0),
+  bajasIngresoMachos: String(lote.bajasIngresoMachos ?? 0),
+  motivoBajas: lote.motivoBajas || "",
+  proveedor: lote.proveedor || "",
+  observaciones: lote.observaciones || "",
+});
+
+// ── Modal de ingreso / edición de lote reproductor ──────────────────────────
 // El lote entra siempre por un galpón de RECRÍA. Cuando esté listo para poner
-// se muda a un galpón de postura desde la pantalla de Galpones.
-const NuevoLoteModal = ({ onClose, onCreado, constantes, galponesOcupados, numeroSugerido }) => {
-  const [form, setForm] = useState({ ...FORM_VACIO, numeroLote: String(numeroSugerido) });
+// se muda a un galpón de postura desde la pantalla de Galpones — por eso al
+// editar se ofrecen los galpones del sector donde el lote está hoy.
+const LoteModal = ({ lote, onClose, onGuardado, constantes, galponesOcupados, numeroSugerido }) => {
+  const esEdicion = Boolean(lote);
+  const [form, setForm] = useState(() =>
+    esEdicion ? formDesdeLote(lote) : { ...FORM_VACIO, numeroLote: String(numeroSugerido) }
+  );
   const [saving, setSaving] = useState(false);
 
-  const galponesRecria = constantes?.galpones?.recria || [];
+  // Un plantel finalizado ya cerró con su egreso: las cantidades quedan como
+  // están y solo se corrigen los datos de cabecera.
+  const finalizado = esEdicion && lote.estado === "finalizado";
+  const sector = esEdicion ? lote.sector : "recria";
+  const galponesSector = constantes?.galpones?.[sector] || [];
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -57,54 +82,77 @@ const NuevoLoteModal = ({ onClose, onCreado, constantes, galponesOcupados, numer
       return;
     }
     if (!form.galpon) {
-      Swal.fire("Falta el galpón", "Elegí en qué galpón de recría entra el plantel.", "warning");
-      return;
-    }
-    if (totalAves <= 0) {
-      Swal.fire("Faltan aves", "Cargá la cantidad de hembras y/o machos.", "warning");
-      return;
-    }
-    // Igual que en el ingreso de pollitos de crianza: las bajas son obligatorias
-    // (se cargan en cero si no hubo), y si hay bajas hay que decir el motivo.
-    if (form.bajasIngresoHembras === "" || form.bajasIngresoMachos === "") {
       Swal.fire(
-        "Faltan las bajas",
-        "Cargá las bajas recibidas de hembras y de machos (cero si no hubo).",
+        "Falta el galpón",
+        `Elegí en qué galpón de ${SECTOR_LABEL[sector].toLowerCase()} está el plantel.`,
         "warning"
       );
       return;
     }
-    if (totalBajas > 0 && !form.motivoBajas.trim()) {
-      Swal.fire("Falta el motivo", "Si hay bajas, indicá el motivo.", "warning");
-      return;
+    if (!finalizado) {
+      if (totalAves <= 0) {
+        Swal.fire("Faltan aves", "Cargá la cantidad de hembras y/o machos.", "warning");
+        return;
+      }
+      // Igual que en el ingreso de pollitos de crianza: las bajas son obligatorias
+      // (se cargan en cero si no hubo), y si hay bajas hay que decir el motivo.
+      if (form.bajasIngresoHembras === "" || form.bajasIngresoMachos === "") {
+        Swal.fire(
+          "Faltan las bajas",
+          "Cargá las bajas recibidas de hembras y de machos (cero si no hubo).",
+          "warning"
+        );
+        return;
+      }
+      if (totalBajas > 0 && !form.motivoBajas.trim()) {
+        Swal.fire("Falta el motivo", "Si hay bajas, indicá el motivo.", "warning");
+        return;
+      }
+    }
+
+    const datos = {
+      numeroLote: Number(form.numeroLote),
+      galpon: Number(form.galpon),
+      fechaIngreso: ajustarFechaParaGuardar(form.fechaIngreso),
+      proveedor: form.proveedor,
+      observaciones: form.observaciones,
+    };
+    // Un plantel finalizado no manda cantidades: el backend las rechaza porque
+    // el saldo ya quedó guardado en el egreso.
+    if (!finalizado) {
+      datos.hembrasIngreso = Number(form.hembrasIngreso) || 0;
+      datos.machosIngreso = Number(form.machosIngreso) || 0;
+      datos.bajasIngresoHembras = Number(form.bajasIngresoHembras) || 0;
+      datos.bajasIngresoMachos = Number(form.bajasIngresoMachos) || 0;
+      datos.motivoBajas = form.motivoBajas;
     }
 
     setSaving(true);
     try {
-      const lote = await crearLoteReproductor({
-        numeroLote: Number(form.numeroLote),
-        galpon: Number(form.galpon),
-        fechaIngreso: ajustarFechaParaGuardar(form.fechaIngreso),
-        hembrasIngreso: Number(form.hembrasIngreso) || 0,
-        machosIngreso: Number(form.machosIngreso) || 0,
-        bajasIngresoHembras: Number(form.bajasIngresoHembras) || 0,
-        bajasIngresoMachos: Number(form.bajasIngresoMachos) || 0,
-        motivoBajas: form.motivoBajas || undefined,
-        proveedor: form.proveedor || undefined,
-        observaciones: form.observaciones || undefined,
-      });
-      onCreado();
+      const guardado = esEdicion
+        ? await actualizarLoteReproductor(lote._id, datos)
+        : await crearLoteReproductor({
+            ...datos,
+            motivoBajas: form.motivoBajas || undefined,
+            proveedor: form.proveedor || undefined,
+            observaciones: form.observaciones || undefined,
+          });
+      onGuardado();
       Swal.fire({
         icon: "success",
-        title: `Plantel #${lote.numeroLote} creado`,
-        text: `${nombreGalpon(constantes?.galpones, "recria", lote.galpon)} — ${formatearNumero(
-          lote.hembras.actual
-        )} hembras / ${formatearNumero(lote.machos.actual)} machos`,
+        title: `Plantel #${guardado.numeroLote} ${esEdicion ? "actualizado" : "creado"}`,
+        text: `${nombreGalpon(constantes?.galpones, guardado.sector, guardado.galpon)} — ${formatearNumero(
+          guardado.hembras.actual
+        )} hembras / ${formatearNumero(guardado.machos.actual)} machos`,
         timer: 2600,
         showConfirmButton: false,
       });
     } catch (err) {
-      Swal.fire("Error", err.message || "No se pudo crear el plantel.", "error");
+      Swal.fire(
+        "Error",
+        err.message || `No se pudo ${esEdicion ? "actualizar" : "crear"} el plantel.`,
+        "error"
+      );
     } finally {
       setSaving(false);
     }
@@ -115,21 +163,41 @@ const NuevoLoteModal = ({ onClose, onCreado, constantes, galponesOcupados, numer
       <div className="modal show d-block" tabIndex="-1">
         <div className="modal-dialog modal-dialog-scrollable modal-lg">
           <div className="modal-content">
-            <div className="modal-header bg-success text-white">
+            <div className={`modal-header text-white ${esEdicion ? "bg-primary" : "bg-success"}`}>
               <h5 className="modal-title">
-                <i className="bi bi-egg me-2"></i>Nuevo plantel
+                <i className={`bi ${esEdicion ? "bi-pencil-square" : "bi-egg"} me-2`}></i>
+                {esEdicion ? `Editar plantel #${lote.numeroLote}` : "Nuevo plantel"}
               </h5>
               <button className="btn-close btn-close-white" onClick={onClose} disabled={saving}></button>
             </div>
 
             <div className="modal-body">
-              <form id="form-nuevo-lote-reproductor" onSubmit={handleSubmit}>
-                <div className="alert alert-light border small mb-3">
-                  <i className="bi bi-info-circle me-1"></i>
-                  El plantel entra por un galpón de <strong>recría</strong> y conserva su número
-                  toda la vida ({constantes?.semanasCicloVida ?? 65} semanas). Cuando esté listo
-                  para poner se muda a un galpón de postura desde <strong>Galpones</strong>.
-                </div>
+              <form id="form-lote-reproductor" onSubmit={handleSubmit}>
+                {esEdicion ? (
+                  <div className="alert alert-light border small mb-3">
+                    <i className="bi bi-info-circle me-1"></i>
+                    Corregís los datos del ingreso. Cambiar las aves ingresadas o las bajas
+                    recalcula el saldo actual del plantel (ingreso menos todas las bajas
+                    cargadas). La mudanza a postura se sigue haciendo desde{" "}
+                    <strong>Galpones</strong>.
+                  </div>
+                ) : (
+                  <div className="alert alert-light border small mb-3">
+                    <i className="bi bi-info-circle me-1"></i>
+                    El plantel entra por un galpón de <strong>recría</strong> y conserva su número
+                    toda la vida ({constantes?.semanasCicloVida ?? 65} semanas). Cuando esté listo
+                    para poner se muda a un galpón de postura desde <strong>Galpones</strong>.
+                  </div>
+                )}
+
+                {finalizado && (
+                  <div className="alert alert-warning small mb-3">
+                    <i className="bi bi-lock-fill me-1"></i>
+                    El plantel está <strong>finalizado</strong>: las aves y las bajas del ingreso
+                    quedan como están. Se pueden corregir el número, la fecha, el proveedor y las
+                    observaciones.
+                  </div>
+                )}
 
                 <div className="row g-3 mb-3">
                   <div className="col-md-4">
@@ -147,17 +215,24 @@ const NuevoLoteModal = ({ onClose, onCreado, constantes, galponesOcupados, numer
                       required
                     />
                     <div className="form-text">
-                      Se carga a mano por ahora — sugerido: #{numeroSugerido}
+                      {esEdicion
+                        ? "Se carga a mano — no puede repetirse con otro plantel"
+                        : `Se carga a mano por ahora — sugerido: #${numeroSugerido}`}
                     </div>
                   </div>
                 </div>
 
                 <div className="mb-3">
-                  <label className="form-label fw-semibold">Galpón de recría</label>
+                  <label className="form-label fw-semibold">
+                    Galpón de {SECTOR_LABEL[sector].toLowerCase()}
+                  </label>
                   <div className="d-flex flex-wrap gap-2">
-                    {galponesRecria.map((g) => {
-                      const ocupado = galponesOcupados.has(g.numero);
+                    {galponesSector.map((g) => {
+                      // El galpón donde ya está el lote no cuenta como ocupado.
+                      const propio = esEdicion && lote.galpon === g.numero;
+                      const ocupado = !propio && galponesOcupados.has(`${sector}-${g.numero}`);
                       const seleccionado = Number(form.galpon) === g.numero;
+                      const bloqueado = ocupado || finalizado;
                       return (
                         <button
                           key={g.numero}
@@ -169,8 +244,8 @@ const NuevoLoteModal = ({ onClose, onCreado, constantes, galponesOcupados, numer
                               ? "btn-success"
                               : "btn-outline-secondary"
                           }`}
-                          disabled={ocupado}
-                          onClick={() => !ocupado && setForm((prev) => ({ ...prev, galpon: g.numero }))}
+                          disabled={bloqueado}
+                          onClick={() => !bloqueado && setForm((prev) => ({ ...prev, galpon: g.numero }))}
                           title={ocupado ? "Galpón ocupado" : g.nombre}
                         >
                           {ocupado ? <i className="bi bi-lock-fill me-1"></i> : null}
@@ -200,6 +275,11 @@ const NuevoLoteModal = ({ onClose, onCreado, constantes, galponesOcupados, numer
                       onChange={handleChange}
                       required
                     />
+                    {esEdicion && (
+                      <div className="form-text">
+                        Cambiarla recalcula la semana de las bajas y los pesajes ya cargados.
+                      </div>
+                    )}
                   </div>
                   <div className="col-md-6">
                     <label className="form-label fw-semibold">
@@ -230,6 +310,7 @@ const NuevoLoteModal = ({ onClose, onCreado, constantes, galponesOcupados, numer
                       onChange={handleChange}
                       min="0"
                       placeholder="Ej: 9000"
+                      disabled={finalizado}
                     />
                   </div>
                   <div className="col-md-6">
@@ -242,6 +323,7 @@ const NuevoLoteModal = ({ onClose, onCreado, constantes, galponesOcupados, numer
                       onChange={handleChange}
                       min="0"
                       placeholder="Ej: 900"
+                      disabled={finalizado}
                     />
                   </div>
                 </div>
@@ -261,6 +343,7 @@ const NuevoLoteModal = ({ onClose, onCreado, constantes, galponesOcupados, numer
                       min="0"
                       placeholder="0"
                       required
+                      disabled={finalizado}
                     />
                   </div>
                   <div className="col-md-4">
@@ -274,6 +357,7 @@ const NuevoLoteModal = ({ onClose, onCreado, constantes, galponesOcupados, numer
                       min="0"
                       placeholder="0"
                       required
+                      disabled={finalizado}
                     />
                   </div>
                   <div className="col-md-4">
@@ -286,15 +370,15 @@ const NuevoLoteModal = ({ onClose, onCreado, constantes, galponesOcupados, numer
                       className="form-control"
                       value={form.motivoBajas}
                       onChange={handleChange}
-                      disabled={totalBajas === 0}
+                      disabled={totalBajas === 0 || finalizado}
                       placeholder={totalBajas > 0 ? "Ej: muertas en viaje" : "Sin bajas"}
                     />
                   </div>
                 </div>
 
-                {totalAves > 0 && (
+                {totalAves > 0 && !finalizado && (
                   <div className="alert alert-success py-2 small mb-3">
-                    Quedan en el galpón:{" "}
+                    {esEdicion ? "Después de las bajas del ingreso quedan:" : "Quedan en el galpón:"}{" "}
                     <strong>
                       {formatearNumero((Number(form.hembrasIngreso) || 0) - (Number(form.bajasIngresoHembras) || 0))}
                     </strong>{" "}
@@ -303,6 +387,11 @@ const NuevoLoteModal = ({ onClose, onCreado, constantes, galponesOcupados, numer
                       {formatearNumero((Number(form.machosIngreso) || 0) - (Number(form.bajasIngresoMachos) || 0))}
                     </strong>{" "}
                     machos ({formatearNumero(totalAves - totalBajas)} aves)
+                    {esEdicion && (
+                      <span className="d-block text-muted">
+                        Al saldo actual se le siguen restando las bajas cargadas después del ingreso.
+                      </span>
+                    )}
                   </div>
                 )}
 
@@ -327,12 +416,13 @@ const NuevoLoteModal = ({ onClose, onCreado, constantes, galponesOcupados, numer
               </button>
               <button
                 type="submit"
-                form="form-nuevo-lote-reproductor"
-                className="btn btn-success"
+                form="form-lote-reproductor"
+                className={`btn ${esEdicion ? "btn-primary" : "btn-success"}`}
                 disabled={saving}
               >
                 {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
-                <i className="bi bi-check-lg me-1"></i>Ingresar plantel
+                <i className="bi bi-check-lg me-1"></i>
+                {esEdicion ? "Guardar cambios" : "Ingresar plantel"}
               </button>
             </div>
           </div>
@@ -350,6 +440,7 @@ const ReproductorLoteNuevoPage = () => {
   const [lotes, setLotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalAbierto, setModalAbierto] = useState(false);
+  const [loteEditando, setLoteEditando] = useState(null);
   const [pagina, setPagina] = useState(1);
 
   const cargar = useCallback(async () => {
@@ -372,11 +463,12 @@ const ReproductorLoteNuevoPage = () => {
     cargar();
   }, [cargar]);
 
-  // Galpones de recría que ya tienen un lote activo.
+  // Galpones con un lote activo, por sector: "recria-2", "postura-1"…
+  // El alta solo mira los de recría; la edición también los de postura.
   const galponesOcupados = new Set(
     lotes
-      .filter((l) => l.sector === "recria" && l.estado !== "finalizado")
-      .map((l) => l.galpon)
+      .filter((l) => l.estado !== "finalizado")
+      .map((l) => `${l.sector}-${l.galpon}`)
   );
 
   const handleEliminar = async (lote) => {
@@ -513,6 +605,13 @@ const ReproductorLoteNuevoPage = () => {
                               <i className="bi bi-eye"></i>
                             </button>
                             <button
+                              className="btn btn-sm btn-outline-secondary me-1"
+                              onClick={() => setLoteEditando(lote)}
+                              title="Editar plantel"
+                            >
+                              <i className="bi bi-pencil"></i>
+                            </button>
+                            <button
                               className="btn btn-sm btn-outline-danger"
                               onClick={() => handleEliminar(lote)}
                               title="Eliminar"
@@ -561,12 +660,20 @@ const ReproductorLoteNuevoPage = () => {
                           <span className="text-muted">Semana:</span> {lote.semanaVida ?? "-"}
                         </div>
                       </div>
-                      <button
-                        className="btn btn-sm btn-outline-danger w-100 mt-3"
-                        onClick={() => handleEliminar(lote)}
-                      >
-                        <i className="bi bi-trash me-1"></i>Eliminar
-                      </button>
+                      <div className="d-flex gap-2 mt-3">
+                        <button
+                          className="btn btn-sm btn-outline-primary flex-fill"
+                          onClick={() => setLoteEditando(lote)}
+                        >
+                          <i className="bi bi-pencil me-1"></i>Editar
+                        </button>
+                        <button
+                          className="btn btn-sm btn-outline-danger flex-fill"
+                          onClick={() => handleEliminar(lote)}
+                        >
+                          <i className="bi bi-trash me-1"></i>Eliminar
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -583,14 +690,19 @@ const ReproductorLoteNuevoPage = () => {
         )}
       </div>
 
-      {modalAbierto && (
-        <NuevoLoteModal
+      {(modalAbierto || loteEditando) && (
+        <LoteModal
+          lote={loteEditando}
           constantes={constantes}
           galponesOcupados={galponesOcupados}
           numeroSugerido={numeroSugerido}
-          onClose={() => setModalAbierto(false)}
-          onCreado={() => {
+          onClose={() => {
             setModalAbierto(false);
+            setLoteEditando(null);
+          }}
+          onGuardado={() => {
+            setModalAbierto(false);
+            setLoteEditando(null);
             cargar();
           }}
         />

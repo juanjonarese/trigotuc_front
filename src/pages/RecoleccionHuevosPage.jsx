@@ -22,22 +22,42 @@ import {
   formatearPorcentaje,
   textoDesglose,
   nombreGalpon,
+  TIPOS_HUEVO,
+  TIPOS_HUEVO_KEYS,
+  sumarTiposHuevo,
 } from "../utils/reproductoresUtils";
 import { exportarTablaExcel } from "../utils/exportarExcel";
 import Swal from "sweetalert2";
 
 const ITEMS_POR_PAGINA = 20;
 
-// Lo recolectado se reparte en tres destinos y los tres se cargan en unidades
+// Lo recolectado se clasifica en el galpón en los cuatro tipos que después
+// viajan en el remito a Trigotuc, más los rotos que se tiran. Todo en unidades
 // (huevos), que es como se cuenta en el galpón y la unidad en la que se lleva el
 // stock. El total es la suma: no se carga aparte, así no puede quedar
 // descuadrado. Cajones y bandejas quedan solo como lectura derivada.
+//
+// Ojo: cargar la recolección NO manda los huevos a Trigotuc — quedan en stock en
+// la granja hasta que salen en un remito.
+
+// Los inputs por tipo se manejan como texto para poder dejarlos vacíos.
+const tiposVacios = () => TIPOS_HUEVO_KEYS.reduce((acc, k) => ({ ...acc, [k]: "" }), {});
+
+const tiposDesdeRecoleccion = (rec) =>
+  TIPOS_HUEVO_KEYS.reduce(
+    (acc, k) => ({ ...acc, [k]: rec.tipos?.[k] ? String(rec.tipos[k]) : "" }),
+    {}
+  );
+
+// Pasa los inputs de texto a números para mandarlos al backend.
+const tiposANumeros = (tipos) =>
+  TIPOS_HUEVO_KEYS.reduce((acc, k) => ({ ...acc, [k]: Number(tipos[k]) || 0 }), {});
+
 const FORM_VACIO = {
   fecha: obtenerFechaHoy(),
-  hora: "",      // hora de la pasada; se precarga con la de ahora
-  aIncubar: "",  // los que están bien, van a la incubadora
-  aVenta: "",    // con algún problema pero vendibles (sucios, etc.)
-  perdida: "",   // rotos y demás: se tiran
+  hora: "",       // hora de la pasada; se precarga con la de ahora
+  tipos: tiposVacios(),
+  perdida: "",    // rotos y demás: se tiran
   observaciones: "",
 };
 
@@ -65,22 +85,20 @@ const RecoleccionModal = ({
           fecha: (recoleccion.fecha || "").slice(0, 10),
           // Las cargas viejas no tienen hora: se cae al horario del alta.
           hora: formatearHoraLocal(recoleccion.fechaHora || recoleccion.createdAt),
-          aIncubar: recoleccion.inoculables ? String(recoleccion.inoculables) : "",
-          aVenta: recoleccion.descarte1 ? String(recoleccion.descarte1) : "",
+          tipos: tiposDesdeRecoleccion(recoleccion),
           perdida: recoleccion.descartePerdida ? String(recoleccion.descartePerdida) : "",
           observaciones: recoleccion.observaciones || "",
         }
-      : { ...FORM_VACIO, fecha: obtenerFechaHoy(), hora: obtenerHoraAhora() }
+      : { ...FORM_VACIO, tipos: tiposVacios(), fecha: obtenerFechaHoy(), hora: obtenerHoraAhora() }
   );
   const [saving, setSaving] = useState(false);
 
   const huevosPorCajon = constantes?.huevosPorCajon ?? 144;
   const huevosPorBandeja = constantes?.huevosPorBandeja ?? 12;
 
-  const inoculables = Number(form.aIncubar) || 0;
-  const aVenta = Number(form.aVenta) || 0;
+  const clasificados = sumarTiposHuevo(form.tipos);
   const perdida = Number(form.perdida) || 0;
-  const huevosTotales = inoculables + aVenta + perdida;
+  const huevosTotales = clasificados + perdida;
 
   // Una gallina pone como mucho un huevo por día: más del 100% de postura es
   // imposible y casi siempre significa que las hembras del plantel están mal cargadas.
@@ -99,10 +117,19 @@ const RecoleccionModal = ({
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleTipoChange = (e) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, tipos: { ...prev.tipos, [name]: value } }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (huevosTotales <= 0) {
-      Swal.fire("Faltan huevos", "Cargá la recolección del día en alguno de los tres destinos.", "warning");
+      Swal.fire(
+        "Faltan huevos",
+        "Cargá la recolección del día en alguno de los tipos o en el descarte.",
+        "warning"
+      );
       return;
     }
     if (posturaImposible) {
@@ -127,8 +154,7 @@ const RecoleccionModal = ({
         // único (plantel, fecha). Para corregirla hay que borrar y volver a cargar.
         await editarRecoleccionHuevos(recoleccion._id, {
           hora: form.hora || undefined,
-          inoculables,
-          descarte1: aVenta,
+          tipos: tiposANumeros(form.tipos),
           descartePerdida: perdida,
           observaciones: form.observaciones || undefined,
         });
@@ -137,8 +163,7 @@ const RecoleccionModal = ({
           lote: lote._id,
           fecha: ajustarFechaParaGuardar(form.fecha),
           hora: form.hora || undefined,
-          inoculables,
-          descarte1: aVenta,
+          tipos: tiposANumeros(form.tipos),
           descartePerdida: perdida,
           observaciones: form.observaciones || undefined,
         });
@@ -147,8 +172,10 @@ const RecoleccionModal = ({
       Swal.fire({
         icon: "success",
         title: edicion ? "Recolección corregida" : "Recolección cargada",
-        text: `${formatearNumero(inoculables)} a incubar · ${formatearNumero(aVenta)} a venta · ${formatearNumero(perdida)} descarte`,
-        timer: 2400,
+        text:
+          `${formatearNumero(clasificados)} clasificados · ${formatearNumero(perdida)} descarte — ` +
+          `quedan en la granja hasta que salgan por remito`,
+        timer: 2600,
         showConfirmButton: false,
       });
     } catch (err) {
@@ -213,54 +240,46 @@ const RecoleccionModal = ({
                   </div>
                 </div>
 
-                <h6 className="fw-bold text-secondary mb-2">Huevos recolectados</h6>
+                <h6 className="fw-bold text-secondary mb-2">
+                  Huevos recolectados
+                  <span className="text-muted fw-normal small ms-2">
+                    clasificados como van a viajar en el remito
+                  </span>
+                </h6>
 
                 <div className="row g-3 mb-3">
-                  <div className="col-md-4">
-                    <div className="border rounded p-3 h-100">
-                      <div className="fw-semibold mb-2">
-                        <i className="bi bi-thermometer-half text-primary me-1"></i>A incubadora
-                        <span className="text-muted fw-normal small"> — los que están bien</span>
+                  {TIPOS_HUEVO.map((tipo) => {
+                    const cantidad = Number(form.tipos[tipo.key]) || 0;
+                    return (
+                      <div className="col-6 col-lg-3" key={tipo.key}>
+                        <div className="border rounded p-3 h-100">
+                          <div className="fw-semibold mb-2">
+                            <i className={`bi ${tipo.icono} ${tipo.clase} me-1`}></i>
+                            {tipo.label}
+                          </div>
+                          <label className="form-label fw-semibold small">Huevos (unidades)</label>
+                          <input
+                            type="number"
+                            name={tipo.key}
+                            className="form-control"
+                            min="0"
+                            value={form.tipos[tipo.key]}
+                            onChange={handleTipoChange}
+                            placeholder="0"
+                          />
+                          <div className="form-text">
+                            {cantidad > 0
+                              ? textoDesglose(cantidad, huevosPorCajon, huevosPorBandeja)
+                              : tipo.ayuda}
+                          </div>
+                        </div>
                       </div>
-                      <label className="form-label fw-semibold small">Huevos (unidades)</label>
-                      <input
-                        type="number"
-                        name="aIncubar"
-                        className="form-control"
-                        min="0"
-                        value={form.aIncubar}
-                        onChange={handleChange}
-                        placeholder="0"
-                      />
-                      <div className="form-text">
-                        {inoculables > 0
-                          ? textoDesglose(inoculables, huevosPorCajon, huevosPorBandeja)
-                          : "Van al stock incubable."}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="border rounded p-3 h-100">
-                      <div className="fw-semibold mb-2">
-                        <i className="bi bi-cart text-warning me-1"></i>A venta
-                        <span className="text-muted fw-normal small"> — con algún problema</span>
-                      </div>
-                      <label className="form-label fw-semibold small">Huevos (unidades)</label>
-                      <input
-                        type="number"
-                        name="aVenta"
-                        className="form-control"
-                        min="0"
-                        value={form.aVenta}
-                        onChange={handleChange}
-                        placeholder="0"
-                      />
-                      <div className="form-text">
-                        Sucios y similares: no se incuban, van al stock de venta.
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
+                    );
+                  })}
+                </div>
+
+                <div className="row g-3 mb-3">
+                  <div className="col-md-6">
                     <div className="border rounded p-3 h-100">
                       <div className="fw-semibold mb-2">
                         <i className="bi bi-trash text-danger me-1"></i>Descarte
@@ -277,7 +296,8 @@ const RecoleccionModal = ({
                         placeholder="0"
                       />
                       <div className="form-text">
-                        Rotos y cualquier otro motivo. No generan stock.
+                        Rotos y cualquier otro motivo. Se tiran en la granja: no generan stock
+                        ni viajan en el remito.
                       </div>
                     </div>
                   </div>
@@ -302,16 +322,20 @@ const RecoleccionModal = ({
                           </span>
                         </div>
                       )}
-                      <div className="col-md-6">
-                        <strong>A incubadora:</strong> {formatearNumero(inoculables)}
-                        <span className="text-muted">
-                          {" "}
-                          ({formatearPorcentaje((inoculables / huevosTotales) * 100)})
-                        </span>
-                      </div>
-                      <div className="col-md-6">
-                        <strong>A venta:</strong> {formatearNumero(aVenta)}
-                      </div>
+                      {TIPOS_HUEVO.map((tipo) => (
+                        <div className="col-md-6" key={tipo.key}>
+                          <strong>{tipo.label}:</strong>{" "}
+                          {formatearNumero(Number(form.tipos[tipo.key]) || 0)}
+                          {tipo.key === "api" && (
+                            <span className="text-muted">
+                              {" "}
+                              ({formatearPorcentaje(
+                                ((Number(form.tipos.api) || 0) / huevosTotales) * 100
+                              )})
+                            </span>
+                          )}
+                        </div>
+                      ))}
                       <div className="col-md-6">
                         <strong>Descarte:</strong> {formatearNumero(perdida)}
                       </div>
@@ -417,13 +441,16 @@ const RecoleccionHuevosPage = () => {
         )
       : [];
     const sumar = (campo) => delDia.reduce((s, r) => s + (r[campo] || 0), 0);
+    const sumarTipo = (tipo) => delDia.reduce((s, r) => s + (r.tipos?.[tipo] || 0), 0);
     const hoyResumen = delDia.length
       ? {
           pasadas: delDia.length,
           huevosTotales: sumar("huevosTotales"),
-          inoculables: sumar("inoculables"),
-          descarte1: sumar("descarte1"),
           descartePerdida: sumar("descartePerdida"),
+          porTipo: TIPOS_HUEVO_KEYS.reduce(
+            (acc, k) => ({ ...acc, [k]: sumarTipo(k) }),
+            {}
+          ),
         }
       : null;
     return { galpon: g, lote, hoyResumen };
@@ -486,12 +513,17 @@ const RecoleccionHuevosPage = () => {
       { header: "Sem. producción",    valor: (r) => r.semanaProduccion ?? "" },
       { header: "Sem. vida",          valor: (r) => r.semanaVida ?? "" },
       { header: "Total huevos",       valor: (r) => r.huevosTotales ?? 0 },
-      { header: "Inoculables",        valor: (r) => r.inoculables ?? 0 },
-      { header: "Descarte a venta",   valor: (r) => r.descarte1 ?? 0 },
+      ...TIPOS_HUEVO.map((t) => ({
+        header: t.label,
+        valor: (r) => r.tipos?.[t.key] ?? 0,
+      })),
       { header: "Descarte pérdida",   valor: (r) => r.descartePerdida || 0 },
       { header: "Fertilidad (%)",     valor: (r) => r.porcentajeFertilidad ?? "" },
       { header: "Postura (%)",        valor: (r) => r.porcentajeProduccion ?? "" },
-      { header: "Sin incubar",        valor: (r) => r.inoculablesDisponibles ?? 0 },
+      ...TIPOS_HUEVO.map((t) => ({
+        header: `En granja ${t.corto}`,
+        valor: (r) => r.disponibles?.[t.key] ?? 0,
+      })),
       { header: "Observaciones",      valor: (r) => r.observaciones },
     ],
   });
@@ -588,14 +620,16 @@ const RecoleccionHuevosPage = () => {
                                   )}
                                 </div>
                                 <div className="text-muted">
-                                  <span className="text-success">
-                                    {formatearNumero(hoyResumen.inoculables)} a incubar
-                                  </span>{" "}
-                                  ·{" "}
-                                  <span className="text-warning">
-                                    {formatearNumero(hoyResumen.descarte1)} a venta
-                                  </span>{" "}
-                                  ·{" "}
+                                  {TIPOS_HUEVO.filter((t) => hoyResumen.porTipo[t.key] > 0).map(
+                                    (t) => (
+                                      <span key={t.key}>
+                                        <span className={t.clase}>
+                                          {formatearNumero(hoyResumen.porTipo[t.key])} {t.corto}
+                                        </span>{" "}
+                                        ·{" "}
+                                      </span>
+                                    )
+                                  )}
                                   <span className="text-danger">
                                     {formatearNumero(hoyResumen.descartePerdida)} descarte
                                   </span>
@@ -649,12 +683,17 @@ const RecoleccionHuevosPage = () => {
                           <th>Plantel</th>
                           <th className="text-center">Sem. prod.</th>
                           <th className="text-end">Total</th>
-                          <th className="text-end">A incubar</th>
-                          <th className="text-end">A venta</th>
+                          {TIPOS_HUEVO.map((t) => (
+                            <th className="text-end" key={t.key} title={t.label}>
+                              {t.corto}
+                            </th>
+                          ))}
                           <th className="text-end">Descarte</th>
                           <th className="text-end">% fert.</th>
                           <th className="text-end">% postura</th>
-                          <th className="text-end">Sin incubar</th>
+                          <th className="text-end" title="Huevos que siguen en la granja, sin remitir">
+                            En granja
+                          </th>
                           <th></th>
                         </tr>
                       </thead>
@@ -674,20 +713,26 @@ const RecoleccionHuevosPage = () => {
                             </td>
                             <td className="text-center">{r.semanaProduccion ?? "-"}</td>
                             <td className="text-end fw-semibold">{formatearNumero(r.huevosTotales)}</td>
-                            <td className="text-end text-success">{formatearNumero(r.inoculables)}</td>
-                            <td className="text-end text-warning">{formatearNumero(r.descarte1)}</td>
+                            {TIPOS_HUEVO.map((t) => (
+                              <td className={`text-end ${t.clase}`} key={t.key}>
+                                {formatearNumero(r.tipos?.[t.key] || 0)}
+                              </td>
+                            ))}
                             <td className="text-end text-danger">
                               {formatearNumero(r.descartePerdida || 0)}
                             </td>
                             <td className="text-end">{formatearPorcentaje(r.porcentajeFertilidad)}</td>
                             <td className="text-end">{formatearPorcentaje(r.porcentajeProduccion)}</td>
                             <td className="text-end">
-                              {r.inoculablesDisponibles > 0 ? (
-                                <span className="badge bg-info text-dark">
-                                  {formatearNumero(r.inoculablesDisponibles)}
+                              {sumarTiposHuevo(r.disponibles) > 0 ? (
+                                <span
+                                  className="badge bg-info text-dark"
+                                  title="Sin remitir: siguen en la granja"
+                                >
+                                  {formatearNumero(sumarTiposHuevo(r.disponibles))}
                                 </span>
                               ) : (
-                                <span className="text-muted small">todo incubado</span>
+                                <span className="text-muted small">todo remitido</span>
                               )}
                             </td>
                             <td className="text-end">
@@ -737,14 +782,14 @@ const RecoleccionHuevosPage = () => {
                             <span className="text-muted">Total:</span>{" "}
                             <strong>{formatearNumero(r.huevosTotales)}</strong>
                           </div>
-                          <div className="col-6">
-                            <span className="text-muted">A incubar:</span>{" "}
-                            <strong className="text-success">{formatearNumero(r.inoculables)}</strong>
-                          </div>
-                          <div className="col-6">
-                            <span className="text-muted">A venta:</span>{" "}
-                            <strong className="text-warning">{formatearNumero(r.descarte1)}</strong>
-                          </div>
+                          {TIPOS_HUEVO.map((t) => (
+                            <div className="col-6" key={t.key}>
+                              <span className="text-muted">{t.label}:</span>{" "}
+                              <strong className={t.clase}>
+                                {formatearNumero(r.tipos?.[t.key] || 0)}
+                              </strong>
+                            </div>
+                          ))}
                           <div className="col-6">
                             <span className="text-muted">Descarte:</span>{" "}
                             <strong className="text-danger">
@@ -754,6 +799,10 @@ const RecoleccionHuevosPage = () => {
                           <div className="col-6">
                             <span className="text-muted">Fertilidad:</span>{" "}
                             {formatearPorcentaje(r.porcentajeFertilidad)}
+                          </div>
+                          <div className="col-12">
+                            <span className="text-muted">En la granja (sin remitir):</span>{" "}
+                            <strong>{formatearNumero(sumarTiposHuevo(r.disponibles))}</strong>
                           </div>
                         </div>
                         <div className="d-flex gap-2 mt-3">

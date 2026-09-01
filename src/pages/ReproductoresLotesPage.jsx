@@ -121,9 +121,9 @@ const ProduccionModal = ({ lote, constantes, onClose }) => {
                     </div>
                     <div className="col-6 col-md-3">
                       <div className="border rounded p-2 text-center h-100">
-                        <div className="text-muted small">A incubar</div>
+                        <div className="text-muted small">API (incubable)</div>
                         <div className="fw-bold text-success">
-                          {formatearNumero(resumen.totales.inoculables)}
+                          {formatearNumero(resumen.totales.porTipo?.api)}
                         </div>
                         <div className="text-muted" style={{ fontSize: ".75rem" }}>
                           fertilidad {formatearPorcentaje(resumen.totales.porcentajeFertilidad)}
@@ -134,7 +134,14 @@ const ProduccionModal = ({ lote, constantes, onClose }) => {
                       <div className="border rounded p-2 text-center h-100">
                         <div className="text-muted small">A venta</div>
                         <div className="fw-bold text-warning">
-                          {formatearNumero(resumen.totales.descarte1)}
+                          {formatearNumero(
+                            (resumen.totales.porTipo?.dobleYema || 0) +
+                              (resumen.totales.porTipo?.regular || 0) +
+                              (resumen.totales.porTipo?.bebe || 0)
+                          )}
+                        </div>
+                        <div className="text-muted" style={{ fontSize: ".75rem" }}>
+                          doble yema + regular + bebé
                         </div>
                       </div>
                     </div>

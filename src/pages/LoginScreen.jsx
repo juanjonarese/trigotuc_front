@@ -65,6 +65,8 @@ const LoginScreen = () => {
           navigate("/frigorifico/pedidos-granja");
         } else if (data.rolUsuario === "granja") {
           navigate("/granja/galpones");
+        } else if (data.rolUsuario === "reproductoras") {
+          navigate("/reproductores/galpones");
         } else {
           navigate("/dashboard");
         }
