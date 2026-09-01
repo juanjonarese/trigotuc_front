@@ -84,7 +84,7 @@ const Layout = ({ children }) => {
         </div>
 
         <nav className="sidebar-nav flex-grow-1 p-3">
-          {rolUsuario !== "frigorifico" && rolUsuario !== "granja" && rolUsuario !== "chofer" && (
+          {rolUsuario !== "frigorifico" && rolUsuario !== "granja" && rolUsuario !== "chofer" && rolUsuario !== "reproductoras" && (
             <a
               href="#"
               className={`nav-link d-flex align-items-center gap-2 mb-2 rounded ${
@@ -100,8 +100,23 @@ const Layout = ({ children }) => {
             </a>
           )}
 
-          {/* Proyección vive dentro de Reproductores: es el cruce de los
-              nacimientos contra los galpones de engorde. */}
+          {/* Proyección: cruce de los nacimientos contra los galpones de
+              engorde. Vive en la raíz porque toca Reproductores y Granja. */}
+          {(rolUsuario === "superadmin" || rolUsuario === "administracion_frigorifico" || rolUsuario === "administracion_granja") && (
+            <a
+              href="#"
+              className={`nav-link d-flex align-items-center gap-2 mb-2 rounded ${
+                isActive("/proyeccion") ? "text-white" : "text-white-50"
+              }`}
+              onClick={(e) => {
+                e.preventDefault();
+                navigate("/proyeccion");
+              }}
+            >
+              <i className="bi bi-graph-up-arrow fs-5"></i>
+              <span>Proyección</span>
+            </a>
+          )}
 
           {(rolUsuario === "superadmin" || rolUsuario === "administracion_frigorifico" || rolUsuario === "administracion_granja") && (
           <div className="nav-section mb-2">
@@ -201,6 +216,119 @@ const Layout = ({ children }) => {
           )}
 
 
+          {/* Reproductores (postura + incubación) — sección hermana de Granja y Frigorífico.
+              El rol `reproductoras` es el operativo del módulo: solo ve esta sección. */}
+          {(rolUsuario === "superadmin" || rolUsuario === "reproductoras") && (
+          <div className="nav-section mb-2">
+            <a
+              href="#"
+              className="nav-link text-white-50 d-flex align-items-center justify-content-between rounded"
+              onClick={(e) => { e.preventDefault(); toggleSeccion("reproductores"); }}
+            >
+              <div className="d-flex align-items-center gap-2">
+                <i className="bi bi-egg fs-5"></i>
+                <span>Reproductoras</span>
+              </div>
+              <i className={`bi bi-chevron-${seccionAbierta === "reproductores" ? "down" : "right"}`}></i>
+            </a>
+            {seccionAbierta === "reproductores" && (
+              <div className="ps-4 mt-2">
+                {/* 1 — Ingreso de Plantel */}
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/galpones/nuevo") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/galpones/nuevo"); }}
+                >
+                  <i className="bi bi-plus-circle"></i>
+                  <span>Ingreso de Plantel</span>
+                </a>
+                {/* 2 — Galpones */}
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${location.pathname === "/reproductores/galpones" ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/galpones"); }}
+                >
+                  <i className="bi bi-list-ul"></i>
+                  <span>Galpones</span>
+                </a>
+                {/* 3 — Datos Semanales (mortandad y peso por sexo) */}
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/datos-semanales") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/datos-semanales"); }}
+                >
+                  <i className="bi bi-pencil-square"></i>
+                  <span>Datos Semanales</span>
+                </a>
+                {/* 4 — Recolección de Huevos */}
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/recoleccion") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/recoleccion"); }}
+                >
+                  <i className="bi bi-basket"></i>
+                  <span>Recolección de Huevos</span>
+                </a>
+                {/* 5 — Remitos de huevos: granja → Trigotuc */}
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/remitos") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/remitos"); }}
+                >
+                  <i className="bi bi-truck"></i>
+                  <span>Remitos de Huevos</span>
+                </a>
+                {/* 6 — Incubadora */}
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/incubadora") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/incubadora"); }}
+                >
+                  <i className="bi bi-thermometer-half"></i>
+                  <span>Incubadora</span>
+                </a>
+                {/* 7 — Asignaciones: lo que ya tiene destino (clientes y galpones) */}
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/asignaciones") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/asignaciones"); }}
+                >
+                  <i className="bi bi-list-check"></i>
+                  <span>Asignaciones</span>
+                </a>
+                {/* 8 — Stock de huevos de descarte + salidas sin cliente */}
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/stock-huevos") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/stock-huevos"); }}
+                >
+                  <i className="bi bi-egg"></i>
+                  <span>Stock de Huevos</span>
+                </a>
+                {/* 8 y 9 — Venta de Huevos y Venta de Pollitos: ocultas por ahora,
+                    el cliente todavía no las va a usar. Las páginas siguen existiendo.
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/ventas-huevos") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/ventas-huevos"); }}
+                >
+                  <i className="bi bi-cash-coin"></i>
+                  <span>Venta de Huevos</span>
+                </a>
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/ventas-pollitos") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/ventas-pollitos"); }}
+                >
+                  <i className="bi bi-cash-stack"></i>
+                  <span>Venta de Pollitos</span>
+                </a>
+                */}
+              </div>
+            )}
+          </div>
+          )}
+
           {/* Granja (crianza) */}
           {(rolUsuario === "superadmin" || rolUsuario === "administracion_granja" || rolUsuario === "granja") && (
           <div className="nav-section mb-2">
@@ -285,130 +413,8 @@ const Layout = ({ children }) => {
           </div>
           )}
 
-          {/* Reproductores (postura + incubación) — sección hermana de Granja y Frigorífico.
-              Por ahora solo superadmin: cuando se definan los roles del módulo, agregarlos acá. */}
-          {rolUsuario === "superadmin" && (
-          <div className="nav-section mb-2">
-            <a
-              href="#"
-              className="nav-link text-white-50 d-flex align-items-center justify-content-between rounded"
-              onClick={(e) => { e.preventDefault(); toggleSeccion("reproductores"); }}
-            >
-              <div className="d-flex align-items-center gap-2">
-                <i className="bi bi-egg fs-5"></i>
-                <span>Reproductoras</span>
-              </div>
-              <i className={`bi bi-chevron-${seccionAbierta === "reproductores" ? "down" : "right"}`}></i>
-            </a>
-            {seccionAbierta === "reproductores" && (
-              <div className="ps-4 mt-2">
-                {/* 1 — Ingreso de Plantel */}
-                <a
-                  href="#"
-                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/galpones/nuevo") ? "text-white" : "text-white-50"}`}
-                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/galpones/nuevo"); }}
-                >
-                  <i className="bi bi-plus-circle"></i>
-                  <span>Ingreso de Plantel</span>
-                </a>
-                {/* 2 — Galpones */}
-                <a
-                  href="#"
-                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${location.pathname === "/reproductores/galpones" ? "text-white" : "text-white-50"}`}
-                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/galpones"); }}
-                >
-                  <i className="bi bi-list-ul"></i>
-                  <span>Galpones</span>
-                </a>
-                {/* 3 — Datos Semanales (mortandad y peso por sexo) */}
-                <a
-                  href="#"
-                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/datos-semanales") ? "text-white" : "text-white-50"}`}
-                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/datos-semanales"); }}
-                >
-                  <i className="bi bi-pencil-square"></i>
-                  <span>Datos Semanales</span>
-                </a>
-                {/* 4 — Recolección de Huevos */}
-                <a
-                  href="#"
-                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/recoleccion") ? "text-white" : "text-white-50"}`}
-                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/recoleccion"); }}
-                >
-                  <i className="bi bi-basket"></i>
-                  <span>Recolección de Huevos</span>
-                </a>
-                {/* 5 — Remitos de huevos: granja → Trigotuc */}
-                <a
-                  href="#"
-                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/remitos") ? "text-white" : "text-white-50"}`}
-                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/remitos"); }}
-                >
-                  <i className="bi bi-truck"></i>
-                  <span>Remitos de Huevos</span>
-                </a>
-                {/* 6 — Incubadora */}
-                <a
-                  href="#"
-                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/incubadora") ? "text-white" : "text-white-50"}`}
-                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/incubadora"); }}
-                >
-                  <i className="bi bi-thermometer-half"></i>
-                  <span>Incubadora</span>
-                </a>
-                {/* 7 — Reserva de Pollitos (reparto por tanda, antes de que nazcan) */}
-                <a
-                  href="#"
-                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/reserva-pollitos") ? "text-white" : "text-white-50"}`}
-                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/reserva-pollitos"); }}
-                >
-                  <i className="bi bi-graph-up-arrow"></i>
-                  <span>Proyección</span>
-                </a>
-                {/* 8 — Asignaciones: lo que ya tiene destino (clientes y galpones) */}
-                <a
-                  href="#"
-                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/asignaciones") ? "text-white" : "text-white-50"}`}
-                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/asignaciones"); }}
-                >
-                  <i className="bi bi-list-check"></i>
-                  <span>Asignaciones</span>
-                </a>
-                {/* 8 — Stock de huevos de descarte + salidas sin cliente */}
-                <a
-                  href="#"
-                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/stock-huevos") ? "text-white" : "text-white-50"}`}
-                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/stock-huevos"); }}
-                >
-                  <i className="bi bi-egg"></i>
-                  <span>Stock de Huevos</span>
-                </a>
-                {/* 8 y 9 — Venta de Huevos y Venta de Pollitos: ocultas por ahora,
-                    el cliente todavía no las va a usar. Las páginas siguen existiendo.
-                <a
-                  href="#"
-                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/ventas-huevos") ? "text-white" : "text-white-50"}`}
-                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/ventas-huevos"); }}
-                >
-                  <i className="bi bi-cash-coin"></i>
-                  <span>Venta de Huevos</span>
-                </a>
-                <a
-                  href="#"
-                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/ventas-pollitos") ? "text-white" : "text-white-50"}`}
-                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/ventas-pollitos"); }}
-                >
-                  <i className="bi bi-cash-stack"></i>
-                  <span>Venta de Pollitos</span>
-                </a>
-                */}
-              </div>
-            )}
-          </div>
-          )}
-
           {/* Frigorifico */}
-          {rolUsuario !== "granja" && rolUsuario !== "chofer" && (
+          {rolUsuario !== "granja" && rolUsuario !== "chofer" && rolUsuario !== "reproductoras" && (
           <div className="nav-section mb-2">
             <a
               href="#"

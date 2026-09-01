@@ -49,8 +49,8 @@ function App() {
         <Route path="/login" element={<LoginScreen />} />
 
         <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-        {/* Proyección pasó a ser la pantalla de Reproductores. */}
-        <Route path="/proyeccion" element={<Navigate to="/reproductores/reserva-pollitos" replace />} />
+        {/* Proyección vive en la raíz del menú (cruza Reproductores y Granja). */}
+        <Route path="/proyeccion" element={<ProtectedRoute><ReservaPollitosPage /></ProtectedRoute>} />
         <Route path="/clientes" element={<ProtectedRoute><ClientesPage /></ProtectedRoute>} />
         <Route path="/personal" element={<ProtectedRoute><PersonalPage /></ProtectedRoute>} />
         <Route path="/camiones" element={<ProtectedRoute><CamionesPage /></ProtectedRoute>} />
@@ -91,7 +91,8 @@ function App() {
         <Route path="/reproductores/incubadora" element={<ProtectedRoute><IncubadoraPage /></ProtectedRoute>} />
         {/* Nacimientos se absorbió en Incubadora (tarjetas de nacedora + solapa). */}
         <Route path="/reproductores/nacimientos" element={<Navigate to="/reproductores/incubadora" replace />} />
-        <Route path="/reproductores/reserva-pollitos" element={<ProtectedRoute><ReservaPollitosPage /></ProtectedRoute>} />
+        {/* Ruta vieja: Proyección se mudó a la raíz. */}
+        <Route path="/reproductores/reserva-pollitos" element={<Navigate to="/proyeccion" replace />} />
         <Route path="/reproductores/asignaciones" element={<ProtectedRoute><AsignacionesPollitosPage /></ProtectedRoute>} />
         <Route path="/reproductores/stock-huevos" element={<ProtectedRoute><StockHuevosPage /></ProtectedRoute>} />
         {/* Ventas de Reproductores: en pausa por pedido del cliente.
