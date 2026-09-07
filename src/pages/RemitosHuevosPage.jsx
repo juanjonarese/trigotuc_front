@@ -6,8 +6,8 @@ import {
   obtenerConstantesReproductores,
   obtenerRemitosHuevos,
   obtenerStockGranja,
-  obtenerStockTrigotuc,
   crearRemitoHuevos,
+  editarRemitoHuevos,
   anularRemitoHuevos,
 } from "../services/api";
 import { formatearFechaLocal, ajustarFechaParaGuardar, obtenerFechaHoy } from "../utils/dateUtils";
@@ -33,13 +33,51 @@ const tiposVacios = () => TIPOS_HUEVO_KEYS.reduce((acc, k) => ({ ...acc, [k]: ""
 //
 // De cada plantel solo se puede mandar lo que tiene en la granja: el backend
 // consume FIFO por fecha de recolección (primero el huevo más viejo).
-const RemitoModal = ({ stockGranja, constantes, onClose, onGuardado }) => {
-  const [numeroRemito, setNumeroRemito] = useState("");
-  const [fecha, setFecha] = useState(obtenerFechaHoy());
-  const [observaciones, setObservaciones] = useState("");
-  // { [loteId]: { api: "", dobleYema: "", regular: "", bebe: "" } }
-  const [cantidades, setCantidades] = useState({});
+// Con `remito` el modal edita en vez de cargar. Editar es revertir y volver a
+// aplicar: por eso lo que ese remito ya tiene tomado vuelve a contar como
+// disponible en la granja, y arranca precargado con sus propias cantidades.
+const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) => {
+  const editando = !!remito;
+  const lineasPrevias = remito?.lineas || [];
+  const idLote = (l) => String(l.lote?._id || l.lote);
+
+  const [numeroRemito, setNumeroRemito] = useState(remito?.numeroRemito || "");
+  const [fecha, setFecha] = useState(
+    remito?.fecha ? String(remito.fecha).slice(0, 10) : obtenerFechaHoy()
+  );
+  const [observaciones, setObservaciones] = useState(remito?.observaciones || "");
+  // { [loteId]: { apiLimpioCinta: "", apiSucioCinta: "", ... } }
+  const [cantidades, setCantidades] = useState(() => {
+    const inicial = {};
+    for (const l of lineasPrevias) {
+      const id = idLote(l);
+      inicial[id] = { ...(inicial[id] || tiposVacios()), [l.tipo]: String(l.huevos) };
+    }
+    return inicial;
+  });
   const [saving, setSaving] = useState(false);
+
+  // Disponible efectivo: lo que hay en la granja MÁS lo que este mismo remito
+  // tomó, porque al guardar se devuelve primero.
+  const entradas = (() => {
+    const mapa = new Map();
+    for (const e of stockGranja) {
+      mapa.set(String(e.lote), { ...e, porTipo: { ...e.porTipo } });
+    }
+    for (const l of lineasPrevias) {
+      const id = idLote(l);
+      if (!mapa.has(id)) {
+        mapa.set(id, {
+          lote: id,
+          numeroLote: l.numeroLote,
+          porTipo: TIPOS_HUEVO_KEYS.reduce((acc, k) => ({ ...acc, [k]: 0 }), {}),
+        });
+      }
+      const e = mapa.get(id);
+      e.porTipo[l.tipo] = (e.porTipo[l.tipo] || 0) + l.huevos;
+    }
+    return [...mapa.values()].sort((a, b) => a.numeroLote - b.numeroLote);
+  })();
 
   const huevosPorCajon = constantes?.huevosPorCajon ?? 144;
   const huevosPorBandeja = constantes?.huevosPorBandeja ?? 12;
@@ -66,7 +104,7 @@ const RemitoModal = ({ stockGranja, constantes, onClose, onGuardado }) => {
   // Líneas efectivas del remito y control de que ninguna supere lo disponible.
   const lineas = [];
   const excedidos = [];
-  for (const entrada of stockGranja) {
+  for (const entrada of entradas) {
     for (const tipo of TIPOS_HUEVO_KEYS) {
       const huevos = cantidad(entrada.lote, tipo);
       if (huevos <= 0) continue;
@@ -103,22 +141,25 @@ const RemitoModal = ({ stockGranja, constantes, onClose, onGuardado }) => {
 
     setSaving(true);
     try {
-      const remito = await crearRemitoHuevos({
+      const payload = {
         numeroRemito: numeroRemito.trim(),
         fecha: ajustarFechaParaGuardar(fecha),
         lineas: lineas.map(({ lote, tipo, huevos }) => ({ lote, tipo, huevos })),
         observaciones: observaciones || undefined,
-      });
+      };
+      const guardado = editando
+        ? await editarRemitoHuevos(remito._id, payload)
+        : await crearRemitoHuevos(payload);
       await onGuardado();
       Swal.fire({
         icon: "success",
-        title: `Remito ${remito.numeroRemito} cargado`,
-        text: `${formatearNumero(remito.huevosTotales)} huevos entraron a Trigotuc`,
+        title: `Remito ${guardado.numeroRemito} ${editando ? "actualizado" : "cargado"}`,
+        text: `${formatearNumero(guardado.huevosTotales)} huevos en Trigotuc`,
         timer: 2600,
         showConfirmButton: false,
       });
     } catch (err) {
-      Swal.fire("Error", err.message || "No se pudo cargar el remito.", "error");
+      Swal.fire("Error", err.message || "No se pudo guardar el remito.", "error");
       setSaving(false);
     }
   };
@@ -130,7 +171,8 @@ const RemitoModal = ({ stockGranja, constantes, onClose, onGuardado }) => {
           <div className="modal-content">
             <div className="modal-header bg-success text-white">
               <h5 className="modal-title">
-                <i className="bi bi-truck me-2"></i>Nuevo remito a Trigotuc
+                <i className="bi bi-truck me-2"></i>
+                {editando ? `Editar remito ${remito.numeroRemito}` : "Nuevo remito a Trigotuc"}
               </h5>
               <button className="btn-close btn-close-white" onClick={onClose} disabled={saving}></button>
             </div>
@@ -183,7 +225,7 @@ const RemitoModal = ({ stockGranja, constantes, onClose, onGuardado }) => {
 
                 <h6 className="fw-bold text-secondary mb-2">Huevos en la granja</h6>
 
-                {stockGranja.length === 0 ? (
+                {entradas.length === 0 ? (
                   <div className="alert alert-warning small">
                     <i className="bi bi-exclamation-triangle me-1"></i>
                     No hay huevos en la granja sin remitir. Cargá primero la recolección.
@@ -204,7 +246,7 @@ const RemitoModal = ({ stockGranja, constantes, onClose, onGuardado }) => {
                         </tr>
                       </thead>
                       <tbody>
-                        {stockGranja.map((entrada) => (
+                        {entradas.map((entrada) => (
                           <tr key={entrada.lote}>
                             <td>
                               <span className="fw-bold">#{entrada.numeroLote}</span>
@@ -389,25 +431,24 @@ const RemitosHuevosPage = () => {
   const [constantes, setConstantes] = useState(null);
   const [remitos, setRemitos] = useState([]);
   const [stockGranja, setStockGranja] = useState([]);
-  const [stockTrigotuc, setStockTrigotuc] = useState(null);
   const [loading, setLoading] = useState(true);
   const [modalAbierto, setModalAbierto] = useState(false);
+  // Remito que se está editando; null = alta.
+  const [editando, setEditando] = useState(null);
   const [detalle, setDetalle] = useState(null);
   const [pagina, setPagina] = useState(1);
 
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
-      const [cons, rems, granja, trigotuc] = await Promise.all([
+      const [cons, rems, granja] = await Promise.all([
         obtenerConstantesReproductores(),
         obtenerRemitosHuevos(),
         obtenerStockGranja(),
-        obtenerStockTrigotuc(),
       ]);
       setConstantes(cons);
       setRemitos(Array.isArray(rems) ? rems : []);
       setStockGranja(Array.isArray(granja) ? granja : []);
-      setStockTrigotuc(trigotuc);
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudieron cargar los remitos.", "error");
     } finally {
@@ -505,51 +546,22 @@ const RemitosHuevosPage = () => {
           </div>
         ) : (
           <>
-            {/* Dónde está el huevo hoy: en la granja o ya en Trigotuc */}
-            <div className="row g-3 mb-4">
-              <div className="col-12 col-lg-6">
-                <div className="card shadow-sm h-100">
-                  <div className="card-header bg-white fw-bold">
-                    <i className="bi bi-house me-1"></i>En la granja
-                    <span className="text-muted fw-normal small ms-2">sin remitir</span>
-                  </div>
-                  <div className="card-body">
-                    <div className="h4 fw-bold mb-2">{formatearNumero(totalGranja)} huevos</div>
-                    <div className="row g-2 small">
-                      {TIPOS_HUEVO.map((t) => (
-                        <div className="col-6" key={t.key}>
-                          <span className="text-muted">{t.label}:</span>{" "}
-                          <strong className={t.clase}>{formatearNumero(granjaPorTipo[t.key])}</strong>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+            {/* Lo que hay en la granja para remitir. El stock ya recibido en
+                Trigotuc no va acá: se ve en Stock de Huevos. */}
+            <div className="card shadow-sm mb-4">
+              <div className="card-header bg-white fw-bold">
+                <i className="bi bi-house me-1"></i>En la granja
+                <span className="text-muted fw-normal small ms-2">sin remitir</span>
               </div>
-              <div className="col-12 col-lg-6">
-                <div className="card shadow-sm h-100">
-                  <div className="card-header bg-white fw-bold">
-                    <i className="bi bi-building me-1"></i>En Trigotuc
-                    <span className="text-muted fw-normal small ms-2">recibido, sin usar</span>
-                  </div>
-                  <div className="card-body">
-                    <div className="h4 fw-bold mb-2">
-                      {formatearNumero(stockTrigotuc?.total || 0)} huevos
+              <div className="card-body">
+                <div className="h4 fw-bold mb-2">{formatearNumero(totalGranja)} huevos</div>
+                <div className="row g-2 small">
+                  {TIPOS_HUEVO.map((t) => (
+                    <div className="col-6 col-md-4 col-lg-2" key={t.key}>
+                      <span className="text-muted">{t.label}:</span>{" "}
+                      <strong className={t.clase}>{formatearNumero(granjaPorTipo[t.key])}</strong>
                     </div>
-                    <div className="row g-2 small">
-                      {(stockTrigotuc?.porTipo || []).map((t) => (
-                        <div className="col-6" key={t.tipo}>
-                          <span className="text-muted">{t.etiqueta}:</span>{" "}
-                          <strong>{formatearNumero(t.cantidad)}</strong>
-                        </div>
-                      ))}
-                      {stockTrigotuc?.sinTipo > 0 && (
-                        <div className="col-12 text-muted">
-                          Descarte de inoculación: {formatearNumero(stockTrigotuc.sinTipo)}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -618,13 +630,22 @@ const RemitosHuevosPage = () => {
                                   <i className="bi bi-eye"></i>
                                 </button>
                                 {!r.anulado && (
-                                  <button
-                                    className="btn btn-outline-danger"
-                                    onClick={() => handleAnular(r)}
-                                    title="Anular"
-                                  >
-                                    <i className="bi bi-x-circle"></i>
-                                  </button>
+                                  <>
+                                    <button
+                                      className="btn btn-outline-secondary"
+                                      onClick={() => setEditando(r)}
+                                      title="Editar"
+                                    >
+                                      <i className="bi bi-pencil"></i>
+                                    </button>
+                                    <button
+                                      className="btn btn-outline-danger"
+                                      onClick={() => handleAnular(r)}
+                                      title="Anular"
+                                    >
+                                      <i className="bi bi-x-circle"></i>
+                                    </button>
+                                  </>
                                 )}
                               </div>
                             </td>
@@ -680,12 +701,20 @@ const RemitosHuevosPage = () => {
                             <i className="bi bi-eye me-1"></i>Detalle
                           </button>
                           {!r.anulado && (
-                            <button
-                              className="btn btn-sm btn-outline-danger flex-fill"
-                              onClick={() => handleAnular(r)}
-                            >
-                              <i className="bi bi-x-circle me-1"></i>Anular
-                            </button>
+                            <>
+                              <button
+                                className="btn btn-sm btn-outline-secondary flex-fill"
+                                onClick={() => setEditando(r)}
+                              >
+                                <i className="bi bi-pencil me-1"></i>Editar
+                              </button>
+                              <button
+                                className="btn btn-sm btn-outline-danger flex-fill"
+                                onClick={() => handleAnular(r)}
+                              >
+                                <i className="bi bi-x-circle me-1"></i>Anular
+                              </button>
+                            </>
                           )}
                         </div>
                       </div>
@@ -704,6 +733,19 @@ const RemitosHuevosPage = () => {
           </>
         )}
       </div>
+
+      {editando && (
+        <RemitoModal
+          stockGranja={stockGranja}
+          constantes={constantes}
+          remito={editando}
+          onClose={() => setEditando(null)}
+          onGuardado={async () => {
+            setEditando(null);
+            await cargar();
+          }}
+        />
+      )}
 
       {modalAbierto && (
         <RemitoModal

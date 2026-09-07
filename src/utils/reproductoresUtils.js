@@ -45,19 +45,30 @@ export const textoDesglose = (huevos, huevosPorCajon, huevosPorBandeja) => {
 export const SECTOR_LABEL = { recria: "Recría", postura: "Postura" };
 
 // ── Tipos de huevo ──────────────────────────────────────────────────────────
-// Los cuatro tipos que se clasifican en el galpón y viajan en el remito a
+// Los cinco tipos que se clasifican en el galpón y viajan en el remito a
 // Trigotuc. Las claves son las de recoleccion.tipos y remito.lineas[].tipo —
 // espejo de utils/reproductores.js en el backend, no cambiar de un lado solo.
+//
+// El API se divide por dónde y cómo se juntó, pero los TRES se incuban igual:
+// la división es para saber la calidad de lo que entra, no para filtrar. Por eso
+// "incubable" son varios tipos y no uno — usar TIPOS_HUEVO_INCUBABLES.
+//
 // El huevo roto no es un tipo: se tira en la granja (descartePerdida).
 export const TIPOS_HUEVO = [
-  { key: "api",       label: "API",        corto: "API",   ayuda: "Incubable — es el único que entra a la incubadora", clase: "text-success",       icono: "bi-thermometer-half" },
-  { key: "dobleYema", label: "Doble yema", corto: "D.yema", ayuda: "No incubable, va a venta",                          clase: "text-warning",       icono: "bi-egg-fried" },
-  { key: "regular",   label: "Regular",    corto: "Reg.",   ayuda: "No incubable, va a venta",                          clase: "text-primary",       icono: "bi-egg" },
-  { key: "bebe",      label: "Huevo bebé", corto: "Bebé",   ayuda: "No incubable, va a venta",                          clase: "text-info",          icono: "bi-egg-fill" },
+  { key: "apiLimpioCinta", label: "API limpio cinta", corto: "API limpio", ayuda: "Incubable — juntado de la cinta, limpio",  clase: "text-success", icono: "bi-thermometer-half", incubable: true },
+  { key: "apiSucioCinta",  label: "API sucio cinta",  corto: "API s.cinta", ayuda: "Incubable — juntado de la cinta, sucio",  clase: "text-success", icono: "bi-thermometer-half", incubable: true },
+  { key: "apiSucioPiso",   label: "API sucio piso",   corto: "API s.piso",  ayuda: "Incubable — juntado del piso",            clase: "text-success", icono: "bi-thermometer-half", incubable: true },
+  { key: "consumo",        label: "Consumo",          corto: "Consumo",     ayuda: "No incubable, va a venta",                clase: "text-primary", icono: "bi-egg",              incubable: false },
+  { key: "dobleYema",      label: "Doble yema",       corto: "D.yema",      ayuda: "No incubable, va a venta",                clase: "text-warning", icono: "bi-egg-fried",        incubable: false },
 ];
 
 export const TIPOS_HUEVO_KEYS = TIPOS_HUEVO.map((t) => t.key);
-export const TIPO_HUEVO_INCUBABLE = "api";
+export const TIPOS_HUEVO_INCUBABLES = TIPOS_HUEVO.filter((t) => t.incubable).map((t) => t.key);
+export const TIPOS_HUEVO_VENTA = TIPOS_HUEVO.filter((t) => !t.incubable).map((t) => t.key);
+
+/** Suma los incubables de un objeto { apiLimpioCinta: n, ... }. */
+export const sumarIncubables = (porTipo = {}) =>
+  TIPOS_HUEVO_INCUBABLES.reduce((acc, k) => acc + (Number(porTipo[k]) || 0), 0);
 
 export const etiquetaTipoHuevo = (key) =>
   TIPOS_HUEVO.find((t) => t.key === key)?.label || key;
@@ -92,6 +103,17 @@ export const ORIGEN_DESCARTE = {
 };
 
 export const SEXO_LABEL = { hembra: "Hembras", macho: "Machos" };
+
+// Controles semanales del galpón: los tres son OK / No OK y van a nivel plantel
+// (no por sexo). El orden de este array es el que se ve en el formulario y en
+// la tabla del historial.
+export const CHEQUEOS_SEMANALES = [
+  { key: "pruebaBalanza",   label: "Prueba de balanza", icono: "bi-speedometer" },
+  { key: "pruebaVaciado",   label: "Prueba de vaciado", icono: "bi-hourglass-split" },
+  { key: "espacioComedero", label: "Espacio comedero",  icono: "bi-rulers" },
+];
+
+export const CHEQUEO_LABEL = { ok: "OK", no_ok: "No OK" };
 
 /** Nombre del galpón según el mapa de constantes que devuelve el backend. */
 export const nombreGalpon = (galpones, sector, numero) => {

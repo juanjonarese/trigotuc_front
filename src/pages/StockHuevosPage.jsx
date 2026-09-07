@@ -28,28 +28,37 @@ const MOTIVOS = {
 // "venta" se reemplaza por la venta real con cliente.
 const SalidaModal = ({ stock, onClose, onHecho }) => {
   const [fecha, setFecha] = useState(obtenerFechaHoy());
-  const [unidad, setUnidad] = useState("maples"); // maples | huevos
-  const [cantidad, setCantidad] = useState("");
   const [motivo, setMotivo] = useState("venta");
+  // Un número por tipo, en unidades: la salida puede llevar varios a la vez.
+  const [porTipo, setPorTipo] = useState({});
   const [observaciones, setObservaciones] = useState("");
   const [saving, setSaving] = useState(false);
 
   const porMaple = stock.huevosPorMaple || 30;
-  const cant = Number(cantidad) || 0;
-  const huevos = unidad === "maples" ? cant * porMaple : cant;
+  const tipos = stock.porTipo || [];
+
+  const cargado = (t) => Number(porTipo[t]) || 0;
+  const huevos = tipos.reduce((acc, t) => acc + cargado(t.tipo), 0);
   const restante = stock.total - huevos;
-  const excede = huevos > stock.total;
+  // Cada tipo se valida contra su propio disponible, no contra el total.
+  const excedidos = tipos.filter((t) => cargado(t.tipo) > t.cantidad);
+  const excede = excedidos.length > 0;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (huevos <= 0) {
-      Swal.fire("Falta la cantidad", "Cargá cuántos huevos salen del stock.", "warning");
+      Swal.fire("Falta la cantidad", "Cargá cuántos huevos salen de cada tipo.", "warning");
       return;
     }
     if (excede) {
       Swal.fire(
         "No alcanza el stock",
-        `Hay ${formatearNumero(stock.total)} huevos disponibles y estás sacando ${formatearNumero(huevos)}.`,
+        excedidos
+          .map(
+            (t) =>
+              `${t.etiqueta}: pediste ${formatearNumero(cargado(t.tipo))} y hay ${formatearNumero(t.cantidad)}.`
+          )
+          .join("<br/>"),
         "warning"
       );
       return;
@@ -58,6 +67,7 @@ const SalidaModal = ({ stock, onClose, onHecho }) => {
     setSaving(true);
     try {
       await crearSalidaHuevos({
+        porTipo,
         fecha: ajustarFechaParaGuardar(fecha),
         huevos,
         motivo,
@@ -135,36 +145,55 @@ const SalidaModal = ({ stock, onClose, onHecho }) => {
                   </div>
                 </div>
 
-                <label className="form-label fw-semibold small">¿Cuánto sale?</label>
-                <div className="input-group mb-1">
-                  <input
-                    type="number"
-                    className={`form-control ${excede ? "border-danger" : ""}`}
-                    min="0"
-                    value={cantidad}
-                    onChange={(e) => setCantidad(e.target.value)}
-                    placeholder="0"
-                  />
-                  <button
-                    type="button"
-                    className={`btn ${unidad === "maples" ? "btn-secondary" : "btn-outline-secondary"}`}
-                    onClick={() => setUnidad("maples")}
-                  >
-                    Maples
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn ${unidad === "huevos" ? "btn-secondary" : "btn-outline-secondary"}`}
-                    onClick={() => setUnidad("huevos")}
-                  >
-                    Huevos
-                  </button>
-                </div>
-                <div className="form-text mb-3">
-                  {unidad === "maples"
-                    ? `1 maple = ${porMaple} huevos · salen ${formatearNumero(huevos)} unidades`
-                    : "Se descuenta en unidades"}
-                </div>
+                <label className="form-label fw-semibold small">
+                  ¿Cuánto sale de cada tipo?
+                  <span className="text-muted fw-normal"> (en huevos)</span>
+                </label>
+                {tipos.length === 0 ? (
+                  <div className="alert alert-secondary py-2 small mb-3">
+                    No hay huevos en stock.
+                  </div>
+                ) : (
+                  <div className="mb-3">
+                    {tipos.map((t) => {
+                      const val = cargado(t.tipo);
+                      const pasado = val > t.cantidad;
+                      return (
+                        <div className="row g-2 align-items-center mb-2" key={t.tipo}>
+                          <div className="col-5">
+                            <div className="fw-semibold small">{t.etiqueta}</div>
+                            <div className="text-muted" style={{ fontSize: ".75rem" }}>
+                              hay {formatearNumero(t.cantidad)}
+                            </div>
+                          </div>
+                          <div className="col-4">
+                            <input
+                              type="number"
+                              className={`form-control ${pasado ? "is-invalid" : ""}`}
+                              min="0"
+                              max={t.cantidad}
+                              placeholder="0"
+                              value={porTipo[t.tipo] ?? ""}
+                              onChange={(e) =>
+                                setPorTipo({ ...porTipo, [t.tipo]: e.target.value })
+                              }
+                            />
+                          </div>
+                          <div className="col-3 text-muted small">
+                            {val > 0 && `${formatearNumero(Math.floor(val / porMaple))} maples`}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div className="border-top pt-2 d-flex justify-content-between fw-semibold small">
+                      <span>Total</span>
+                      <span className={excede ? "text-danger" : ""}>
+                        {formatearNumero(huevos)} huevos ·{" "}
+                        {formatearNumero(Math.floor(huevos / porMaple))} maples
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 <div className="alert alert-light border small mb-3">
                   <i className="bi bi-info-circle me-1"></i>
@@ -257,6 +286,7 @@ const StockHuevosPage = () => {
         filas: stock?.partidas || [],
         columnas: [
           { header: "Fecha",       valor: (p) => formatearFechaLocal(p.fecha) },
+          { header: "Tipo",        valor: (p) => p.etiquetaTipo || "—" },
           { header: "Origen",      valor: (p) => ORIGEN_DESCARTE[p.origen] || p.etiqueta || p.origen },
           { header: "Plantel",     valor: (p) => p.numeroLote ?? "" },
           { header: "Ingresaron",  valor: (p) => p.cantidad ?? 0 },
@@ -357,6 +387,30 @@ const StockHuevosPage = () => {
               </div>
             </div>
 
+            {/* Qué es lo que hay: doble yema, consumo o descarte de inoculación */}
+            {(stock.porTipo || []).length > 0 && (
+              <div className="card shadow-sm mb-4">
+                <div className="card-header bg-white fw-bold">
+                  <i className="bi bi-tags me-1"></i>Por tipo de huevo
+                </div>
+                <div className="card-body">
+                  <div className="row g-2">
+                    {stock.porTipo.map((t) => (
+                      <div className="col-6 col-md-4 col-lg-3" key={t.tipo}>
+                        <div className="border rounded p-2 h-100">
+                          <div className="small text-muted">{t.etiqueta}</div>
+                          <div className="fw-bold h5 mb-0">{formatearNumero(t.cantidad)}</div>
+                          <div className="text-muted" style={{ fontSize: ".75rem" }}>
+                            {formatearNumero(t.maples)} maple{t.maples === 1 ? "" : "s"}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Partidas: el orden es el orden en que van a salir */}
             <h5 className="fw-bold text-secondary mb-3">
               Partidas disponibles
@@ -377,6 +431,7 @@ const StockHuevosPage = () => {
                     <thead className="table-light">
                       <tr>
                         <th>Fecha</th>
+                        <th>Tipo</th>
                         <th>Origen</th>
                         <th className="text-center">Plantel</th>
                         <th className="text-end">Ingresaron</th>
@@ -388,6 +443,11 @@ const StockHuevosPage = () => {
                       {stock.partidas.map((p) => (
                         <tr key={p._id}>
                           <td>{formatearFechaLocal(p.fecha)}</td>
+                          <td>
+                            <span className={`badge ${p.tipo ? "bg-primary" : "bg-secondary"}`}>
+                              {p.etiquetaTipo}
+                            </span>
+                          </td>
                           <td className="small">{ORIGEN_DESCARTE[p.origen] || p.etiqueta}</td>
                           <td className="text-center">#{p.numeroLote ?? "?"}</td>
                           <td className="text-end text-muted">{formatearNumero(p.cantidad)}</td>

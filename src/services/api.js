@@ -866,6 +866,27 @@ export const eliminarPesajeReproductor = async (id, pesajeId) => {
   return handleResponse(response);
 };
 
+export const registrarControlSemanalReproductor = async (id, data) => {
+  const response = await fetch(`${API_URL}/lotes-reproductores/${id}/control-semanal`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const editarControlSemanalReproductor = async (id, controlId, data) => {
+  const response = await fetch(`${API_URL}/lotes-reproductores/${id}/control-semanal/${controlId}`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const eliminarControlSemanalReproductor = async (id, controlId) => {
+  const response = await fetch(`${API_URL}/lotes-reproductores/${id}/control-semanal/${controlId}`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
 // ── Recolección diaria de huevos ──
 export const obtenerRecoleccionesHuevos = async (filtros = {}) => {
   const response = await fetch(`${API_URL}/recolecciones-huevos${buildQuery(filtros)}`, {
@@ -953,6 +974,13 @@ export const crearRemitoHuevos = async (data) => {
 };
 
 // El remito no se edita: se anula y se vuelve a cargar, como el papel.
+export const editarRemitoHuevos = async (id, data) => {
+  const response = await fetch(`${API_URL}/remitos-huevos/${id}`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
 export const anularRemitoHuevos = async (id, motivo) => {
   const response = await fetch(`${API_URL}/remitos-huevos/${id}/anular`, {
     method: "POST", headers: getAuthHeaders(), body: JSON.stringify({ motivo }),

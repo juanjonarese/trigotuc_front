@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import * as XLSX from "xlsx";
 import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
+import Pagination from "../components/Pagination";
 import BotonExcel from "../components/BotonExcel";
 import { escapeHtml } from "../utils/escapeHtml";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
@@ -168,6 +169,48 @@ const EditarLoteModal = ({ lote, onClose, onGuardado }) => {
 };
 
 // ────────────────────────────────────────────────────────────────────────────
+// ── Cuenta corriente de stock ───────────────────────────────────────────────
+// Cuánto suma o resta un movimiento, en cajones (pollo entero) y cajas (trozado).
+//
+// El `detalle` guarda SIEMPRE valores absolutos y la dirección la marca `tipo`
+// (ver models/movimientoCamara.model.js). Por eso:
+//   · ingreso        → suma
+//   · salida         → resta
+//   · transferencia  → 0: mueve entre cámaras nuestras, el total no cambia
+//   · ajuste         → 0: son documentales ("edición manual del lote #13",
+//                     "envío eliminado"). Guardan una FOTO de lo afectado, no un
+//                     delta con signo, así que no se puede saber para qué lado
+//                     van. Se listan igual, marcados, pero no mueven el saldo.
+const movimientoEnUnidades = (m) => {
+  let cajones = 0;
+  let cajas = 0;
+  for (const d of m.detalle || []) {
+    if (d.clase === "entero") cajones += Number(d.cajones) || 0;
+    else if (d.clase === "trozado") cajas += Number(d.cajas) || 0;
+  }
+  const signo = m.tipo === "ingreso" ? 1 : m.tipo === "salida" ? -1 : 0;
+  return { cajones: cajones * signo, cajas: cajas * signo, mueveSaldo: signo !== 0 };
+};
+
+// Arma el extracto con saldo corriente. Los movimientos vienen del más nuevo al
+// más viejo, así que el saldo se calcula HACIA ATRÁS desde el stock actual: así
+// la primera fila siempre coincide con lo que hay hoy en cámara, aunque la
+// consulta esté limitada a los últimos N movimientos y no arranque de cero.
+const MOVIMIENTOS_POR_PAGINA = 100;
+
+const armarCuentaCorriente = (movimientos, saldoActualCajones, saldoActualCajas) => {
+  let cajones = saldoActualCajones;
+  let cajas = saldoActualCajas;
+  return movimientos.map((m) => {
+    const delta = movimientoEnUnidades(m);
+    const fila = { ...m, delta, saldoCajones: cajones, saldoCajas: cajas };
+    // El saldo de la fila siguiente (más vieja) es el de esta menos su efecto.
+    cajones -= delta.cajones;
+    cajas -= delta.cajas;
+    return fila;
+  });
+};
+
 const GranjaDashboardPage = () => {
   const navigate = useNavigate();
   const rolUsuario = localStorage.getItem("rolUsuario");
@@ -193,6 +236,7 @@ const GranjaDashboardPage = () => {
   const [historial, setHistorial] = useState([]);
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
   const [filtroOrigen, setFiltroOrigen] = useState("");
+  const [paginaMov, setPaginaMov] = useState(1);
 
   const cargarDatos = useCallback(async () => {
     try {
@@ -218,12 +262,33 @@ const GranjaDashboardPage = () => {
 
   const formatNum = fmtNum;
 
+  // Extracto con saldo corriente, anclado al stock que hay HOY en cámara. Va
+  // acá arriba porque lo usan tanto la tabla como la exportación a Excel.
+  const cajasEnCamara = [
+    ...(resumen.trozadosCañeteDetalle || []),
+    ...(resumen.trozadosTrigotucDetalle || []),
+  ].reduce((a, t) => a + (Number(t.cajas) || 0), 0);
+  const cuentaCorriente = armarCuentaCorriente(
+    historial,
+    resumen.cajonesDisponibles || 0,
+    cajasEnCamara
+  );
+  // El saldo se calcula sobre la lista COMPLETA y recién después se corta la
+  // página: si se paginara antes, cada página volvería a arrancar del stock de hoy.
+  const movimientosPagina = cuentaCorriente.slice(
+    (paginaMov - 1) * MOVIMIENTOS_POR_PAGINA,
+    paginaMov * MOVIMIENTOS_POR_PAGINA
+  );
+
   // Historial de movimientos de stock (solo superadmin)
   const cargarHistorial = async (origen = filtroOrigen) => {
     setCargandoHistorial(true);
     try {
-      const data = await obtenerMovimientosCamara({ origen, limite: 100 });
+      // El historial se pagina en pantalla, así que se trae completo. 3000 es el
+      // tope que acepta el backend (movimientoCamara.services.js).
+      const data = await obtenerMovimientosCamara({ origen, limite: 3000 });
       setHistorial(data);
+      setPaginaMov(1);
     } catch (err) {
       Swal.fire("Error", err.message, "error");
     } finally {
@@ -251,7 +316,7 @@ const GranjaDashboardPage = () => {
     ).join(" · ");
 
     exportarTablaExcel({
-      filas: historial,
+      filas: cuentaCorriente,
       nombreHoja: "Movimientos de stock",
       nombreArchivo: "Frigorifico_historial_stock",
       columnas: [
@@ -263,6 +328,12 @@ const GranjaDashboardPage = () => {
         { header: "Cámara destino", valor: (m) => m.camaraDestino },
         { header: "Producto",  valor: (m) => m.producto },
         { header: "Detalle",   valor: (m) => detalleTxt(m), ancho: 40 },
+        { header: "Entra cajones", valor: (m) => (m.delta.cajones > 0 ? m.delta.cajones : "") },
+        { header: "Sale cajones",  valor: (m) => (m.delta.cajones < 0 ? -m.delta.cajones : "") },
+        { header: "Entra cajas",   valor: (m) => (m.delta.cajas > 0 ? m.delta.cajas : "") },
+        { header: "Sale cajas",    valor: (m) => (m.delta.cajas < 0 ? -m.delta.cajas : "") },
+        { header: "Saldo cajones", valor: (m) => m.saldoCajones },
+        { header: "Saldo cajas",   valor: (m) => m.saldoCajas },
         { header: "Referencia", valor: (m) => {
             const r = m.referencia || {};
             return [r.numeroLote != null ? "Lote #" + r.numeroLote : null, r.numeroEnvio, r.ticket]
@@ -464,6 +535,7 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
   const trozadosTotales = Object.values(trozadosTotalesMap)
     .filter((t) => t.cajas > 0)
     .sort((a, b) => (TIPOS_ORDER.indexOf(a.tipo) - TIPOS_ORDER.indexOf(b.tipo)) || a.clase.localeCompare(b.clase));
+
 
   return (
     <Layout>
@@ -721,6 +793,16 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
               ) : historial.length === 0 ? (
                 <p className="text-muted small mb-0">Sin movimientos registrados.</p>
               ) : (
+                <>
+                <div className="alert alert-light border small py-2 mb-2">
+                  <i className="bi bi-info-circle me-1"></i>
+                  El saldo va como una cuenta corriente y es el que queda{" "}
+                  <strong>después</strong> de cada movimiento, del más nuevo al más viejo. Arranca
+                  del stock que hay hoy en cámara ({formatNum(resumen.cajonesDisponibles || 0)}{" "}
+                  cajones y {formatNum(cajasEnCamara)} cajas) y se va hacia atrás, así que la
+                  primera fila siempre coincide con la realidad aunque el listado esté limitado a
+                  los últimos {formatNum(historial.length)} movimientos.
+                </div>
                 <div className="table-responsive">
                   <table className="table table-sm table-hover align-middle mb-0">
                     <thead>
@@ -730,11 +812,14 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
                         <th>Operación</th>
                         <th>Cámara</th>
                         <th>Detalle</th>
-                        <th>Usuario</th>
+                        <th className="text-end text-success">Entrada</th>
+                        <th className="text-end text-danger">Salida</th>
+                        <th className="text-end border-start">Saldo cajones</th>
+                        <th className="text-end">Saldo cajas</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {historial.map((m) => {
+                      {movimientosPagina.map((m) => {
                         const opLabel = {
                           faena: "Faena (ingreso)", venta_pos: "Venta POS", despacho: "Despacho",
                           envio_camara: "Envío entre cámaras", ajuste_manual: "Ajuste manual",
@@ -768,13 +853,45 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
                             </td>
                             <td className="small text-capitalize">{camaraTxt}</td>
                             <td className="small">{detalleTxt || "—"}</td>
-                            <td className="small">{m.registradoPorNombre || m.registradoPor?.nombreUsuario || "—"}</td>
+                            <td className="text-end small text-success fw-semibold">
+                              {m.delta.cajones > 0 || m.delta.cajas > 0
+                                ? [
+                                    m.delta.cajones > 0 && `${formatNum(m.delta.cajones)} caj`,
+                                    m.delta.cajas > 0 && `${formatNum(m.delta.cajas)} cajas`,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" · ")
+                                : ""}
+                            </td>
+                            <td className="text-end small text-danger fw-semibold">
+                              {m.delta.cajones < 0 || m.delta.cajas < 0
+                                ? [
+                                    m.delta.cajones < 0 && `${formatNum(-m.delta.cajones)} caj`,
+                                    m.delta.cajas < 0 && `${formatNum(-m.delta.cajas)} cajas`,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" · ")
+                                : !m.delta.mueveSaldo
+                                ? <span className="text-muted fw-normal" title="Los ajustes guardan una foto de lo afectado, no un movimiento con signo: no mueven el saldo.">no mueve saldo</span>
+                                : ""}
+                            </td>
+                            <td className="text-end small fw-bold border-start">
+                              {formatNum(m.saldoCajones)}
+                            </td>
+                            <td className="text-end small fw-bold">{formatNum(m.saldoCajas)}</td>
                           </tr>
                         );
                       })}
                     </tbody>
                   </table>
                 </div>
+                <Pagination
+                  currentPage={paginaMov}
+                  totalItems={cuentaCorriente.length}
+                  itemsPerPage={MOVIMIENTOS_POR_PAGINA}
+                  onPageChange={setPaginaMov}
+                />
+                </>
               )}
             </div>
           )}

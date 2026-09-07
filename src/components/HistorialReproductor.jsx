@@ -1,16 +1,22 @@
 import React, { useState } from "react";
 import { formatearFechaLocal } from "../utils/dateUtils";
-import { formatearNumero, SEXO_LABEL } from "../utils/reproductoresUtils";
+import {
+  formatearNumero,
+  SEXO_LABEL,
+  CHEQUEOS_SEMANALES,
+  CHEQUEO_LABEL,
+} from "../utils/reproductoresUtils";
 
 /**
- * Historial de datos semanales de un plantel: pesajes y mortandad,
- * siempre agrupados por semana y discriminados por sexo.
+ * Historial de datos semanales de un plantel: pesajes, mortandad y controles
+ * del galpón, siempre agrupados por semana. Pesajes y mortandad van
+ * discriminados por sexo; los controles son del plantel entero.
  *
  * Se usa en dos lugares con la misma pinta:
  *  - ReproductoresLotesPage, al tocar la tarjeta del galpón (solo lectura).
  *  - ReproductoresDatosPage, debajo de los formularios de carga (con borrado).
  *
- * Si no se pasan `onBorrarPesaje` / `onBorrarMortandad`, no se muestran acciones.
+ * Si no se pasan los `onBorrar*` / `onEditar*`, no se muestran acciones.
  */
 
 const formatPeso = (g) =>
@@ -48,6 +54,17 @@ const agruparMortandadPorSemana = (mortandad = []) => {
     .sort((a, b) => b.semana - a.semana);
 };
 
+const BadgeChequeo = ({ valor }) => {
+  if (valor == null) return <span className="text-muted">—</span>;
+  const ok = valor === "ok";
+  return (
+    <span className={`badge ${ok ? "bg-success" : "bg-danger"}`}>
+      <i className={`bi bi-${ok ? "check" : "x"}-lg me-1`}></i>
+      {CHEQUEO_LABEL[valor]}
+    </span>
+  );
+};
+
 const CeldaPeso = ({ pesaje, onEditar, onBorrar }) => {
   if (!pesaje) return <span className="text-muted">—</span>;
   return (
@@ -81,6 +98,8 @@ const HistorialReproductor = ({
   onBorrarPesaje,
   onEditarMortandad,
   onBorrarMortandad,
+  onEditarControl,
+  onBorrarControl,
   tabInicial = "pesaje",
   // Modo controlado: la página de carga ya tiene su propia solapa (que además
   // cambia el formulario), así que maneja el tab y esconde el de acá.
@@ -102,6 +121,8 @@ const HistorialReproductor = ({
     );
 
   const filasPeso = agruparPesajesPorSemana(lote?.pesajes);
+  // Un control por semana; se muestran de la más reciente a la más vieja.
+  const controles = [...(lote?.controlesSemanales || [])].sort((a, b) => b.semana - a.semana);
   const semanaActual = lote?.semanaVida ?? 0;
   const bajas = (lote?.mortandad || []).reduce((s, m) => s + m.cantidad, 0);
 
@@ -127,6 +148,17 @@ const HistorialReproductor = ({
           >
             <i className="bi bi-heartbreak me-1"></i>Mortandad
             {bajas > 0 && <span className="badge bg-danger ms-1">{formatearNumero(bajas)}</span>}
+          </button>
+        </li>
+        <li className="nav-item">
+          <button
+            className={`nav-link ${tab === "control" ? "active" : ""}`}
+            onClick={() => setTab("control")}
+          >
+            <i className="bi bi-clipboard-check me-1"></i>Controles
+            {controles.length > 0 && (
+              <span className="badge bg-secondary ms-1">{controles.length}</span>
+            )}
           </button>
         </li>
       </ul>
@@ -188,6 +220,82 @@ const HistorialReproductor = ({
                 Todavía no hay tabla de peso esperado para reproductores. Cuando la tengan, se
                 agrega igual que en crianza y la tabla muestra la diferencia contra el objetivo.
               </div>
+            </div>
+          )
+        ) : tab === "control" ? (
+          controles.length === 0 ? (
+            <p className="text-muted small text-center py-3 mb-0">Sin controles registrados</p>
+          ) : (
+            <div className="table-responsive">
+              <table className="table table-sm align-middle mb-0">
+                <thead className="table-light">
+                  <tr>
+                    <th>Semana</th>
+                    {CHEQUEOS_SEMANALES.map((c) => (
+                      <th key={c.key} className="text-center">
+                        {c.label}
+                      </th>
+                    ))}
+                    <th className="text-end">Alimento</th>
+                    <th className="d-none d-sm-table-cell">Fecha</th>
+                    {(onEditarControl || onBorrarControl) && <th></th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {controles.map((c) => {
+                    const esActual = c.semana === semanaActual;
+                    return (
+                      <tr key={c._id} className={esActual ? "table-primary" : ""}>
+                        <td className="fw-semibold">
+                          Sem. {c.semana}
+                          {esActual && (
+                            <span className="badge bg-primary ms-1" style={{ fontSize: "0.65rem" }}>
+                              actual
+                            </span>
+                          )}
+                        </td>
+                        {CHEQUEOS_SEMANALES.map((ch) => (
+                          <td key={ch.key} className="text-center">
+                            <BadgeChequeo valor={c[ch.key]} />
+                          </td>
+                        ))}
+                        <td className="text-end fw-semibold">
+                          {c.consumoAlimentoKg == null ? (
+                            <span className="text-muted fw-normal">—</span>
+                          ) : (
+                            `${formatearNumero(c.consumoAlimentoKg)} kg`
+                          )}
+                        </td>
+                        <td className="d-none d-sm-table-cell text-muted small">
+                          {formatearFechaLocal(c.fecha)}
+                        </td>
+                        {(onEditarControl || onBorrarControl) && (
+                          <td className="text-end text-nowrap">
+                            {onEditarControl && (
+                              <button
+                                className="btn btn-sm btn-outline-primary me-1"
+                                onClick={() => onEditarControl(c)}
+                                title="Editar"
+                              >
+                                <i className="bi bi-pencil"></i>
+                              </button>
+                            )}
+                            {onBorrarControl && (
+                              <button
+                                className="btn btn-sm btn-outline-danger"
+                                onClick={() => onBorrarControl(c)}
+                                title="Eliminar"
+                              >
+                                <i className="bi bi-trash"></i>
+                              </button>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )
         ) : grupos.length === 0 ? (
