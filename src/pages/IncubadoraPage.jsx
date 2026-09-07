@@ -19,11 +19,78 @@ import {
   textoDesglose,
   ESTADO_TANDA,
   nombreGalpon,
+  etiquetaTipoHuevo,
 } from "../utils/reproductoresUtils";
 import { exportarTablaExcel } from "../utils/exportarExcel";
 import Swal from "sweetalert2";
 
 const ITEMS_POR_PAGINA = 15;
+
+// ── Nacimientos por plantel ─────────────────────────────────────────────────
+// "Tanda de reproductoras" es el plantel: el dato ya viaja por toda la cadena
+// (recoleccion.lote → stockHuevo.lote → tandaIncubacion.lote), así que el
+// rendimiento se arma acá con las tandas que ya tenemos, sin pedir nada nuevo.
+//
+// Solo las tandas NACIDAS entran en el porcentaje: las que siguen en incubadora
+// o en nacedora todavía no tienen nacimiento y meterlas hundiría el número. Se
+// cuentan aparte para que se vea que hay huevo en curso.
+const rendimientoPorPlantel = (tandas) => {
+  const mapa = new Map();
+
+  for (const t of tandas) {
+    if (t.estado === "cancelada") continue;
+    const id = String(t.lote?._id || t.lote || "");
+    if (!id) continue;
+
+    if (!mapa.has(id)) {
+      mapa.set(id, {
+        id,
+        numeroLote: t.lote?.numeroLote ?? "?",
+        galpon: t.lote?.galpon,
+        incubados: 0,
+        nacidos: 0,
+        tandasNacidas: 0,
+        enCurso: 0,
+        huevosEnCurso: 0,
+        porTipo: new Map(),
+      });
+    }
+    const p = mapa.get(id);
+
+    if (t.estado === "nacida") {
+      const incubados = t.huevosIncubando || 0;
+      const nacidos = t.nacimiento?.pollitosNacidos || 0;
+      p.incubados += incubados;
+      p.nacidos += nacidos;
+      p.tandasNacidas += 1;
+
+      // El tipo de API es el eje nuevo: sirve para ver si el huevo de piso nace
+      // menos que el de cinta. Las tandas viejas no tienen tipo.
+      const tipo = t.tipo || "sinTipo";
+      if (!p.porTipo.has(tipo)) p.porTipo.set(tipo, { tipo, incubados: 0, nacidos: 0, tandas: 0 });
+      const pt = p.porTipo.get(tipo);
+      pt.incubados += incubados;
+      pt.nacidos += nacidos;
+      pt.tandas += 1;
+    } else {
+      p.enCurso += 1;
+      p.huevosEnCurso += t.huevosIncubando || 0;
+    }
+  }
+
+  return [...mapa.values()]
+    .map((p) => ({
+      ...p,
+      porcentaje: p.incubados > 0 ? (p.nacidos / p.incubados) * 100 : null,
+      porTipo: [...p.porTipo.values()]
+        .map((pt) => ({
+          ...pt,
+          porcentaje: pt.incubados > 0 ? (pt.nacidos / pt.incubados) * 100 : null,
+        }))
+        .sort((a, b) => String(a.tipo).localeCompare(String(b.tipo))),
+    }))
+    .sort((a, b) => a.numeroLote - b.numeroLote);
+};
 
 // ── Tarjeta de API recibido, lista para aceptar ─────────────────────────────
 // Una por (plantel, tipo), tal como vino en el remito. Al aceptarla entra a la
@@ -509,6 +576,11 @@ const IncubadoraPage = () => {
   const [solapa, setSolapa] = useState("incubadora");
   const [paginaHistorial, setPaginaHistorial] = useState(1);
 
+  // Nacimientos por plantel de reproductoras. Se llama `rendimientoPlanteles` y
+  // no `rendimiento` para no confundirlo con el de una tanda suelta que calcula
+  // NacimientoModal.
+  const rendimientoPlanteles = rendimientoPorPlantel(tandas);
+
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
@@ -608,6 +680,126 @@ const IncubadoraPage = () => {
             </p>
           </div>
           <div className="d-flex gap-2 align-items-center">
+            {solapa === "rendimiento" && (
+              rendimientoPlanteles.length === 0 ? (
+                <div className="card shadow-sm">
+                  <div className="card-body text-center py-5 text-muted">
+                    <i className="bi bi-graph-up fs-1 d-block mb-2"></i>
+                    Todavía no nació ninguna tanda. El porcentaje aparece cuando se
+                    registre el primer nacimiento.
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-muted small mb-3">
+                    Cuánto nace de cada plantel de reproductoras. Solo entran las tandas ya
+                    nacidas: las que siguen en la máquina se muestran aparte para que no
+                    hundan el porcentaje. Dentro de cada plantel se abre por tipo de API,
+                    que es lo que permite comparar el huevo de cinta contra el de piso.
+                  </p>
+                  <div className="row g-3">
+                    {rendimientoPlanteles.map((p) => (
+                      <div className="col-12 col-lg-6" key={p.id}>
+                        <div className="card shadow-sm h-100">
+                          <div className="card-header bg-white d-flex justify-content-between align-items-center">
+                            <span className="fw-bold">
+                              Plantel #{p.numeroLote}
+                              {p.galpon != null && (
+                                <span className="text-muted fw-normal small ms-2">
+                                  {nombreGalpon(constantes?.galpones, "postura", p.galpon)}
+                                </span>
+                              )}
+                            </span>
+                            {p.porcentaje != null && (
+                              <span
+                                className={`badge fs-6 ${
+                                  p.porcentaje >= 80
+                                    ? "bg-success"
+                                    : p.porcentaje >= 70
+                                    ? "bg-warning text-dark"
+                                    : "bg-danger"
+                                }`}
+                              >
+                                {formatearPorcentaje(p.porcentaje)}
+                              </span>
+                            )}
+                          </div>
+                          <div className="card-body">
+                            <div className="row g-2 text-center mb-3">
+                              <div className="col-4">
+                                <div className="border rounded p-2">
+                                  <div className="text-muted small">Incubados</div>
+                                  <div className="fw-bold">{formatearNumero(p.incubados)}</div>
+                                </div>
+                              </div>
+                              <div className="col-4">
+                                <div className="border rounded p-2">
+                                  <div className="text-muted small">Nacidos</div>
+                                  <div className="fw-bold text-success">
+                                    {formatearNumero(p.nacidos)}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="col-4">
+                                <div className="border rounded p-2">
+                                  <div className="text-muted small">Tandas</div>
+                                  <div className="fw-bold">{p.tandasNacidas}</div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="table-responsive">
+                              <table className="table table-sm align-middle mb-0">
+                                <thead className="table-light">
+                                  <tr>
+                                    <th className="small">Tipo de API</th>
+                                    <th className="small text-end">Incubados</th>
+                                    <th className="small text-end">Nacidos</th>
+                                    <th className="small text-end">%</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {p.porTipo.map((t) => (
+                                    <tr key={t.tipo}>
+                                      <td className="small">
+                                        {t.tipo === "sinTipo"
+                                          ? "Sin tipo (tandas viejas)"
+                                          : etiquetaTipoHuevo(t.tipo)}
+                                      </td>
+                                      <td className="small text-end">
+                                        {formatearNumero(t.incubados)}
+                                      </td>
+                                      <td className="small text-end text-success">
+                                        {formatearNumero(t.nacidos)}
+                                      </td>
+                                      <td className="small text-end fw-semibold">
+                                        {t.porcentaje != null
+                                          ? formatearPorcentaje(t.porcentaje)
+                                          : "—"}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+
+                            {p.enCurso > 0 && (
+                              <div className="alert alert-light border small mt-3 mb-0">
+                                <i className="bi bi-hourglass-split me-1"></i>
+                                {p.enCurso} tanda{p.enCurso === 1 ? "" : "s"} en curso con{" "}
+                                {formatearNumero(p.huevosEnCurso)} huevos: todavía no cuentan
+                                en el porcentaje.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )
+            )}
+
             {solapa === "historial" && (
               <BotonExcel
                 onClick={exportarHistorialExcel}
@@ -637,6 +829,14 @@ const IncubadoraPage = () => {
               onClick={() => setSolapa("historial")}
             >
               <i className="bi bi-clock-history me-1"></i>Historial ({tandas.length})
+            </button>
+          </li>
+          <li className="nav-item">
+            <button
+              className={`nav-link ${solapa === "rendimiento" ? "active fw-semibold" : ""}`}
+              onClick={() => setSolapa("rendimiento")}
+            >
+              <i className="bi bi-graph-up me-1"></i>Nacimientos por plantel
             </button>
           </li>
         </ul>
