@@ -11,6 +11,9 @@ import {
   registrarPesajeReproductor,
   editarPesajeReproductor,
   eliminarPesajeReproductor,
+  registrarControlSemanalReproductor,
+  editarControlSemanalReproductor,
+  eliminarControlSemanalReproductor,
 } from "../services/api";
 import { formatearFechaLocal, ajustarFechaParaGuardar, obtenerFechaHoy } from "../utils/dateUtils";
 import {
@@ -18,6 +21,8 @@ import {
   SEXO_LABEL,
   SECTOR_LABEL,
   nombreGalpon,
+  CHEQUEOS_SEMANALES,
+  CHEQUEO_LABEL,
 } from "../utils/reproductoresUtils";
 import Swal from "sweetalert2";
 
@@ -28,6 +33,10 @@ const COLOR_SECTOR = { recria: "#0dcaf0", postura: "#198754" };
 const PESO_MAX = 8000;
 const PESO_MIN_SOSPECHOSO = 100;
 
+// Los chequeos usan "" como "no lo controlé esta semana"; el backend lo recibe
+// como null y no pisa lo que ya estuviera cargado.
+const CHEQUEOS_VACIOS = CHEQUEOS_SEMANALES.reduce((acc, c) => ({ ...acc, [c.key]: "" }), {});
+
 const FORM_VACIO = {
   fecha: obtenerFechaHoy(),
   bajasHembras: "",
@@ -35,7 +44,32 @@ const FORM_VACIO = {
   causa: "",
   pesoHembras: "",
   pesoMachos: "",
+  ...CHEQUEOS_VACIOS,
+  consumoAlimentoKg: "",
 };
+
+// Consumo semanal de un galpón entero: un plantel grande no pasa de unos pocos
+// miles de kg por semana, así que arriba de esto casi seguro es un error de carga.
+const ALIMENTO_MAX_KG = 50000;
+
+// <select> de tres estados para cada chequeo del galpón.
+const SelectChequeo = ({ chequeo, value, onChange }) => (
+  <div className="col-12 col-sm-6 col-lg-3">
+    <label className="form-label small mb-1">
+      <i className={`bi ${chequeo.icono} me-1`}></i>
+      {chequeo.label}
+    </label>
+    <select
+      className="form-select form-select-sm"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      <option value="">Sin controlar</option>
+      <option value="ok">{CHEQUEO_LABEL.ok}</option>
+      <option value="no_ok">{CHEQUEO_LABEL.no_ok}</option>
+    </select>
+  </div>
+);
 
 const soloFecha = (f) => (f || "").split("T")[0];
 
@@ -287,6 +321,143 @@ const EditarPesajeModal = ({ lote, pesaje, onClose, onGuardado }) => {
   );
 };
 
+// ── Modal: editar el control semanal del galpón ─────────────────────────────
+const EditarControlModal = ({ lote, control, onClose, onGuardado }) => {
+  const [valores, setValores] = useState(() =>
+    CHEQUEOS_SEMANALES.reduce((acc, c) => ({ ...acc, [c.key]: control[c.key] || "" }), {
+      consumoAlimentoKg:
+        control.consumoAlimentoKg == null ? "" : String(control.consumoAlimentoKg),
+    })
+  );
+  const [fecha, setFecha] = useState(soloFecha(control.fecha));
+  const [saving, setSaving] = useState(false);
+
+  const set = (campo, valor) => setValores((v) => ({ ...v, [campo]: valor }));
+
+  const handleGuardar = async (e) => {
+    e.preventDefault();
+    const kg = valores.consumoAlimentoKg === "" ? null : Number(valores.consumoAlimentoKg);
+    if (kg !== null && (isNaN(kg) || kg < 0 || kg > ALIMENTO_MAX_KG)) {
+      Swal.fire("Consumo inválido", `Cargá los kg de alimento (hasta ${formatearNumero(ALIMENTO_MAX_KG)}).`, "warning");
+      return;
+    }
+    const algo = CHEQUEOS_SEMANALES.some((c) => valores[c.key]) || kg !== null;
+    if (!algo) {
+      Swal.fire(
+        "Control vacío",
+        "Dejá al menos un chequeo o el consumo cargado. Si querés borrarlo entero, usá el botón de eliminar.",
+        "warning"
+      );
+      return;
+    }
+    if (fecha < soloFecha(lote.fechaIngreso)) {
+      Swal.fire(
+        "Fecha inválida",
+        `No puede ser anterior al ingreso del plantel (${formatearFechaLocal(lote.fechaIngreso)}).`,
+        "warning"
+      );
+      return;
+    }
+    setSaving(true);
+    try {
+      await editarControlSemanalReproductor(lote._id, control._id, {
+        ...CHEQUEOS_SEMANALES.reduce(
+          (acc, c) => ({ ...acc, [c.key]: valores[c.key] || null }),
+          {}
+        ),
+        consumoAlimentoKg: kg,
+        fecha: ajustarFechaParaGuardar(fecha),
+      });
+      onGuardado();
+    } catch (err) {
+      Swal.fire("Error", err.message || "No se pudo guardar.", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="modal show d-block" tabIndex="-1">
+        <div className="modal-dialog">
+          <div className="modal-content">
+            <div className="modal-header bg-primary text-white">
+              <h5 className="modal-title">
+                <i className="bi bi-clipboard-check me-2"></i>Control de la semana {control.semana}
+              </h5>
+              <button className="btn-close btn-close-white" onClick={onClose} disabled={saving}></button>
+            </div>
+            <form onSubmit={handleGuardar}>
+              <div className="modal-body">
+                <div className="row g-3">
+                  {CHEQUEOS_SEMANALES.map((c) => (
+                    <div className="col-12" key={c.key}>
+                      <label className="form-label fw-semibold small mb-1">
+                        <i className={`bi ${c.icono} me-1`}></i>
+                        {c.label}
+                      </label>
+                      <select
+                        className="form-select"
+                        value={valores[c.key]}
+                        onChange={(e) => set(c.key, e.target.value)}
+                      >
+                        <option value="">Sin controlar</option>
+                        <option value="ok">{CHEQUEO_LABEL.ok}</option>
+                        <option value="no_ok">{CHEQUEO_LABEL.no_ok}</option>
+                      </select>
+                    </div>
+                  ))}
+                  <div className="col-12">
+                    <label className="form-label fw-semibold small mb-1">
+                      Consumo de alimento (kg)
+                    </label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      min="0"
+                      max={ALIMENTO_MAX_KG}
+                      step="any"
+                      value={valores.consumoAlimentoKg}
+                      onChange={(e) => set("consumoAlimentoKg", e.target.value)}
+                      placeholder="Dejá vacío si no lo tenés"
+                    />
+                  </div>
+                  <div className="col-12">
+                    <label className="form-label fw-semibold small mb-1">Fecha</label>
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={fecha}
+                      min={soloFecha(lote.fechaIngreso)}
+                      max={obtenerFechaHoy()}
+                      onChange={(e) => setFecha(e.target.value)}
+                      required
+                    />
+                    <div className="form-text">
+                      Si la fecha cae en otra semana, el control se reubica ahí. No puede haber
+                      dos controles en la misma semana.
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-outline-secondary" onClick={onClose} disabled={saving}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={saving}>
+                  {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
+                  Guardar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+      <div className="modal-backdrop show"></div>
+    </>
+  );
+};
+
 // ── Página ──────────────────────────────────────────────────────────────────
 const ReproductoresDatosPage = () => {
   const [constantes, setConstantes] = useState(null);
@@ -299,6 +470,7 @@ const ReproductoresDatosPage = () => {
   const [saving, setSaving] = useState(false);
   const [editMortandad, setEditMortandad] = useState(null);
   const [editPesaje, setEditPesaje] = useState(null);
+  const [editControl, setEditControl] = useState(null);
   const [showMudanza, setShowMudanza] = useState(false);
 
   const cargar = useCallback(async () => {
@@ -348,8 +520,24 @@ const ReproductoresDatosPage = () => {
     const pesoH = form.pesoHembras === "" ? null : Number(form.pesoHembras);
     const pesoM = form.pesoMachos === "" ? null : Number(form.pesoMachos);
 
-    if (!bajasH && !bajasM && pesoH === null && pesoM === null) {
-      Swal.fire("Faltan datos", "Cargá al menos una baja o un peso promedio.", "warning");
+    const chequeosCargados = CHEQUEOS_SEMANALES.filter((c) => form[c.key]);
+    const alimento = form.consumoAlimentoKg === "" ? null : Number(form.consumoAlimentoKg);
+    const hayControl = chequeosCargados.length > 0 || alimento !== null;
+
+    if (!bajasH && !bajasM && pesoH === null && pesoM === null && !hayControl) {
+      Swal.fire(
+        "Faltan datos",
+        "Cargá al menos una baja, un peso promedio, un chequeo o el consumo de alimento.",
+        "warning"
+      );
+      return;
+    }
+    if (alimento !== null && (isNaN(alimento) || alimento < 0 || alimento > ALIMENTO_MAX_KG)) {
+      Swal.fire(
+        "Consumo inválido",
+        `El alimento se carga en kg (hasta ${formatearNumero(ALIMENTO_MAX_KG)}).`,
+        "warning"
+      );
       return;
     }
     if ([bajasH, bajasM].some((v) => isNaN(v) || v < 0)) {
@@ -424,6 +612,16 @@ const ReproductoresDatosPage = () => {
         pasos.push(() =>
           registrarPesajeReproductor(lote._id, { sexo: "macho", pesoPromedio: pesoM, fecha })
         );
+      // Un solo control por semana: el backend crea el de la semana de `fecha` o
+      // actualiza el que ya exista, pisando solo los campos que mandamos.
+      if (hayControl)
+        pasos.push(() =>
+          registrarControlSemanalReproductor(lote._id, {
+            ...chequeosCargados.reduce((acc, c) => ({ ...acc, [c.key]: form[c.key] }), {}),
+            ...(alimento !== null ? { consumoAlimentoKg: alimento } : {}),
+            fecha,
+          })
+        );
 
       for (const paso of pasos) await paso();
 
@@ -475,11 +673,34 @@ const ReproductoresDatosPage = () => {
     }
   };
 
+  const borrarControl = async (control) => {
+    const { isConfirmed } = await Swal.fire({
+      icon: "warning",
+      title: `¿Eliminar el control de la semana ${control.semana}?`,
+      text: "Se borran los tres chequeos y el consumo de alimento de esa semana.",
+      showCancelButton: true,
+      confirmButtonText: "Sí, eliminar",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#dc3545",
+    });
+    if (!isConfirmed) return;
+    try {
+      await eliminarControlSemanalReproductor(lote._id, control._id);
+      await cargar();
+    } catch (err) {
+      Swal.fire("Error", err.message || "No se pudo eliminar.", "error");
+    }
+  };
+
   const bajasPorSexo = (sexo) =>
     (lote?.mortandad || []).filter((m) => m.sexo === sexo).reduce((acc, m) => acc + m.cantidad, 0);
 
   const totalBajas = bajasPorSexo("hembra") + bajasPorSexo("macho");
-  const hayDatos = (lote?.mortandad?.length || 0) + (lote?.pesajes?.length || 0) > 0;
+  const hayDatos =
+    (lote?.mortandad?.length || 0) +
+      (lote?.pesajes?.length || 0) +
+      (lote?.controlesSemanales?.length || 0) >
+    0;
 
   if (loading) {
     return (
@@ -501,7 +722,7 @@ const ReproductoresDatosPage = () => {
               Reproductores
             </h1>
             <p className="text-muted mb-0 small">
-              Mortandad y peso promedio, siempre discriminados por sexo
+              Mortandad diaria y peso semanal por sexo · chequeos y consumo de alimento del galpón
             </p>
           </div>
           <button
@@ -721,6 +942,52 @@ const ReproductoresDatosPage = () => {
                         </div>
                       </div>
 
+                      <div className="row g-3 mt-1">
+                        <div className="col-12">
+                          <div className="border rounded p-3">
+                            <div className="fw-semibold mb-2">
+                              <i className="bi bi-clipboard-check text-primary me-1"></i>Control
+                              semanal del galpón
+                              <span className="text-muted fw-normal small">
+                                {" "}
+                                (no se discrimina por sexo)
+                              </span>
+                            </div>
+                            <div className="row g-2">
+                              {CHEQUEOS_SEMANALES.map((c) => (
+                                <SelectChequeo
+                                  key={c.key}
+                                  chequeo={c}
+                                  value={form[c.key]}
+                                  onChange={(v) => setForm({ ...form, [c.key]: v })}
+                                />
+                              ))}
+                              <div className="col-12 col-sm-6 col-lg-3">
+                                <label className="form-label small mb-1">
+                                  <i className="bi bi-basket me-1"></i>Consumo de alimento (kg)
+                                </label>
+                                <input
+                                  type="number"
+                                  className="form-control form-control-sm"
+                                  min="0"
+                                  max={ALIMENTO_MAX_KG}
+                                  step="any"
+                                  placeholder="Ej: 1250"
+                                  value={form.consumoAlimentoKg}
+                                  onChange={(e) =>
+                                    setForm({ ...form, consumoAlimentoKg: e.target.value })
+                                  }
+                                />
+                              </div>
+                            </div>
+                            <div className="form-text mt-2">
+                              Va una sola vez por semana. Si esta semana ya tenía control cargado,
+                              se actualiza con lo que completes acá y el resto queda como estaba.
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
                       <div className="d-flex justify-content-end gap-2 mt-3">
                         <button
                           type="button"
@@ -756,6 +1023,8 @@ const ReproductoresDatosPage = () => {
                         onBorrarMortandad={borrarMortandad}
                         onEditarPesaje={setEditPesaje}
                         onBorrarPesaje={borrarPesaje}
+                        onEditarControl={setEditControl}
+                        onBorrarControl={borrarControl}
                       />
                     </>
                   )}
@@ -811,6 +1080,18 @@ const ReproductoresDatosPage = () => {
           onClose={() => setEditPesaje(null)}
           onGuardado={() => {
             setEditPesaje(null);
+            cargar();
+          }}
+        />
+      )}
+
+      {editControl && lote && (
+        <EditarControlModal
+          lote={lote}
+          control={editControl}
+          onClose={() => setEditControl(null)}
+          onGuardado={() => {
+            setEditControl(null);
             cargar();
           }}
         />

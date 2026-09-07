@@ -24,6 +24,7 @@ import {
   nombreGalpon,
   TIPOS_HUEVO,
   TIPOS_HUEVO_KEYS,
+  sumarIncubables,
   sumarTiposHuevo,
 } from "../utils/reproductoresUtils";
 import { exportarTablaExcel } from "../utils/exportarExcel";
@@ -251,7 +252,7 @@ const RecoleccionModal = ({
                   {TIPOS_HUEVO.map((tipo) => {
                     const cantidad = Number(form.tipos[tipo.key]) || 0;
                     return (
-                      <div className="col-6 col-lg-3" key={tipo.key}>
+                      <div className="col-6 col-lg-4" key={tipo.key}>
                         <div className="border rounded p-3 h-100">
                           <div className="fw-semibold mb-2">
                             <i className={`bi ${tipo.icono} ${tipo.clase} me-1`}></i>
@@ -276,14 +277,11 @@ const RecoleccionModal = ({
                       </div>
                     );
                   })}
-                </div>
 
-                <div className="row g-3 mb-3">
-                  <div className="col-md-6">
+                  <div className="col-6 col-lg-4">
                     <div className="border rounded p-3 h-100">
                       <div className="fw-semibold mb-2">
                         <i className="bi bi-trash text-danger me-1"></i>Descarte
-                        <span className="text-muted fw-normal small"> — se tiran</span>
                       </div>
                       <label className="form-label fw-semibold small">Huevos (unidades)</label>
                       <input
@@ -296,8 +294,9 @@ const RecoleccionModal = ({
                         placeholder="0"
                       />
                       <div className="form-text">
-                        Rotos y cualquier otro motivo. Se tiran en la granja: no generan stock
-                        ni viajan en el remito.
+                        {perdida > 0
+                          ? textoDesglose(perdida, huevosPorCajon, huevosPorBandeja)
+                          : "Rotos y demás — se tiran en la granja"}
                       </div>
                     </div>
                   </div>
@@ -326,18 +325,21 @@ const RecoleccionModal = ({
                         <div className="col-md-6" key={tipo.key}>
                           <strong>{tipo.label}:</strong>{" "}
                           {formatearNumero(Number(form.tipos[tipo.key]) || 0)}
-                          {tipo.key === "api" && (
-                            <span className="text-muted">
-                              {" "}
-                              ({formatearPorcentaje(
-                                ((Number(form.tipos.api) || 0) / huevosTotales) * 100
-                              )})
-                            </span>
-                          )}
                         </div>
                       ))}
                       <div className="col-md-6">
                         <strong>Descarte:</strong> {formatearNumero(perdida)}
+                      </div>
+                      <div className="col-12">
+                        <strong>API (incubable):</strong>{" "}
+                        {formatearNumero(sumarIncubables(form.tipos))}
+                        <span className="text-muted">
+                          {" "}
+                          ({formatearPorcentaje(
+                            (sumarIncubables(form.tipos) / huevosTotales) * 100
+                          )}{" "}
+                          de fertilidad — suma de los tres API)
+                        </span>
                       </div>
                       {porcentajePostura != null && (
                         <div className="col-12">

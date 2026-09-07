@@ -15,6 +15,9 @@ import {
   ESTADO_LOTE,
   SECTOR_LABEL,
   nombreGalpon,
+  TIPOS_HUEVO,
+  TIPOS_HUEVO_VENTA,
+  sumarIncubables,
 } from "../utils/reproductoresUtils";
 import Swal from "sweetalert2";
 
@@ -123,7 +126,7 @@ const ProduccionModal = ({ lote, constantes, onClose }) => {
                       <div className="border rounded p-2 text-center h-100">
                         <div className="text-muted small">API (incubable)</div>
                         <div className="fw-bold text-success">
-                          {formatearNumero(resumen.totales.porTipo?.api)}
+                          {formatearNumero(sumarIncubables(resumen.totales.porTipo))}
                         </div>
                         <div className="text-muted" style={{ fontSize: ".75rem" }}>
                           fertilidad {formatearPorcentaje(resumen.totales.porcentajeFertilidad)}
@@ -135,13 +138,16 @@ const ProduccionModal = ({ lote, constantes, onClose }) => {
                         <div className="text-muted small">A venta</div>
                         <div className="fw-bold text-warning">
                           {formatearNumero(
-                            (resumen.totales.porTipo?.dobleYema || 0) +
-                              (resumen.totales.porTipo?.regular || 0) +
-                              (resumen.totales.porTipo?.bebe || 0)
+                            TIPOS_HUEVO_VENTA.reduce(
+                              (acc, k) => acc + (resumen.totales.porTipo?.[k] || 0),
+                              0
+                            )
                           )}
                         </div>
                         <div className="text-muted" style={{ fontSize: ".75rem" }}>
-                          doble yema + regular + bebé
+                          {TIPOS_HUEVO.filter((t) => !t.incubable)
+                            .map((t) => t.label.toLowerCase())
+                            .join(" + ")}
                         </div>
                       </div>
                     </div>

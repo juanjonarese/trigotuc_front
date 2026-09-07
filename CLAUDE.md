@@ -48,7 +48,7 @@ There are no automated tests.
 | `/granja/remitos` | `GranjaRemitosPage` | Granja |
 | `/reproductores/galpones` | `ReproductoresLotesPage` | Reproductores |
 | `/reproductores/galpones/nuevo` | `ReproductorLoteNuevoPage` (ingreso de lote) | Reproductores |
-| `/reproductores/datos-semanales` | `ReproductoresDatosPage` (mortandad/peso por sexo) | Reproductores |
+| `/reproductores/datos-semanales` | `ReproductoresDatosPage` (mortandad/peso por sexo + controles del galpón) | Reproductores |
 | `/reproductores/recoleccion` | `RecoleccionHuevosPage` (clasifica en 4 tipos; queda en la granja) | Reproductores |
 | `/reproductores/remitos` | `RemitosHuevosPage` (envío granja → Trigotuc) | Reproductores |
 | `/reproductores/incubadora` | `IncubadoraPage` (incubadora + nacedora + nacimientos) | Reproductores |

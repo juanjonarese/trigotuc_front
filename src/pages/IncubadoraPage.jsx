@@ -18,92 +18,59 @@ import {
   formatearPorcentaje,
   textoDesglose,
   ESTADO_TANDA,
+  nombreGalpon,
 } from "../utils/reproductoresUtils";
 import { exportarTablaExcel } from "../utils/exportarExcel";
 import Swal from "sweetalert2";
 
 const ITEMS_POR_PAGINA = 15;
 
-// ── Modal: cargar tanda en la incubadora ────────────────────────────────────
-// La tanda es homogénea (un solo plantel) y consume los inoculables más viejos
-// primero. El descarte de inoculación se carga acá y va directo a venta.
-const CargarTandaModal = ({ stock, estado, constantes, onClose, onHecho }) => {
-  const [loteSel, setLoteSel] = useState(stock[0]?.lote || "");
-  const [fecha, setFecha] = useState(obtenerFechaHoy());
-  // Se cargan los dos destinos —los que entran a la máquina y los que se
-  // descartan— y el total sale de la suma: eso es lo que se saca del plantel, así
-  // que no puede quedar descuadrado. Mismo criterio que la recolección.
-  // Todo en unidades; cajones y bandejas quedan como lectura derivada.
-  const [aIncubadora, setAIncubadora] = useState("");
-  const [descarte, setDescarte] = useState("");
-  const [observaciones, setObservaciones] = useState("");
+// ── Tarjeta de API recibido, lista para aceptar ─────────────────────────────
+// Una por (plantel, tipo), tal como vino en el remito. Al aceptarla entra a la
+// incubadora como su propia tanda. El campo de rotos es lo que se rompió en el
+// traslado de la granja: pérdida pura, ni se incuba ni se vende.
+const TarjetaApiRecibido = ({ entrada, fecha, constantes, onAceptado }) => {
+  const [rotos, setRotos] = useState("");
   const [saving, setSaving] = useState(false);
 
   const huevosPorCajon = constantes?.huevosPorCajon ?? 144;
-  const entrada = stock.find((s) => String(s.lote) === String(loteSel));
+  const rotosNum = Number(rotos) || 0;
+  const aIncubar = entrada.huevosDisponibles - rotosNum;
+  const rotosInvalidos = rotosNum < 0 || rotosNum >= entrada.huevosDisponibles;
 
-  const incubando = Number(aIncubadora) || 0;
-  const desc = Number(descarte) || 0;
-  const huevos = incubando + desc; // total que se saca del plantel
-
-  // La máquina es de carga continua: no hay tope de ocupación total. Lo que se
-  // controla es el tamaño de la carga y cuántas van en la semana.
-  const huevosPorCarga = constantes?.huevosPorCarga ?? 57600;
-  const cargasPorSemana = estado?.cargasPorSemana ?? 2;
-  const cargasEstaSemana = estado?.cargasEstaSemana ?? 0;
-
-  const excedeStock = entrada ? huevos > entrada.huevosDisponibles : false;
-  const excedeCarga = incubando > huevosPorCarga;
-  const semanaCompleta = cargasEstaSemana >= cargasPorSemana;
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!loteSel) {
-      Swal.fire("Falta el plantel", "Elegí de qué plantel son los huevos.", "warning");
-      return;
-    }
-    if (incubando <= 0) {
-      Swal.fire("Faltan huevos", "Cargá cuántos huevos entran a la incubadora.", "warning");
-      return;
-    }
-    if (excedeStock) {
+  const handleAceptar = async () => {
+    if (rotosInvalidos) {
       Swal.fire(
-        "Stock insuficiente",
-        `Entre lo que va a la incubadora y el descarte se sacan ${formatearNumero(huevos)} huevos del ` +
-          `plantel, y tiene ${formatearNumero(entrada.huevosDisponibles)} huevos API en Trigotuc. ` +
-          `Si los huevos están en la granja, cargá primero el remito.`,
+        "Rotos inválidos",
+        `Tienen que ser menos que los ${formatearNumero(entrada.huevosDisponibles)} huevos recibidos.`,
         "warning"
       );
       return;
     }
-    if (excedeCarga) {
-      Swal.fire(
-        "Carga demasiado grande",
-        `Una carga es de hasta ${formatearNumero(huevosPorCarga)} huevos y estás cargando ` +
-          `${formatearNumero(incubando)}. Partila en dos tandas.`,
-        "warning"
-      );
-      return;
-    }
-    if (semanaCompleta) {
-      Swal.fire(
-        "Semana completa",
-        `Esta semana ya tiene ${cargasEstaSemana} carga(s) y se hacen ${cargasPorSemana} por semana.`,
-        "warning"
-      );
-      return;
-    }
+    const { isConfirmed } = await Swal.fire({
+      icon: "question",
+      title: `¿Aceptar ${entrada.etiquetaTipo} del plantel #${entrada.numeroLote}?`,
+      html:
+        `Entran <strong>${formatearNumero(aIncubar)}</strong> huevos a la incubadora` +
+        (rotosNum > 0
+          ? `.<br/><span class="text-danger">${formatearNumero(rotosNum)} rotos en el traslado se descartan.</span>`
+          : " (sin rotos)."),
+      showCancelButton: true,
+      confirmButtonText: "Sí, aceptar",
+      cancelButtonText: "Cancelar",
+    });
+    if (!isConfirmed) return;
 
     setSaving(true);
     try {
       const tanda = await crearTandaIncubacion({
-        lote: loteSel,
+        lote: entrada.lote,
+        tipo: entrada.tipo,
         fecha: ajustarFechaParaGuardar(fecha),
-        huevos,
-        descarteInoculacion: desc,
-        observaciones: observaciones || undefined,
+        huevos: entrada.huevosDisponibles,
+        rotosTraslado: rotosNum,
       });
-      onHecho();
+      onAceptado();
       Swal.fire({
         icon: "success",
         title: `Tanda #${tanda.numeroTanda} cargada`,
@@ -114,186 +81,58 @@ const CargarTandaModal = ({ stock, estado, constantes, onClose, onHecho }) => {
         showConfirmButton: false,
       });
     } catch (err) {
-      Swal.fire("Error", err.message || "No se pudo cargar la tanda.", "error");
+      Swal.fire("Error", err.message || "No se pudo aceptar el plantel.", "error");
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <>
-      <div className="modal show d-block" tabIndex="-1">
-        <div className="modal-dialog modal-lg modal-dialog-scrollable">
-          <div className="modal-content">
-            <div className="modal-header bg-warning">
-              <h5 className="modal-title">
-                <i className="bi bi-thermometer-half me-2"></i>Cargar tanda en la incubadora
-              </h5>
-              <button className="btn-close" onClick={onClose} disabled={saving}></button>
-            </div>
-            <div className="modal-body">
-              <form id="form-tanda" onSubmit={handleSubmit}>
-                {semanaCompleta && (
-                  <div className="alert alert-warning small mb-3">
-                    <i className="bi bi-exclamation-triangle me-1"></i>
-                    Esta semana ya tiene <strong>{cargasEstaSemana}</strong> carga
-                    {cargasEstaSemana === 1 ? "" : "s"} y se hacen {cargasPorSemana} por semana.
-                  </div>
-                )}
-
-                <div className="alert alert-light border small mb-3">
-                  <i className="bi bi-info-circle me-1"></i>
-                  La tanda es de un <strong>solo plantel</strong>. Solo se puede incubar el huevo
-                  API que ya <strong>llegó a Trigotuc</strong> con un remito; se consumen los más
-                  viejos primero (FIFO). A los {constantes?.diasIncubacion ?? 18} días se
-                  transfieren a la nacedora.
-                </div>
-
-                <div className="mb-3">
-                  <label className="form-label fw-semibold">Plantel de origen</label>
-                  <select className="form-select" value={loteSel} onChange={(e) => setLoteSel(e.target.value)}>
-                    {stock.map((s) => (
-                      <option key={s.lote} value={s.lote}>
-                        Plantel #{s.numeroLote} — {formatearNumero(s.huevosDisponibles)} huevos
-                        disponibles
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {entrada && (
-                  <div className="table-responsive mb-3">
-                    <table className="table table-sm mb-0">
-                      <thead className="table-light">
-                        <tr>
-                          <th className="small">Fecha de recolección</th>
-                          <th className="small text-end">Disponibles</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {entrada.partidas.map((p) => (
-                          <tr key={p.stockHuevo || p.recoleccion}>
-                            <td className="small">{formatearFechaLocal(p.fecha)}</td>
-                            <td className="small text-end">{formatearNumero(p.disponibles)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-
-                <div className="row g-3 mb-3">
-                  <div className="col-md-3">
-                    <label className="form-label fw-semibold small">Fecha de carga</label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      value={fecha}
-                      onChange={(e) => setFecha(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="col-md-4">
-                    <label className="form-label fw-semibold small">
-                      <i className="bi bi-thermometer-half text-primary me-1"></i>
-                      A incubadora (unidades)
-                    </label>
-                    <input
-                      type="number"
-                      className="form-control"
-                      min="0"
-                      value={aIncubadora}
-                      onChange={(e) => setAIncubadora(e.target.value)}
-                      placeholder="0"
-                    />
-                    <div className="form-text">
-                      {incubando > 0
-                        ? textoDesglose(incubando, huevosPorCajon, constantes?.huevosPorBandeja)
-                        : "Los que entran a la máquina"}
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <label className="form-label fw-semibold small">
-                      <i className="bi bi-cart text-warning me-1"></i>
-                      Descarte (unidades)
-                    </label>
-                    <input
-                      type="number"
-                      className="form-control"
-                      min="0"
-                      value={descarte}
-                      onChange={(e) => setDescarte(e.target.value)}
-                      placeholder="0"
-                    />
-                    <div className="form-text">Los que se separan acá: van a venta</div>
-                  </div>
-                </div>
-
-                {huevos > 0 && (
-                  <div
-                    className={`alert py-2 small mb-3 ${
-                      excedeStock || excedeCarga ? "alert-danger" : "alert-warning"
-                    }`}
-                  >
-                    <div>
-                      <strong>Incubando:</strong> {formatearNumero(incubando)} +{" "}
-                      <strong>descarte:</strong> {formatearNumero(desc)} ={" "}
-                      <strong>{formatearNumero(huevos)}</strong> huevos que se sacan del plantel
-                    </div>
-                    {entrada && (
-                      <div className="mt-1">
-                        Del plantel quedan {formatearNumero(entrada.huevosDisponibles - huevos)} de{" "}
-                        {formatearNumero(entrada.huevosDisponibles)} incubables.
-                      </div>
-                    )}
-                    {excedeStock && (
-                      <div className="mt-1">
-                        <i className="bi bi-exclamation-triangle me-1"></i>
-                        Supera los incubables disponibles del plantel.
-                      </div>
-                    )}
-                    {excedeCarga && (
-                      <div className="mt-1">
-                        <i className="bi bi-exclamation-triangle me-1"></i>
-                        Una carga es de hasta {formatearNumero(huevosPorCarga)} huevos. Partila en
-                        dos tandas.
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="mb-2">
-                  <label className="form-label fw-semibold">
-                    Observaciones <span className="text-muted fw-normal">(opcional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={observaciones}
-                    onChange={(e) => setObservaciones(e.target.value)}
-                  />
-                </div>
-              </form>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-outline-secondary" onClick={onClose} disabled={saving}>
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                form="form-tanda"
-                className="btn btn-warning"
-                disabled={saving || excedeStock || excedeCarga || semanaCompleta}
-              >
-                {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
-                <i className="bi bi-box-arrow-in-down me-1"></i>Cargar plantel
-              </button>
-            </div>
+    <div className="col-12 col-md-6 col-xl-4">
+      <div className="card shadow-sm h-100 border-warning">
+        <div className="card-header bg-warning-subtle d-flex justify-content-between align-items-center">
+          <span className="fw-bold">Plantel #{entrada.numeroLote}</span>
+          <span className="badge bg-success">{entrada.etiquetaTipo}</span>
+        </div>
+        <div className="card-body d-flex flex-column">
+          <div className="text-muted small mb-1">
+            {nombreGalpon(constantes?.galpones, "postura", entrada.galpon)}
           </div>
+          <div className="h4 fw-bold mb-0">{formatearNumero(entrada.huevosDisponibles)}</div>
+          <div className="text-muted small mb-3">
+            huevos recibidos · {textoDesglose(entrada.huevosDisponibles, huevosPorCajon)}
+          </div>
+
+          <label className="form-label fw-semibold small mb-1">
+            Rotos en el traslado <span className="text-muted fw-normal">(opcional)</span>
+          </label>
+          <input
+            type="number"
+            className={`form-control form-control-sm ${rotosInvalidos ? "is-invalid" : ""}`}
+            min="0"
+            max={entrada.huevosDisponibles - 1}
+            placeholder="0"
+            value={rotos}
+            onChange={(e) => setRotos(e.target.value)}
+            disabled={saving}
+          />
+          <div className="form-text mb-3">
+            {rotosNum > 0 && !rotosInvalidos
+              ? `Entran ${formatearNumero(aIncubar)} a la incubadora`
+              : "Se tiran: no se incuban ni se venden"}
+          </div>
+
+          <button
+            className="btn btn-warning mt-auto"
+            onClick={handleAceptar}
+            disabled={saving || rotosInvalidos}
+          >
+            {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
+            <i className="bi bi-check2-circle me-1"></i>Aceptar plantel
+          </button>
         </div>
       </div>
-      <div className="modal-backdrop show"></div>
-    </>
+    </div>
   );
 };
 
@@ -665,7 +504,6 @@ const IncubadoraPage = () => {
   const [stock, setStock] = useState([]);
   const [tandas, setTandas] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [modalCarga, setModalCarga] = useState(false);
   const [tandaTransferir, setTandaTransferir] = useState(null);
   const [tandaNacimiento, setTandaNacimiento] = useState(null);
   const [solapa, setSolapa] = useState("incubadora");
@@ -780,13 +618,6 @@ const IncubadoraPage = () => {
             <button className="btn btn-outline-secondary" onClick={cargar} disabled={loading}>
               <i className="bi bi-arrow-clockwise"></i>
             </button>
-            <button
-              className="btn btn-warning"
-              onClick={() => setModalCarga(true)}
-              disabled={loading || stock.length === 0}
-            >
-              <i className="bi bi-box-arrow-in-down me-1"></i>Cargar plantel
-            </button>
           </div>
         </div>
 
@@ -894,6 +725,33 @@ const IncubadoraPage = () => {
                   </div>
                 </div>
               </div>
+
+              {/* API recibido por remito, esperando que lo acepten. Una tarjeta
+                  por plantel y tipo, igual que vino en el remito. */}
+              {stock.length > 0 && (
+                <>
+                  <h5 className="fw-bold text-secondary mb-1">
+                    <i className="bi bi-inbox-fill me-1"></i>API recibido, para aceptar (
+                    {stock.length})
+                  </h5>
+                  <p className="text-muted small mb-3">
+                    Llegó por remito y está en Trigotuc. Al aceptarlo entra a la incubadora:
+                    cada tipo es su propia tanda, y aceptar varios tipos del mismo plantel el
+                    mismo día cuenta como una sola carga.
+                  </p>
+                  <div className="row g-3 mb-4">
+                    {stock.map((entrada) => (
+                      <TarjetaApiRecibido
+                        key={`${entrada.lote}-${entrada.tipo}`}
+                        entrada={entrada}
+                        fecha={obtenerFechaHoy()}
+                        constantes={constantes}
+                        onAceptado={cargar}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
 
               {/* Tandas en incubadora */}
               <h5 className="fw-bold text-secondary mb-3">
@@ -1231,18 +1089,6 @@ const IncubadoraPage = () => {
         )}
       </div>
 
-      {modalCarga && (
-        <CargarTandaModal
-          stock={stock}
-          estado={estado}
-          constantes={constantes}
-          onClose={() => setModalCarga(false)}
-          onHecho={() => {
-            setModalCarga(false);
-            cargar();
-          }}
-        />
-      )}
       {tandaNacimiento && (
         <NacimientoModal
           tanda={tandaNacimiento}
