@@ -104,6 +104,20 @@ export const ORIGEN_DESCARTE = {
 
 export const SEXO_LABEL = { hembra: "Hembras", macho: "Machos" };
 
+// El galpón se divide en 4 corrales y se pesa cada uno, por sexo: 8 valores por
+// pesada. El peso del galpón es el promedio simple de los 4.
+// ⚠️ "Corral" y no "sector": acá `sector` ya es recría/postura.
+// Espejo de CORRALES_PESAJE en utils/reproductores.js del backend.
+export const CORRALES_PESAJE = 4;
+export const CORRALES = Array.from({ length: CORRALES_PESAJE }, (_, i) => i + 1);
+
+/** Promedio simple de los corrales cargados; null si falta alguno. */
+export const promedioCorrales = (valores = []) => {
+  const nums = valores.map((v) => Number(v));
+  if (nums.length !== CORRALES_PESAJE || nums.some((n) => !n || isNaN(n) || n <= 0)) return null;
+  return Math.round(nums.reduce((a, b) => a + b, 0) / nums.length);
+};
+
 // Controles semanales del galpón: los tres son OK / No OK y van a nivel plantel
 // (no por sexo). El orden de este array es el que se ve en el formulario y en
 // la tabla del historial.
