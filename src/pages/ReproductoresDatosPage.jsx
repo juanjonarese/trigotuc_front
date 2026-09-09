@@ -21,6 +21,9 @@ import {
   SEXO_LABEL,
   SECTOR_LABEL,
   nombreGalpon,
+  CORRALES,
+  CORRALES_PESAJE,
+  promedioCorrales,
   CHEQUEOS_SEMANALES,
   CHEQUEO_LABEL,
 } from "../utils/reproductoresUtils";
@@ -42,8 +45,9 @@ const FORM_VACIO = {
   bajasHembras: "",
   bajasMachos: "",
   causa: "",
-  pesoHembras: "",
-  pesoMachos: "",
+  // Un peso por corral y por sexo: ["", "", "", ""]
+  pesoHembras: CORRALES.map(() => ""),
+  pesoMachos: CORRALES.map(() => ""),
   ...CHEQUEOS_VACIOS,
   consumoAlimentoKg: "",
 };
@@ -229,16 +233,46 @@ const EditarMortandadModal = ({ lote, entrada, onClose, onGuardado }) => {
 
 // ── Modal: editar un pesaje ─────────────────────────────────────────────────
 const EditarPesajeModal = ({ lote, pesaje, onClose, onGuardado }) => {
+  // Los pesajes anteriores a los corrales no tienen `pesos`: se editan con el
+  // promedio suelto, como se cargaron.
+  const porCorral = Array.isArray(pesaje.pesos) && pesaje.pesos.length === CORRALES_PESAJE;
+  const [pesos, setPesos] = useState(() =>
+    porCorral ? pesaje.pesos.map(String) : CORRALES.map(() => "")
+  );
   const [peso, setPeso] = useState(String(pesaje.pesoPromedio));
   const [fecha, setFecha] = useState(soloFecha(pesaje.fecha));
   const [saving, setSaving] = useState(false);
 
   const handleGuardar = async (e) => {
     e.preventDefault();
-    const val = Number(peso);
-    if (!peso || isNaN(val) || val <= 0 || val > PESO_MAX) {
-      Swal.fire("Peso inválido", `Cargá el peso promedio en gramos (hasta ${PESO_MAX}).`, "warning");
-      return;
+    if (porCorral) {
+      const faltan = CORRALES.filter((c, i) => pesos[i] === "");
+      if (faltan.length) {
+        Swal.fire(
+          "Faltan corrales",
+          `Cargá los ${CORRALES_PESAJE} corrales. Falta${faltan.length === 1 ? "" : "n"} el corral ${faltan.join(", ")}.`,
+          "warning"
+        );
+        return;
+      }
+      const malo = pesos.findIndex((p) => {
+        const n = Number(p);
+        return isNaN(n) || n <= 0 || n > PESO_MAX;
+      });
+      if (malo >= 0) {
+        Swal.fire(
+          "Peso inválido",
+          `El corral ${malo + 1} se carga en gramos (hasta ${formatearNumero(PESO_MAX)}).`,
+          "warning"
+        );
+        return;
+      }
+    } else {
+      const val = Number(peso);
+      if (!peso || isNaN(val) || val <= 0 || val > PESO_MAX) {
+        Swal.fire("Peso inválido", `Cargá el peso promedio en gramos (hasta ${PESO_MAX}).`, "warning");
+        return;
+      }
     }
     if (fecha < soloFecha(lote.fechaIngreso)) {
       Swal.fire(
@@ -251,7 +285,9 @@ const EditarPesajeModal = ({ lote, pesaje, onClose, onGuardado }) => {
     setSaving(true);
     try {
       await editarPesajeReproductor(lote._id, pesaje._id, {
-        pesoPromedio: val,
+        ...(porCorral
+          ? { pesos: pesos.map(Number) }
+          : { pesoPromedio: Number(peso) }),
         fecha: ajustarFechaParaGuardar(fecha),
       });
       onGuardado();
@@ -276,17 +312,55 @@ const EditarPesajeModal = ({ lote, pesaje, onClose, onGuardado }) => {
             </div>
             <form onSubmit={handleGuardar}>
               <div className="modal-body">
-                <div className="mb-3">
-                  <label className="form-label fw-semibold small">Peso promedio (g)</label>
-                  <input
-                    type="number"
-                    className="form-control"
-                    min="1"
-                    max={PESO_MAX}
-                    value={peso}
-                    onChange={(e) => setPeso(e.target.value)}
-                  />
-                </div>
+                {porCorral ? (
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold small">
+                      Peso por corral (g)
+                    </label>
+                    <div className="row g-2">
+                      {CORRALES.map((c, i) => (
+                        <div className="col-3" key={c}>
+                          <input
+                            type="number"
+                            className="form-control"
+                            min="1"
+                            max={PESO_MAX}
+                            aria-label={`Corral ${c}`}
+                            value={pesos[i]}
+                            onChange={(e) => {
+                              const nuevos = [...pesos];
+                              nuevos[i] = e.target.value;
+                              setPesos(nuevos);
+                            }}
+                          />
+                          <div className="text-muted text-center" style={{ fontSize: ".7rem" }}>
+                            Corral {c}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="form-text">
+                      {promedioCorrales(pesos) != null
+                        ? `Promedio del galpón: ${formatearNumero(promedioCorrales(pesos))} g`
+                        : "El promedio se recalcula con los 4 corrales"}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold small">Peso promedio (g)</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      min="1"
+                      max={PESO_MAX}
+                      value={peso}
+                      onChange={(e) => setPeso(e.target.value)}
+                    />
+                    <div className="form-text">
+                      Este pesaje es anterior a la carga por corrales.
+                    </div>
+                  </div>
+                )}
                 <div className="mb-2">
                   <label className="form-label fw-semibold small">Fecha</label>
                   <input
@@ -517,8 +591,11 @@ const ReproductoresDatosPage = () => {
 
     const bajasH = form.bajasHembras === "" ? 0 : Number(form.bajasHembras);
     const bajasM = form.bajasMachos === "" ? 0 : Number(form.bajasMachos);
-    const pesoH = form.pesoHembras === "" ? null : Number(form.pesoHembras);
-    const pesoM = form.pesoMachos === "" ? null : Number(form.pesoMachos);
+    // Cada sexo se carga con sus 4 corrales o con ninguno: a medio cargar no va.
+    const corralesH = form.pesoHembras.filter((v) => v !== "");
+    const corralesM = form.pesoMachos.filter((v) => v !== "");
+    const pesoH = corralesH.length > 0 ? form.pesoHembras : null;
+    const pesoM = corralesM.length > 0 ? form.pesoMachos : null;
 
     const chequeosCargados = CHEQUEOS_SEMANALES.filter((c) => form[c.key]);
     const alimento = form.consumoAlimentoKg === "" ? null : Number(form.consumoAlimentoKg);
@@ -527,10 +604,29 @@ const ReproductoresDatosPage = () => {
     if (!bajasH && !bajasM && pesoH === null && pesoM === null && !hayControl) {
       Swal.fire(
         "Faltan datos",
-        "Cargá al menos una baja, un peso promedio, un chequeo o el consumo de alimento.",
+        "Cargá al menos una baja, un pesaje, un chequeo o el consumo de alimento.",
         "warning"
       );
       return;
+    }
+    // Los 4 corrales son obligatorios: si falta uno es un olvido y el promedio
+    // saldría mal sin que nadie lo note.
+    for (const [cargados, valores, label] of [
+      [corralesH, form.pesoHembras, "hembras"],
+      [corralesM, form.pesoMachos, "machos"],
+    ]) {
+      if (cargados.length === 0) continue;
+      if (cargados.length < CORRALES_PESAJE) {
+        const faltan = CORRALES.filter((c, i) => valores[i] === "");
+        Swal.fire(
+          "Faltan corrales",
+          `Cargá los ${CORRALES_PESAJE} corrales de ${label}. Falta${
+            faltan.length === 1 ? "" : "n"
+          } el corral ${faltan.join(", ")}.`,
+          "warning"
+        );
+        return;
+      }
     }
     if (alimento !== null && (isNaN(alimento) || alimento < 0 || alimento > ALIMENTO_MAX_KG)) {
       Swal.fire(
@@ -544,29 +640,32 @@ const ReproductoresDatosPage = () => {
       Swal.fire("Bajas inválidas", "Las bajas no pueden ser negativas.", "warning");
       return;
     }
-    for (const [peso, label] of [
+    for (const [valores, label] of [
       [pesoH, "hembras"],
       [pesoM, "machos"],
     ]) {
-      if (peso === null) continue;
-      if (isNaN(peso) || peso <= 0 || peso > PESO_MAX) {
-        Swal.fire(
-          "Peso inválido",
-          `El peso de ${label} se carga en gramos (hasta ${formatearNumero(PESO_MAX)}).`,
-          "warning"
-        );
-        return;
-      }
-      if (peso < PESO_MIN_SOSPECHOSO) {
-        const { isConfirmed } = await Swal.fire({
-          icon: "warning",
-          title: "Peso muy bajo",
-          html: `Cargaste <strong>${peso} g</strong> para ${label}. El campo es en <strong>gramos</strong>. ¿Es correcto?`,
-          showCancelButton: true,
-          confirmButtonText: "Sí, es correcto",
-          cancelButtonText: "Corregir",
-        });
-        if (!isConfirmed) return;
+      if (valores === null) continue;
+      for (let i = 0; i < valores.length; i++) {
+        const peso = Number(valores[i]);
+        if (isNaN(peso) || peso <= 0 || peso > PESO_MAX) {
+          Swal.fire(
+            "Peso inválido",
+            `El corral ${i + 1} de ${label} se carga en gramos (hasta ${formatearNumero(PESO_MAX)}).`,
+            "warning"
+          );
+          return;
+        }
+        if (peso < PESO_MIN_SOSPECHOSO) {
+          const { isConfirmed } = await Swal.fire({
+            icon: "warning",
+            title: "Peso muy bajo",
+            html: `Cargaste <strong>${peso} g</strong> en el corral ${i + 1} de ${label}. El campo es en <strong>gramos</strong>. ¿Es correcto?`,
+            showCancelButton: true,
+            confirmButtonText: "Sí, es correcto",
+            cancelButtonText: "Corregir",
+          });
+          if (!isConfirmed) return;
+        }
       }
     }
     if (form.fecha < soloFecha(lote.fechaIngreso)) {
@@ -606,11 +705,19 @@ const ReproductoresDatosPage = () => {
         );
       if (pesoH !== null)
         pasos.push(() =>
-          registrarPesajeReproductor(lote._id, { sexo: "hembra", pesoPromedio: pesoH, fecha })
+          registrarPesajeReproductor(lote._id, {
+            sexo: "hembra",
+            pesos: pesoH.map(Number),
+            fecha,
+          })
         );
       if (pesoM !== null)
         pasos.push(() =>
-          registrarPesajeReproductor(lote._id, { sexo: "macho", pesoPromedio: pesoM, fecha })
+          registrarPesajeReproductor(lote._id, {
+            sexo: "macho",
+            pesos: pesoM.map(Number),
+            fecha,
+          })
         );
       // Un solo control por semana: el backend crea el de la semana de `fecha` o
       // actualiza el que ya exista, pisando solo los campos que mandamos.
@@ -906,34 +1013,67 @@ const ReproductoresDatosPage = () => {
                         <div className="col-12 col-lg-6">
                           <div className="border rounded p-3 h-100">
                             <div className="fw-semibold mb-2">
-                              <i className="bi bi-speedometer2 text-success me-1"></i>Peso promedio
+                              <i className="bi bi-speedometer2 text-success me-1"></i>Peso por corral
                               <span className="text-muted fw-normal small"> (gramos)</span>
                             </div>
-                            <div className="row g-2">
-                              <div className="col-6">
-                                <label className="form-label small mb-1">{SEXO_LABEL.hembra}</label>
-                                <input
-                                  type="number"
-                                  className="form-control form-control-sm"
-                                  min="1"
-                                  max={PESO_MAX}
-                                  placeholder="Ej: 2450"
-                                  value={form.pesoHembras}
-                                  onChange={(e) => setForm({ ...form, pesoHembras: e.target.value })}
-                                />
-                              </div>
-                              <div className="col-6">
-                                <label className="form-label small mb-1">{SEXO_LABEL.macho}</label>
-                                <input
-                                  type="number"
-                                  className="form-control form-control-sm"
-                                  min="1"
-                                  max={PESO_MAX}
-                                  placeholder="Ej: 3600"
-                                  value={form.pesoMachos}
-                                  onChange={(e) => setForm({ ...form, pesoMachos: e.target.value })}
-                                />
-                              </div>
+                            <div className="row g-3">
+                              {[
+                                { campo: "pesoHembras", label: SEXO_LABEL.hembra, ej: "2450" },
+                                { campo: "pesoMachos", label: SEXO_LABEL.macho, ej: "3600" },
+                              ].map(({ campo, label, ej }) => {
+                                const valores = form[campo];
+                                const prom = promedioCorrales(valores);
+                                const cargados = valores.filter((v) => v !== "").length;
+                                return (
+                                  <div className="col-12" key={campo}>
+                                    <label className="form-label small fw-semibold mb-1">
+                                      {label}
+                                    </label>
+                                    <div className="row g-1">
+                                      {CORRALES.map((c, i) => (
+                                        <div className="col-3" key={c}>
+                                          <input
+                                            type="number"
+                                            className={`form-control form-control-sm ${
+                                              cargados > 0 && valores[i] === "" ? "is-invalid" : ""
+                                            }`}
+                                            min="1"
+                                            max={PESO_MAX}
+                                            placeholder={`Ej: ${ej}`}
+                                            aria-label={`${label} — corral ${c}`}
+                                            value={valores[i]}
+                                            onChange={(e) => {
+                                              const nuevos = [...valores];
+                                              nuevos[i] = e.target.value;
+                                              setForm({ ...form, [campo]: nuevos });
+                                            }}
+                                          />
+                                          <div
+                                            className="text-muted text-center"
+                                            style={{ fontSize: ".7rem" }}
+                                          >
+                                            Corral {c}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <div className="form-text mt-1">
+                                      {prom != null ? (
+                                        <span className="text-success fw-semibold">
+                                          Promedio del galpón: {formatearNumero(prom)} g
+                                        </span>
+                                      ) : cargados > 0 ? (
+                                        <span className="text-danger">
+                                          Faltan {CORRALES_PESAJE - cargados} corral
+                                          {CORRALES_PESAJE - cargados === 1 ? "" : "es"}
+                                        </span>
+                                      ) : (
+                                        `Los ${CORRALES_PESAJE} corrales, o ninguno`
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
                             <div className="form-text mt-2">
                               El pesaje es semanal; las bajas se cargan todos los días.

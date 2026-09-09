@@ -67,9 +67,22 @@ const BadgeChequeo = ({ valor }) => {
 
 const CeldaPeso = ({ pesaje, onEditar, onBorrar }) => {
   if (!pesaje) return <span className="text-muted">—</span>;
+  // El desglose por corral solo existe desde septiembre 2026; los pesajes
+  // anteriores traen únicamente el promedio.
+  const corrales = Array.isArray(pesaje.pesos) ? pesaje.pesos : null;
   return (
     <span className="d-inline-flex align-items-center gap-2">
-      <span className="fw-semibold">{formatPeso(pesaje.pesoPromedio)}</span>
+      <span
+        className="fw-semibold"
+        title={corrales ? `Corrales: ${corrales.join(" · ")} g` : undefined}
+      >
+        {formatPeso(pesaje.pesoPromedio)}
+        {corrales && (
+          <span className="text-muted fw-normal ms-1" style={{ fontSize: ".75rem" }}>
+            ({corrales.join(" · ")})
+          </span>
+        )}
+      </span>
       {onEditar && (
         <button
           className="btn btn-sm btn-link text-primary p-0 lh-1"
