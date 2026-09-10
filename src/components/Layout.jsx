@@ -278,7 +278,18 @@ const Layout = ({ children }) => {
                   <i className="bi bi-truck"></i>
                   <span>Remitos de Huevos</span>
                 </a>
-                {/* 6 — Incubadora */}
+                {/* 6 — Recepción de API: la puerta de entrada del huevo a
+                    Trigotuc. Va entre el remito (lo manda la granja) y la
+                    incubadora (lo usa), que es justo lo que pasa en la realidad. */}
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/recepcion-api") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/recepcion-api"); }}
+                >
+                  <i className="bi bi-box-arrow-in-down"></i>
+                  <span>Recepción de API</span>
+                </a>
+                {/* 7 — Incubadora */}
                 <a
                   href="#"
                   className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/incubadora") ? "text-white" : "text-white-50"}`}
