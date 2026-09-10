@@ -981,6 +981,20 @@ export const editarRemitoHuevos = async (id, data) => {
   return handleResponse(response);
 };
 
+export const obtenerRemitosPendientes = async () => {
+  const response = await fetch(`${API_URL}/remitos-huevos/pendientes`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const recibirRemitoHuevos = async (id) => {
+  const response = await fetch(`${API_URL}/remitos-huevos/${id}/recibir`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify({}),
+  });
+  return handleResponse(response);
+};
+
 export const anularRemitoHuevos = async (id, motivo) => {
   const response = await fetch(`${API_URL}/remitos-huevos/${id}/anular`, {
     method: "POST", headers: getAuthHeaders(), body: JSON.stringify({ motivo }),
@@ -989,6 +1003,13 @@ export const anularRemitoHuevos = async (id, motivo) => {
 };
 
 // ── Incubación (incubadora → nacedora → nacimiento) ──
+export const obtenerOcupacionMaquinas = async () => {
+  const response = await fetch(`${API_URL}/incubacion/ocupacion`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
 export const obtenerEstadoIncubadora = async () => {
   const response = await fetch(`${API_URL}/incubacion/estado`, { headers: getAuthHeaders() });
   return handleResponse(response);
@@ -1136,6 +1157,20 @@ export const eliminarReservaPollitos = async (id) => {
 };
 
 // ── Ventas del módulo (huevos de descarte y pollitos) ──
+export const descartarApiHuevos = async (data) => {
+  const response = await fetch(`${API_URL}/reproductores/descarte-api`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const enviarApiAVenta = async (data) => {
+  const response = await fetch(`${API_URL}/reproductores/api-a-venta`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
 export const obtenerStockHuevosDescarte = async () => {
   const response = await fetch(`${API_URL}/reproductores/stock-huevos`, { headers: getAuthHeaders() });
   return handleResponse(response);
