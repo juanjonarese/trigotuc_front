@@ -185,6 +185,12 @@ const TandaEnCarroModal = ({ tanda, constantes, onClose, onTransferir, onCancela
                     <td className="text-muted small">Ingreso</td>
                     <td className="small text-end">{formatearFechaLocal(tanda.fechaIngreso)}</td>
                   </tr>
+                  <tr>
+                    <td className="text-muted small">Peso del huevo al cargar</td>
+                    <td className="small text-end">
+                      {tanda.pesoHuevoIngreso ? `${tanda.pesoHuevoIngreso} g` : "-"}
+                    </td>
+                  </tr>
                 </tbody>
               </table>
 
@@ -317,6 +323,8 @@ const AsignarCarroModal = ({ entrada, fecha, constantes, incubadoras, onClose, o
   const [carroSel, setCarroSel] = useState(null);
   // Arranca vacía a propósito: la cantidad la decide el usuario.
   const [cantidad, setCantidad] = useState("");
+  // Peso promedio del huevo en gramos. Opcional.
+  const [peso, setPeso] = useState("");
   const [saving, setSaving] = useState(false);
 
   const maquinaSel = (incubadoras || []).find((m) => m.numero === Number(maquina));
@@ -341,6 +349,7 @@ const AsignarCarroModal = ({ entrada, fecha, constantes, incubadoras, onClose, o
         huevos: enviados,
         incubadora: Number(maquina),
         carro: carroSel,
+        pesoHuevoIngreso: peso === "" ? undefined : Number(peso),
       });
       await onHecho();
       Swal.fire({
@@ -445,6 +454,27 @@ const AsignarCarroModal = ({ entrada, fecha, constantes, incubadoras, onClose, o
                   />
                   <div className="form-text">
                     Hasta {formatearNumero(tope)} — un carro es de {formatearNumero(porCarro)}
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  <label className="form-label fw-semibold small mb-1">
+                    Peso promedio del huevo (g){" "}
+                    <span className="text-muted fw-normal">(opcional)</span>
+                  </label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    min="0"
+                    max="200"
+                    step="0.1"
+                    placeholder="Ej: 62,5"
+                    value={peso}
+                    onChange={(e) => setPeso(e.target.value)}
+                    disabled={saving}
+                  />
+                  <div className="form-text">
+                    Se compara con el peso de la transferencia para ver cuánto perdió.
                   </div>
                 </div>
 
@@ -831,10 +861,17 @@ const TransferenciaModal = ({ tanda, nacedoras, onClose, onHecho }) => {
     () => (nacedoras || []).find((m) => m.carrosLibres > 0)?.numero ?? 1
   );
   const [carroSel, setCarroSel] = useState(null);
+  // Peso promedio del huevo en gramos. Opcional.
+  const [peso, setPeso] = useState("");
   const [observaciones, setObservaciones] = useState("");
   const [saving, setSaving] = useState(false);
 
   const maquinaSel = (nacedoras || []).find((m) => m.numero === Number(maquina));
+
+  // Pérdida de peso contra el de la carga, si los dos están.
+  const pesoInicial = tanda.pesoHuevoIngreso;
+  const perdidaPeso =
+    pesoInicial && peso !== "" ? ((pesoInicial - Number(peso)) / pesoInicial) * 100 : null;
 
   // Dos destinos y nada más: lo que pasa a la nacedora y lo que se descarta.
   // Del miraje no sale nada vendible (usuario, 2026-08-12) — antes había un
@@ -874,6 +911,7 @@ const TransferenciaModal = ({ tanda, nacedoras, onClose, onHecho }) => {
         descarteMirajePerdida: descartado,
         nacedora: Number(maquina),
         carro: carroSel,
+        pesoHuevo: peso === "" ? undefined : Number(peso),
         observaciones: observaciones || undefined,
       });
       onHecho();
@@ -964,6 +1002,38 @@ const TransferenciaModal = ({ tanda, nacedoras, onClose, onHecho }) => {
                   <div className="form-text">
                     Claros, infértiles, podridos y embrión muerto: se tiran. Del miraje no sale
                     nada para vender.
+                  </div>
+                </div>
+
+                <div className="mb-3">
+                  <label className="form-label fw-semibold">
+                    <i className="bi bi-speedometer2 text-secondary me-1"></i>Peso promedio del
+                    huevo (g) <span className="text-muted fw-normal">(opcional)</span>
+                  </label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    min="0"
+                    max="200"
+                    step="0.1"
+                    placeholder="Ej: 55,3"
+                    value={peso}
+                    onChange={(e) => setPeso(e.target.value)}
+                  />
+                  <div className="form-text">
+                    {pesoInicial ? (
+                      <>
+                        Al cargar pesaba <strong>{pesoInicial} g</strong>
+                        {perdidaPeso != null && (
+                          <>
+                            {" · "}pérdida de peso{" "}
+                            <strong>{formatearPorcentaje(perdidaPeso)}</strong>
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      "No se cargó el peso al ingresar a la incubadora."
+                    )}
                   </div>
                 </div>
 
@@ -1079,13 +1149,16 @@ const TransferenciaModal = ({ tanda, nacedoras, onClose, onHecho }) => {
 const NacimientoModal = ({ tanda, onClose, onHecho }) => {
   const [fecha, setFecha] = useState(obtenerFechaHoy());
   const [pollitos, setPollitos] = useState("");
+  // Muertos o descartados al sacar la nacedora: pérdida, no van a stock.
+  const [descarte, setDescarte] = useState("");
   const [observaciones, setObservaciones] = useState("");
   const [saving, setSaving] = useState(false);
 
   const transferidos = tanda.transferencia?.huevosTransferidos ?? 0;
   const nacidos = Number(pollitos) || 0;
-  const noNacidos = Math.max(0, transferidos - nacidos);
-  const excede = nacidos > transferidos;
+  const descartados = Number(descarte) || 0;
+  const noNacidos = Math.max(0, transferidos - nacidos - descartados);
+  const excede = nacidos + descartados > transferidos;
   const rendimiento = tanda.huevosIngresados ? (nacidos / tanda.huevosIngresados) * 100 : null;
 
   const handleSubmit = async (e) => {
@@ -1097,7 +1170,8 @@ const NacimientoModal = ({ tanda, onClose, onHecho }) => {
     if (excede) {
       Swal.fire(
         "Cantidad inválida",
-        `Se transfirieron ${formatearNumero(transferidos)} huevos a la nacedora.`,
+        `Vivos + descarte (${formatearNumero(nacidos + descartados)}) supera los ` +
+          `${formatearNumero(transferidos)} huevos transferidos a la nacedora.`,
         "warning"
       );
       return;
@@ -1108,6 +1182,7 @@ const NacimientoModal = ({ tanda, onClose, onHecho }) => {
       const actualizada = await registrarNacimiento(tanda._id, {
         fecha: ajustarFechaParaGuardar(fecha),
         pollitosNacidos: nacidos,
+        descarteNacimiento: descartados,
         observaciones: observaciones || undefined,
       });
       onHecho();
@@ -1172,17 +1247,33 @@ const NacimientoModal = ({ tanda, onClose, onHecho }) => {
                   />
                 </div>
 
-                <div className="mb-3">
-                  <label className="form-label fw-semibold">Pollitos nacidos</label>
-                  <input
-                    type="number"
-                    className="form-control"
-                    min="0"
-                    max={transferidos}
-                    value={pollitos}
-                    onChange={(e) => setPollitos(e.target.value)}
-                    required
-                  />
+                <div className="row g-2 mb-3">
+                  <div className="col-6">
+                    <label className="form-label fw-semibold">Pollitos vivos</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      min="0"
+                      max={transferidos}
+                      value={pollitos}
+                      onChange={(e) => setPollitos(e.target.value)}
+                      required
+                    />
+                    <div className="form-text">Quedan disponibles para venta.</div>
+                  </div>
+                  <div className="col-6">
+                    <label className="form-label fw-semibold">Descarte / muertos</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      min="0"
+                      max={transferidos}
+                      value={descarte}
+                      onChange={(e) => setDescarte(e.target.value)}
+                      placeholder="0"
+                    />
+                    <div className="form-text">Pérdida: no van a stock.</div>
+                  </div>
                 </div>
 
                 {pollitos !== "" && (
@@ -1193,12 +1284,13 @@ const NacimientoModal = ({ tanda, onClose, onHecho }) => {
                       <strong>Rendimiento:</strong> {formatearPorcentaje(rendimiento)}
                     </div>
                     <div className="text-muted mt-1">
-                      El rendimiento se mide sobre los huevos que entraron a la incubadora.
+                      El rendimiento se mide con los vivos sobre los huevos que entraron a la
+                      incubadora.
                     </div>
                     {excede && (
                       <div className="mt-1">
                         <i className="bi bi-exclamation-triangle me-1"></i>
-                        No pueden nacer más pollitos que huevos transferidos.
+                        Vivos + descarte no puede superar los huevos transferidos.
                       </div>
                     )}
                   </div>
@@ -1336,14 +1428,18 @@ const IncubadoraPage = () => {
       { header: "Plantel",            valor: (t) => t.lote?.numeroLote ?? "" },
       { header: "Fecha ingreso",      valor: (t) => formatearFechaLocal(t.fechaIngreso) },
       { header: "Huevos ingresados",  valor: (t) => t.huevosIngresados ?? 0 },
+      { header: "Peso huevo ingreso (g)", valor: (t) => t.pesoHuevoIngreso ?? "" },
       { header: "Desc. inoculación",  valor: (t) => t.descarteInoculacion ?? 0 },
       { header: "Huevos incubando",   valor: (t) => t.huevosIncubando ?? 0 },
       { header: "Fecha miraje",       valor: (t) => (t.transferencia?.fecha ? formatearFechaLocal(t.transferencia.fecha) : "") },
       { header: "A nacedora",         valor: (t) => (t.transferencia ? t.transferencia.huevosTransferidos : "") },
       { header: "Desc. miraje",       valor: (t) => (t.transferencia ? (t.transferencia.descarteMirajePerdida || 0) : "") },
+      { header: "Peso huevo transf. (g)", valor: (t) => t.transferencia?.pesoHuevo ?? "" },
+      { header: "Pérdida de peso (%)", valor: (t) => t.perdidaPeso ?? "" },
       { header: "Nacimiento previsto", valor: (t) => (t.fechaNacimientoPrevista ? formatearFechaLocal(t.fechaNacimientoPrevista) : "") },
       { header: "Fecha nacimiento",   valor: (t) => (t.nacimiento?.fecha ? formatearFechaLocal(t.nacimiento.fecha) : "") },
-      { header: "Pollitos nacidos",   valor: (t) => (t.nacimiento ? t.nacimiento.pollitosNacidos : "") },
+      { header: "Pollitos vivos",     valor: (t) => (t.nacimiento ? t.nacimiento.pollitosNacidos : "") },
+      { header: "Desc. nacimiento",   valor: (t) => (t.nacimiento ? (t.nacimiento.descarteNacimiento || 0) : "") },
       { header: "Rendimiento (%)",    valor: (t) => (t.nacimiento && t.rendimiento != null ? t.rendimiento : "") },
       { header: "Pollitos disponibles", valor: (t) => t.pollitosDisponibles ?? 0 },
       { header: "Estado",             valor: (t) => (ESTADO_TANDA[t.estado]?.label || t.estado) },
@@ -1715,8 +1811,14 @@ Mismo esquema que las incubadoras. Tocá un carro ocupado para ver la tanda y
                             <th className="text-end" title="Descarte del miraje: se tira entero">
                               Desc. miraje
                             </th>
+                            <th className="text-end" title="Peso del huevo: carga → transferencia">
+                              Pérdida peso
+                            </th>
                             <th>Nacimiento</th>
-                            <th className="text-end">Nacidos</th>
+                            <th className="text-end">Vivos</th>
+                            <th className="text-end" title="Muertos o descartados al nacer: pérdida">
+                              Desc. nacimiento
+                            </th>
                             <th className="text-end">Rendimiento</th>
                             <th className="text-center">Estado</th>
                           </tr>
@@ -1743,6 +1845,16 @@ Mismo esquema que las incubadoras. Tocá un carro ocupado para ver la tanda y
                                     ? formatearNumero(t.transferencia.descarteMirajePerdida || 0)
                                     : "-"}
                                 </td>
+                                <td
+                                  className="text-end"
+                                  title={
+                                    t.pesoHuevoIngreso || t.transferencia?.pesoHuevo
+                                      ? `${t.pesoHuevoIngreso ?? "-"} g → ${t.transferencia?.pesoHuevo ?? "-"} g`
+                                      : undefined
+                                  }
+                                >
+                                  {t.perdidaPeso != null ? formatearPorcentaje(t.perdidaPeso) : "-"}
+                                </td>
                                 <td>
                                   {t.nacimiento?.fecha ? (
                                     formatearFechaLocal(t.nacimiento.fecha)
@@ -1753,6 +1865,11 @@ Mismo esquema que las incubadoras. Tocá un carro ocupado para ver la tanda y
                                 <td className="text-end fw-semibold text-success">
                                   {t.nacimiento
                                     ? formatearNumero(t.nacimiento.pollitosNacidos)
+                                    : "-"}
+                                </td>
+                                <td className="text-end text-danger">
+                                  {t.nacimiento
+                                    ? formatearNumero(t.nacimiento.descarteNacimiento || 0)
                                     : "-"}
                                 </td>
                                 <td className="text-end fw-bold">
@@ -1800,12 +1917,28 @@ Mismo esquema que las incubadoras. Tocá un carro ocupado para ver la tanda y
                                   : "-"}
                               </div>
                               <div className="col-6">
-                                <span className="text-muted">Nacidos:</span>{" "}
+                                <span className="text-muted">Peso:</span>{" "}
+                                {t.pesoHuevoIngreso ?? "-"} → {t.transferencia?.pesoHuevo ?? "-"} g
+                              </div>
+                              <div className="col-6">
+                                <span className="text-muted">Pérdida peso:</span>{" "}
+                                {t.perdidaPeso != null ? formatearPorcentaje(t.perdidaPeso) : "-"}
+                              </div>
+                              <div className="col-6">
+                                <span className="text-muted">Vivos:</span>{" "}
                                 <strong className="text-success">
                                   {t.nacimiento
                                     ? formatearNumero(t.nacimiento.pollitosNacidos)
                                     : "-"}
                                 </strong>
+                              </div>
+                              <div className="col-6">
+                                <span className="text-muted">Desc. nacimiento:</span>{" "}
+                                <span className="text-danger">
+                                  {t.nacimiento
+                                    ? formatearNumero(t.nacimiento.descarteNacimiento || 0)
+                                    : "-"}
+                                </span>
                               </div>
                               <div className="col-6">
                                 <span className="text-muted">Rendimiento:</span>{" "}
