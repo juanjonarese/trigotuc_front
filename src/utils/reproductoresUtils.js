@@ -45,19 +45,19 @@ export const textoDesglose = (huevos, huevosPorCajon, huevosPorBandeja) => {
 export const SECTOR_LABEL = { recria: "Recría", postura: "Postura" };
 
 // ── Tipos de huevo ──────────────────────────────────────────────────────────
-// Los cinco tipos que se clasifican en el galpón y viajan en el remito a
+// Los cuatro tipos que se clasifican en el galpón y viajan en el remito a
 // Trigotuc. Las claves son las de recoleccion.tipos y remito.lineas[].tipo —
 // espejo de utils/reproductores.js en el backend, no cambiar de un lado solo.
 //
-// El API se divide por dónde y cómo se juntó, pero los TRES se incuban igual:
-// la división es para saber la calidad de lo que entra, no para filtrar. Por eso
-// "incubable" son varios tipos y no uno — usar TIPOS_HUEVO_INCUBABLES.
+// El API se divide en limpio de cinta y sucio (cinta y piso juntos, unificados
+// el 2026-09-16), pero los DOS se incuban igual: la división es para saber la
+// calidad de lo que entra, no para filtrar. Por eso "incubable" son varios tipos
+// y no uno — usar TIPOS_HUEVO_INCUBABLES.
 //
 // El huevo roto no es un tipo: se tira en la granja (descartePerdida).
 export const TIPOS_HUEVO = [
-  { key: "apiLimpioCinta", label: "API limpio cinta", corto: "API limpio", ayuda: "Incubable — juntado de la cinta, limpio",  clase: "text-success", icono: "bi-thermometer-half", incubable: true },
-  { key: "apiSucioCinta",  label: "API sucio cinta",  corto: "API s.cinta", ayuda: "Incubable — juntado de la cinta, sucio",  clase: "text-success", icono: "bi-thermometer-half", incubable: true },
-  { key: "apiSucioPiso",   label: "API sucio piso",   corto: "API s.piso",  ayuda: "Incubable — juntado del piso",            clase: "text-success", icono: "bi-thermometer-half", incubable: true },
+  { key: "apiLimpioCinta", label: "API limpio cinta",         corto: "API limpio", ayuda: "Incubable — juntado de la cinta, limpio",     clase: "text-success", icono: "bi-thermometer-half", incubable: true },
+  { key: "apiSucio",       label: "API sucio (cinta y piso)", corto: "API sucio",  ayuda: "Incubable — sucio, de la cinta o del piso",   clase: "text-success", icono: "bi-thermometer-half", incubable: true },
   { key: "consumo",        label: "Consumo",          corto: "Consumo",     ayuda: "No incubable, va a venta",                clase: "text-primary", icono: "bi-egg",              incubable: false },
   { key: "dobleYema",      label: "Doble yema",       corto: "D.yema",      ayuda: "No incubable, va a venta",                clase: "text-warning", icono: "bi-egg-fried",        incubable: false },
 ];

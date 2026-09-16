@@ -2,57 +2,85 @@ import React from "react";
 import { formatearNumero } from "../utils/reproductoresUtils";
 
 /**
- * Mapa de los 12 carros de una máquina (incubadora o nacedora).
+ * Mapa de los carros de una máquina (incubadora o nacedora).
  *
- * Los carros van numerados 1..12 de corrido, en columnas de dos, y el
- * ventilador es VERTICAL: parte la máquina entre el carro 6 y el 7.
+ * Los carros van numerados de corrido, en columnas de dos, y el ventilador es
+ * VERTICAL. La incubadora tiene 12 (el ventilador parte el 6 del 7) y la
+ * nacedora 4 (parte el 2 del 3):
  *
- *      1   3   5  ‖   7   9  11      ← fila de arriba
- *      2   4   6  ‖   8  10  12      ← fila de abajo
- *                 ↑ ventilador
+ *      1   3   5  ‖   7   9  11          1  ‖  3
+ *      2   4   6  ‖   8  10  12          2  ‖  4
  *
  * El dibujo respeta esa disposición para que el operario encuentre el carro
  * mirando la pantalla igual que mira la máquina.
  *
+ * Los carros de nacedora traen `capacidad` y `huevos` porque juntan varias
+ * tandas: pueden estar libres, a medias (amarillo) o llenos (rojo).
+ *
  * Dos formas de interactuar, las dos opcionales:
- *  - `onElegir`  → se tocan los carros LIBRES, para mandar una tanda ahí
- *  - `onVerTanda` → se tocan los OCUPADOS, para abrir la tanda que tienen adentro
+ *  - `onElegir`  → se tocan los carros con LUGAR, para mandar una tanda ahí
+ *  - `onVerTanda(tanda, carro)` → se tocan los OCUPADOS, para ver qué tienen
  *
  * `maquina` es lo que devuelve GET /incubacion/ocupacion.
+ *
+ * `seleccion` puede ser un número (un carro) o un array de números (varios
+ * carros, en el orden en que se eligieron: se muestra 1º, 2º, …).
  */
 const MapaCarros = ({ maquina, seleccion, onElegir, onVerTanda, compacto = false }) => {
   const elegible = typeof onElegir === "function";
   const verTanda = typeof onVerTanda === "function";
   const carros = maquina.carros || [];
+  const multiple = Array.isArray(seleccion);
 
   // Columnas de a dos: la 1 lleva los carros 1 y 2, la 2 el 3 y 4, y así.
   const columnas = [...new Set(carros.map((c) => c.columna))].sort((a, b) => a - b);
 
   const Carro = ({ c }) => {
     if (!c) return <div style={{ minWidth: compacto ? "32px" : "46px" }} />;
-    const elegido = seleccion === c.carro;
+    const orden = multiple ? seleccion.indexOf(c.carro) : -1;
+    const elegido = multiple ? orden >= 0 : seleccion === c.carro;
+    // En la incubadora un carro ocupado ya está lleno; en la nacedora no.
+    const conCapacidad = c.capacidad != null;
+    const lleno = conCapacidad ? c.lleno : c.ocupado;
+    const aMedias = c.ocupado && !lleno;
     const clase = elegido
       ? "btn-primary"
-      : c.ocupado
+      : lleno
       ? "btn-danger"
+      : aMedias
+      ? "btn-warning"
       : elegible
       ? "btn-outline-success"
       : "btn-outline-secondary";
 
-    const titulo = c.ocupado
-      ? `Carro ${c.carro} · tanda #${c.tanda.numeroTanda} · plantel #${
+    const titulo = !c.ocupado
+      ? `Carro ${c.carro} · libre` +
+        (conCapacidad ? ` · entran ${formatearNumero(c.capacidad)} huevos` : "")
+      : conCapacidad
+      ? `Carro ${c.carro} · ${formatearNumero(c.huevos)} de ${formatearNumero(c.capacidad)} huevos · ` +
+        c.tandas.map((t) => `tanda #${t.numeroTanda} (plantel #${t.numeroLote ?? "?"})`).join(", ") +
+        (verTanda ? " — tocá para abrirlo" : "")
+      : `Carro ${c.carro} · tanda #${c.tanda.numeroTanda} · plantel #${
           c.tanda.numeroLote ?? "?"
         } · ${formatearNumero(c.tanda.huevosIncubando ?? c.tanda.huevos)} huevos` +
-        (verTanda ? " — tocá para abrirla" : "")
-      : `Carro ${c.carro} · libre`;
+        (verTanda ? " — tocá para abrirla" : "");
 
-    // Un carro es clickeable si está libre y se puede elegir, o si está ocupado
-    // y se puede abrir la tanda que tiene adentro.
-    const clickeable = c.ocupado ? verTanda : elegible;
+    // Un carro es clickeable si tiene lugar y se puede elegir, o si tiene algo
+    // adentro y se puede abrir.
+    const puedeElegir = elegible && !lleno;
+    const clickeable = puedeElegir || (c.ocupado && verTanda);
     const alTocar = () => {
-      if (c.ocupado && verTanda) onVerTanda(c.tanda);
-      else if (!c.ocupado && elegible) onElegir(c.carro);
+      if (puedeElegir) onElegir(c.carro);
+      else if (c.ocupado && verTanda) onVerTanda(c.tanda, c);
     };
+
+    const etiqueta = orden >= 0
+      ? `${orden + 1}º`
+      : !c.ocupado
+      ? "libre"
+      : conCapacidad
+      ? `${Math.round((c.huevos / c.capacidad) * 100)}%`
+      : `#${c.tanda.numeroLote ?? "?"}`;
 
     return (
       <button
@@ -68,7 +96,7 @@ const MapaCarros = ({ maquina, seleccion, onElegir, onVerTanda, compacto = false
         </div>
         {!compacto && (
           <div style={{ fontSize: ".6rem" }}>
-            {c.ocupado ? `#${c.tanda.numeroLote ?? "?"}` : "libre"}
+            {etiqueta}
           </div>
         )}
       </button>

@@ -1034,6 +1034,14 @@ export const crearTandaIncubacion = async (data) => {
   return handleResponse(response);
 };
 
+// Carga en varios carros de una vez. Devuelve un array con una tanda por carro.
+export const crearCargaIncubacion = async (data) => {
+  const response = await fetch(`${API_URL}/incubacion/cargas`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
 export const registrarTransferenciaNacedora = async (id, data) => {
   const response = await fetch(`${API_URL}/incubacion/tandas/${id}/transferencia`, {
     method: "PATCH", headers: getAuthHeaders(), body: JSON.stringify(data),

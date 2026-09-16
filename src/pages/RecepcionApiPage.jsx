@@ -38,11 +38,13 @@ const TarjetaRemito = ({ remito, constantes, onRecibido }) => {
   const api = incubablesDe(remito);
   const huevosPorCajon = constantes?.huevosPorCajon ?? 144;
 
-  // Un remito puede traer varios planteles: se listan para que se pueda
-  // controlar contra el papel antes de aceptarlo.
+  // Un remito puede traer varios galpones: se listan para que se pueda
+  // controlar contra el papel antes de aceptarlo. Los remitos viejos no
+  // guardaban el galpón en la línea: se usa el del plantel.
   const porPlantel = {};
   for (const l of remito.lineas || []) {
-    const n = l.lote?.numeroLote ?? "?";
+    const galpon = l.galpon ?? l.lote?.galpon;
+    const n = `${galpon != null ? `Galpón ${galpon} · ` : ""}#${l.lote?.numeroLote ?? "?"}`;
     if (!porPlantel[n]) porPlantel[n] = [];
     porPlantel[n].push(l);
   }
@@ -121,7 +123,7 @@ const TarjetaRemito = ({ remito, constantes, onRecibido }) => {
             <table className="table table-sm align-middle mb-0">
               <thead className="table-light">
                 <tr>
-                  <th className="small">Plantel</th>
+                  <th className="small">Galpón / plantel</th>
                   <th className="small">Tipo</th>
                   <th className="small text-end">Huevos</th>
                 </tr>
@@ -131,8 +133,8 @@ const TarjetaRemito = ({ remito, constantes, onRecibido }) => {
                   lineas.map((l, i) => (
                     <tr key={`${numeroLote}-${l.tipo}`}>
                       {i === 0 && (
-                        <td className="fw-semibold" rowSpan={lineas.length}>
-                          #{numeroLote}
+                        <td className="fw-semibold text-nowrap" rowSpan={lineas.length}>
+                          {numeroLote}
                         </td>
                       )}
                       <td className="small">
