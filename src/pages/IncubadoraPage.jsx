@@ -11,7 +11,7 @@ import {
   enviarApiAVenta,
   descartarApiHuevos,
   obtenerTandasIncubacion,
-  crearTandaIncubacion,
+  crearCargaIncubacion,
   registrarTransferenciaNacedora,
   registrarNacimiento,
   cancelarTandaIncubacion,
@@ -99,7 +99,11 @@ const rendimientoPorPlantel = (tandas) => {
 // ── Tarjeta de una máquina en la solapa Ocupación ───────────────────────────
 const TarjetaMaquina = ({ maquina, etiqueta, color, onVerTanda }) => {
   const total = maquina.carros.length;
-  const pct = Math.round((maquina.carrosOcupados / total) * 100);
+  // La nacedora junta varias tandas por carro: su barra se llena por huevos, no
+  // por carros tomados.
+  const pct = maquina.capacidad
+    ? Math.round((maquina.huevos / maquina.capacidad) * 100)
+    : Math.round((maquina.carrosOcupados / total) * 100);
   return (
     <div className="col-12 col-md-6 col-xl-4">
       <div className="card shadow-sm h-100">
@@ -225,79 +229,75 @@ const TandaEnCarroModal = ({ tanda, constantes, onClose, onTransferir, onCancela
   );
 };
 
-// ── Modal: la tanda que hay adentro de un carro de nacedora ─────────────────
+// ── Modal: lo que hay adentro de un carro de nacedora ───────────────────────
 // Mismo criterio que en la incubadora: el mapa dice dónde está cada cosa y el
-// detalle con la acción aparece al tocar el carro.
-const TandaEnNacedoraModal = ({ tanda, constantes, onClose, onRegistrarNacimiento }) => {
+// detalle con la acción aparece al tocar el carro. Un carro de nacedora junta
+// varias tandas, así que se listan todas, cada una con su nacimiento.
+const CarroNacedoraModal = ({ carro, constantes, onClose, onRegistrarNacimiento }) => {
   const diasNacedora = constantes?.diasNacedora ?? 3;
-  const dias = tanda.diasEnNacedora ?? 0;
-  const lista = dias >= diasNacedora;
-  const progreso = Math.min(100, Math.round((dias / diasNacedora) * 100));
+  const pct = Math.min(100, Math.round((carro.huevos / carro.capacidad) * 100));
 
   return (
     <>
       <div className="modal show d-block" tabIndex="-1">
         <div className="modal-dialog">
           <div className="modal-content">
-            <div className={`modal-header ${lista ? "bg-success text-white" : "bg-info"}`}>
+            <div className="modal-header bg-info">
               <h5 className="modal-title">
-                <i className="bi bi-egg me-2"></i>Tanda #{tanda.numeroTanda}
+                <i className="bi bi-egg me-2"></i>Nacedora {carro.nacedora} · carro {carro.carro}
               </h5>
-              <button
-                className={`btn-close ${lista ? "btn-close-white" : ""}`}
-                onClick={onClose}
-              ></button>
+              <button className="btn-close" onClick={onClose}></button>
             </div>
             <div className="modal-body">
+              <div className="d-flex justify-content-between small mb-1">
+                <span className="text-muted">
+                  {carro.tandas.length} tanda{carro.tandas.length === 1 ? "" : "s"}
+                </span>
+                <span className="fw-semibold">
+                  {formatearNumero(carro.huevos)} de {formatearNumero(carro.capacidad)} huevos
+                </span>
+              </div>
               <div className="progress mb-3" style={{ height: "8px" }}>
-                <div
-                  className={`progress-bar ${lista ? "bg-success" : "bg-info"}`}
-                  style={{ width: `${progreso}%` }}
-                ></div>
+                <div className="progress-bar bg-info" style={{ width: `${pct}%` }}></div>
               </div>
 
-              <div className="row g-2 text-center mb-3">
-                <div className="col-6">
-                  <div className="border rounded p-2">
-                    <div className="text-muted small">Día</div>
-                    <div className="fw-bold h5 mb-0">
-                      {dias}/{diasNacedora}
+              <div className="d-grid gap-2">
+                {carro.tandas.map((t) => {
+                  const dias = t.diasEnNacedora ?? 0;
+                  const lista = dias >= diasNacedora;
+                  return (
+                    <div
+                      key={t._id}
+                      className={`border rounded p-2 d-flex justify-content-between align-items-center gap-2 ${
+                        lista ? "border-success" : ""
+                      }`}
+                    >
+                      <div>
+                        <div className="fw-bold">
+                          Tanda #{t.numeroTanda}{" "}
+                          <span className="text-muted fw-normal small">
+                            · plantel #{t.numeroLote ?? "?"}
+                          </span>
+                        </div>
+                        <div className="small text-muted">
+                          {formatearNumero(t.huevos)} huevos · día {dias}/{diasNacedora}
+                          {lista && <span className="text-success fw-semibold"> · lista</span>}
+                        </div>
+                      </div>
+                      <button
+                        className={`btn btn-sm ${lista ? "btn-success" : "btn-outline-success"}`}
+                        onClick={() => onRegistrarNacimiento(t)}
+                      >
+                        <i className="bi bi-sunrise me-1"></i>Nacimiento
+                      </button>
                     </div>
-                  </div>
-                </div>
-                <div className="col-6">
-                  <div className="border rounded p-2">
-                    <div className="text-muted small">En nacedora</div>
-                    <div className="fw-bold h5 mb-0">{formatearNumero(tanda.huevos)}</div>
-                  </div>
-                </div>
+                  );
+                })}
               </div>
-
-              <table className="table table-sm mb-0">
-                <tbody>
-                  <tr>
-                    <td className="text-muted small">Plantel</td>
-                    <td className="small fw-semibold text-end">#{tanda.numeroLote ?? "?"}</td>
-                  </tr>
-                </tbody>
-              </table>
-
-              {lista && (
-                <div className="alert alert-success py-2 small mt-3 mb-0">
-                  <i className="bi bi-bell me-1"></i>
-                  Cumplió los {diasNacedora} días: lista para registrar el nacimiento.
-                </div>
-              )}
             </div>
             <div className="modal-footer">
               <button className="btn btn-outline-secondary" onClick={onClose}>
                 Cerrar
-              </button>
-              <button
-                className={`btn ${lista ? "btn-success" : "btn-outline-success"}`}
-                onClick={() => onRegistrarNacimiento(tanda)}
-              >
-                <i className="bi bi-sunrise me-1"></i>Registrar nacimiento
               </button>
             </div>
           </div>
@@ -308,19 +308,21 @@ const TandaEnNacedoraModal = ({ tanda, constantes, onClose, onRegistrarNacimient
   );
 };
 
-// ── Modal: asignar huevos a un carro de la incubadora ───────────────────────
+// ── Modal: asignar huevos a carros de la incubadora ─────────────────────────
 // Se abre desde la tarjeta de stock. Muestra la máquina con sus 12 carros
-// numerados y el ventilador vertical en el medio: se toca el carro y se dice
-// cuánto va. No tiene por qué ir todo — lo que sobra queda en stock, para otro
-// carro o para venta.
+// numerados y el ventilador vertical en el medio. Se pueden tocar VARIOS carros
+// (incluso de incubadoras distintas) para cargar todo de una vez: el total se
+// reparte en el orden en que se eligieron, de a un carro lleno, y el último se
+// lleva el resto. Cada carro entra como su propia tanda. No tiene por qué ir
+// todo — lo que sobra queda en stock, para otro carro o para venta.
 const AsignarCarroModal = ({ entrada, fecha, constantes, incubadoras, onClose, onHecho }) => {
   const porCarro = constantes?.huevosPorCarro ?? 4800;
-  const tope = Math.min(entrada.huevosDisponibles, porCarro);
 
   const [maquina, setMaquina] = useState(
     () => (incubadoras || []).find((m) => m.carrosLibres > 0)?.numero ?? 1
   );
-  const [carroSel, setCarroSel] = useState(null);
+  // Carros elegidos, en orden: [{ incubadora, carro }].
+  const [elegidos, setElegidos] = useState([]);
   // Arranca vacía a propósito: la cantidad la decide el usuario.
   const [cantidad, setCantidad] = useState("");
   // Peso promedio del huevo en gramos. Opcional.
@@ -328,13 +330,38 @@ const AsignarCarroModal = ({ entrada, fecha, constantes, incubadoras, onClose, o
   const [saving, setSaving] = useState(false);
 
   const maquinaSel = (incubadoras || []).find((m) => m.numero === Number(maquina));
-  // Lo que se manda entra entero: el descarte se hace aparte, desde la tarjeta.
+  // Para que el mapa muestre 1º, 2º… con el orden GLOBAL y no el de esta máquina,
+  // se completa con huecos los que están en otras incubadoras.
+  const seleccionOrdenada = elegidos.map((e) =>
+    e.incubadora === Number(maquina) ? e.carro : null
+  );
+
+  const alternarCarro = (carro) => {
+    const inc = Number(maquina);
+    setElegidos((prev) =>
+      prev.some((e) => e.incubadora === inc && e.carro === carro)
+        ? prev.filter((e) => !(e.incubadora === inc && e.carro === carro))
+        : [...prev, { incubadora: inc, carro }]
+    );
+  };
+
+  const capacidad = elegidos.length * porCarro;
+  const tope = Math.min(entrada.huevosDisponibles, capacidad || porCarro);
   const enviados = Number(cantidad) || 0;
   const quedaEnStock = entrada.huevosDisponibles - enviados;
 
+  // Reparto: carros llenos en orden, el último con lo que queda.
+  const reparto = elegidos.map((e, i) => ({
+    ...e,
+    huevos: Math.max(0, Math.min(porCarro, enviados - i * porCarro)),
+  }));
+  const carrosVacios = reparto.filter((r) => r.huevos === 0);
+
   const cantidadInvalida =
-    enviados <= 0 || enviados > entrada.huevosDisponibles || enviados > porCarro;
-  const puedeGuardar = !!carroSel && !cantidadInvalida;
+    enviados <= 0 || enviados > entrada.huevosDisponibles || enviados > capacidad;
+  const puedeGuardar = elegidos.length > 0 && !cantidadInvalida && carrosVacios.length === 0;
+
+  const etiquetaPos = (r) => `inc. ${r.incubadora} · carro ${r.carro}`;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -342,28 +369,28 @@ const AsignarCarroModal = ({ entrada, fecha, constantes, incubadoras, onClose, o
 
     setSaving(true);
     try {
-      const tanda = await crearTandaIncubacion({
+      const tandas = await crearCargaIncubacion({
         lote: entrada.lote,
         tipo: entrada.tipo,
         fecha: ajustarFechaParaGuardar(fecha),
-        huevos: enviados,
-        incubadora: Number(maquina),
-        carro: carroSel,
+        carros: reparto,
         pesoHuevoIngreso: peso === "" ? undefined : Number(peso),
       });
       await onHecho();
+      const numeros = tandas.map((t) => `#${t.numeroTanda}`).join(", ");
       Swal.fire({
         icon: "success",
-        title: `Tanda #${tanda.numeroTanda} cargada`,
+        title: tandas.length === 1 ? `Tanda ${numeros} cargada` : `${tandas.length} tandas cargadas`,
         html:
-          `${formatearNumero(tanda.huevosIncubando)} huevos en la incubadora ${maquina}, carro ${carroSel}.` +
+          `${formatearNumero(enviados)} huevos en ${reparto.map(etiquetaPos).join(", ")}.` +
+          (tandas.length > 1 ? `<br/><span class="text-muted">Tandas ${numeros}</span>` : "") +
           (quedaEnStock > 0
             ? `<br/><span class="text-muted">Quedan ${formatearNumero(quedaEnStock)} en stock.</span>`
             : "") +
           `<br/><span class="text-muted">Transferencia prevista ${formatearFechaLocal(
-            tanda.fechaTransferenciaPrevista
+            tandas[0]?.fechaTransferenciaPrevista
           )}</span>`,
-        timer: 3600,
+        timer: 4200,
         showConfirmButton: false,
       });
     } catch (err) {
@@ -400,25 +427,30 @@ const AsignarCarroModal = ({ entrada, fecha, constantes, incubadoras, onClose, o
                 <select
                   className="form-select mb-3"
                   value={maquina}
-                  onChange={(e) => {
-                    setMaquina(Number(e.target.value));
-                    setCarroSel(null);
-                  }}
+                  onChange={(e) => setMaquina(Number(e.target.value))}
                   disabled={saving}
                 >
-                  {(incubadoras || []).map((m) => (
-                    <option key={m.numero} value={m.numero}>
-                      Incubadora {m.numero} — {m.carrosLibres} de {m.carros.length} carros libres
-                    </option>
-                  ))}
+                  {(incubadoras || []).map((m) => {
+                    const enEsta = elegidos.filter((e) => e.incubadora === m.numero).length;
+                    return (
+                      <option key={m.numero} value={m.numero}>
+                        Incubadora {m.numero} — {m.carrosLibres} de {m.carros.length} carros libres
+                        {enEsta > 0 ? ` · ${enEsta} elegido${enEsta === 1 ? "" : "s"}` : ""}
+                      </option>
+                    );
+                  })}
                 </select>
 
                 <label className="form-label fw-semibold small mb-1">
-                  Tocá el carro donde va
+                  Tocá los carros donde va — podés elegir varios, también de otra incubadora
                 </label>
                 {maquinaSel ? (
                   <div className="border rounded p-3 mb-2 d-flex justify-content-center">
-                    <MapaCarros maquina={maquinaSel} seleccion={carroSel} onElegir={setCarroSel} />
+                    <MapaCarros
+                      maquina={maquinaSel}
+                      seleccion={seleccionOrdenada}
+                      onElegir={alternarCarro}
+                    />
                   </div>
                 ) : (
                   <div className="alert alert-secondary py-2 small">Cargando máquinas…</div>
@@ -431,7 +463,8 @@ const AsignarCarroModal = ({ entrada, fecha, constantes, incubadoras, onClose, o
                     <i className="bi bi-square-fill text-danger me-1"></i>ocupado
                   </span>
                   <span>
-                    <i className="bi bi-square-fill text-primary me-1"></i>elegido
+                    <i className="bi bi-square-fill text-primary me-1"></i>elegido (tocalo de
+                    nuevo para sacarlo)
                   </span>
                   <span>
                     <i className="bi bi-fan me-1"></i>el ventilador parte el 6 del 7
@@ -440,20 +473,37 @@ const AsignarCarroModal = ({ entrada, fecha, constantes, incubadoras, onClose, o
 
                 <div>
                   <label className="form-label fw-semibold small mb-1">
-                    ¿Cuántos huevos van?
+                    ¿Cuántos huevos van en total?
                   </label>
-                  <input
-                    type="number"
-                    className={`form-control ${cantidadInvalida ? "is-invalid" : ""}`}
-                    min="1"
-                    max={tope}
-                    placeholder="0"
-                    value={cantidad}
-                    onChange={(e) => setCantidad(e.target.value)}
-                    disabled={saving}
-                  />
+                  <div className="input-group">
+                    <input
+                      type="number"
+                      className={`form-control ${
+                        cantidad !== "" && cantidadInvalida ? "is-invalid" : ""
+                      }`}
+                      min="1"
+                      max={tope}
+                      placeholder="0"
+                      value={cantidad}
+                      onChange={(e) => setCantidad(e.target.value)}
+                      disabled={saving}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary"
+                      onClick={() => setCantidad(String(tope))}
+                      disabled={saving || elegidos.length === 0}
+                      title="Llenar los carros elegidos con lo que haya en stock"
+                    >
+                      Llenar carros
+                    </button>
+                  </div>
                   <div className="form-text">
-                    Hasta {formatearNumero(tope)} — un carro es de {formatearNumero(porCarro)}
+                    {elegidos.length === 0
+                      ? `Un carro es de ${formatearNumero(porCarro)} huevos`
+                      : `Hasta ${formatearNumero(tope)} — ${elegidos.length} carro${
+                          elegidos.length === 1 ? "" : "s"
+                        } de ${formatearNumero(porCarro)}`}
                   </div>
                 </div>
 
@@ -474,29 +524,74 @@ const AsignarCarroModal = ({ entrada, fecha, constantes, incubadoras, onClose, o
                     disabled={saving}
                   />
                   <div className="form-text">
-                    Se compara con el peso de la transferencia para ver cuánto perdió.
+                    Se compara con el peso de la transferencia para ver cuánto perdió. Si van
+                    varios carros, se usa el mismo peso para todos.
                   </div>
                 </div>
+
+                {reparto.length > 0 && enviados > 0 && (
+                  <div className="table-responsive mt-3">
+                    <table className="table table-sm mb-0">
+                      <thead className="table-light">
+                        <tr>
+                          <th className="small">Orden</th>
+                          <th className="small">Posición</th>
+                          <th className="small text-end">Huevos</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reparto.map((r, i) => (
+                          <tr
+                            key={`${r.incubadora}-${r.carro}`}
+                            className={r.huevos === 0 ? "table-danger" : ""}
+                          >
+                            <td className="small">{i + 1}º</td>
+                            <td className="small">
+                              Incubadora {r.incubadora}, carro {r.carro}
+                            </td>
+                            <td className="small text-end fw-semibold">
+                              {r.huevos === 0 ? "sin huevos" : formatearNumero(r.huevos)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
 
                 <div
                   className={`alert py-2 mt-3 mb-0 small ${
                     puedeGuardar ? "alert-success" : "alert-secondary"
                   }`}
                 >
-                  {!carroSel
-                    ? "Elegí un carro para continuar."
-                    : enviados <= 0
-                    ? `Carro ${carroSel} elegido. Poné cuántos huevos van.`
-                    : (
-                      <>
-                        Entran <strong>{formatearNumero(enviados)}</strong> huevos a la{" "}
-                        <strong>
-                          incubadora {maquina}, carro {carroSel}
-                        </strong>
-                        .
-                        {quedaEnStock > 0 && <> Quedan {formatearNumero(quedaEnStock)} en stock.</>}
-                      </>
-                    )}
+                  {elegidos.length === 0 ? (
+                    "Elegí uno o más carros para continuar."
+                  ) : enviados <= 0 ? (
+                    `${elegidos.length} carro${elegidos.length === 1 ? "" : "s"} elegido${
+                      elegidos.length === 1 ? "" : "s"
+                    }. Poné cuántos huevos van.`
+                  ) : enviados > entrada.huevosDisponibles ? (
+                    `Hay ${formatearNumero(entrada.huevosDisponibles)} huevos en stock.`
+                  ) : enviados > capacidad ? (
+                    `En ${elegidos.length} carro${elegidos.length === 1 ? "" : "s"} entran ${formatearNumero(
+                      capacidad
+                    )}. Elegí otro carro o bajá la cantidad.`
+                  ) : carrosVacios.length > 0 ? (
+                    `No alcanza para ${
+                      carrosVacios.length === 1 ? "el carro" : "los carros"
+                    } ${carrosVacios.map(etiquetaPos).join(", ")}: sacalo${
+                      carrosVacios.length === 1 ? "" : "s"
+                    } o subí la cantidad.`
+                  ) : (
+                    <>
+                      Entran <strong>{formatearNumero(enviados)}</strong> huevos en{" "}
+                      <strong>
+                        {elegidos.length} carro{elegidos.length === 1 ? "" : "s"}
+                      </strong>
+                      {elegidos.length > 1 && <> ({elegidos.length} tandas)</>}.
+                      {quedaEnStock > 0 && <> Quedan {formatearNumero(quedaEnStock)} en stock.</>}
+                    </>
+                  )}
                 </div>
               </div>
               <div className="modal-footer">
@@ -856,9 +951,14 @@ const TransferenciaModal = ({ tanda, nacedoras, onClose, onHecho }) => {
   const [fecha, setFecha] = useState(obtenerFechaHoy());
   const [transferidos, setTransferidos] = useState("");
   const [perdida, setPerdida] = useState("");
-  // A qué nacedora y carro va. Arranca en la primera con lugar.
+  // A qué nacedora y carro va. Arranca en la primera donde entra la tanda entera.
   const [maquina, setMaquina] = useState(
-    () => (nacedoras || []).find((m) => m.carrosLibres > 0)?.numero ?? 1
+    () =>
+      (nacedoras || []).find((m) =>
+        m.carros.some((c) => (c.huevosLibres ?? 0) >= tanda.huevosIncubando)
+      )?.numero ??
+      (nacedoras || []).find((m) => m.carrosLibres > 0)?.numero ??
+      1
   );
   const [carroSel, setCarroSel] = useState(null);
   // Peso promedio del huevo en gramos. Opcional.
@@ -882,6 +982,11 @@ const TransferenciaModal = ({ tanda, nacedoras, onClose, onHecho }) => {
   const diferencia = tanda.huevosIncubando - total;
   const cuadra = diferencia === 0;
 
+  // Un carro de nacedora junta varias tandas: lo que se transfiere tiene que
+  // entrar en el lugar que le queda.
+  const carroElegido = maquinaSel?.carros.find((c) => c.carro === carroSel);
+  const noEntra = !!carroElegido && trans > carroElegido.huevosLibres;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (transferidos === "") {
@@ -890,6 +995,15 @@ const TransferenciaModal = ({ tanda, nacedoras, onClose, onHecho }) => {
     }
     if (!carroSel) {
       Swal.fire("Falta el carro", "Elegí a qué carro de la nacedora va.", "warning");
+      return;
+    }
+    if (noEntra) {
+      Swal.fire(
+        "No entra en el carro",
+        `Al carro ${carroSel} le quedan ${formatearNumero(carroElegido.huevosLibres)} huevos de ` +
+          `lugar y se transfieren ${formatearNumero(trans)}. Elegí otro carro.`,
+        "warning"
+      );
       return;
     }
     if (!cuadra) {
@@ -1039,7 +1153,8 @@ const TransferenciaModal = ({ tanda, nacedoras, onClose, onHecho }) => {
 
                 {/* A qué carro de la nacedora va. La nacedora tiene la misma
                     capacidad que la incubadora justamente para poder recibir una
-                    máquina llena. */}
+                    máquina llena, pero en 4 carros de 14.400 que juntan varias
+                    tandas cada uno. */}
                 <div className="mb-3">
                   <label className="form-label fw-semibold small">¿A qué nacedora va?</label>
                   <select
@@ -1053,30 +1168,32 @@ const TransferenciaModal = ({ tanda, nacedoras, onClose, onHecho }) => {
                   >
                     {(nacedoras || []).map((m) => (
                       <option key={m.numero} value={m.numero}>
-                        Nacedora {m.numero} — {m.carrosLibres} carro
-                        {m.carrosLibres === 1 ? "" : "s"} libre{m.carrosLibres === 1 ? "" : "s"}
+                        Nacedora {m.numero} — {formatearNumero(m.huevosLibres ?? 0)} huevos de
+                        lugar
                       </option>
                     ))}
                   </select>
                   {maquinaSel ? (
-                    <div className="border rounded p-2">
+                    <div className="border rounded p-2 d-flex justify-content-center">
                       <MapaCarros
                         maquina={maquinaSel}
                         seleccion={carroSel}
                         onElegir={setCarroSel}
-                        compacto
                       />
                     </div>
                   ) : (
                     <div className="alert alert-secondary py-2 small mb-0">Cargando…</div>
                   )}
                   <div className="form-text">
-                    {carroSel ? (
-                      <span className="text-primary fw-semibold">
-                        Nacedora {maquina} · carro {carroSel}
+                    {carroElegido ? (
+                      <span className={noEntra ? "text-danger fw-semibold" : "text-primary fw-semibold"}>
+                        Nacedora {maquina} · carro {carroSel} · le quedan{" "}
+                        {formatearNumero(carroElegido.huevosLibres)} de{" "}
+                        {formatearNumero(carroElegido.capacidad)}
+                        {noEntra && " — no entra"}
                       </span>
                     ) : (
-                      "Tocá un carro libre (verde)"
+                      "Tocá un carro con lugar: verde vacío, amarillo a medias. Varias tandas comparten carro."
                     )}
                   </div>
                 </div>
@@ -1131,7 +1248,7 @@ const TransferenciaModal = ({ tanda, nacedoras, onClose, onHecho }) => {
                 type="submit"
                 form="form-transferencia"
                 className="btn btn-info"
-                disabled={saving || !cuadra}
+                disabled={saving || !cuadra || noEntra}
               >
                 {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
                 Confirmar transferencia
@@ -1342,7 +1459,7 @@ const IncubadoraPage = () => {
   const [tandaNacimiento, setTandaNacimiento] = useState(null);
   const [solapa, setSolapa] = useState("incubadora");
   const [paginaHistorial, setPaginaHistorial] = useState(1);
-  // Mapa de las 6 incubadoras y las 3 nacedoras con sus 12 carros cada una.
+  // Mapa de las 6 incubadoras y las 3 nacedoras (12 carros por incubadora, 4 por nacedora).
   const [ocupacion, setOcupacion] = useState({ incubadoras: [], nacedoras: [] });
   // Entrada de stock que se está asignando a un carro; null = modal cerrado.
   const [asignando, setAsignando] = useState(null);
@@ -1350,7 +1467,8 @@ const IncubadoraPage = () => {
   const [descartando, setDescartando] = useState(null);
   // Tanda abierta desde un carro del mapa; null = modal cerrado.
   const [tandaAbierta, setTandaAbierta] = useState(null);
-  const [tandaNacAbierta, setTandaNacAbierta] = useState(null);
+  // Carro de nacedora abierto desde el mapa (con sus tandas); null = cerrado.
+  const [carroNacAbierto, setCarroNacAbierto] = useState(null);
 
   // Nacimientos por plantel de reproductoras. Se llama `rendimientoPlanteles` y
   // no `rendimiento` para no confundirlo con el de una tanda suelta que calcula
@@ -1643,8 +1761,8 @@ Tocá un carro ocupado para ver la tanda y transferirla a nacedora.
                 <i className="bi bi-grid-3x3 me-1"></i>Posiciones en las nacedoras
               </h5>
               <p className="text-muted small mb-3">
-Mismo esquema que las incubadoras. Tocá un carro ocupado para ver la tanda y
-                registrar el nacimiento.
+4 carros de 14.400 por nacedora, con el ventilador entre el 2 y el 3. Cada carro junta varias tandas: tocalo para verlas y
+                registrar cada nacimiento.
               </p>
               <div className="row g-3 mb-4">
                 {ocupacion.nacedoras.map((m) => (
@@ -1653,7 +1771,7 @@ Mismo esquema que las incubadoras. Tocá un carro ocupado para ver la tanda y
                     maquina={m}
                     etiqueta="Nacedora"
                     color="bg-info"
-                    onVerTanda={setTandaNacAbierta}
+                    onVerTanda={(_, carro) => setCarroNacAbierto({ ...carro, nacedora: m.numero })}
                   />
                 ))}
               </div>
@@ -1975,13 +2093,13 @@ Mismo esquema que las incubadoras. Tocá un carro ocupado para ver la tanda y
           }}
         />
       )}
-      {tandaNacAbierta && (
-        <TandaEnNacedoraModal
-          tanda={tandaNacAbierta}
+      {carroNacAbierto && (
+        <CarroNacedoraModal
+          carro={carroNacAbierto}
           constantes={constantes}
-          onClose={() => setTandaNacAbierta(null)}
+          onClose={() => setCarroNacAbierto(null)}
           onRegistrarNacimiento={(t) => {
-            setTandaNacAbierta(null);
+            setCarroNacAbierto(null);
             // El mapa trae un resumen; el modal de nacimiento necesita la tanda entera.
             setTandaNacimiento(tandas.find((x) => x._id === t._id) || t);
           }}

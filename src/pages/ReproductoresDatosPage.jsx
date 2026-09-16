@@ -50,11 +50,106 @@ const FORM_VACIO = {
   pesoMachos: CORRALES.map(() => ""),
   ...CHEQUEOS_VACIOS,
   consumoAlimentoKg: "",
+  // Gramos de alimento de la semana por corral y por sexo: ["", "", "", ""]
+  alimentoCorralesHembras: CORRALES.map(() => ""),
+  alimentoCorralesMachos: CORRALES.map(() => ""),
 };
 
 // Consumo semanal de un galpón entero: un plantel grande no pasa de unos pocos
 // miles de kg por semana, así que arriba de esto casi seguro es un error de carga.
 const ALIMENTO_MAX_KG = 50000;
+// Lo mismo por corral, en gramos: 10 toneladas en un corral es un error seguro.
+const ALIMENTO_CORRAL_MAX_G = 10000000;
+
+const CAMPOS_ALIMENTO_CORRALES = [
+  { campo: "alimentoCorralesHembras", label: SEXO_LABEL.hembra, ej: "850000" },
+  { campo: "alimentoCorralesMachos", label: SEXO_LABEL.macho, ej: "120000" },
+];
+
+// Lee los 4 corrales de un sexo. Devuelve { valor } con null (nada cargado) o
+// el array de números, o { error } si está a medias o hay un valor inválido.
+const leerAlimentoCorrales = (valores, label) => {
+  const cargados = valores.filter((v) => v !== "");
+  if (cargados.length === 0) return { valor: null };
+  if (cargados.length < CORRALES_PESAJE) {
+    const faltan = CORRALES.filter((c, i) => valores[i] === "");
+    return {
+      error: `Cargá el alimento de los ${CORRALES_PESAJE} corrales de ${label.toLowerCase()}. Falta${
+        faltan.length === 1 ? "" : "n"
+      } el corral ${faltan.join(", ")}.`,
+    };
+  }
+  const nums = valores.map(Number);
+  const malo = nums.findIndex((n) => isNaN(n) || n < 0 || n > ALIMENTO_CORRAL_MAX_G);
+  if (malo >= 0)
+    return {
+      error: `El alimento del corral ${malo + 1} de ${label.toLowerCase()} va en gramos (hasta ${formatearNumero(
+        ALIMENTO_CORRAL_MAX_G
+      )}).`,
+    };
+  return { valor: nums };
+};
+
+// Grilla de 4 corrales × 2 sexos para el alimento en gramos. `valores` es un
+// objeto con los dos campos de CAMPOS_ALIMENTO_CORRALES.
+const AlimentoCorralesInputs = ({ valores, onChange, disabled }) => (
+  <div className="row g-2">
+    {CAMPOS_ALIMENTO_CORRALES.map(({ campo, label, ej }) => {
+      const lista = valores[campo];
+      const cargados = lista.filter((v) => v !== "").length;
+      const totalKg =
+        cargados === CORRALES_PESAJE
+          ? lista.reduce((a, v) => a + (Number(v) || 0), 0) / 1000
+          : null;
+      return (
+        <div className="col-12 col-md-6" key={campo}>
+          <label className="form-label small fw-semibold mb-1">{label}</label>
+          <div className="row g-1">
+            {CORRALES.map((c, i) => (
+              <div className="col-3" key={c}>
+                <input
+                  type="number"
+                  className={`form-control form-control-sm ${
+                    cargados > 0 && lista[i] === "" ? "is-invalid" : ""
+                  }`}
+                  min="0"
+                  max={ALIMENTO_CORRAL_MAX_G}
+                  step="any"
+                  placeholder={`Ej: ${ej}`}
+                  aria-label={`Alimento ${label} — corral ${c}`}
+                  value={lista[i]}
+                  disabled={disabled}
+                  onChange={(e) => {
+                    const nuevos = [...lista];
+                    nuevos[i] = e.target.value;
+                    onChange(campo, nuevos);
+                  }}
+                />
+                <div className="text-muted text-center" style={{ fontSize: ".7rem" }}>
+                  Corral {c}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="form-text mt-1">
+            {totalKg != null ? (
+              <span className="text-success fw-semibold">
+                Total {label.toLowerCase()}: {formatearNumero(totalKg)} kg
+              </span>
+            ) : cargados > 0 ? (
+              <span className="text-danger">
+                Faltan {CORRALES_PESAJE - cargados} corral
+                {CORRALES_PESAJE - cargados === 1 ? "" : "es"}
+              </span>
+            ) : (
+              `Los ${CORRALES_PESAJE} corrales, o ninguno`
+            )}
+          </div>
+        </div>
+      );
+    })}
+  </div>
+);
 
 // <select> de tres estados para cada chequeo del galpón.
 const SelectChequeo = ({ chequeo, value, onChange }) => (
@@ -401,6 +496,16 @@ const EditarControlModal = ({ lote, control, onClose, onGuardado }) => {
     CHEQUEOS_SEMANALES.reduce((acc, c) => ({ ...acc, [c.key]: control[c.key] || "" }), {
       consumoAlimentoKg:
         control.consumoAlimentoKg == null ? "" : String(control.consumoAlimentoKg),
+      ...CAMPOS_ALIMENTO_CORRALES.reduce(
+        (acc, { campo }) => ({
+          ...acc,
+          [campo]:
+            control[campo]?.length === CORRALES_PESAJE
+              ? control[campo].map(String)
+              : CORRALES.map(() => ""),
+        }),
+        {}
+      ),
     })
   );
   const [fecha, setFecha] = useState(soloFecha(control.fecha));
@@ -415,7 +520,19 @@ const EditarControlModal = ({ lote, control, onClose, onGuardado }) => {
       Swal.fire("Consumo inválido", `Cargá los kg de alimento (hasta ${formatearNumero(ALIMENTO_MAX_KG)}).`, "warning");
       return;
     }
-    const algo = CHEQUEOS_SEMANALES.some((c) => valores[c.key]) || kg !== null;
+    const corrales = {};
+    for (const { campo, label } of CAMPOS_ALIMENTO_CORRALES) {
+      const { valor, error } = leerAlimentoCorrales(valores[campo], label);
+      if (error) {
+        Swal.fire("Alimento por corral", error, "warning");
+        return;
+      }
+      corrales[campo] = valor;
+    }
+    const algo =
+      CHEQUEOS_SEMANALES.some((c) => valores[c.key]) ||
+      kg !== null ||
+      Object.values(corrales).some((v) => v !== null);
     if (!algo) {
       Swal.fire(
         "Control vacío",
@@ -440,6 +557,7 @@ const EditarControlModal = ({ lote, control, onClose, onGuardado }) => {
           {}
         ),
         consumoAlimentoKg: kg,
+        ...corrales,
         fecha: ajustarFechaParaGuardar(fecha),
       });
       onGuardado();
@@ -453,7 +571,7 @@ const EditarControlModal = ({ lote, control, onClose, onGuardado }) => {
   return (
     <>
       <div className="modal show d-block" tabIndex="-1">
-        <div className="modal-dialog">
+        <div className="modal-dialog modal-lg modal-dialog-scrollable">
           <div className="modal-content">
             <div className="modal-header bg-primary text-white">
               <h5 className="modal-title">
@@ -495,6 +613,12 @@ const EditarControlModal = ({ lote, control, onClose, onGuardado }) => {
                       onChange={(e) => set("consumoAlimentoKg", e.target.value)}
                       placeholder="Dejá vacío si no lo tenés"
                     />
+                  </div>
+                  <div className="col-12">
+                    <label className="form-label fw-semibold small mb-1">
+                      Alimento por corral (gramos de la semana)
+                    </label>
+                    <AlimentoCorralesInputs valores={valores} onChange={set} disabled={saving} />
                   </div>
                   <div className="col-12">
                     <label className="form-label fw-semibold small mb-1">Fecha</label>
@@ -599,7 +723,19 @@ const ReproductoresDatosPage = () => {
 
     const chequeosCargados = CHEQUEOS_SEMANALES.filter((c) => form[c.key]);
     const alimento = form.consumoAlimentoKg === "" ? null : Number(form.consumoAlimentoKg);
-    const hayControl = chequeosCargados.length > 0 || alimento !== null;
+    const alimentoCorrales = {};
+    for (const { campo, label } of CAMPOS_ALIMENTO_CORRALES) {
+      const { valor, error } = leerAlimentoCorrales(form[campo], label);
+      if (error) {
+        Swal.fire("Alimento por corral", error, "warning");
+        return;
+      }
+      if (valor !== null) alimentoCorrales[campo] = valor;
+    }
+    const hayControl =
+      chequeosCargados.length > 0 ||
+      alimento !== null ||
+      Object.keys(alimentoCorrales).length > 0;
 
     if (!bajasH && !bajasM && pesoH === null && pesoM === null && !hayControl) {
       Swal.fire(
@@ -726,6 +862,7 @@ const ReproductoresDatosPage = () => {
           registrarControlSemanalReproductor(lote._id, {
             ...chequeosCargados.reduce((acc, c) => ({ ...acc, [c.key]: form[c.key] }), {}),
             ...(alimento !== null ? { consumoAlimentoKg: alimento } : {}),
+            ...alimentoCorrales,
             fecha,
           })
         );
@@ -1120,6 +1257,18 @@ const ReproductoresDatosPage = () => {
                                 />
                               </div>
                             </div>
+                            <div className="fw-semibold small mt-3 mb-1">
+                              <i className="bi bi-basket me-1"></i>Alimento por corral
+                              <span className="text-muted fw-normal">
+                                {" "}
+                                (gramos consumidos en la semana, por sexo)
+                              </span>
+                            </div>
+                            <AlimentoCorralesInputs
+                              valores={form}
+                              onChange={(campo, v) => setForm({ ...form, [campo]: v })}
+                              disabled={saving}
+                            />
                             <div className="form-text mt-2">
                               Va una sola vez por semana. Si esta semana ya tenía control cargado,
                               se actualiza con lo que completes acá y el resto queda como estaba.

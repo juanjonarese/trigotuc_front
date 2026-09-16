@@ -250,6 +250,7 @@ const HistorialReproductor = ({
                       </th>
                     ))}
                     <th className="text-end">Alimento</th>
+                    <th title="Gramos de la semana por corral (1 · 2 · 3 · 4)">Alimento por corral (g)</th>
                     <th className="d-none d-sm-table-cell">Fecha</th>
                     {(onEditarControl || onBorrarControl) && <th></th>}
                   </tr>
@@ -277,6 +278,26 @@ const HistorialReproductor = ({
                             <span className="text-muted fw-normal">—</span>
                           ) : (
                             `${formatearNumero(c.consumoAlimentoKg)} kg`
+                          )}
+                        </td>
+                        <td className="small text-nowrap">
+                          {[
+                            ["hembra", c.alimentoCorralesHembras],
+                            ["macho", c.alimentoCorralesMachos],
+                          ].every(([, v]) => !v?.length) ? (
+                            <span className="text-muted">—</span>
+                          ) : (
+                            [
+                              ["hembra", c.alimentoCorralesHembras],
+                              ["macho", c.alimentoCorralesMachos],
+                            ].map(([sexo, v]) =>
+                              v?.length ? (
+                                <div key={sexo}>
+                                  <span className="text-muted">{SEXO_LABEL[sexo]}:</span>{" "}
+                                  {v.map((g) => formatearNumero(g)).join(" · ")}
+                                </div>
+                              ) : null
+                            )
                           )}
                         </td>
                         <td className="d-none d-sm-table-cell text-muted small">

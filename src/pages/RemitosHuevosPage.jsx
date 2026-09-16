@@ -18,6 +18,7 @@ import {
   TIPOS_HUEVO_KEYS,
   etiquetaTipoHuevo,
   sumarTiposHuevo,
+  nombreGalpon,
 } from "../utils/reproductoresUtils";
 import { exportarTablaExcel } from "../utils/exportarExcel";
 import Swal from "sweetalert2";
@@ -26,13 +27,25 @@ const ITEMS_POR_PAGINA = 15;
 
 const tiposVacios = () => TIPOS_HUEVO_KEYS.reduce((acc, k) => ({ ...acc, [k]: "" }), {});
 
+const textoGalpon = (constantes, galpon) =>
+  galpon == null ? "?" : nombreGalpon(constantes?.galpones, "postura", galpon);
+
+// Galpones de un remito, sin repetir. Los remitos viejos no guardaban el galpón
+// en la línea: se toma el del plantel.
+const galponesDeRemito = (constantes, remito) =>
+  [...new Set(remito.lineas.map((l) => l.galpon ?? l.lote?.galpon).filter((g) => g != null))]
+    .sort((a, b) => a - b)
+    .map((g) => textoGalpon(constantes, g))
+    .join(", ");
+
 // ── Modal: carga de un remito ───────────────────────────────────────────────
 // El remito es el papel con el que los huevos salen de la granja y entran a
-// Trigotuc. Puede llevar varios planteles; de cada uno se dice cuánto va de cada
+// Trigotuc. Puede llevar varios galpones; de cada uno se dice cuánto va de cada
 // tipo. El número es el del talonario: lo carga el usuario.
 //
-// De cada plantel solo se puede mandar lo que tiene en la granja: el backend
-// consume FIFO por fecha de recolección (primero el huevo más viejo).
+// Cada fila es un GALPÓN (con su plantel): el remito tiene que decir de qué
+// galpón salen los huevos. De cada galpón solo se puede mandar lo que tiene en la
+// granja: el backend consume FIFO por fecha de recolección de ese galpón.
 // Con `remito` el modal edita en vez de cargar. Editar es revertir y volver a
 // aplicar: por eso lo que ese remito ya tiene tomado vuelve a contar como
 // disponible en la granja, y arranca precargado con sus propias cantidades.
@@ -40,18 +53,23 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
   const editando = !!remito;
   const lineasPrevias = remito?.lineas || [];
   const idLote = (l) => String(l.lote?._id || l.lote);
+  // Los remitos viejos no guardaban el galpón en la línea: se toma el del plantel.
+  const galponLinea = (l) => l.galpon ?? l.lote?.galpon ?? null;
+  // Clave de una fila: galpón + plantel.
+  const clave = (galpon, loteId) => `${galpon ?? ""}|${loteId}`;
 
   const [numeroRemito, setNumeroRemito] = useState(remito?.numeroRemito || "");
   const [fecha, setFecha] = useState(
     remito?.fecha ? String(remito.fecha).slice(0, 10) : obtenerFechaHoy()
   );
   const [observaciones, setObservaciones] = useState(remito?.observaciones || "");
-  // { [loteId]: { apiLimpioCinta: "", apiSucioCinta: "", ... } }
+  // { ["galpon|loteId"]: { apiLimpioCinta: "", apiSucio: "", ... } }
   const [cantidades, setCantidades] = useState(() => {
     const inicial = {};
     for (const l of lineasPrevias) {
-      const id = idLote(l);
-      inicial[id] = { ...(inicial[id] || tiposVacios()), [l.tipo]: String(l.huevos) };
+      const id = clave(galponLinea(l), idLote(l));
+      const previo = Number(inicial[id]?.[l.tipo]) || 0;
+      inicial[id] = { ...(inicial[id] || tiposVacios()), [l.tipo]: String(previo + l.huevos) };
     }
     return inicial;
   });
@@ -62,40 +80,51 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
   const entradas = (() => {
     const mapa = new Map();
     for (const e of stockGranja) {
-      mapa.set(String(e.lote), { ...e, porTipo: { ...e.porTipo } });
+      const id = clave(e.galpon, String(e.lote));
+      mapa.set(id, { ...e, id, lote: String(e.lote), porTipo: { ...e.porTipo } });
     }
     for (const l of lineasPrevias) {
-      const id = idLote(l);
+      const galpon = galponLinea(l);
+      const id = clave(galpon, idLote(l));
       if (!mapa.has(id)) {
         mapa.set(id, {
-          lote: id,
+          id,
+          lote: idLote(l),
+          galpon,
           numeroLote: l.numeroLote,
+          huevosDisponibles: 0,
           porTipo: TIPOS_HUEVO_KEYS.reduce((acc, k) => ({ ...acc, [k]: 0 }), {}),
         });
       }
       const e = mapa.get(id);
       e.porTipo[l.tipo] = (e.porTipo[l.tipo] || 0) + l.huevos;
+      e.huevosDisponibles = (e.huevosDisponibles || 0) + l.huevos;
     }
-    return [...mapa.values()].sort((a, b) => a.numeroLote - b.numeroLote);
+    return [...mapa.values()].sort(
+      (a, b) => (a.galpon ?? 0) - (b.galpon ?? 0) || a.numeroLote - b.numeroLote
+    );
   })();
 
   const huevosPorCajon = constantes?.huevosPorCajon ?? 144;
   const huevosPorBandeja = constantes?.huevosPorBandeja ?? 12;
 
-  const valor = (loteId, tipo) => cantidades[loteId]?.[tipo] ?? "";
-  const cantidad = (loteId, tipo) => Number(valor(loteId, tipo)) || 0;
+  const valor = (id, tipo) => cantidades[id]?.[tipo] ?? "";
+  const cantidad = (id, tipo) => Number(valor(id, tipo)) || 0;
 
-  const handleCantidad = (loteId, tipo, value) =>
+  const handleCantidad = (id, tipo, value) =>
     setCantidades((prev) => ({
       ...prev,
-      [loteId]: { ...(prev[loteId] || tiposVacios()), [tipo]: value },
+      [id]: { ...(prev[id] || tiposVacios()), [tipo]: value },
     }));
 
-  // Carga de una vez todo lo que ese plantel tiene en la granja.
+  const etiquetaGalpon = (galpon) =>
+    galpon == null ? "Galpón ?" : nombreGalpon(constantes?.galpones, "postura", galpon);
+
+  // Carga de una vez todo lo que ese galpón tiene en la granja.
   const cargarTodo = (entrada) =>
     setCantidades((prev) => ({
       ...prev,
-      [entrada.lote]: TIPOS_HUEVO_KEYS.reduce(
+      [entrada.id]: TIPOS_HUEVO_KEYS.reduce(
         (acc, k) => ({ ...acc, [k]: entrada.porTipo[k] ? String(entrada.porTipo[k]) : "" }),
         {}
       ),
@@ -106,11 +135,17 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
   const excedidos = [];
   for (const entrada of entradas) {
     for (const tipo of TIPOS_HUEVO_KEYS) {
-      const huevos = cantidad(entrada.lote, tipo);
+      const huevos = cantidad(entrada.id, tipo);
       if (huevos <= 0) continue;
       if (huevos > (entrada.porTipo[tipo] || 0))
-        excedidos.push(`#${entrada.numeroLote} ${etiquetaTipoHuevo(tipo)}`);
-      lineas.push({ lote: entrada.lote, numeroLote: entrada.numeroLote, tipo, huevos });
+        excedidos.push(`${etiquetaGalpon(entrada.galpon)} ${etiquetaTipoHuevo(tipo)}`);
+      lineas.push({
+        lote: entrada.lote,
+        galpon: entrada.galpon,
+        numeroLote: entrada.numeroLote,
+        tipo,
+        huevos,
+      });
     }
   }
 
@@ -127,7 +162,7 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
       return;
     }
     if (lineas.length === 0) {
-      Swal.fire("Remito vacío", "Cargá cuántos huevos salen de al menos un plantel.", "warning");
+      Swal.fire("Remito vacío", "Cargá cuántos huevos salen de al menos un galpón.", "warning");
       return;
     }
     if (excedidos.length > 0) {
@@ -144,7 +179,7 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
       const payload = {
         numeroRemito: numeroRemito.trim(),
         fecha: ajustarFechaParaGuardar(fecha),
-        lineas: lineas.map(({ lote, tipo, huevos }) => ({ lote, tipo, huevos })),
+        lineas: lineas.map(({ lote, galpon, tipo, huevos }) => ({ lote, galpon, tipo, huevos })),
         observaciones: observaciones || undefined,
       };
       const guardado = editando
@@ -181,7 +216,7 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
               <form id="form-remito-huevos" onSubmit={handleSubmit}>
                 <div className="alert alert-light border small mb-3">
                   <i className="bi bi-info-circle me-1"></i>
-                  Cargá cuántos huevos salen de cada plantel. De cada plantel sale primero el
+                  Cargá cuántos huevos salen de cada galpón. De cada galpón sale primero el
                   huevo más viejo. Lo que no cargues sigue en la granja para el próximo remito.
                 </div>
 
@@ -235,7 +270,7 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
                     <table className="table table-sm align-middle">
                       <thead className="table-light">
                         <tr>
-                          <th>Plantel</th>
+                          <th>Galpón</th>
                           {TIPOS_HUEVO.map((t) => (
                             <th className="text-center" key={t.key} style={{ minWidth: 130 }}>
                               {t.label}
@@ -247,14 +282,16 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
                       </thead>
                       <tbody>
                         {entradas.map((entrada) => (
-                          <tr key={entrada.lote}>
-                            <td>
-                              <span className="fw-bold">#{entrada.numeroLote}</span>
-                              <span className="text-muted small d-block">G{entrada.galpon}</span>
+                          <tr key={entrada.id}>
+                            <td className="text-nowrap">
+                              <span className="fw-bold">{etiquetaGalpon(entrada.galpon)}</span>
+                              <span className="text-muted small d-block">
+                                Plantel #{entrada.numeroLote}
+                              </span>
                             </td>
                             {TIPOS_HUEVO.map((t) => {
                               const disponible = entrada.porTipo[t.key] || 0;
-                              const cargado = cantidad(entrada.lote, t.key);
+                              const cargado = cantidad(entrada.id, t.key);
                               const excede = cargado > disponible;
                               return (
                                 <td key={t.key}>
@@ -263,9 +300,9 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
                                     className={`form-control form-control-sm ${excede ? "is-invalid" : ""}`}
                                     min="0"
                                     max={disponible}
-                                    value={valor(entrada.lote, t.key)}
+                                    value={valor(entrada.id, t.key)}
                                     onChange={(e) =>
-                                      handleCantidad(entrada.lote, t.key, e.target.value)
+                                      handleCantidad(entrada.id, t.key, e.target.value)
                                     }
                                     placeholder="0"
                                     disabled={disponible === 0}
@@ -284,7 +321,7 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
                                 type="button"
                                 className="btn btn-sm btn-outline-secondary"
                                 onClick={() => cargarTodo(entrada)}
-                                title="Mandar todo lo que hay de este plantel"
+                                title="Mandar todo lo que hay de este galpón"
                               >
                                 Todo
                               </button>
@@ -349,7 +386,7 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
 };
 
 // ── Modal: detalle de un remito ─────────────────────────────────────────────
-const DetalleRemitoModal = ({ remito, onClose }) => (
+const DetalleRemitoModal = ({ remito, constantes, onClose }) => (
   <>
     <div className="modal show d-block" tabIndex="-1">
       <div className="modal-dialog modal-lg modal-dialog-scrollable">
@@ -390,6 +427,7 @@ const DetalleRemitoModal = ({ remito, onClose }) => (
             <table className="table table-sm align-middle">
               <thead className="table-light">
                 <tr>
+                  <th>Galpón</th>
                   <th>Plantel</th>
                   <th>Tipo</th>
                   <th className="text-end">Huevos</th>
@@ -399,7 +437,10 @@ const DetalleRemitoModal = ({ remito, onClose }) => (
               <tbody>
                 {remito.lineas.map((l, i) => (
                   <tr key={i}>
-                    <td className="fw-bold">#{l.numeroLote ?? l.lote?.numeroLote ?? "?"}</td>
+                    <td className="fw-bold text-nowrap">
+                      {textoGalpon(constantes, l.galpon ?? l.lote?.galpon)}
+                    </td>
+                    <td>#{l.numeroLote ?? l.lote?.numeroLote ?? "?"}</td>
                     <td>{etiquetaTipoHuevo(l.tipo)}</td>
                     <td className="text-end">{formatearNumero(l.huevos)}</td>
                     <td className="small text-muted">
@@ -500,6 +541,7 @@ const RemitosHuevosPage = () => {
         { header: "Remito",   valor: (r) => r.numeroRemito },
         { header: "Fecha",    valor: (r) => formatearFechaLocal(r.fecha) },
         { header: "Origen",   valor: (r) => r.origen || "" },
+        { header: "Galpones",  valor: (r) => galponesDeRemito(constantes, r) },
         { header: "Planteles", valor: (r) => [...new Set(r.lineas.map((l) => `#${l.numeroLote}`))].join(" ") },
         ...TIPOS_HUEVO.map((t) => ({
           header: t.label,
@@ -584,7 +626,7 @@ const RemitosHuevosPage = () => {
                         <tr>
                           <th>Remito</th>
                           <th>Fecha</th>
-                          <th>Planteles</th>
+                          <th>Galpones</th>
                           {TIPOS_HUEVO.map((t) => (
                             <th className="text-end" key={t.key} title={t.label}>
                               {t.corto}
@@ -601,9 +643,12 @@ const RemitosHuevosPage = () => {
                             <td className="fw-bold">{r.numeroRemito}</td>
                             <td>{formatearFechaLocal(r.fecha)}</td>
                             <td className="small">
-                              {[...new Set(r.lineas.map((l) => l.numeroLote))]
-                                .map((n) => `#${n}`)
-                                .join(" ")}
+                              {galponesDeRemito(constantes, r)}
+                              <span className="text-muted d-block">
+                                {[...new Set(r.lineas.map((l) => l.numeroLote))]
+                                  .map((n) => `#${n}`)
+                                  .join(" ")}
+                              </span>
                             </td>
                             {TIPOS_HUEVO.map((t) => (
                               <td className="text-end" key={t.key}>
@@ -679,10 +724,8 @@ const RemitosHuevosPage = () => {
                             <strong>{formatearNumero(r.huevosTotales)}</strong>
                           </div>
                           <div className="col-12">
-                            <span className="text-muted">Planteles:</span>{" "}
-                            {[...new Set(r.lineas.map((l) => l.numeroLote))]
-                              .map((n) => `#${n}`)
-                              .join(" ")}
+                            <span className="text-muted">Galpones:</span>{" "}
+                            {galponesDeRemito(constantes, r)}
                           </div>
                           {TIPOS_HUEVO.filter((t) => r.totales?.[t.key] > 0).map((t) => (
                             <div className="col-6" key={t.key}>
@@ -759,7 +802,13 @@ const RemitosHuevosPage = () => {
         />
       )}
 
-      {detalle && <DetalleRemitoModal remito={detalle} onClose={() => setDetalle(null)} />}
+      {detalle && (
+        <DetalleRemitoModal
+          remito={detalle}
+          constantes={constantes}
+          onClose={() => setDetalle(null)}
+        />
+      )}
     </Layout>
   );
 };

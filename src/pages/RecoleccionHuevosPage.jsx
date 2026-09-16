@@ -9,6 +9,7 @@ import {
   crearRecoleccionHuevos,
   editarRecoleccionHuevos,
   eliminarRecoleccionHuevos,
+  obtenerStockGranja,
 } from "../services/api";
 import {
   formatearFechaLocal,
@@ -338,7 +339,7 @@ const RecoleccionModal = ({
                           ({formatearPorcentaje(
                             (sumarIncubables(form.tipos) / huevosTotales) * 100
                           )}{" "}
-                          de fertilidad — suma de los tres API)
+                          de fertilidad — suma de los dos API)
                         </span>
                       </div>
                       {porcentajePostura != null && (
@@ -400,6 +401,8 @@ const RecoleccionHuevosPage = () => {
   const [constantes, setConstantes] = useState(null);
   const [lotes, setLotes] = useState([]);
   const [recolecciones, setRecolecciones] = useState([]);
+  // Lo que sigue en la granja sin remitir, una entrada por galpón (y plantel).
+  const [stockGranja, setStockGranja] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pagina, setPagina] = useState(1);
   const [galponAbierto, setGalponAbierto] = useState(null);
@@ -408,14 +411,16 @@ const RecoleccionHuevosPage = () => {
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
-      const [cons, lotesProd, recs] = await Promise.all([
+      const [cons, lotesProd, recs, granja] = await Promise.all([
         obtenerConstantesReproductores(),
         obtenerLotesEnProduccion(),
         obtenerRecoleccionesHuevos(),
+        obtenerStockGranja(),
       ]);
       setConstantes(cons);
       setLotes(Array.isArray(lotesProd) ? lotesProd : []);
       setRecolecciones(Array.isArray(recs) ? recs : []);
+      setStockGranja(Array.isArray(granja) ? granja : []);
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudieron cargar los datos.", "error");
     } finally {
@@ -499,6 +504,17 @@ const RecoleccionHuevosPage = () => {
       Swal.fire("No se puede eliminar", err.message, "error");
     }
   };
+
+  // Stock en la granja: totales por tipo de todos los galpones, para la fila final.
+  const stockPorTipo = TIPOS_HUEVO_KEYS.reduce(
+    (acc, k) => ({ ...acc, [k]: stockGranja.reduce((s, e) => s + (e.porTipo?.[k] || 0), 0) }),
+    {}
+  );
+  const stockTotal = sumarTiposHuevo(stockPorTipo);
+  const stockDeGalpon = (numero) =>
+    stockGranja
+      .filter((e) => e.galpon === numero)
+      .reduce((s, e) => s + (e.huevosDisponibles || 0), 0);
 
   const recsPagina = recolecciones.slice((pagina - 1) * ITEMS_POR_PAGINA, pagina * ITEMS_POR_PAGINA);
   // Excel: el historial entero, no solo la página. Los porcentajes van con el
@@ -605,9 +621,15 @@ const RecoleccionHuevosPage = () => {
                               <span className="fw-bold">Plantel #{lote.numeroLote}</span>
                               <small className="text-muted">Semana {lote.semanaVida}</small>
                             </div>
-                            <div className="small text-muted mb-3">
-                              <i className="bi bi-gender-female me-1"></i>
-                              {formatearNumero(lote.hembras?.actual)} hembras
+                            <div className="small text-muted mb-3 d-flex justify-content-between">
+                              <span>
+                                <i className="bi bi-gender-female me-1"></i>
+                                {formatearNumero(lote.hembras?.actual)} hembras
+                              </span>
+                              <span title="Huevos de este galpón que siguen en la granja, sin remitir">
+                                <i className="bi bi-house me-1"></i>
+                                {formatearNumero(stockDeGalpon(galpon.numero))} en granja
+                              </span>
                             </div>
 
                             {hoyResumen ? (
@@ -656,6 +678,75 @@ const RecoleccionHuevosPage = () => {
                   })}
                 </div>
               </>
+            )}
+
+            {/* Stock en la granja, por galpón: lo recolectado que todavía no
+                salió en un remito. Es lo mismo que se ve al armar el remito. */}
+            <h5 className="fw-bold text-secondary mb-3">
+              Stock en la granja por galpón
+              <span className="text-muted fw-normal small ms-2">sin remitir</span>
+            </h5>
+            {stockGranja.length === 0 ? (
+              <div className="card shadow-sm mb-4">
+                <div className="card-body text-center py-4 text-muted small">
+                  <i className="bi bi-house fs-3 d-block mb-1"></i>
+                  No hay huevos en la granja sin remitir.
+                </div>
+              </div>
+            ) : (
+              <div className="card shadow-sm mb-4">
+                <div className="table-responsive">
+                  <table className="table table-sm align-middle mb-0">
+                    <thead className="table-light">
+                      <tr>
+                        <th>Galpón</th>
+                        {TIPOS_HUEVO.map((t) => (
+                          <th className="text-end" key={t.key} title={t.label}>
+                            {t.corto}
+                          </th>
+                        ))}
+                        <th className="text-end">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stockGranja.map((e) => (
+                        <tr key={`${e.galpon}-${e.lote}`}>
+                          <td className="text-nowrap">
+                            <span className="fw-semibold">
+                              {nombreGalpon(constantes?.galpones, "postura", e.galpon)}
+                            </span>
+                            <span className="text-muted small"> · plantel #{e.numeroLote}</span>
+                          </td>
+                          {TIPOS_HUEVO.map((t) => (
+                            <td className={`text-end ${t.clase}`} key={t.key}>
+                              {formatearNumero(e.porTipo?.[t.key] || 0)}
+                            </td>
+                          ))}
+                          <td className="text-end">
+                            <span className="fw-bold">{formatearNumero(e.huevosDisponibles)}</span>
+                            <span className="text-muted small d-block">
+                              {textoDesglose(e.huevosDisponibles, huevosPorCajon)}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    {stockGranja.length > 1 && (
+                      <tfoot className="table-light">
+                        <tr className="fw-bold">
+                          <td>Total granja</td>
+                          {TIPOS_HUEVO.map((t) => (
+                            <td className="text-end" key={t.key}>
+                              {formatearNumero(stockPorTipo[t.key])}
+                            </td>
+                          ))}
+                          <td className="text-end">{formatearNumero(stockTotal)}</td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              </div>
             )}
 
             <div className="d-flex justify-content-between align-items-center mb-3">
