@@ -32,11 +32,16 @@ const MapaCarros = ({ maquina, seleccion, onElegir, onVerTanda, compacto = false
   const carros = maquina.carros || [];
   const multiple = Array.isArray(seleccion);
 
+  // Las máquinas de pocos carros (la nacedora, que tiene 4) se dibujan con los
+  // carros más grandes: hay lugar de sobra y cada uno lleva mucho más huevo.
+  const grande = !compacto && carros.length <= 6;
+  const ancho = compacto ? "32px" : grande ? "86px" : "46px";
+
   // Columnas de a dos: la 1 lleva los carros 1 y 2, la 2 el 3 y 4, y así.
   const columnas = [...new Set(carros.map((c) => c.columna))].sort((a, b) => a - b);
 
   const Carro = ({ c }) => {
-    if (!c) return <div style={{ minWidth: compacto ? "32px" : "46px" }} />;
+    if (!c) return <div style={{ minWidth: ancho }} />;
     const orden = multiple ? seleccion.indexOf(c.carro) : -1;
     const elegido = multiple ? orden >= 0 : seleccion === c.carro;
     // En la incubadora un carro ocupado ya está lleno; en la nacedora no.
@@ -85,18 +90,29 @@ const MapaCarros = ({ maquina, seleccion, onElegir, onVerTanda, compacto = false
     return (
       <button
         type="button"
-        className={`btn btn-sm ${clase} p-1`}
-        style={{ minWidth: compacto ? "32px" : "46px", lineHeight: 1.1 }}
+        className={`btn btn-sm ${clase} ${grande ? "p-2" : "p-1"}`}
+        style={{
+          minWidth: ancho,
+          minHeight: grande ? "62px" : undefined,
+          lineHeight: 1.15,
+        }}
         title={titulo}
         disabled={!clickeable}
         onClick={alTocar}
       >
-        <div className="fw-bold" style={{ fontSize: compacto ? ".72rem" : ".82rem" }}>
+        <div
+          className="fw-bold"
+          style={{ fontSize: compacto ? ".72rem" : grande ? "1.1rem" : ".82rem" }}
+        >
           {c.carro}
         </div>
         {!compacto && (
-          <div style={{ fontSize: ".6rem" }}>
-            {etiqueta}
+          <div style={{ fontSize: grande ? ".78rem" : ".6rem" }}>{etiqueta}</div>
+        )}
+        {/* En los carros grandes entra el dato de cuánto tienen adentro. */}
+        {grande && conCapacidad && c.ocupado && (
+          <div className="text-muted" style={{ fontSize: ".68rem" }}>
+            {formatearNumero(c.huevos)}
           </div>
         )}
       </button>
@@ -121,7 +137,7 @@ const MapaCarros = ({ maquina, seleccion, onElegir, onVerTanda, compacto = false
   );
 
   return (
-    <div className="d-flex align-items-center gap-1">
+    <div className="d-flex align-items-center justify-content-center gap-1">
       {columnas.map((col) => (
         <React.Fragment key={col}>
           <Columna col={col} />
@@ -132,7 +148,7 @@ const MapaCarros = ({ maquina, seleccion, onElegir, onVerTanda, compacto = false
               title="Ventilador"
             >
               <div className="border-start border-2 border-secondary-subtle flex-grow-1"></div>
-              <i className="bi bi-fan my-1" style={{ fontSize: ".8rem" }}></i>
+              <i className="bi bi-fan my-1" style={{ fontSize: grande ? "1rem" : ".8rem" }}></i>
               <div className="border-start border-2 border-secondary-subtle flex-grow-1"></div>
             </div>
           )}

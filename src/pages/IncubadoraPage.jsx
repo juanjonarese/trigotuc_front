@@ -907,10 +907,14 @@ const DescartarApiModal = ({ entrada, onClose, onHecho }) => {
 };
 
 // ── Tarjeta de API en stock ─────────────────────────────────────────────────
-// Solo muestra qué hay y de qué plantel. La asignación se hace en el modal, que
-// es donde están el mapa de la máquina y la cantidad.
+// Muestra qué hay, de qué plantel y con qué remito vino (la fecha en que salió
+// de la granja). La asignación se hace en el modal, que es donde están el mapa
+// de la máquina y la cantidad.
 const TarjetaApiRecibido = ({ entrada, constantes, onAsignar, onEnviarAVenta, onDescartar }) => {
   const huevosPorCajon = constantes?.huevosPorCajon ?? 144;
+  // De qué envío vino lo que queda. Puede ser más de uno: el stock se consume
+  // FIFO y lo que sobró de un remito viejo convive con el último.
+  const remitos = entrada.remitos || [];
   return (
     <div className="col-12 col-md-6 col-xl-4">
       <div className="card shadow-sm h-100 border-warning">
@@ -923,9 +927,46 @@ const TarjetaApiRecibido = ({ entrada, constantes, onAsignar, onEnviarAVenta, on
             {nombreGalpon(constantes?.galpones, "postura", entrada.galpon)}
           </div>
           <div className="h3 fw-bold mb-0">{formatearNumero(entrada.huevosDisponibles)}</div>
-          <div className="text-muted small mb-3">
+          <div className="text-muted small mb-2">
             huevos en stock · {textoDesglose(entrada.huevosDisponibles, huevosPorCajon)}
           </div>
+
+          {/* Cuándo salió de la granja. Si vino en varios remitos, cada uno con
+              su parte: el de arriba es el más viejo, que sale primero. */}
+          {remitos.length > 0 && (
+            <div className="border rounded p-2 mb-3 small">
+              <div className="text-muted mb-1">
+                <i className="bi bi-truck me-1"></i>
+                Enviado desde la granja
+              </div>
+              {remitos.map((r, i) => (
+                <div
+                  key={r.remito || `sin-${i}`}
+                  className="d-flex justify-content-between gap-2"
+                  title={
+                    r.fechaRecoleccionDesde
+                      ? `Recolectado ${formatearFechaLocal(r.fechaRecoleccionDesde)}` +
+                        (r.fechaRecoleccionHasta !== r.fechaRecoleccionDesde
+                          ? ` al ${formatearFechaLocal(r.fechaRecoleccionHasta)}`
+                          : "")
+                      : undefined
+                  }
+                >
+                  <span>
+                    {r.fechaRemito ? (
+                      <span className="fw-semibold">{formatearFechaLocal(r.fechaRemito)}</span>
+                    ) : (
+                      <span className="text-muted">sin remito</span>
+                    )}
+                    {r.numeroRemito && (
+                      <span className="text-muted"> · remito {r.numeroRemito}</span>
+                    )}
+                  </span>
+                  <span className="text-nowrap">{formatearNumero(r.huevos)}</span>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="d-grid gap-2 mt-auto">
             <button className="btn btn-warning" onClick={() => onAsignar(entrada)}>
               <i className="bi bi-grid-3x3 me-1"></i>Asignar a incubadora
