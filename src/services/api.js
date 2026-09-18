@@ -1247,3 +1247,49 @@ export const anularVentaPollitos = async (id, motivo) => {
   });
   return handleResponse(response);
 };
+
+// ── Órdenes de carga de pollitos ────────────────────────────────────────────
+// La salida del stock de nacimientos hacia un cliente: pendiente (compromete)
+// → entregada (descuenta FIFO por fecha de nacimiento).
+
+export const obtenerStockOrdenesPollitos = async () => {
+  const response = await fetch(`${API_URL}/ordenes-carga-pollitos/stock`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const obtenerOrdenesCargaPollitos = async (filtros = {}) => {
+  const response = await fetch(`${API_URL}/ordenes-carga-pollitos${buildQuery(filtros)}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const crearOrdenCargaPollitos = async (data) => {
+  const response = await fetch(`${API_URL}/ordenes-carga-pollitos`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const actualizarOrdenCargaPollitos = async (id, data) => {
+  const response = await fetch(`${API_URL}/ordenes-carga-pollitos/${id}`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const entregarOrdenCargaPollitos = async (id, data = {}) => {
+  const response = await fetch(`${API_URL}/ordenes-carga-pollitos/${id}/entregar`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const anularOrdenCargaPollitos = async (id, motivo) => {
+  const response = await fetch(`${API_URL}/ordenes-carga-pollitos/${id}/anular`, {
+    method: "PATCH", headers: getAuthHeaders(), body: JSON.stringify({ motivo }),
+  });
+  return handleResponse(response);
+};
