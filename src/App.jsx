@@ -40,6 +40,7 @@ import IncubadoraPage from "./pages/IncubadoraPage";
 // import VentaPollitosPage from "./pages/VentaPollitosPage";
 import ReservaPollitosPage from "./pages/ReservaPollitosPage";
 import AsignacionesPollitosPage from "./pages/AsignacionesPollitosPage";
+import OrdenCargaPollitosPage from "./pages/OrdenCargaPollitosPage";
 import StockHuevosPage from "./pages/StockHuevosPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -96,6 +97,8 @@ function App() {
         {/* Ruta vieja: Proyección se mudó a la raíz. */}
         <Route path="/reproductores/reserva-pollitos" element={<Navigate to="/proyeccion" replace />} />
         <Route path="/reproductores/asignaciones" element={<ProtectedRoute><AsignacionesPollitosPage /></ProtectedRoute>} />
+        {/* Órdenes de carga de pollitos: la salida del stock de nacimientos hacia el cliente. */}
+        <Route path="/reproductores/ordenes-carga" element={<ProtectedRoute><OrdenCargaPollitosPage /></ProtectedRoute>} />
         <Route path="/reproductores/stock-huevos" element={<ProtectedRoute><StockHuevosPage /></ProtectedRoute>} />
         {/* Ventas de Reproductores: en pausa por pedido del cliente.
         <Route path="/reproductores/ventas-huevos" element={<ProtectedRoute><VentaHuevosPage /></ProtectedRoute>} />

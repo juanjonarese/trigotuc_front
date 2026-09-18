@@ -307,7 +307,16 @@ const Layout = ({ children }) => {
                   <i className="bi bi-list-check"></i>
                   <span>Asignaciones</span>
                 </a>
-                {/* 8 — Stock de huevos de descarte + salidas sin cliente */}
+                {/* 8 — Órdenes de carga: la salida de los pollitos nacidos hacia el cliente */}
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/ordenes-carga") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/ordenes-carga"); }}
+                >
+                  <i className="bi bi-truck"></i>
+                  <span>Órdenes de Carga</span>
+                </a>
+                {/* 9 — Stock de huevos de descarte + salidas sin cliente */}
                 <a
                   href="#"
                   className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/stock-huevos") ? "text-white" : "text-white-50"}`}
