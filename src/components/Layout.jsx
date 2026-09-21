@@ -38,6 +38,12 @@ const Layout = ({ children }) => {
   );
   const rolUsuario = localStorage.getItem("rolUsuario");
 
+  // `admin` (2026-09-21) es el superadmin operativo: ve lo mismo que el
+  // superadmin salvo **Usuarios**, que es el único ítem que sigue preguntando
+  // por `superadmin` a secas. Lo que no ve acá tampoco lo puede hacer: el
+  // backend corta el alta de usuarios y el reset de Reproductoras.
+  const mandaTodo = rolUsuario === "superadmin" || rolUsuario === "admin";
+
   // Auto-expand: al cambiar de ruta se abre la sección que le corresponde
   // (y se cierra la anterior). Ajuste de estado durante el render, no en un
   // efecto: https://react.dev/learn/you-might-not-need-an-effect
@@ -102,7 +108,7 @@ const Layout = ({ children }) => {
 
           {/* Proyección: cruce de los nacimientos contra los galpones de
               engorde. Vive en la raíz porque toca Reproductores y Granja. */}
-          {(rolUsuario === "superadmin" || rolUsuario === "administracion_frigorifico" || rolUsuario === "administracion_granja") && (
+          {(mandaTodo || rolUsuario === "administracion_frigorifico" || rolUsuario === "administracion_granja") && (
             <a
               href="#"
               className={`nav-link d-flex align-items-center gap-2 mb-2 rounded ${
@@ -118,7 +124,7 @@ const Layout = ({ children }) => {
             </a>
           )}
 
-          {(rolUsuario === "superadmin" || rolUsuario === "administracion_frigorifico" || rolUsuario === "administracion_granja") && (
+          {(mandaTodo || rolUsuario === "administracion_frigorifico" || rolUsuario === "administracion_granja") && (
           <div className="nav-section mb-2">
             <a
               href="#"
@@ -153,6 +159,9 @@ const Layout = ({ children }) => {
                   <i className="bi bi-person-badge"></i>
                   <span>Clientes</span>
                 </a>
+                {/* Usuarios es el ÚNICO ítem que el `admin` no ve: quién entra
+                    al sistema y con qué rol lo decide solo el superadmin. El
+                    backend lo corta igual (esSuperAdmin en /usuarios). */}
                 {rolUsuario === "superadmin" && (
                   <a
                     href="#"
@@ -187,7 +196,7 @@ const Layout = ({ children }) => {
           )}
 
           {/* Contable Granja — comentado temporalmente
-          {(rolUsuario === "superadmin" || rolUsuario === "administracion") && (
+          {(mandaTodo || rolUsuario === "administracion") && (
           <div className="nav-section mb-2">
             ...Contable Granja...
           </div>
@@ -195,13 +204,16 @@ const Layout = ({ children }) => {
           */}
 
           {/* Contable Frigorifico — comentado temporalmente
-          {(rolUsuario === "superadmin" || rolUsuario === "administracion") && (
+          {(mandaTodo || rolUsuario === "administracion") && (
           <div className="nav-section mb-2">
             ...Contable Frigorifico...
           </div>
           )}
           */}
 
+          {/* Actividad: solo superadmin. El log dice quién hizo cada cosa,
+              incluido el propio admin, así que mirarlo es del que audita.
+              El backend lo corta igual (esSuperAdmin en /auditoria). */}
           {rolUsuario === "superadmin" && (
             <a
               href="#"
@@ -218,7 +230,7 @@ const Layout = ({ children }) => {
 
           {/* Reproductores (postura + incubación) — sección hermana de Granja y Frigorífico.
               El rol `reproductoras` es el operativo del módulo: solo ve esta sección. */}
-          {(rolUsuario === "superadmin" || rolUsuario === "reproductoras") && (
+          {(mandaTodo || rolUsuario === "reproductoras") && (
           <div className="nav-section mb-2">
             <a
               href="#"
@@ -353,7 +365,7 @@ const Layout = ({ children }) => {
           )}
 
           {/* Granja (crianza) */}
-          {(rolUsuario === "superadmin" || rolUsuario === "administracion_granja" || rolUsuario === "granja") && (
+          {(mandaTodo || rolUsuario === "administracion_granja" || rolUsuario === "granja") && (
           <div className="nav-section mb-2">
             <a
               href="#"
@@ -387,7 +399,7 @@ const Layout = ({ children }) => {
                   <span>Galpones</span>
                 </a>
                 {/* 2b — Movimientos por Galpón (solo superadmin) */}
-                {rolUsuario === "superadmin" && (
+                {mandaTodo && (
                   <a
                     href="#"
                     className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/granja/movimientos") ? "text-white" : "text-white-50"}`}
@@ -398,7 +410,7 @@ const Layout = ({ children }) => {
                   </a>
                 )}
                 {/* 3 — Datos Semanales */}
-                {(rolUsuario === "superadmin" || rolUsuario === "granja") && (
+                {(mandaTodo || rolUsuario === "granja") && (
                   <a
                     href="#"
                     className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/granja/cargar-datos") ? "text-white" : "text-white-50"}`}
@@ -409,7 +421,7 @@ const Layout = ({ children }) => {
                   </a>
                 )}
                 {/* 4 — Órdenes de Carga */}
-                {(rolUsuario === "superadmin" || rolUsuario === "administracion_granja") && (
+                {(mandaTodo || rolUsuario === "administracion_granja") && (
                   <a
                     href="#"
                     className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/granja/ordenes-carga") ? "text-white" : "text-white-50"}`}
@@ -459,7 +471,7 @@ const Layout = ({ children }) => {
             {seccionAbierta === "frigorifico" && (
               <div className="ps-4 mt-2">
                 {/* 1 — Pedidos a Granja */}
-                {(rolUsuario === "superadmin" || rolUsuario === "frigorifico") && (
+                {(mandaTodo || rolUsuario === "frigorifico") && (
                   <a
                     href="#"
                     className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
@@ -472,7 +484,7 @@ const Layout = ({ children }) => {
                   </a>
                 )}
                 {/* 2 — Faenar */}
-                {(rolUsuario === "superadmin" || rolUsuario === "frigorifico") && (
+                {(mandaTodo || rolUsuario === "frigorifico") && (
                   <a
                     href="#"
                     className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
@@ -498,7 +510,7 @@ const Layout = ({ children }) => {
                   <span>Stock</span>
                 </a>
                 {/* 4 — Órdenes de Carga - Venta (administración emite) */}
-                {(rolUsuario === "superadmin" || rolUsuario === "administracion_frigorifico") && (
+                {(mandaTodo || rolUsuario === "administracion_frigorifico") && (
                   <a
                     href="#"
                     className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
@@ -514,7 +526,7 @@ const Layout = ({ children }) => {
                   </a>
                 )}
                 {/* 5 — Recepción de Órdenes (frigorifico confirma) */}
-                {(rolUsuario === "superadmin" || rolUsuario === "frigorifico" || rolUsuario === "administracion_frigorifico") && (
+                {(mandaTodo || rolUsuario === "frigorifico" || rolUsuario === "administracion_frigorifico") && (
                   <a
                     href="#"
                     className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
@@ -527,7 +539,7 @@ const Layout = ({ children }) => {
                   </a>
                 )}
                 {/* 6 — Envío Cámara */}
-                {(rolUsuario === "superadmin" || rolUsuario === "administracion_frigorifico") && (
+                {(mandaTodo || rolUsuario === "administracion_frigorifico") && (
                   <a
                     href="#"
                     className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
@@ -540,7 +552,7 @@ const Layout = ({ children }) => {
                   </a>
                 )}
                 {/* 6b — Salida Mostrador (descuenta Trigotuc) */}
-                {(rolUsuario === "superadmin" || rolUsuario === "administracion_frigorifico" || rolUsuario === "administracion_granja") && (
+                {(mandaTodo || rolUsuario === "administracion_frigorifico" || rolUsuario === "administracion_granja") && (
                   <a
                     href="#"
                     className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
@@ -553,7 +565,7 @@ const Layout = ({ children }) => {
                   </a>
                 )}
                 {/* 6c — Recepción de Cámara (granja recibe envíos a Trigotuc) */}
-                {(rolUsuario === "superadmin" || rolUsuario === "administracion_granja") && (
+                {(mandaTodo || rolUsuario === "administracion_granja") && (
                   <a
                     href="#"
                     className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
@@ -566,7 +578,7 @@ const Layout = ({ children }) => {
                   </a>
                 )}
                 {/* 7 — Stock Empaque */}
-                {(rolUsuario === "superadmin" || rolUsuario === "administracion_frigorifico") && (
+                {(mandaTodo || rolUsuario === "administracion_frigorifico") && (
                   <a
                     href="#"
                     className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${

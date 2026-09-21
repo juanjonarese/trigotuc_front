@@ -506,9 +506,9 @@ const EditarIngresoModal = ({ lote, onClose, onGuardado }) => {
 // ── Página principal ────────────────────────────────────────────────────────
 const GranjaLoteNuevoPage = () => {
   const rolUsuario   = localStorage.getItem("rolUsuario");
-  const puedeCrear    = ["superadmin", "administracion_granja"].includes(rolUsuario);
-  const puedeEditar   = ["superadmin", "frigorifico", "administracion_granja"].includes(rolUsuario);
-  const puedeEliminar = ["superadmin", "administracion_granja"].includes(rolUsuario);
+  const puedeCrear    = ["superadmin", "admin", "administracion_granja"].includes(rolUsuario);
+  const puedeEditar   = ["superadmin", "admin", "frigorifico", "administracion_granja"].includes(rolUsuario);
+  const puedeEliminar = ["superadmin", "admin", "administracion_granja"].includes(rolUsuario);
 
   const [lotes, setLotes]                         = useState([]);
   const [pedidosPendientes, setPedidosPendientes] = useState([]);

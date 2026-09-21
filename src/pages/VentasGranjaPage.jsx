@@ -14,7 +14,7 @@ import { formatearFechaLocal, ajustarFechaParaGuardar, obtenerFechaHoy } from ".
 import Swal from "sweetalert2";
 
 const rolUsuario   = () => localStorage.getItem("rolUsuario");
-const esSuperAdmin = () => rolUsuario() === "superadmin";
+const mandaTodo = () => (rolUsuario() === "superadmin" || rolUsuario() === "admin");
 
 const GRANJA_LABEL  = { cañete: "Cañete", los_pinos: "Los Pinos" };
 
@@ -568,7 +568,7 @@ const VentasGranjaPage = () => {
                           <th className="text-end">$/kg</th>
                           <th className="text-end">Total</th>
                           <th>Fecha</th>
-                          {esSuperAdmin() && <th></th>}
+                          {mandaTodo() && <th></th>}
                         </tr>
                       </thead>
                       <tbody>
@@ -587,7 +587,7 @@ const VentasGranjaPage = () => {
                               <td className="text-end">{fmtARS(v.precioPorKg)}</td>
                               <td className="text-end fw-semibold text-success">{fmtARS(v.precioTotalReal)}</td>
                               <td className="text-muted small">{formatearFechaLocal(v.fecha)}</td>
-                              {esSuperAdmin() && (
+                              {mandaTodo() && (
                                 <td>
                                   <button className="btn btn-outline-danger btn-sm" onClick={() => handleEliminar(v)}>
                                     <i className="bi bi-trash"></i>

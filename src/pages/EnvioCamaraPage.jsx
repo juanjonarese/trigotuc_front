@@ -28,12 +28,12 @@ const FORM_INICIAL = {
 const EnvioCamaraPage = () => {
   const navigate = useNavigate();
   const rolUsuario   = localStorage.getItem("rolUsuario");
-  const esSuperAdmin = rolUsuario === "superadmin";
+  const mandaTodo = (rolUsuario === "superadmin" || rolUsuario === "admin");
   // Administración puede dar de baja un envío cargado por error, pero solo mientras
   // esté pendiente de recepción. Los ya recibidos quedan para superadmin (el backend
   // aplica el mismo límite).
   const puedeEliminar = (e) =>
-    esSuperAdmin ||
+    mandaTodo ||
     (rolUsuario === "administracion_frigorifico" && e.estado === "pendiente");
   // Mismo criterio que eliminar: corregir un envío ya recibido puede tocar stock
   // que ya se vendió, así que queda para superadmin (el backend aplica el corte).

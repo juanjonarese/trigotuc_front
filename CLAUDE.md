@@ -68,9 +68,24 @@ Default redirect: `/` y rutas desconocidas → `/login`.
 
 ### Roles (`localStorage.rolUsuario`)
 
-`superadmin`, `administracion_frigorifico`, `administracion_granja`, `frigorifico`, `granja`, `chofer`.
+`superadmin`, `admin`, `administracion_frigorifico`, `administracion_granja`, `frigorifico`, `granja`, `reproductoras`, `chofer`.
 
 > El gateo por rol en el frontend es **cosmético** (oculta secciones del sidebar). La autorización real la aplica el backend con JWT + middleware. No confiar en el front para seguridad.
+
+**`admin`** (2026-09-21) es el superadmin operativo: ve y hace lo mismo que el
+`superadmin` salvo **Usuarios**, **Actividad** y el botón **Resetear
+proyección**. En el front eso son dos cosas:
+
+- `Layout.jsx` define `mandaTodo = superadmin || admin` y lo usa en **todos** los
+  ítems del sidebar; los únicos dos que siguen preguntando por
+  `rolUsuario === "superadmin"` son **Usuarios** y **Actividad**.
+- En las páginas, el mismo par se escribe inline (`["superadmin", "admin"].includes(rol)`
+  o la comparación doble). `ProyeccionPage` es la única que **parte** el permiso en
+  dos: `puedeEditarParametros` (superadmin + admin) y `puedeResetear` (solo
+  superadmin), porque en esa barra conviven las dos clases de acción.
+
+⚠️ Varios locals se llaman `mandaTodo` justamente porque ya **no** son "es
+superadmin". Si ves un `esSuperAdmin` en el front, o es de antes o hay que mirarlo.
 
 ### Authentication Flow
 
@@ -85,7 +100,11 @@ Default redirect: `/` y rutas desconocidas → `/login`.
 
 ### Sidebar (`src/components/Layout.jsx`)
 
-Secciones colapsables, fondo oscuro, auto-expande según la ruta activa. Visibilidad por rol:
+Secciones colapsables, fondo oscuro, auto-expande según la ruta activa. Visibilidad por rol.
+
+> En la lista de abajo, donde dice `superadmin` leé **`superadmin` + `admin`**
+> (`mandaTodo`). Las dos únicas excepciones están marcadas: **Usuarios** y
+> **Actividad**, que son solo del `superadmin`.
 
 - **Panel Principal** (`/dashboard`) — oculto para `frigorifico`, `granja`, `chofer`.
 - **Altas** (colapsable) — `superadmin` / `administracion_frigorifico` / `administracion_granja`:
@@ -95,11 +114,13 @@ Secciones colapsables, fondo oscuro, auto-expande según la ruta activa. Visibil
   - Ingreso de pollitos, Galpones, Datos Semanales (solo `superadmin`/`granja`), Órdenes de Carga (Venta) (solo `superadmin`/`administracion_granja`), Recepción de Órdenes.
 - **Reproductores** (colapsable) — solo `superadmin` por ahora (hasta definir los roles del módulo):
   - Ingreso de Lote, Galpones, Datos Semanales, Recolección de Huevos, Remitos de Huevos, Recepción de API, Incubadora, **Plan de Pollitos**, **Órdenes de Carga (venta)** (pollitos), Stock de Huevos.
-  - En **Remitos de Huevos** cada celda (galpón × tipo) tiene **dos** inputs: lo
-    que viaja y, abajo, los **rotos al cargar el camión** (`rotosCarga`). El
-    segundo aparece recién cuando la celda tiene algo cargado, para que el caso
-    normal quede como estaba. El control de stock es contra la **suma** de los
-    dos, y el total del remito de papel sigue siendo solo lo que viaja.
+  - En **Remitos de Huevos** cada celda (galpón × tipo) tiene **dos** inputs
+    siempre a la vista: "van" (lo que viaja) y "rotos" (los **rotos al cargar el
+    camión**, `rotosCarga`). El de rotos estuvo un rato condicionado a que la
+    celda tuviera algo cargado y **no servía**: el campo no existía hasta que
+    hacías justo lo que no ibas a hacer si no sabías que estaba. El control de
+    stock es contra la **suma** de los dos, y el total del remito de papel sigue
+    siendo solo lo que viaja.
   - **Asignaciones** (`AsignacionesPollitosPage`) se **eliminó** el 2026-09-20: la
     absorbió el Plan de Pollitos. Era la misma lista de reservas pero suelta y
     sin la foto de lo que va a nacer, así que no servía para decidir.

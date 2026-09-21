@@ -316,6 +316,7 @@ const PersonalPage = () => {
                           </div>
                           <span className={`badge ${
                             usuario.rolUsuario === 'superadmin' ? 'bg-danger' :
+                            usuario.rolUsuario === 'admin' ? 'bg-danger-subtle text-danger' :
                             usuario.rolUsuario === 'administracion_frigorifico' ? 'bg-primary' :
                             usuario.rolUsuario === 'administracion_granja' ? 'bg-success-subtle text-success' :
                             usuario.rolUsuario === 'frigorifico' ? 'bg-info text-dark' :
@@ -350,6 +351,7 @@ const PersonalPage = () => {
                             <td>
                               <span className={`badge ${
                                 usuario.rolUsuario === 'superadmin' ? 'bg-danger' :
+                            usuario.rolUsuario === 'admin' ? 'bg-danger-subtle text-danger' :
                                 usuario.rolUsuario === 'administracion_frigorifico' ? 'bg-primary' :
                                 usuario.rolUsuario === 'administracion_granja' ? 'bg-success-subtle text-success' :
                                 usuario.rolUsuario === 'frigorifico' ? 'bg-info text-dark' :
@@ -614,6 +616,7 @@ const PersonalPage = () => {
                             <option value="granja">Granja (Ingreso pollitos, galpones, datos semanales)</option>
                             <option value="reproductoras">Reproductoras (Planteles, recolección, remitos, incubadora)</option>
                             <option value="chofer">Chofer (Carga y entrega de pedidos)</option>
+                            <option value="admin">Admin (Todo, menos usuarios y el reset de Reproductoras)</option>
                             <option value="superadmin">Super Admin (Acceso total)</option>
                           </select>
                           <div className="form-text">
@@ -622,6 +625,7 @@ const PersonalPage = () => {
                               <strong>Administración Granja:</strong> Clientes, camiones, ingreso de pollitos, galpones, órdenes de carga y recepción. <br />
                               <strong>Frigorífico:</strong> Carga de lotes y envíos entre cámaras. <br />
                               <strong>Cámaras:</strong> Registro de entregas de mercadería. <br />
+                              <strong>Admin:</strong> Todo lo del Super Admin salvo dar de alta usuarios y resetear Reproductoras. <br />
                               <strong>Super Admin:</strong> Acceso total al sistema.
                             </small>
                           </div>

@@ -206,7 +206,7 @@ const GranjaMovimientosPage = () => {
     win.document.close();
   };
 
-  if (rolUsuario !== "superadmin") return <Navigate to="/dashboard" replace />;
+  if (!["superadmin", "admin"].includes(rolUsuario)) return <Navigate to="/dashboard" replace />;
 
   const resumen = data?.resumen;
   const cuadra = resumen && resumen.diferencia === 0;
