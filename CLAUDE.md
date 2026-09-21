@@ -51,7 +51,7 @@ There are no automated tests.
 | `/reproductores/galpones/nuevo` | `ReproductorLoteNuevoPage` (ingreso de lote) | Reproductores |
 | `/reproductores/datos-semanales` | `ReproductoresDatosPage` (mortandad/peso por sexo + controles del galpón) | Reproductores |
 | `/reproductores/recoleccion` | `RecoleccionHuevosPage` (clasifica en 4 tipos; queda en la granja) | Reproductores |
-| `/reproductores/remitos` | `RemitosHuevosPage` (envío granja → Trigotuc) | Reproductores |
+| `/reproductores/remitos` | `RemitosHuevosPage` (envío granja → Trigotuc; cada celda lleva lo que viaja + los rotos al cargar) | Reproductores |
 | `/reproductores/incubadora` | `IncubadoraPage` (incubadora + nacedora + nacimientos) | Reproductores |
 | `/reproductores/plan` | `PlanPollitosPage` (almanaque mensual por CARGA: a nacer / vendido / engorde / **libre**; reparto en modal) | Reproductores |
 | `/reproductores/asignaciones` | → redirige a `/reproductores/plan` (página eliminada el 2026-09-20) | Reproductores |
@@ -95,6 +95,11 @@ Secciones colapsables, fondo oscuro, auto-expande según la ruta activa. Visibil
   - Ingreso de pollitos, Galpones, Datos Semanales (solo `superadmin`/`granja`), Órdenes de Carga (Venta) (solo `superadmin`/`administracion_granja`), Recepción de Órdenes.
 - **Reproductores** (colapsable) — solo `superadmin` por ahora (hasta definir los roles del módulo):
   - Ingreso de Lote, Galpones, Datos Semanales, Recolección de Huevos, Remitos de Huevos, Recepción de API, Incubadora, **Plan de Pollitos**, **Órdenes de Carga (venta)** (pollitos), Stock de Huevos.
+  - En **Remitos de Huevos** cada celda (galpón × tipo) tiene **dos** inputs: lo
+    que viaja y, abajo, los **rotos al cargar el camión** (`rotosCarga`). El
+    segundo aparece recién cuando la celda tiene algo cargado, para que el caso
+    normal quede como estaba. El control de stock es contra la **suma** de los
+    dos, y el total del remito de papel sigue siendo solo lo que viaja.
   - **Asignaciones** (`AsignacionesPollitosPage`) se **eliminó** el 2026-09-20: la
     absorbió el Plan de Pollitos. Era la misma lista de reservas pero suelta y
     sin la foto de lo que va a nacer, así que no servía para decidir.
