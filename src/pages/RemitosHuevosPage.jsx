@@ -73,6 +73,19 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
     }
     return inicial;
   });
+  // Lo que se rompió cargando el camión, con la misma forma que `cantidades`.
+  // Va aparte porque no es lo mismo que se manda: sale de la granja pero no
+  // viaja, así que no entra en el total del remito de papel.
+  const [rotos, setRotos] = useState(() => {
+    const inicial = {};
+    for (const l of lineasPrevias) {
+      if (!l.rotosCarga) continue;
+      const id = clave(galponLinea(l), idLote(l));
+      const previo = Number(inicial[id]?.[l.tipo]) || 0;
+      inicial[id] = { ...(inicial[id] || tiposVacios()), [l.tipo]: String(previo + l.rotosCarga) };
+    }
+    return inicial;
+  });
   const [saving, setSaving] = useState(false);
 
   // Disponible efectivo: lo que hay en la granja MÁS lo que este mismo remito
@@ -96,9 +109,12 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
           porTipo: TIPOS_HUEVO_KEYS.reduce((acc, k) => ({ ...acc, [k]: 0 }), {}),
         });
       }
+      // Vuelve lo que viajó Y lo que se rompió cargando: los dos habían salido
+      // de la granja, y al guardar el backend devuelve los dos antes de reaplicar.
       const e = mapa.get(id);
-      e.porTipo[l.tipo] = (e.porTipo[l.tipo] || 0) + l.huevos;
-      e.huevosDisponibles = (e.huevosDisponibles || 0) + l.huevos;
+      const salieron = l.huevos + (l.rotosCarga || 0);
+      e.porTipo[l.tipo] = (e.porTipo[l.tipo] || 0) + salieron;
+      e.huevosDisponibles = (e.huevosDisponibles || 0) + salieron;
     }
     return [...mapa.values()].sort(
       (a, b) => (a.galpon ?? 0) - (b.galpon ?? 0) || a.numeroLote - b.numeroLote
@@ -110,6 +126,8 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
 
   const valor = (id, tipo) => cantidades[id]?.[tipo] ?? "";
   const cantidad = (id, tipo) => Number(valor(id, tipo)) || 0;
+  const valorRoto = (id, tipo) => rotos[id]?.[tipo] ?? "";
+  const cantidadRota = (id, tipo) => Number(valorRoto(id, tipo)) || 0;
 
   const handleCantidad = (id, tipo, value) =>
     setCantidades((prev) => ({
@@ -117,27 +135,37 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
       [id]: { ...(prev[id] || tiposVacios()), [tipo]: value },
     }));
 
+  const handleRoto = (id, tipo, value) =>
+    setRotos((prev) => ({
+      ...prev,
+      [id]: { ...(prev[id] || tiposVacios()), [tipo]: value },
+    }));
+
   const etiquetaGalpon = (galpon) =>
     galpon == null ? "Galpón ?" : nombreGalpon(constantes?.galpones, "postura", galpon);
 
-  // Carga de una vez todo lo que ese galpón tiene en la granja.
+  // Carga de una vez todo lo que ese galpón tiene en la granja. Si ya hay rotos
+  // anotados se descuentan: el resto es lo que puede viajar.
   const cargarTodo = (entrada) =>
     setCantidades((prev) => ({
       ...prev,
-      [entrada.id]: TIPOS_HUEVO_KEYS.reduce(
-        (acc, k) => ({ ...acc, [k]: entrada.porTipo[k] ? String(entrada.porTipo[k]) : "" }),
-        {}
-      ),
+      [entrada.id]: TIPOS_HUEVO_KEYS.reduce((acc, k) => {
+        const viajan = (entrada.porTipo[k] || 0) - cantidadRota(entrada.id, k);
+        return { ...acc, [k]: viajan > 0 ? String(viajan) : "" };
+      }, {}),
     }));
 
   // Líneas efectivas del remito y control de que ninguna supere lo disponible.
+  // Lo que sale del galpón es lo que viaja MÁS lo que se rompió cargándolo: el
+  // control es contra esa suma, no contra lo que viaja.
   const lineas = [];
   const excedidos = [];
   for (const entrada of entradas) {
     for (const tipo of TIPOS_HUEVO_KEYS) {
       const huevos = cantidad(entrada.id, tipo);
-      if (huevos <= 0) continue;
-      if (huevos > (entrada.porTipo[tipo] || 0))
+      const rotosCarga = cantidadRota(entrada.id, tipo);
+      if (huevos <= 0 && rotosCarga <= 0) continue;
+      if (huevos + rotosCarga > (entrada.porTipo[tipo] || 0))
         excedidos.push(`${etiquetaGalpon(entrada.galpon)} ${etiquetaTipoHuevo(tipo)}`);
       lineas.push({
         lote: entrada.lote,
@@ -145,6 +173,7 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
         numeroLote: entrada.numeroLote,
         tipo,
         huevos,
+        rotosCarga,
       });
     }
   }
@@ -154,6 +183,7 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
     {}
   );
   const huevosTotales = sumarTiposHuevo(totalesPorTipo);
+  const rotosTotales = lineas.reduce((s, l) => s + l.rotosCarga, 0);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -163,6 +193,14 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
     }
     if (lineas.length === 0) {
       Swal.fire("Remito vacío", "Cargá cuántos huevos salen de al menos un galpón.", "warning");
+      return;
+    }
+    if (huevosTotales === 0) {
+      Swal.fire(
+        "No viaja nada",
+        "Todo lo cargado figura como roto. Si no salió ningún huevo no hay remito.",
+        "warning"
+      );
       return;
     }
     if (excedidos.length > 0) {
@@ -179,7 +217,13 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
       const payload = {
         numeroRemito: numeroRemito.trim(),
         fecha: ajustarFechaParaGuardar(fecha),
-        lineas: lineas.map(({ lote, galpon, tipo, huevos }) => ({ lote, galpon, tipo, huevos })),
+        lineas: lineas.map(({ lote, galpon, tipo, huevos, rotosCarga }) => ({
+          lote,
+          galpon,
+          tipo,
+          huevos,
+          rotosCarga,
+        })),
         observaciones: observaciones || undefined,
       };
       const guardado = editando
@@ -258,7 +302,19 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
                   </div>
                 </div>
 
-                <h6 className="fw-bold text-secondary mb-2">Huevos en la granja</h6>
+                <h6 className="fw-bold text-secondary mb-1">Huevos en la granja</h6>
+                <p className="text-muted small mb-2">
+                  De cada galpón y tipo se cargan dos cosas:{" "}
+                  <span className="text-secondary">
+                    <i className="bi bi-truck"></i> <strong>van</strong>
+                  </span>{" "}
+                  es lo que viaja y entra a Trigotuc (el total del remito de papel), y{" "}
+                  <span className="text-danger">
+                    <i className="bi bi-droplet-half"></i> <strong>rotos</strong>
+                  </span>{" "}
+                  lo que se cayó o se rompió cargando el camión: sale de la granja pero no
+                  viaja ni entra a Trigotuc. Los dos descuentan stock del galpón.
+                </p>
 
                 {entradas.length === 0 ? (
                   <div className="alert alert-warning small">
@@ -272,7 +328,7 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
                         <tr>
                           <th>Galpón</th>
                           {TIPOS_HUEVO.map((t) => (
-                            <th className="text-center" key={t.key} style={{ minWidth: 130 }}>
+                            <th className="text-center" key={t.key} style={{ minWidth: 175 }}>
                               {t.label}
                             </th>
                           ))}
@@ -292,21 +348,54 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
                             {TIPOS_HUEVO.map((t) => {
                               const disponible = entrada.porTipo[t.key] || 0;
                               const cargado = cantidad(entrada.id, t.key);
-                              const excede = cargado > disponible;
+                              const roto = cantidadRota(entrada.id, t.key);
+                              const excede = cargado + roto > disponible;
                               return (
                                 <td key={t.key}>
-                                  <input
-                                    type="number"
-                                    className={`form-control form-control-sm ${excede ? "is-invalid" : ""}`}
-                                    min="0"
-                                    max={disponible}
-                                    value={valor(entrada.id, t.key)}
-                                    onChange={(e) =>
-                                      handleCantidad(entrada.id, t.key, e.target.value)
-                                    }
-                                    placeholder="0"
-                                    disabled={disponible === 0}
-                                  />
+                                  {/* Dos campos por celda: lo que viaja y lo que
+                                      se rompió cargando. El de rotos está siempre
+                                      a la vista aunque casi nunca se use: si hay
+                                      que ir a buscarlo, no se carga. */}
+                                  <div className="input-group input-group-sm">
+                                    <span
+                                      className="input-group-text px-1 text-secondary"
+                                      style={{ fontSize: ".7rem", minWidth: 42 }}
+                                      title="Huevos que viajan en el camión"
+                                    >
+                                      <i className="bi bi-truck me-1"></i>van
+                                    </span>
+                                    <input
+                                      type="number"
+                                      className={`form-control form-control-sm ${excede ? "is-invalid" : ""}`}
+                                      min="0"
+                                      max={disponible}
+                                      value={valor(entrada.id, t.key)}
+                                      onChange={(e) =>
+                                        handleCantidad(entrada.id, t.key, e.target.value)
+                                      }
+                                      placeholder="0"
+                                      disabled={disponible === 0}
+                                    />
+                                  </div>
+                                  <div className="input-group input-group-sm mt-1">
+                                    <span
+                                      className="input-group-text px-1 text-danger"
+                                      style={{ fontSize: ".7rem", minWidth: 42 }}
+                                      title="Huevos que se cayeron o se rompieron CARGANDO el camión. Salen de la granja pero no viajan ni entran a Trigotuc."
+                                    >
+                                      <i className="bi bi-droplet-half me-1"></i>rotos
+                                    </span>
+                                    <input
+                                      type="number"
+                                      className={`form-control form-control-sm ${excede ? "is-invalid" : ""}`}
+                                      min="0"
+                                      max={Math.max(0, disponible - cargado)}
+                                      value={valorRoto(entrada.id, t.key)}
+                                      onChange={(e) => handleRoto(entrada.id, t.key, e.target.value)}
+                                      placeholder="0"
+                                      disabled={disponible === 0}
+                                    />
+                                  </div>
                                   <div className={`form-text ${excede ? "text-danger" : ""}`}>
                                     {disponible > 0 ? `hay ${formatearNumero(disponible)}` : "sin stock"}
                                   </div>
@@ -333,7 +422,7 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
                   </div>
                 )}
 
-                {huevosTotales > 0 && (
+                {(huevosTotales > 0 || rotosTotales > 0) && (
                   <div className={`alert py-2 mt-3 ${excedidos.length ? "alert-danger" : "alert-success"}`}>
                     <div className="row g-2 small">
                       <div className="col-12">
@@ -351,6 +440,14 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
                         </div>
                       ))}
                     </div>
+                    {rotosTotales > 0 && (
+                      <div className="mt-2 pt-2 border-top small">
+                        <i className="bi bi-droplet-half text-danger me-1"></i>
+                        <strong>Rotos cargando:</strong> {formatearNumero(rotosTotales)} huevos —
+                        salen de la granja pero no viajan ni entran a Trigotuc. El total del remito
+                        de papel sigue siendo {formatearNumero(huevosTotales)}.
+                      </div>
+                    )}
                     {excedidos.length > 0 && (
                       <div className="mt-2 pt-2 border-top small">
                         <i className="bi bi-exclamation-triangle-fill me-1"></i>
@@ -409,6 +506,18 @@ const DetalleRemitoModal = ({ remito, constantes, onClose }) => (
                 <span className="text-muted">Total:</span>{" "}
                 <strong>{formatearNumero(remito.huevosTotales)}</strong> huevos
               </div>
+              {remito.rotosCargaTotales > 0 && (
+                <div className="col-12">
+                  <i className="bi bi-droplet-half text-danger me-1"></i>
+                  <span className="text-muted">Rotos cargando el camión:</span>{" "}
+                  <strong className="text-danger">
+                    {formatearNumero(remito.rotosCargaTotales)}
+                  </strong>{" "}
+                  <span className="text-muted">
+                    — salieron de la granja pero no viajaron. No están en Trigotuc.
+                  </span>
+                </div>
+              )}
               {remito.observaciones && (
                 <div className="col-12">
                   <span className="text-muted">Observaciones:</span> {remito.observaciones}
@@ -431,6 +540,7 @@ const DetalleRemitoModal = ({ remito, constantes, onClose }) => (
                   <th>Plantel</th>
                   <th>Tipo</th>
                   <th className="text-end">Huevos</th>
+                  <th className="text-end">Rotos</th>
                   <th>Recolecciones de origen</th>
                 </tr>
               </thead>
@@ -443,6 +553,9 @@ const DetalleRemitoModal = ({ remito, constantes, onClose }) => (
                     <td>#{l.numeroLote ?? l.lote?.numeroLote ?? "?"}</td>
                     <td>{etiquetaTipoHuevo(l.tipo)}</td>
                     <td className="text-end">{formatearNumero(l.huevos)}</td>
+                    <td className="text-end text-danger">
+                      {l.rotosCarga > 0 ? formatearNumero(l.rotosCarga) : "-"}
+                    </td>
                     <td className="small text-muted">
                       {l.consumos?.length
                         ? l.consumos
@@ -548,6 +661,7 @@ const RemitosHuevosPage = () => {
           valor: (r) => r.totales?.[t.key] ?? 0,
         })),
         { header: "Total huevos", valor: (r) => r.huevosTotales ?? 0 },
+        { header: "Rotos carga",  valor: (r) => r.rotosCargaTotales ?? 0 },
         { header: "Estado",       valor: (r) => (r.anulado ? "Anulado" : "Vigente") },
         { header: "Observaciones", valor: (r) => r.observaciones },
       ],
