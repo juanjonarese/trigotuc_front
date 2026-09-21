@@ -1133,9 +1133,23 @@ export const guardarConfigGalpon = async (data) => {
   return handleResponse(response);
 };
 
+// ── Plan de pollitos ──
+// La planilla del cliente: una fila por CARGA de incubadora, con lo que va a
+// nacer, lo comprometido (clientes + engorde) y lo que queda libre para vender.
+// Incluye las cargas que todavía no se hicieron, proyectadas desde los huevos.
+export const obtenerPlanPollitos = async (filtros = {}) => {
+  const response = await fetch(`${API_URL}/reservas-pollitos/plan${buildQuery(filtros)}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
 // ── Reserva de pollitos por tanda ──
 // El reparto se arma antes de que nazcan: clientes + granjas propias contra los
 // pollitos estimados de cada tanda.
+//
+// Sin uso en el front: el Plan de Pollitos lee `/plan`, que es esto mismo pero
+// agrupado por carga. El endpoint sigue vivo en el back.
 export const obtenerRepartoPollitos = async (filtros = {}) => {
   const response = await fetch(`${API_URL}/reservas-pollitos${buildQuery(filtros)}`, {
     headers: getAuthHeaders(),
@@ -1150,6 +1164,9 @@ export const crearReservaPollitos = async (data) => {
   return handleResponse(response);
 };
 
+// Sin uso en el front desde que el Plan de Pollitos absorbió Asignaciones y el
+// reparto de Proyección (2026-09-20). Se deja porque editar una reserva es el
+// hueco que le queda al Plan: hoy solo se puede agregar o liberar.
 export const actualizarReservaPollitos = async (id, data) => {
   const response = await fetch(`${API_URL}/reservas-pollitos/${id}`, {
     method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),

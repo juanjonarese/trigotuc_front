@@ -38,9 +38,9 @@ import IncubadoraPage from "./pages/IncubadoraPage";
 // Ventas de Reproductores: en pausa por pedido del cliente.
 // import VentaHuevosPage from "./pages/VentaHuevosPage";
 // import VentaPollitosPage from "./pages/VentaPollitosPage";
-import ReservaPollitosPage from "./pages/ReservaPollitosPage";
-import AsignacionesPollitosPage from "./pages/AsignacionesPollitosPage";
+import ProyeccionPage from "./pages/ProyeccionPage";
 import OrdenCargaPollitosPage from "./pages/OrdenCargaPollitosPage";
+import PlanPollitosPage from "./pages/PlanPollitosPage";
 import StockHuevosPage from "./pages/StockHuevosPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -52,7 +52,7 @@ function App() {
 
         <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
         {/* Proyección vive en la raíz del menú (cruza Reproductores y Granja). */}
-        <Route path="/proyeccion" element={<ProtectedRoute><ReservaPollitosPage /></ProtectedRoute>} />
+        <Route path="/proyeccion" element={<ProtectedRoute><ProyeccionPage /></ProtectedRoute>} />
         <Route path="/clientes" element={<ProtectedRoute><ClientesPage /></ProtectedRoute>} />
         <Route path="/personal" element={<ProtectedRoute><PersonalPage /></ProtectedRoute>} />
         <Route path="/camiones" element={<ProtectedRoute><CamionesPage /></ProtectedRoute>} />
@@ -96,7 +96,13 @@ function App() {
         <Route path="/reproductores/nacimientos" element={<Navigate to="/reproductores/incubadora" replace />} />
         {/* Ruta vieja: Proyección se mudó a la raíz. */}
         <Route path="/reproductores/reserva-pollitos" element={<Navigate to="/proyeccion" replace />} />
-        <Route path="/reproductores/asignaciones" element={<ProtectedRoute><AsignacionesPollitosPage /></ProtectedRoute>} />
+        {/* Plan de Pollitos: una fila por carga de incubadora — lo que va a nacer,
+            lo vendido, lo que va a engorde y lo que queda libre. Es la planilla
+            del cliente, y la pantalla con la que se decide a quién se le vende. */}
+        <Route path="/reproductores/plan" element={<ProtectedRoute><PlanPollitosPage /></ProtectedRoute>} />
+        {/* Asignaciones se absorbió en el Plan de Pollitos (2026-09-20): era la
+            misma lista de reservas, suelta y sin la foto de lo que va a nacer. */}
+        <Route path="/reproductores/asignaciones" element={<Navigate to="/reproductores/plan" replace />} />
         {/* Órdenes de carga de pollitos: la salida del stock de nacimientos hacia el cliente. */}
         <Route path="/reproductores/ordenes-carga" element={<ProtectedRoute><OrdenCargaPollitosPage /></ProtectedRoute>} />
         <Route path="/reproductores/stock-huevos" element={<ProtectedRoute><StockHuevosPage /></ProtectedRoute>} />

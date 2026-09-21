@@ -27,6 +27,7 @@ There are no automated tests.
 | `/clientes` | `ClientesPage` | Altas |
 | `/personal` | `PersonalPage` (gestión de usuarios) | Altas |
 | `/camiones` | `CamionesPage` (camiones + choferes inline) | Altas |
+| `/proyeccion` | `ProyeccionPage` (almanaque de faena: galpones + faena + huevos) | General (cruza Reproductores y Granja) |
 | `/frigorifico` | `GranjaDashboardPage` (stock cámara) | Frigorífico |
 | `/frigorifico/lotes/nuevo` | `LoteCreatePage` (faenar) | Frigorífico |
 | `/frigorifico/pedidos-granja` | `PedidosGranjaPage` | Frigorífico |
@@ -52,6 +53,8 @@ There are no automated tests.
 | `/reproductores/recoleccion` | `RecoleccionHuevosPage` (clasifica en 4 tipos; queda en la granja) | Reproductores |
 | `/reproductores/remitos` | `RemitosHuevosPage` (envío granja → Trigotuc) | Reproductores |
 | `/reproductores/incubadora` | `IncubadoraPage` (incubadora + nacedora + nacimientos) | Reproductores |
+| `/reproductores/plan` | `PlanPollitosPage` (almanaque mensual por CARGA: a nacer / vendido / engorde / **libre**; reparto en modal) | Reproductores |
+| `/reproductores/asignaciones` | → redirige a `/reproductores/plan` (página eliminada el 2026-09-20) | Reproductores |
 | `/reproductores/ordenes-carga` | `OrdenCargaPollitosPage` (salida de pollitos nacidos → cliente) | Reproductores |
 | `/reproductores/ventas-huevos` | `VentaHuevosPage` | Reproductores |
 | `/reproductores/ventas-pollitos` | `VentaPollitosPage` | Reproductores |
@@ -91,7 +94,16 @@ Secciones colapsables, fondo oscuro, auto-expande según la ruta activa. Visibil
 - **Granja** (colapsable) — `superadmin` / `administracion_granja` / `granja`:
   - Ingreso de pollitos, Galpones, Datos Semanales (solo `superadmin`/`granja`), Órdenes de Carga (Venta) (solo `superadmin`/`administracion_granja`), Recepción de Órdenes.
 - **Reproductores** (colapsable) — solo `superadmin` por ahora (hasta definir los roles del módulo):
-  - Ingreso de Lote, Galpones, Datos Semanales, Recolección de Huevos, Remitos de Huevos, Incubadora, Asignaciones, **Órdenes de Carga** (pollitos), Stock de Huevos.
+  - Ingreso de Lote, Galpones, Datos Semanales, Recolección de Huevos, Remitos de Huevos, Recepción de API, Incubadora, **Plan de Pollitos**, **Órdenes de Carga (venta)** (pollitos), Stock de Huevos.
+  - **Asignaciones** (`AsignacionesPollitosPage`) se **eliminó** el 2026-09-20: la
+    absorbió el Plan de Pollitos. Era la misma lista de reservas pero suelta y
+    sin la foto de lo que va a nacer, así que no servía para decidir.
+    `/reproductores/asignaciones` redirige a `/reproductores/plan`.
+  - En **Proyección** (`/proyeccion`, `ProyeccionPage`) se eliminó el mismo
+    día la solapa **"Reparto nacimientos"** (con su `AsignarModal` y sus
+    `FechaCard`), por la misma razón: repartía por tanda y el Plan reparte por
+    carga. La página quedó con el almanaque de faena solo — sin solapas —, más
+    el Excel, Parámetros y Resetear. Bajó de 1054 a ~378 líneas.
   - **Venta de Huevos** y **Venta de Pollitos** están comentadas (sidebar + rutas en
     `App.jsx`): el cliente no las va a usar por ahora. Las páginas siguen en `src/pages/`.
   - No hay ítem "Nacimientos": `IncubadoraPage` cubre todo el ciclo (tarjetas de

@@ -298,14 +298,17 @@ const Layout = ({ children }) => {
                   <i className="bi bi-thermometer-half"></i>
                   <span>Incubadora</span>
                 </a>
-                {/* 7 — Asignaciones: lo que ya tiene destino (clientes y galpones) */}
+                {/* 7 — Plan de Pollitos: lo que va a nacer contra lo vendido y lo
+                    que va a engorde. Absorbió a Asignaciones (2026-09-20): era la
+                    misma lista de reservas, pero suelta y sin la foto de lo que
+                    viene, así que no se podía decidir con ella. */}
                 <a
                   href="#"
-                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/asignaciones") ? "text-white" : "text-white-50"}`}
-                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/asignaciones"); }}
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/reproductores/plan") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/reproductores/plan"); }}
                 >
-                  <i className="bi bi-list-check"></i>
-                  <span>Asignaciones</span>
+                  <i className="bi bi-calendar-range"></i>
+                  <span>Plan de Pollitos</span>
                 </a>
                 {/* 8 — Órdenes de carga: la salida de los pollitos nacidos hacia el cliente */}
                 <a
@@ -314,7 +317,7 @@ const Layout = ({ children }) => {
                   onClick={(e) => { e.preventDefault(); navigate("/reproductores/ordenes-carga"); }}
                 >
                   <i className="bi bi-truck"></i>
-                  <span>Órdenes de Carga</span>
+                  <span>Órdenes de Carga (venta)</span>
                 </a>
                 {/* 9 — Stock de huevos de descarte + salidas sin cliente */}
                 <a
