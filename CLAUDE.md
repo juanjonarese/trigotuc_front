@@ -33,6 +33,7 @@ There are no automated tests.
 | `/frigorifico/pedidos-granja` | `PedidosGranjaPage` | Frigorífico |
 | `/frigorifico/envios` | `EnvioCamaraPage` | Frigorífico |
 | `/frigorifico/decomisados` | `DecomisadosPage` | Frigorífico |
+| `/frigorifico/salida-mostrador` | `SalidaMostradorPage` (pollo de cámara **y huevo** de Trigotuc) | Frigorífico (por ahora) |
 | `/frigorifico/stock-empaque` | `StockEmpaquePage` | Frigorífico |
 | `/frigorifico/ordenes-carga` | `DespachoFrigorificoPage` | Frigorífico |
 | `/frigorifico/recepcion` | `RecepcionFrigorificoPage` | Frigorífico |
@@ -169,6 +170,25 @@ Secciones: `USUARIOS`, `CLIENTES`, `LOTES (FAENA)`, `ENVÍOS CÁMARA`, `DESPACHO
 - `Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' })` para montos.
 - SweetAlert2 para modales/confirmaciones; `xlsx` para export Excel.
 - PWA: `public/manifest.json` + `public/sw.js`.
+
+### Salida de Mostrador (`SalidaMostradorPage`)
+
+Desde el 2026-09-21 saca **dos stocks distintos** en una sola operación:
+
+- **Pollo** (entero por calibre + trozado) de la cámara Trigotuc, que viene de
+  `obtenerResumenStock()`.
+- **Huevo** de `stockHuevo` —el que ya llegó a Trigotuc por remito—, que viene de
+  `obtenerStockHuevosMostrador()`, su propio endpoint. Se carga en **maples** y
+  la pantalla muestra a cuántos huevos equivale.
+
+Los dos se piden en paralelo, y el de huevos con `.catch(() => null)`: si falla,
+el mostrador tiene que poder vender pollo igual.
+
+Solo aparecen los tipos **vendibles con stock**; el API incubable no se lista, y
+el backend lo rechaza aunque se lo mande a mano.
+
+⚠️ La página sigue colgando de **Frigorífico**, pero el usuario ya avisó que la
+va a mover a otro nivel: es de mostrador, no del frigorífico.
 
 ## Important Notes
 

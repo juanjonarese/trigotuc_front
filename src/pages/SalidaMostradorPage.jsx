@@ -5,6 +5,7 @@ import BotonExcel from "../components/BotonExcel";
 import CalibreTable from "../components/CalibreTable";
 import {
   obtenerResumenStock,
+  obtenerStockHuevosMostrador,
   registrarSalidaMostrador,
   obtenerSalidasMostrador,
   editarSalidaMostrador,
@@ -21,7 +22,12 @@ const hoyISO = () => new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD en tz
 const detalleAEditable = (detalle = []) => {
   const enteros = [];
   const trozados = [];
+  const huevos = [];
   for (const d of detalle) {
+    if (d.clase === "huevo") {
+      huevos.push({ tipo: d.tipo, maples: Number(d.maples) });
+      continue;
+    }
     if (d.clase === "entero") {
       enteros.push({ calibre: Number(d.calibre), cajones: Number(d.cajones) });
     } else if (d.clase === "trozado") {
@@ -30,16 +36,18 @@ const detalleAEditable = (detalle = []) => {
       trozados.push({ tipo: d.tipo, clase: d.claseTrozado || "A", cajas, kgCaja });
     }
   }
-  return { enteros, trozados };
+  return { enteros, trozados, huevos };
 };
 
 // Resumen legible de una salida para la tabla.
-const resumenLineas = (detalle = []) => {
+const resumenLineas = (detalle = [], etiquetasHuevo = {}) => {
   const partes = [];
   for (const d of detalle) {
     if (d.clase === "entero") partes.push(`Cal. ${d.calibre}: ${fmt(d.cajones)} caj`);
     else if (d.clase === "trozado")
       partes.push(`${TIPOS_LABEL[d.tipo] || d.tipo}${d.claseTrozado ? ` ${d.claseTrozado}` : ""}: ${fmt(d.cajas)} cajas`);
+    else if (d.clase === "huevo")
+      partes.push(`${etiquetasHuevo[d.tipo] || d.tipo}: ${fmt(d.maples)} maples`);
   }
   return partes;
 };
@@ -52,12 +60,17 @@ const SalidaMostradorPage = () => {
   const [saving, setSaving] = useState(false);
   const [lineas, setLineas] = useState([]);              // enteros: { calibre, cajones, pollos }
   const [trozadosLineas, setTrozadosLineas] = useState([]); // { tipo, clase, cajas, kgCaja }
+  // Huevo (2026-09-21): el stock que ya llegó a Trigotuc por remito. Es OTRO
+  // stock, no el de cámara: por eso viene de su propio endpoint. Se carga en
+  // maples, que es como se vende en el mostrador.
+  const [stockHuevos, setStockHuevos] = useState(null);
+  const [maplesPorTipo, setMaplesPorTipo] = useState({}); // { [tipo]: "3" }
 
   // ── Solapa "Salidas del día" ──
   const [fecha, setFecha] = useState(hoyISO());
   const [salidas, setSalidas] = useState([]);
   const [loadingSalidas, setLoadingSalidas] = useState(false);
-  const [editSalida, setEditSalida] = useState(null); // { _id, enteros, trozados }
+  const [editSalida, setEditSalida] = useState(null); // { _id, enteros, trozados, huevos }
   const [editSaving, setEditSaving] = useState(false);
   // Excel: las salidas del día elegido. Dos hojas porque son dos preguntas
   // distintas — "qué salidas hubo" y "cuánto salió de cada producto", que es la
@@ -76,7 +89,7 @@ const SalidaMostradorPage = () => {
           columnas: [
             { header: "Fecha",   valor: (s) => new Date(s.fecha).toLocaleDateString("es-AR") },
             { header: "Hora",    valor: (s) => new Date(s.fecha).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }) },
-            { header: "Detalle", valor: (s) => resumenLineas(s.detalle).join(" · "), ancho: 45 },
+            { header: "Detalle", valor: (s) => resumenLineas(s.detalle, etiquetasHuevo).join(" · "), ancho: 45 },
             { header: "Registró", valor: (s) => s.registradoPor?.nombreUsuario },
           ],
         },
@@ -86,13 +99,17 @@ const SalidaMostradorPage = () => {
           columnas: [
             { header: "Fecha",   valor: (f) => new Date(f.s.fecha).toLocaleDateString("es-AR") },
             { header: "Hora",    valor: (f) => new Date(f.s.fecha).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }) },
-            { header: "Producto", valor: (f) => (f.d.clase === "entero"
-                ? "Entero Cal." + f.d.calibre
-                : (TIPOS_LABEL[f.d.tipo] || f.d.tipo) + (f.d.claseTrozado ? " " + f.d.claseTrozado : "")) },
+            { header: "Producto", valor: (f) => {
+                if (f.d.clase === "entero") return "Entero Cal." + f.d.calibre;
+                if (f.d.clase === "huevo") return etiquetasHuevo[f.d.tipo] || f.d.tipo;
+                return (TIPOS_LABEL[f.d.tipo] || f.d.tipo) + (f.d.claseTrozado ? " " + f.d.claseTrozado : "");
+              } },
             { header: "Clase",   valor: (f) => f.d.clase },
             { header: "Calibre", valor: (f) => (f.d.clase === "entero" ? f.d.calibre : "") },
             { header: "Cajones", valor: (f) => (f.d.clase === "entero" ? f.d.cajones ?? 0 : "") },
             { header: "Cajas",   valor: (f) => (f.d.clase === "trozado" ? f.d.cajas ?? 0 : "") },
+            { header: "Maples",  valor: (f) => (f.d.clase === "huevo" ? f.d.maples ?? 0 : "") },
+            { header: "Huevos",  valor: (f) => (f.d.clase === "huevo" ? f.d.huevos ?? 0 : "") },
             { header: "Kg",      valor: (f) => (f.d.kg != null ? f.d.kg : "") },
             { header: "Registró", valor: (f) => f.s.registradoPor?.nombreUsuario },
           ],
@@ -104,7 +121,15 @@ const SalidaMostradorPage = () => {
 
   const cargar = async () => {
     try {
-      setResumen(await obtenerResumenStock());
+      // Los dos stocks en paralelo: son independientes y la pantalla los muestra
+      // juntos. Si el de huevos falla no se cae la página — el mostrador tiene
+      // que poder vender pollo igual.
+      const [stock, huevos] = await Promise.all([
+        obtenerResumenStock(),
+        obtenerStockHuevosMostrador().catch(() => null),
+      ]);
+      setResumen(stock);
+      setStockHuevos(huevos);
     } catch {
       Swal.fire("Error", "No se pudo cargar el stock.", "error");
     } finally {
@@ -130,15 +155,34 @@ const SalidaMostradorPage = () => {
 
   const stockEnteros = resumen?.stockTrigotuc || [];
   const trozadosDisp = (resumen?.trozadosTrigotucDetalle || []).filter((t) => t.cajas > 0);
+  const huevosDisp = stockHuevos?.porTipo || [];
+  const huevosPorMaple = stockHuevos?.huevosPorMaple ?? 30;
+  // { apiSucio: "API sucio", ... } para poder nombrar los tipos en los resúmenes.
+  const etiquetasHuevo = Object.fromEntries(huevosDisp.map((h) => [h.tipo, h.etiqueta]));
+
+  const maples = (tipo) => Number(maplesPorTipo[tipo]) || 0;
+  const setMaples = (tipo, val) => setMaplesPorTipo((prev) => ({ ...prev, [tipo]: val }));
+  const huevosCargados = huevosDisp
+    .filter((h) => maples(h.tipo) > 0)
+    .map((h) => ({ tipo: h.tipo, maples: maples(h.tipo) }));
+  const totalMaples = huevosCargados.reduce((s, h) => s + h.maples, 0);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     const calibresValidos = lineas.filter((l) => Number(l.cajones) > 0);
     const trozadosValidos = trozadosLineas.filter((t) => Number(t.cajas) > 0);
 
-    if (calibresValidos.length === 0 && trozadosValidos.length === 0) {
-      Swal.fire("Faltan datos", "Ingresá al menos un cajón o una caja vendida.", "warning");
+    if (calibresValidos.length === 0 && trozadosValidos.length === 0 && huevosCargados.length === 0) {
+      Swal.fire("Faltan datos", "Ingresá al menos un cajón, una caja o un maple vendido.", "warning");
       return;
+    }
+
+    for (const h of huevosCargados) {
+      const disp = huevosDisp.find((d) => d.tipo === h.tipo)?.maples || 0;
+      if (h.maples > disp) {
+        Swal.fire("Error", `Stock insuficiente de ${etiquetasHuevo[h.tipo]}. Disponible: ${disp} maples.`, "error");
+        return;
+      }
     }
 
     // Validar stock disponible
@@ -162,10 +206,12 @@ const SalidaMostradorPage = () => {
       await registrarSalidaMostrador({
         calibres: calibresValidos.map((c) => ({ calibre: Number(c.calibre), cajones: Number(c.cajones) })),
         trozados: trozadosValidos.map((t) => ({ tipo: t.tipo, clase: t.clase, cajas: Number(t.cajas), kgCaja: Number(t.kgCaja) })),
+        huevos: huevosCargados,
       });
       await Swal.fire({ icon: "success", title: "Salida registrada", text: "Se descontó el stock de Trigotuc.", timer: 1500, showConfirmButton: false });
       setLineas([]);
       setTrozadosLineas([]);
+      setMaplesPorTipo({});
       cargar();
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudo registrar la salida.", "error");
@@ -187,6 +233,11 @@ const SalidaMostradorPage = () => {
       ...prev,
       trozados: prev.trozados.map((t, i) => (i === idx ? { ...t, cajas: val } : t)),
     }));
+  const setHuevoMaples = (idx, val) =>
+    setEditSalida((prev) => ({
+      ...prev,
+      huevos: prev.huevos.map((h, i) => (i === idx ? { ...h, maples: val } : h)),
+    }));
 
   const guardarEdicion = async () => {
     const calibres = editSalida.enteros
@@ -195,15 +246,18 @@ const SalidaMostradorPage = () => {
     const trozados = editSalida.trozados
       .filter((t) => Number(t.cajas) > 0)
       .map((t) => ({ tipo: t.tipo, clase: t.clase, cajas: Number(t.cajas), kgCaja: Number(t.kgCaja) }));
+    const huevos = (editSalida.huevos || [])
+      .filter((h) => Number(h.maples) > 0)
+      .map((h) => ({ tipo: h.tipo, maples: Number(h.maples) }));
 
-    if (calibres.length === 0 && trozados.length === 0) {
+    if (calibres.length === 0 && trozados.length === 0 && huevos.length === 0) {
       Swal.fire("Sin cantidades", "Dejá al menos una línea con cantidad mayor a 0. Si querés eliminar toda la salida, usá Borrar.", "warning");
       return;
     }
 
     setEditSaving(true);
     try {
-      await editarSalidaMostrador(editSalida._id, { calibres, trozados });
+      await editarSalidaMostrador(editSalida._id, { calibres, trozados, huevos });
       setEditSalida(null);
       await Swal.fire({ icon: "success", title: "Salida actualizada", text: "Se reajustó el stock de Trigotuc.", timer: 1400, showConfirmButton: false });
       cargar();
@@ -216,7 +270,7 @@ const SalidaMostradorPage = () => {
   };
 
   const borrarSalida = async (salida) => {
-    const detalleTxt = resumenLineas(salida.detalle).join(" · ") || "(sin detalle)";
+    const detalleTxt = resumenLineas(salida.detalle, etiquetasHuevo).join(" · ") || "(sin detalle)";
     const r = await Swal.fire({
       icon: "warning",
       title: "¿Borrar salida?",
@@ -336,7 +390,70 @@ const SalidaMostradorPage = () => {
                       <p className="text-muted">No hay stock en la cámara Trigotuc.</p>
                     )}
 
-                    <button type="submit" className="btn btn-primary" disabled={saving || (stockEnteros.length === 0 && trozadosDisp.length === 0)}>
+                    {/* Huevos. OJO: no es stock de cámara — es el huevo que ya
+                        llegó a Trigotuc por remito. Solo lo vendible: el API
+                        incubable no aparece acá, y el backend lo rechaza igual. */}
+                    {huevosDisp.length > 0 && (
+                      <div className="mb-3">
+                        <label className="form-label fw-semibold">
+                          <i className="bi bi-egg me-1 text-warning"></i>
+                          Huevos (por maple)
+                        </label>
+                        <table className="table table-sm table-bordered align-middle mb-0">
+                          <thead className="table-light">
+                            <tr>
+                              <th>Tipo</th>
+                              <th className="text-end">Disponible</th>
+                              <th style={{ width: "9rem" }}>Maples vendidos</th>
+                              <th className="text-muted small">Huevos</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {huevosDisp.map((h) => {
+                              const cargado = maples(h.tipo);
+                              const excede = cargado > h.maples;
+                              return (
+                                <tr key={h.tipo}>
+                                  <td className="fw-semibold">{h.etiqueta}</td>
+                                  <td className="text-end text-muted">
+                                    {fmt(h.maples)} maples
+                                    <span className="d-block small">({fmt(h.huevos)} huevos)</span>
+                                  </td>
+                                  <td>
+                                    <input
+                                      type="number" min="0" max={h.maples} step="1"
+                                      className={`form-control form-control-sm text-center ${excede ? "is-invalid" : ""}`}
+                                      placeholder="0"
+                                      value={maplesPorTipo[h.tipo] ?? ""}
+                                      onChange={(e) => setMaples(h.tipo, e.target.value)}
+                                    />
+                                  </td>
+                                  <td className="text-muted small">
+                                    {cargado > 0 ? `${fmt(cargado * huevosPorMaple)} huevos` : "—"}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                        {totalMaples > 0 && (
+                          <div className="form-text">
+                            Total: <strong>{fmt(totalMaples)} maples</strong> ={" "}
+                            {fmt(totalMaples * huevosPorMaple)} huevos — sale del stock de huevo de
+                            Trigotuc, lo más viejo primero.
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      className="btn btn-primary"
+                      disabled={
+                        saving ||
+                        (stockEnteros.length === 0 && trozadosDisp.length === 0 && huevosDisp.length === 0)
+                      }
+                    >
                       {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
                       <i className="bi bi-cart-dash me-1"></i>
                       Registrar salida
@@ -396,7 +513,7 @@ const SalidaMostradorPage = () => {
                             {new Date(s.fecha).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}
                           </td>
                           <td>
-                            {resumenLineas(s.detalle).map((linea, i) => (
+                            {resumenLineas(s.detalle, etiquetasHuevo).map((linea, i) => (
                               <span key={i} className="badge bg-light text-dark border me-1 mb-1">{linea}</span>
                             ))}
                           </td>
@@ -475,9 +592,35 @@ const SalidaMostradorPage = () => {
                   </div>
                 )}
 
+                {editSalida.huevos?.length > 0 && (
+                  <div className="mb-2">
+                    <label className="form-label fw-semibold mb-1">
+                      <i className="bi bi-egg me-1 text-warning"></i>Huevos (maples)
+                    </label>
+                    <table className="table table-sm table-bordered align-middle mb-0">
+                      <thead className="table-light"><tr><th>Tipo</th><th style={{ width: "9rem" }}>Maples</th><th className="text-muted small">Huevos</th></tr></thead>
+                      <tbody>
+                        {editSalida.huevos.map((h, idx) => (
+                          <tr key={h.tipo}>
+                            <td className="fw-semibold">{etiquetasHuevo[h.tipo] || h.tipo}</td>
+                            <td>
+                              <input type="number" min="0" step="1" className="form-control form-control-sm text-center"
+                                value={h.maples} onChange={(ev) => setHuevoMaples(idx, ev.target.value)} />
+                            </td>
+                            <td className="text-muted small">
+                              {Number(h.maples) > 0 ? `${fmt(Number(h.maples) * huevosPorMaple)} huevos` : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
                 <p className="text-muted small mb-0 mt-2">
                   <i className="bi bi-info-circle me-1"></i>
                   Poné una línea en 0 para quitarla. Para eliminar toda la salida usá Borrar.
+                  {editSalida.huevos?.length > 0 && " Los huevos vuelven a la partida de la que salieron."}
                 </p>
               </div>
               <div className="modal-footer">
