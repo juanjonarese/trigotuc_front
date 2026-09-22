@@ -402,162 +402,176 @@ const AsignarCarroModal = ({ entrada, fecha, constantes, incubadoras, onClose, o
   return (
     <>
       <div className="modal show d-block" tabIndex="-1">
-        <div className="modal-dialog modal-lg modal-dialog-scrollable">
+        <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
           <div className="modal-content">
-            <div className="modal-header bg-warning">
-              <h5 className="modal-title">
+            <div className="modal-header bg-warning py-2">
+              <h5 className="modal-title fs-6">
                 <i className="bi bi-box-arrow-in-down me-2"></i>
                 Asignar a la incubadora — plantel #{entrada.numeroLote}
               </h5>
               <button className="btn-close" onClick={onClose} disabled={saving}></button>
             </div>
-            <form onSubmit={handleSubmit}>
-              <div className="modal-body">
-                <div className="alert alert-light border py-2 px-3 mb-3 d-flex justify-content-between align-items-center">
-                  <span className="badge bg-success fs-6">{entrada.etiquetaTipo}</span>
+            {/* El form es hijo de modal-content, que es flex column: sin
+                d-flex + minHeight 0 el form no se achica, el modal-body nunca
+                llega a tener scroll y el footer (con el botón Asignar) queda
+                cortado abajo en pantallas bajas. */}
+            <form
+              onSubmit={handleSubmit}
+              className="d-flex flex-column flex-grow-1"
+              style={{ minHeight: 0 }}
+            >
+              <div className="modal-body py-2">
+                <div className="alert alert-light border py-1 px-2 mb-2 d-flex justify-content-between align-items-center">
+                  <span className="badge bg-success">{entrada.etiquetaTipo}</span>
                   <span>
-                    <strong className="h5 mb-0">
-                      {formatearNumero(entrada.huevosDisponibles)}
-                    </strong>{" "}
+                    <strong>{formatearNumero(entrada.huevosDisponibles)}</strong>{" "}
                     <span className="text-muted small">huevos en stock</span>
                   </span>
                 </div>
 
-                <label className="form-label fw-semibold small mb-1">Incubadora</label>
-                <select
-                  className="form-select mb-3"
-                  value={maquina}
-                  onChange={(e) => setMaquina(Number(e.target.value))}
-                  disabled={saving}
-                >
-                  {(incubadoras || []).map((m) => {
-                    const enEsta = elegidos.filter((e) => e.incubadora === m.numero).length;
-                    return (
-                      <option key={m.numero} value={m.numero}>
-                        Incubadora {m.numero} — {m.carrosLibres} de {m.carros.length} carros libres
-                        {enEsta > 0 ? ` · ${enEsta} elegido${enEsta === 1 ? "" : "s"}` : ""}
-                      </option>
-                    );
-                  })}
-                </select>
+                {/* En monitores anchos el mapa va al lado de los datos: así el
+                    modal entra entero sin scroll. En pantallas chicas se apila. */}
+                <div className="row g-3">
+                  <div className="col-12 col-lg-6">
+                    <label className="form-label fw-semibold small mb-1">Incubadora</label>
+                    <select
+                      className="form-select form-select-sm mb-2"
+                      value={maquina}
+                      onChange={(e) => setMaquina(Number(e.target.value))}
+                      disabled={saving}
+                    >
+                      {(incubadoras || []).map((m) => {
+                        const enEsta = elegidos.filter((e) => e.incubadora === m.numero).length;
+                        return (
+                          <option key={m.numero} value={m.numero}>
+                            Incubadora {m.numero} — {m.carrosLibres} de {m.carros.length} carros
+                            libres
+                            {enEsta > 0 ? ` · ${enEsta} elegido${enEsta === 1 ? "" : "s"}` : ""}
+                          </option>
+                        );
+                      })}
+                    </select>
 
-                <label className="form-label fw-semibold small mb-1">
-                  Tocá los carros donde va — podés elegir varios, también de otra incubadora
-                </label>
-                {maquinaSel ? (
-                  <div className="border rounded p-3 mb-2 d-flex justify-content-center">
-                    <MapaCarros
-                      maquina={maquinaSel}
-                      seleccion={seleccionOrdenada}
-                      onElegir={alternarCarro}
-                    />
+                    <label className="form-label fw-semibold small mb-1">
+                      Tocá los carros donde va — podés elegir varios, también de otra incubadora
+                    </label>
+                    {maquinaSel ? (
+                      <div className="border rounded p-2 mb-2 d-flex justify-content-center">
+                        <MapaCarros
+                          maquina={maquinaSel}
+                          seleccion={seleccionOrdenada}
+                          onElegir={alternarCarro}
+                        />
+                      </div>
+                    ) : (
+                      <div className="alert alert-secondary py-2 small">Cargando máquinas…</div>
+                    )}
+                    <div className="d-flex gap-2 small text-muted flex-wrap">
+                      <span>
+                        <i className="bi bi-square text-success me-1"></i>libre
+                      </span>
+                      <span>
+                        <i className="bi bi-square-fill text-danger me-1"></i>ocupado
+                      </span>
+                      <span>
+                        <i className="bi bi-square-fill text-primary me-1"></i>elegido (tocalo de
+                        nuevo para sacarlo)
+                      </span>
+                      <span>
+                        <i className="bi bi-fan me-1"></i>el ventilador parte el 6 del 7
+                      </span>
+                    </div>
                   </div>
-                ) : (
-                  <div className="alert alert-secondary py-2 small">Cargando máquinas…</div>
-                )}
-                <div className="d-flex gap-3 small text-muted mb-3 flex-wrap">
-                  <span>
-                    <i className="bi bi-square text-success me-1"></i>libre
-                  </span>
-                  <span>
-                    <i className="bi bi-square-fill text-danger me-1"></i>ocupado
-                  </span>
-                  <span>
-                    <i className="bi bi-square-fill text-primary me-1"></i>elegido (tocalo de
-                    nuevo para sacarlo)
-                  </span>
-                  <span>
-                    <i className="bi bi-fan me-1"></i>el ventilador parte el 6 del 7
-                  </span>
-                </div>
 
-                <div>
-                  <label className="form-label fw-semibold small mb-1">
-                    ¿Cuántos huevos van en total?
-                  </label>
-                  <div className="input-group">
+                  <div className="col-12 col-lg-6">
+                    <label className="form-label fw-semibold small mb-1">
+                      ¿Cuántos huevos van en total?
+                    </label>
+                    <div className="input-group input-group-sm">
+                      <input
+                        type="number"
+                        className={`form-control ${
+                          cantidad !== "" && cantidadInvalida ? "is-invalid" : ""
+                        }`}
+                        min="1"
+                        max={tope}
+                        placeholder="0"
+                        value={cantidad}
+                        onChange={(e) => setCantidad(e.target.value)}
+                        disabled={saving}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary"
+                        onClick={() => setCantidad(String(tope))}
+                        disabled={saving || elegidos.length === 0}
+                        title="Llenar los carros elegidos con lo que haya en stock"
+                      >
+                        Llenar carros
+                      </button>
+                    </div>
+                    <div className="form-text mt-1">
+                      {elegidos.length === 0
+                        ? `Un carro es de ${formatearNumero(porCarro)} huevos`
+                        : `Hasta ${formatearNumero(tope)} — ${elegidos.length} carro${
+                            elegidos.length === 1 ? "" : "s"
+                          } de ${formatearNumero(porCarro)}`}
+                    </div>
+
+                    <label className="form-label fw-semibold small mb-1 mt-2">
+                      Peso promedio del huevo (g){" "}
+                      <span className="text-muted fw-normal">(opcional)</span>
+                    </label>
                     <input
                       type="number"
-                      className={`form-control ${
-                        cantidad !== "" && cantidadInvalida ? "is-invalid" : ""
-                      }`}
-                      min="1"
-                      max={tope}
-                      placeholder="0"
-                      value={cantidad}
-                      onChange={(e) => setCantidad(e.target.value)}
+                      className="form-control form-control-sm"
+                      min="0"
+                      max="200"
+                      step="0.1"
+                      placeholder="Ej: 62,5"
+                      value={peso}
+                      onChange={(e) => setPeso(e.target.value)}
                       disabled={saving}
                     />
-                    <button
-                      type="button"
-                      className="btn btn-outline-secondary"
-                      onClick={() => setCantidad(String(tope))}
-                      disabled={saving || elegidos.length === 0}
-                      title="Llenar los carros elegidos con lo que haya en stock"
-                    >
-                      Llenar carros
-                    </button>
-                  </div>
-                  <div className="form-text">
-                    {elegidos.length === 0
-                      ? `Un carro es de ${formatearNumero(porCarro)} huevos`
-                      : `Hasta ${formatearNumero(tope)} — ${elegidos.length} carro${
-                          elegidos.length === 1 ? "" : "s"
-                        } de ${formatearNumero(porCarro)}`}
+                    <div className="form-text mt-1">
+                      Se compara con el de la transferencia para ver cuánto perdió. Si van varios
+                      carros, se usa el mismo para todos.
+                    </div>
+
+                    {reparto.length > 0 && enviados > 0 && (
+                      <div
+                        className="table-responsive mt-2 border rounded"
+                        style={{ maxHeight: "10rem", overflowY: "auto" }}
+                      >
+                        <table className="table table-sm mb-0 align-middle">
+                          <thead className="table-light">
+                            <tr>
+                              <th className="small">Orden</th>
+                              <th className="small">Posición</th>
+                              <th className="small text-end">Huevos</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {reparto.map((r, i) => (
+                              <tr
+                                key={`${r.incubadora}-${r.carro}`}
+                                className={r.huevos === 0 ? "table-danger" : ""}
+                              >
+                                <td className="small">{i + 1}º</td>
+                                <td className="small">
+                                  Incubadora {r.incubadora}, carro {r.carro}
+                                </td>
+                                <td className="small text-end fw-semibold">
+                                  {r.huevos === 0 ? "sin huevos" : formatearNumero(r.huevos)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
                 </div>
-
-                <div className="mt-3">
-                  <label className="form-label fw-semibold small mb-1">
-                    Peso promedio del huevo (g){" "}
-                    <span className="text-muted fw-normal">(opcional)</span>
-                  </label>
-                  <input
-                    type="number"
-                    className="form-control"
-                    min="0"
-                    max="200"
-                    step="0.1"
-                    placeholder="Ej: 62,5"
-                    value={peso}
-                    onChange={(e) => setPeso(e.target.value)}
-                    disabled={saving}
-                  />
-                  <div className="form-text">
-                    Se compara con el peso de la transferencia para ver cuánto perdió. Si van
-                    varios carros, se usa el mismo peso para todos.
-                  </div>
-                </div>
-
-                {reparto.length > 0 && enviados > 0 && (
-                  <div className="table-responsive mt-3">
-                    <table className="table table-sm mb-0">
-                      <thead className="table-light">
-                        <tr>
-                          <th className="small">Orden</th>
-                          <th className="small">Posición</th>
-                          <th className="small text-end">Huevos</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {reparto.map((r, i) => (
-                          <tr
-                            key={`${r.incubadora}-${r.carro}`}
-                            className={r.huevos === 0 ? "table-danger" : ""}
-                          >
-                            <td className="small">{i + 1}º</td>
-                            <td className="small">
-                              Incubadora {r.incubadora}, carro {r.carro}
-                            </td>
-                            <td className="small text-end fw-semibold">
-                              {r.huevos === 0 ? "sin huevos" : formatearNumero(r.huevos)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
 
                 <div
                   className={`alert py-2 mt-3 mb-0 small ${
@@ -594,7 +608,7 @@ const AsignarCarroModal = ({ entrada, fecha, constantes, incubadoras, onClose, o
                   )}
                 </div>
               </div>
-              <div className="modal-footer">
+              <div className="modal-footer py-2">
                 <button
                   type="button"
                   className="btn btn-outline-secondary"
