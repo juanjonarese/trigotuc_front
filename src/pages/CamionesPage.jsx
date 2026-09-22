@@ -28,7 +28,7 @@ const CamionesPage = () => {
   const [guardandoChofer, setGuardandoChofer] = useState(false);
 
   const rolUsuario  = localStorage.getItem("rolUsuario");
-  const puedeEditar = ["superadmin", "administracion_frigorifico", "administracion_granja"].includes(rolUsuario);
+  const puedeEditar = ["superadmin", "admin", "administracion_frigorifico", "administracion_granja"].includes(rolUsuario);
 
   const cargarCamiones = async () => {
     try {

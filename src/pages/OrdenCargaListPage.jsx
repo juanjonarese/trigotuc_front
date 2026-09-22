@@ -793,8 +793,8 @@ const EditarOrdenModal = ({ orden, lotes, onClose, onGuardado }) => {
 const OrdenCargaListPage = () => {
   const navigate      = useNavigate();
   const rolUsuario    = localStorage.getItem("rolUsuario");
-  const puedeCrear   = ["superadmin", "administracion_granja", "frigorifico"].includes(rolUsuario);
-  const esAdmin      = ["superadmin", "administracion_granja"].includes(rolUsuario);
+  const puedeCrear   = ["superadmin", "admin", "administracion_granja", "frigorifico"].includes(rolUsuario);
+  const esAdmin      = ["superadmin", "admin", "administracion_granja"].includes(rolUsuario);
 
   const [ordenes, setOrdenes]   = useState([]);
   const [lotes, setLotes]       = useState([]);

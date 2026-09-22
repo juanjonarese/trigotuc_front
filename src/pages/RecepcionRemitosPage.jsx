@@ -9,7 +9,7 @@ import {
 import Swal from "sweetalert2";
 
 const rolUsuario   = () => localStorage.getItem("rolUsuario");
-const esSuperAdmin = () => rolUsuario() === "superadmin";
+const mandaTodo = () => (rolUsuario() === "superadmin" || rolUsuario() === "admin");
 
 const GRANJA_LABEL  = { cañete: "Cañete", los_pinos: "Los Pinos" };
 const GRANJA_PREFIX = { cañete: "C", los_pinos: "P" };
@@ -186,7 +186,7 @@ const RecepcionRemitosPage = () => {
                                   <i className="bi bi-plus-circle me-1"></i>Ingresar lote
                                 </button>
                               )}
-                              {esSuperAdmin() && (
+                              {mandaTodo() && (
                                 <button className="btn btn-outline-danger btn-sm" onClick={() => handleEliminar(r)}>
                                   <i className="bi bi-trash"></i>
                                 </button>

@@ -649,7 +649,7 @@ const EditarPedidoModal = ({ orden, onClose, onGuardado }) => {
 // ── Página principal ────────────────────────────────────────────────────────
 const PedidosGranjaPage = () => {
   const rolUsuario = localStorage.getItem("rolUsuario");
-  const esAdmin    = rolUsuario === "superadmin";
+  const esAdmin    = (rolUsuario === "superadmin" || rolUsuario === "admin");
 
   const [lotes, setLotes]               = useState([]);
   const [pedidos, setPedidos]           = useState([]);

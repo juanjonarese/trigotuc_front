@@ -214,8 +214,8 @@ const armarCuentaCorriente = (movimientos, saldoActualCajones, saldoActualCajas)
 const GranjaDashboardPage = () => {
   const navigate = useNavigate();
   const rolUsuario = localStorage.getItem("rolUsuario");
-  const esSuperAdmin = rolUsuario === "superadmin";
-  const puedeGestionar = rolUsuario === "superadmin" || rolUsuario === "frigorifico";
+  const mandaTodo = (rolUsuario === "superadmin" || rolUsuario === "admin");
+  const puedeGestionar = (rolUsuario === "superadmin" || rolUsuario === "admin") || rolUsuario === "frigorifico";
 
   const [resumen, setResumen] = useState({
     totalPollosVivos: 0,
@@ -280,7 +280,7 @@ const GranjaDashboardPage = () => {
     paginaMov * MOVIMIENTOS_POR_PAGINA
   );
 
-  // Historial de movimientos de stock (solo superadmin)
+  // Historial de movimientos de stock (superadmin y admin)
   const cargarHistorial = async (origen = filtroOrigen) => {
     setCargandoHistorial(true);
     try {
@@ -556,7 +556,7 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
                 Nuevo Lote
               </button>
             )}
-          {(esSuperAdmin || rolUsuario === "granja") && (
+          {(mandaTodo || rolUsuario === "granja") && (
             <button
               className="btn btn-outline-secondary btn-sm"
               onClick={() => navigate("/frigorifico/envios")}
@@ -754,8 +754,8 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
         </div>
       )}
 
-      {/* ── Historial de movimientos de stock (solo superadmin) ── */}
-      {esSuperAdmin && (
+      {/* ── Historial de movimientos de stock (superadmin y admin) ── */}
+      {mandaTodo && (
         <div className="card border-0 shadow-sm mt-4">
           <div className="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
             <h6 className="mb-0">

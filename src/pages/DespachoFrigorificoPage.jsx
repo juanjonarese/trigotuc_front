@@ -1070,7 +1070,7 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado }) => {
 // ── Página principal ─────────────────────────────────────────────────────────
 const DespachoFrigorificoPage = () => {
   const rolUsuario    = localStorage.getItem("rolUsuario");
-  const esAdmin       = ["superadmin", "administracion_frigorifico"].includes(rolUsuario);
+  const esAdmin       = ["superadmin", "admin", "administracion_frigorifico"].includes(rolUsuario);
 
   const [despachos, setDespachos]       = useState([]);
   const [loading, setLoading]           = useState(true);

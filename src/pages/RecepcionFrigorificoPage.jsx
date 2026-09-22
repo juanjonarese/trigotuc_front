@@ -390,16 +390,16 @@ const ConfirmarModal = ({ despacho, onClose, onConfirmado, esAdmin }) => {
 // ── Página principal ─────────────────────────────────────────────────────────
 const RecepcionFrigorificoPage = () => {
   const rolUsuario     = localStorage.getItem("rolUsuario");
-  const puedeLiberar   = ["superadmin", "administracion_frigorifico"].includes(rolUsuario);
-  const puedeConfirmar = ["superadmin", "frigorifico"].includes(rolUsuario);
+  const puedeLiberar   = ["superadmin", "admin", "administracion_frigorifico"].includes(rolUsuario);
+  const puedeConfirmar = ["superadmin", "admin", "frigorifico"].includes(rolUsuario);
   // Baja de envíos cargados por error (ej. el mismo envío mandado dos veces).
   // Solo mientras siga pendiente de recepción en destino — el backend valida igual.
-  const puedeEliminarEnvios = ["superadmin", "frigorifico", "administracion_frigorifico"].includes(rolUsuario);
+  const puedeEliminarEnvios = ["superadmin", "admin", "frigorifico", "administracion_frigorifico"].includes(rolUsuario);
   // Corregir un envío cargado mal. Mismo alcance que eliminarlo — editar es menos
   // destructivo — y con el mismo corte: solo mientras siga pendiente de recepción,
-  // salvo superadmin. El backend valida igual.
+  // salvo superadmin y admin. El backend valida igual.
   const puedeEditarEnvio = (e) =>
-    rolUsuario === "superadmin" ||
+    (rolUsuario === "superadmin" || rolUsuario === "admin") ||
     (puedeEliminarEnvios && e.estado === "pendiente");
 
   const [despachos, setDespachos]     = useState([]);

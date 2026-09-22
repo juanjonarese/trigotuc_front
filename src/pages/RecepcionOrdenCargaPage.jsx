@@ -414,8 +414,8 @@ const RecepcionOrdenCargaPage = () => {
   const [filtroEstado, setFiltroEstado] = useState("pendiente");
   const [ordenModal, setOrdenModal]     = useState(null);
 
-  const esAdmin = ["superadmin", "administracion_granja"].includes(rolUsuario);
-  const esSuperAdmin = rolUsuario === "superadmin";
+  const esAdmin = ["superadmin", "admin", "administracion_granja"].includes(rolUsuario);
+  const mandaTodo = (rolUsuario === "superadmin" || rolUsuario === "admin");
 
   const abrirModal = (orden) => {
     setOrdenModal(orden);
@@ -809,7 +809,7 @@ const RecepcionOrdenCargaPage = () => {
                                 >
                                   <i className="bi bi-printer"></i>
                                 </button>
-                                {esSuperAdmin && !o.loteAsociado && !o.faenaPendiente && !o.ventaGranjaAsociada && (
+                                {mandaTodo && !o.loteAsociado && !o.faenaPendiente && !o.ventaGranjaAsociada && (
                                   <button
                                     className="btn btn-outline-danger btn-sm"
                                     title="Revertir recepción (vuelve a pendiente)"

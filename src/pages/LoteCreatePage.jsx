@@ -252,7 +252,7 @@ const LoteCreatePage = () => {
   const navigate = useNavigate();
 
   const rolUsuario    = localStorage.getItem("rolUsuario");
-  const puedeCrear    = rolUsuario === "superadmin" || rolUsuario === "frigorifico";
+  const puedeCrear    = (rolUsuario === "superadmin" || rolUsuario === "admin") || rolUsuario === "frigorifico";
 
   const [lotes, setLotes]               = useState([]);
   const [loading, setLoading]           = useState(true);

@@ -36,7 +36,7 @@ const LoteFaenaCrearPage = () => {
   const navigate = useNavigate();
 
   const rolUsuario = localStorage.getItem("rolUsuario");
-  const puedeCrear = rolUsuario === "superadmin" || rolUsuario === "frigorifico";
+  const puedeCrear = (rolUsuario === "superadmin" || rolUsuario === "admin") || rolUsuario === "frigorifico";
 
   const [recepciones, setRecepciones]   = useState([]);
   const [loadingRec, setLoadingRec]     = useState(true);

@@ -147,8 +147,8 @@ const EditarIngresoModal = ({ lote, onClose, onGuardado }) => {
 
 const GranjaHistorialPage = () => {
   const rolUsuario  = localStorage.getItem("rolUsuario");
-  const puedeEditar  = rolUsuario === "superadmin" || rolUsuario === "frigorifico";
-  const esSuperAdmin = rolUsuario === "superadmin";
+  const puedeEditar  = (rolUsuario === "superadmin" || rolUsuario === "admin") || rolUsuario === "frigorifico";
+  const mandaTodo = (rolUsuario === "superadmin" || rolUsuario === "admin");
 
   const [lotes, setLotes]       = useState([]);
   const [loading, setLoading]   = useState(true);
@@ -335,7 +335,7 @@ const GranjaHistorialPage = () => {
                                 <i className="bi bi-pencil"></i>
                               </button>
                             )}
-                            {esSuperAdmin && (
+                            {mandaTodo && (
                               <button className="btn btn-outline-danger btn-sm" onClick={() => handleEliminar(lote)}>
                                 <i className="bi bi-trash"></i>
                               </button>
@@ -392,7 +392,7 @@ const GranjaHistorialPage = () => {
                                   <i className="bi bi-pencil"></i>
                                 </button>
                               )}
-                              {esSuperAdmin && (
+                              {mandaTodo && (
                                 <button className="btn btn-outline-danger btn-sm" onClick={() => handleEliminar(lote)}>
                                   <i className="bi bi-trash"></i>
                                 </button>

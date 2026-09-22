@@ -17,8 +17,8 @@ import { obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
 import Swal from "sweetalert2";
 
 const rolUsuario  = () => localStorage.getItem("rolUsuario");
-const esAdmin     = () => rolUsuario() === "superadmin";
-const esSuperAdmin = () => rolUsuario() === "superadmin";
+const esAdmin     = () => (rolUsuario() === "superadmin" || rolUsuario() === "admin");
+const mandaTodo = () => (rolUsuario() === "superadmin" || rolUsuario() === "admin");
 
 const fmtNum   = (n) => n != null ? new Intl.NumberFormat("es-AR").format(n) : "—";
 const fmtFecha = (f) => f ? new Date(f).toLocaleDateString("es-AR") : "—";
@@ -158,7 +158,7 @@ const ArticuloModal = ({ articulo, onClose, onMovimiento, onEditar, onEliminar }
                   <i className="bi bi-pencil"></i>
                 </button>
               )}
-              {esSuperAdmin() && (
+              {mandaTodo() && (
                 <button className="btn btn-outline-danger btn-sm" onClick={() => onEliminar(articulo)} title="Eliminar">
                   <i className="bi bi-trash"></i>
                 </button>
@@ -859,7 +859,7 @@ const ProveedoresModal = ({ onClose }) => {
                           >
                             <i className="bi bi-pencil"></i>
                           </button>
-                          {esSuperAdmin() && (
+                          {mandaTodo() && (
                             <button className="btn btn-outline-danger btn-sm" onClick={() => handleEliminar(p)}>
                               <i className="bi bi-trash"></i>
                             </button>

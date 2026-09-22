@@ -626,7 +626,7 @@ const GranjaCargaDatosPage = () => {
   // (esSuperAdminOGranjaOAdministracionGranja). Antes `granja` no veía el botón
   // pero podía borrar igual poniendo la cantidad en 0, así que era una
   // restricción de fachada.
-  const puedeEliminar = ["superadmin", "administracion_granja", "granja"].includes(rolUsuario);
+  const puedeEliminar = ["superadmin", "admin", "administracion_granja", "granja"].includes(rolUsuario);
 
   const [lotes, setLotes]   = useState([]);
   const [loading, setLoading] = useState(true);

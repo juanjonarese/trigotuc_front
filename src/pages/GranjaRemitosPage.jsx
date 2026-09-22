@@ -11,7 +11,7 @@ import {
 import { obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
 import Swal from "sweetalert2";
 
-const esSuperAdmin = () => localStorage.getItem("rolUsuario") === "superadmin";
+const mandaTodo = () => ["superadmin", "admin"].includes(localStorage.getItem("rolUsuario"));
 
 const GRANJA_LABEL  = { cañete: "Cañete", los_pinos: "Los Pinos" };
 const GRANJA_PREFIX = { cañete: "C", los_pinos: "P" };
@@ -197,7 +197,7 @@ const GranjaRemitosPage = () => {
                               <button className="btn btn-outline-secondary btn-sm" title="Imprimir" onClick={() => imprimirRemito(r)}>
                                 <i className="bi bi-printer"></i>
                               </button>
-                              {esSuperAdmin() && (
+                              {mandaTodo() && (
                                 <button className="btn btn-outline-danger btn-sm" onClick={() => handleEliminar(r)}>
                                   <i className="bi bi-trash"></i>
                                 </button>

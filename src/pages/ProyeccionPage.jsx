@@ -28,7 +28,12 @@ const ProyeccionPage = () => {
   const [almanaque, setAlmanaque] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showConfig, setShowConfig] = useState(false);
-  const esSuperAdmin = localStorage.getItem("rolUsuario") === "superadmin";
+  // Los dos botones de esta barra NO tienen el mismo candado, y es a propósito:
+  // el `admin` toca los parámetros (mueve números, se corrige volviendo a
+  // tocarlos) pero no resetea el módulo (borra todo y no se deshace).
+  const rolUsuario = localStorage.getItem("rolUsuario");
+  const puedeEditarParametros = rolUsuario === "superadmin" || rolUsuario === "admin";
+  const puedeResetear = rolUsuario === "superadmin";
   const [reseteando, setReseteando] = useState(false);
 
   const cargar = useCallback(async () => {
@@ -311,9 +316,9 @@ const ProyeccionPage = () => {
               titulo="Descargar los datos del almanaque"
             />
             {/* La capacidad y el fuera de servicio cambian todos los números del
-                almanaque, así que los edita solo el superadmin — igual que el PUT
-                del backend. */}
-            {esSuperAdmin && (
+                almanaque, así que los editan solo superadmin y admin — igual que
+                el PUT del backend. */}
+            {puedeEditarParametros && (
               <button
                 className="btn btn-outline-secondary btn-sm"
                 onClick={() => setShowConfig(true)}
@@ -324,8 +329,9 @@ const ProyeccionPage = () => {
             )}
             {/* Deja Reproductores en cero para volver a probar el flujo desde el
                 principio. Borra el módulo entero, así que va aparte del resto de
-                los botones y en rojo. */}
-            {esSuperAdmin && (
+                los botones y en rojo — y es de las dos cosas que el `admin` NO
+                hereda del superadmin. */}
+            {puedeResetear && (
               <button
                 className="btn btn-outline-danger btn-sm"
                 onClick={handleResetear}

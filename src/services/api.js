@@ -163,7 +163,17 @@ export const crearEnvioCamara = async (data) => {
   return handleResponse(response);
 };
 
-// Salida de mostrador: descuenta stock de Trigotuc. data: { calibres, trozados }
+// El stock de huevo que el mostrador puede vender: el que ya llegó a Trigotuc
+// por remito y no es incubable. Viene por tipo, en huevos y en maples.
+export const obtenerStockHuevosMostrador = async () => {
+  const response = await fetch(`${API_URL}/ventas-mostrador/stock-huevos`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+// Salida de mostrador: descuenta stock de Trigotuc.
+// data: { calibres, trozados, huevos } — `huevos` es [{ tipo, maples }].
 export const registrarSalidaMostrador = async (data) => {
   const response = await fetch(`${API_URL}/ventas-mostrador`, {
     method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
@@ -178,7 +188,7 @@ export const obtenerSalidasMostrador = async (fecha) => {
   return handleResponse(response);
 };
 
-// Edita una salida de mostrador (reajusta el stock de cámara). data: { calibres, trozados }
+// Edita una salida de mostrador (reajusta los dos stocks). data: { calibres, trozados, huevos }
 export const editarSalidaMostrador = async (id, data) => {
   const response = await fetch(`${API_URL}/ventas-mostrador/${id}`, {
     method: "PATCH", headers: getAuthHeaders(), body: JSON.stringify(data),
