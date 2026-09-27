@@ -3,6 +3,7 @@ import { jsPDF } from "jspdf";
 import Layout from "../components/Layout";
 import BotonExcel from "../components/BotonExcel";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
+import { BADGE_ESPECIE, especieDe, etiquetaEspecie, claveEntero, claveTrozado, hayVariasEspecies } from "../utils/especies";
 import {
   obtenerDespachosFrigorifico,
   crearDespachoFrigorifico,
@@ -315,9 +316,9 @@ const NuevaOrdenModal = ({ onClose, onCreada }) => {
     }
 
     for (const t of trozadosValidos) {
-      const disp = trozadosDisp.find((d) => d.tipo === t.tipo && d.clase === t.clase)?.cajas || 0;
+      const disp = trozadosDisp.find((d) => claveTrozado(d) === claveTrozado(t))?.cajas || 0;
       if (Number(t.cajas) > disp) {
-        Swal.fire("Error", `Stock insuficiente de ${tipoLbl(t.tipo)} clase ${t.clase || "A"}. Disponible: ${disp} cajas.`, "error");
+        Swal.fire("Error", `Stock insuficiente de ${etiquetaEspecie(especieDe(t))} ${tipoLbl(t.tipo)} clase ${t.clase || "A"}. Disponible: ${disp} cajas.`, "error");
         return;
       }
     }
@@ -330,8 +331,8 @@ const NuevaOrdenModal = ({ onClose, onCreada }) => {
         camara,
         turno,
         cliente:          clienteSel._id,
-        calibres:         lineasValidas.map(({ calibre, cajones }) => ({ calibre: Number(calibre), cajones })),
-        trozados:         trozadosValidos.map((t) => ({ tipo: t.tipo, kgCaja: Number(t.kgCaja), cajas: Number(t.cajas), clase: t.clase })),
+        calibres:         lineasValidas.map((l) => ({ especie: especieDe(l), calibre: Number(l.calibre), cajones: l.cajones })),
+        trozados:         trozadosValidos.map((t) => ({ especie: especieDe(t), tipo: t.tipo, kgCaja: Number(t.kgCaja), cajas: Number(t.cajas), clase: t.clase })),
         observaciones:    form.observaciones || undefined,
         modalidadEntrega: modalidad,
         chofer:           modalidad === "delivery_chofer" ? choferSel : undefined,
@@ -524,17 +525,23 @@ const NuevaOrdenModal = ({ onClose, onCreada }) => {
                         </div>
                         <div className="d-flex flex-wrap gap-2">
                           {(stockCalibres || []).filter((c) => c.cajones > 0).map((c) => (
-                            <div key={c.calibre} className="text-center rounded border"
+                            <div key={claveEntero(c)} className="text-center rounded border"
                               style={{ background: "#eff6ff", minWidth: "80px", padding: "6px 10px" }}>
                               <div className="fw-bold text-primary" style={{ fontSize: "1rem" }}>Cal. {c.calibre}</div>
+                              <div className={`badge ${BADGE_ESPECIE[especieDe(c)]}`} style={{ fontSize: ".62rem" }}>
+                                {etiquetaEspecie(especieDe(c))}
+                              </div>
                               <div className="text-muted" style={{ fontSize: "0.72rem", lineHeight: 1.2 }}>{fmt(c.cajones)} cajones</div>
                               <div className="text-muted" style={{ fontSize: "0.68rem" }}>{fmt(c.cajones * 20)} kg</div>
                             </div>
                           ))}
                           {trozadosDisp.map((t) => (
-                            <div key={`${t.tipo}-${t.clase || "A"}`} className="text-center rounded border"
+                            <div key={claveTrozado(t)} className="text-center rounded border"
                               style={{ background: "#fffbeb", minWidth: "80px", padding: "6px 10px" }}>
                               <div className="fw-bold text-warning" style={{ fontSize: "0.85rem" }}>{tipoLbl(t.tipo)} {t.clase || "A"}</div>
+                              <div className={`badge ${BADGE_ESPECIE[especieDe(t)]}`} style={{ fontSize: ".62rem" }}>
+                                {etiquetaEspecie(especieDe(t))}
+                              </div>
                               <div className="text-muted" style={{ fontSize: "0.72rem", lineHeight: 1.2 }}>{fmt(t.cajas)} cajas</div>
                               <div className="text-muted" style={{ fontSize: "0.68rem" }}>{fmt(t.kgTotal)} kg</div>
                             </div>
@@ -580,10 +587,19 @@ const NuevaOrdenModal = ({ onClose, onCreada }) => {
                           </thead>
                           <tbody>
                             {trozadosDisp.map((t) => {
-                              const linea = trozadosLineas.find((l) => l.tipo === t.tipo && l.clase === t.clase) || { cajas: "", kgCaja: t.kgCaja, clase: t.clase };
+                              const linea =
+                                trozadosLineas.find((l) => claveTrozado(l) === claveTrozado(t)) ||
+                                { especie: especieDe(t), cajas: "", kgCaja: t.kgCaja, clase: t.clase };
                               return (
-                                <tr key={`${t.tipo}-${t.clase || "A"}`}>
-                                  <td className="fw-semibold">{tipoLbl(t.tipo)}</td>
+                                <tr key={claveTrozado(t)}>
+                                  <td className="fw-semibold">
+                                    {hayVariasEspecies(trozadosDisp) && (
+                                      <span className={`badge me-1 ${BADGE_ESPECIE[especieDe(t)]}`}>
+                                        {etiquetaEspecie(especieDe(t))}
+                                      </span>
+                                    )}
+                                    {tipoLbl(t.tipo)}
+                                  </td>
                                   <td><span className="badge bg-secondary">Clase {t.clase || "A"}</span></td>
                                   <td className="text-end text-muted">{fmt(t.cajas)} cajas</td>
                                   <td>
@@ -594,8 +610,8 @@ const NuevaOrdenModal = ({ onClose, onCreada }) => {
                                       onChange={(e) => {
                                         const val = e.target.value;
                                         setTrozadosLineas((prev) => {
-                                          const idx = prev.findIndex((l) => l.tipo === t.tipo && l.clase === t.clase);
-                                          const nueva = { tipo: t.tipo, clase: t.clase, cajas: val, kgCaja: t.kgCaja };
+                                          const idx = prev.findIndex((l) => claveTrozado(l) === claveTrozado(t));
+                                          const nueva = { especie: especieDe(t), tipo: t.tipo, clase: t.clase, cajas: val, kgCaja: t.kgCaja };
                                           return idx === -1 ? [...prev, nueva] : prev.map((l, i) => i === idx ? nueva : l);
                                         });
                                       }}
@@ -651,14 +667,17 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado }) => {
   const [camara, setCamara]                 = useState(despacho.camara || "");
   const [turno, setTurno]                   = useState(despacho.turno || "");
   const [lineas, setLineas]                 = useState(
+    // La especie se arrastra desde el despacho guardado: si se perdiera acá, al
+    // guardar la edición las líneas volverían como pollo.
     (despacho.calibres || []).map((c) => ({
+      especie: especieDe(c),
       calibre: Number(c.calibre),
       cajones: Number(c.cajones),
       pollos:  Number(c.cajones) * Number(c.calibre),
     }))
   );
   const [trozadosLineas, setTrozadosLineas] = useState(
-    (despacho.trozados || []).map((t) => ({ tipo: t.tipo, cajas: String(t.cajas), kgCaja: t.kgCaja, clase: t.clase }))
+    (despacho.trozados || []).map((t) => ({ especie: especieDe(t), tipo: t.tipo, cajas: String(t.cajas), kgCaja: t.kgCaja, clase: t.clase }))
   );
   const [modalidad, setModalidad]           = useState(despacho.modalidadEntrega || "retiro_cliente");
   const [choferes, setChoferes]             = useState([]);
@@ -740,9 +759,9 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado }) => {
     }
 
     for (const t of trozadosValidos) {
-      const disp = trozadosDisp.find((d) => d.tipo === t.tipo && d.clase === t.clase)?.cajas || 0;
+      const disp = trozadosDisp.find((d) => claveTrozado(d) === claveTrozado(t))?.cajas || 0;
       if (Number(t.cajas) > disp) {
-        Swal.fire("Error", `Stock insuficiente de ${tipoLbl(t.tipo)} clase ${t.clase || "A"}. Disponible: ${disp} cajas.`, "error");
+        Swal.fire("Error", `Stock insuficiente de ${etiquetaEspecie(especieDe(t))} ${tipoLbl(t.tipo)} clase ${t.clase || "A"}. Disponible: ${disp} cajas.`, "error");
         return;
       }
     }
@@ -755,8 +774,8 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado }) => {
         camara,
         turno,
         cliente:          clienteSel._id,
-        calibres:         lineasValidas.map(({ calibre, cajones }) => ({ calibre: Number(calibre), cajones })),
-        trozados:         trozadosValidos.map((t) => ({ tipo: t.tipo, kgCaja: Number(t.kgCaja), cajas: Number(t.cajas), clase: t.clase })),
+        calibres:         lineasValidas.map((l) => ({ especie: especieDe(l), calibre: Number(l.calibre), cajones: l.cajones })),
+        trozados:         trozadosValidos.map((t) => ({ especie: especieDe(t), tipo: t.tipo, kgCaja: Number(t.kgCaja), cajas: Number(t.cajas), clase: t.clase })),
         observaciones:    form.observaciones || undefined,
         modalidadEntrega: modalidad,
         chofer:           modalidad === "delivery_chofer" ? choferSel : undefined,
@@ -949,17 +968,23 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado }) => {
                         </div>
                         <div className="d-flex flex-wrap gap-2">
                           {(stockCalibres || []).filter((c) => c.cajones > 0).map((c) => (
-                            <div key={c.calibre} className="text-center rounded border"
+                            <div key={claveEntero(c)} className="text-center rounded border"
                               style={{ background: "#eff6ff", minWidth: "80px", padding: "6px 10px" }}>
                               <div className="fw-bold text-primary" style={{ fontSize: "1rem" }}>Cal. {c.calibre}</div>
+                              <div className={`badge ${BADGE_ESPECIE[especieDe(c)]}`} style={{ fontSize: ".62rem" }}>
+                                {etiquetaEspecie(especieDe(c))}
+                              </div>
                               <div className="text-muted" style={{ fontSize: "0.72rem", lineHeight: 1.2 }}>{fmt(c.cajones)} cajones</div>
                               <div className="text-muted" style={{ fontSize: "0.68rem" }}>{fmt(c.cajones * 20)} kg</div>
                             </div>
                           ))}
                           {trozadosDisp.map((t) => (
-                            <div key={`${t.tipo}-${t.clase || "A"}`} className="text-center rounded border"
+                            <div key={claveTrozado(t)} className="text-center rounded border"
                               style={{ background: "#fffbeb", minWidth: "80px", padding: "6px 10px" }}>
                               <div className="fw-bold text-warning" style={{ fontSize: "0.85rem" }}>{tipoLbl(t.tipo)} {t.clase || "A"}</div>
+                              <div className={`badge ${BADGE_ESPECIE[especieDe(t)]}`} style={{ fontSize: ".62rem" }}>
+                                {etiquetaEspecie(especieDe(t))}
+                              </div>
                               <div className="text-muted" style={{ fontSize: "0.72rem", lineHeight: 1.2 }}>{fmt(t.cajas)} cajas</div>
                               <div className="text-muted" style={{ fontSize: "0.68rem" }}>{fmt(t.kgTotal)} kg</div>
                             </div>
@@ -1005,10 +1030,19 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado }) => {
                           </thead>
                           <tbody>
                             {trozadosDisp.map((t) => {
-                              const linea = trozadosLineas.find((l) => l.tipo === t.tipo && l.clase === t.clase) || { cajas: "", kgCaja: t.kgCaja, clase: t.clase };
+                              const linea =
+                                trozadosLineas.find((l) => claveTrozado(l) === claveTrozado(t)) ||
+                                { especie: especieDe(t), cajas: "", kgCaja: t.kgCaja, clase: t.clase };
                               return (
-                                <tr key={`${t.tipo}-${t.clase || "A"}`}>
-                                  <td className="fw-semibold">{tipoLbl(t.tipo)}</td>
+                                <tr key={claveTrozado(t)}>
+                                  <td className="fw-semibold">
+                                    {hayVariasEspecies(trozadosDisp) && (
+                                      <span className={`badge me-1 ${BADGE_ESPECIE[especieDe(t)]}`}>
+                                        {etiquetaEspecie(especieDe(t))}
+                                      </span>
+                                    )}
+                                    {tipoLbl(t.tipo)}
+                                  </td>
                                   <td><span className="badge bg-secondary">Clase {t.clase || "A"}</span></td>
                                   <td className="text-end text-muted">{fmt(t.cajas)} cajas</td>
                                   <td>
@@ -1019,8 +1053,8 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado }) => {
                                       onChange={(e) => {
                                         const val = e.target.value;
                                         setTrozadosLineas((prev) => {
-                                          const idx = prev.findIndex((l) => l.tipo === t.tipo && l.clase === t.clase);
-                                          const nueva = { tipo: t.tipo, clase: t.clase, cajas: val, kgCaja: t.kgCaja };
+                                          const idx = prev.findIndex((l) => claveTrozado(l) === claveTrozado(t));
+                                          const nueva = { especie: especieDe(t), tipo: t.tipo, clase: t.clase, cajas: val, kgCaja: t.kgCaja };
                                           return idx === -1 ? [...prev, nueva] : prev.map((l, i) => i === idx ? nueva : l);
                                         });
                                       }}
@@ -1266,7 +1300,9 @@ const DespachoFrigorificoPage = () => {
                                 ? "1px solid #d1fae5" : "none",
                               background: "#f0fdf4",
                             }}>
-                            <span className="fw-semibold text-success">Cal. {c.calibre}</span>
+                            <span className="fw-semibold text-success">
+                              {etiquetaEspecie(especieDe(c))} Cal. {c.calibre}
+                            </span>
                             <span className="text-muted small">{fmt(c.cajones)} cajones · {fmt(c.cajones * 20)} kg</span>
                           </div>
                         ))}

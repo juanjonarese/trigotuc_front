@@ -4,6 +4,7 @@ import Layout from "../components/Layout";
 import BotonExcel from "../components/BotonExcel";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
 import { trozadoLabel } from "../components/TrozadoTable";
+import { BADGE_ESPECIE, especieDe, etiquetaEspecie, claveTrozado, hayVariasEspecies } from "../utils/especies";
 import EditarEnvioModal from "../components/EditarEnvioModal";
 import { crearEnvioCamara, obtenerEnviosCamara, obtenerCamiones, obtenerChoferes, eliminarEnvioCamara, obtenerResumenStock } from "../services/api";
 import { ajustarFechaParaGuardar } from "../utils/dateUtils";
@@ -169,9 +170,9 @@ const EnvioCamaraPage = () => {
       ? (resumen?.trozadosCañeteDetalle   || [])
       : (resumen?.trozadosTrigotucDetalle || []);
     for (const t of trozadosValidos) {
-      const disponible = trozadosDisp.find((d) => d.tipo === t.tipo && d.clase === t.clase)?.cajas || 0;
+      const disponible = trozadosDisp.find((d) => claveTrozado(d) === claveTrozado(t))?.cajas || 0;
       if (Number(t.cajas) > disponible) {
-        Swal.fire("Error", `Stock insuficiente de ${trozadoLabel(t.tipo)} clase ${t.clase || "A"}. Disponible: ${disponible} cajas.`, "error");
+        Swal.fire("Error", `Stock insuficiente de ${etiquetaEspecie(especieDe(t))} ${trozadoLabel(t.tipo)} clase ${t.clase || "A"}. Disponible: ${disponible} cajas.`, "error");
         return;
       }
     }
@@ -189,11 +190,11 @@ const EnvioCamaraPage = () => {
         chofer:        form.chofer || null,
         camaraOrigen:  form.camaraOrigen,
         camaraDestino: form.camaraDestino,
-        calibres:      lineasValidas.map(({ calibre, pollos, cajones }) => ({
-          calibre: Number(calibre), pollos: Number(pollos), cajones,
+        calibres:      lineasValidas.map((l) => ({
+          especie: especieDe(l), calibre: Number(l.calibre), pollos: Number(l.pollos), cajones: l.cajones,
         })),
         trozados:      trozadosValidos.map((t) => ({
-          tipo: t.tipo, kgCaja: Number(t.kgCaja), cajas: Number(t.cajas), clase: t.clase || "A",
+          especie: especieDe(t), tipo: t.tipo, kgCaja: Number(t.kgCaja), cajas: Number(t.cajas), clase: t.clase || "A",
         })),
         observaciones: form.observaciones,
       });
@@ -374,6 +375,7 @@ const EnvioCamaraPage = () => {
                     <table className="table table-sm table-bordered align-middle mb-0">
                       <thead className="table-light">
                         <tr>
+                          {hayVariasEspecies(disponibles) && <th>Producto</th>}
                           <th>Tipo</th>
                           <th>Clase</th>
                           <th className="text-end">Disponible (cajas)</th>
@@ -383,9 +385,18 @@ const EnvioCamaraPage = () => {
                       </thead>
                       <tbody>
                         {disponibles.map((t) => {
-                          const linea = trozadosLineas.find((l) => l.tipo === t.tipo && l.clase === t.clase) || { tipo: t.tipo, clase: t.clase, cajas: "", kgCaja: t.kgCaja };
+                          const linea =
+                            trozadosLineas.find((l) => claveTrozado(l) === claveTrozado(t)) ||
+                            { especie: especieDe(t), tipo: t.tipo, clase: t.clase, cajas: "", kgCaja: t.kgCaja };
                           return (
-                            <tr key={`${t.tipo}-${t.clase || "A"}`}>
+                            <tr key={claveTrozado(t)}>
+                              {hayVariasEspecies(disponibles) && (
+                                <td>
+                                  <span className={`badge ${BADGE_ESPECIE[especieDe(t)]}`}>
+                                    {etiquetaEspecie(especieDe(t))}
+                                  </span>
+                                </td>
+                              )}
                               <td className="fw-semibold">{trozadoLabel(t.tipo)}</td>
                               <td><span className="badge bg-secondary">Clase {t.clase || "A"}</span></td>
                               <td className="text-end text-muted">{formatNum(t.cajas)}</td>
@@ -398,8 +409,8 @@ const EnvioCamaraPage = () => {
                                   onChange={(e) => {
                                     const val = e.target.value;
                                     setTrozadosLineas((prev) => {
-                                      const idx = prev.findIndex((l) => l.tipo === t.tipo && l.clase === t.clase);
-                                      const nueva = { tipo: t.tipo, clase: t.clase, cajas: val, kgCaja: t.kgCaja };
+                                      const idx = prev.findIndex((l) => claveTrozado(l) === claveTrozado(t));
+                                      const nueva = { especie: especieDe(t), tipo: t.tipo, clase: t.clase, cajas: val, kgCaja: t.kgCaja };
                                       if (idx === -1) return [...prev, nueva];
                                       return prev.map((l, i) => i === idx ? nueva : l);
                                     });
