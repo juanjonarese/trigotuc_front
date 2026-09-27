@@ -6,6 +6,7 @@ import {
   obtenerConstantesReproductores,
   obtenerLotesReproductores,
   obtenerResumenProduccion,
+  enviarPlantelAFaena,
 } from "../services/api";
 import { formatearFechaLocal } from "../utils/dateUtils";
 import {
@@ -302,6 +303,161 @@ const DatosGalponModal = ({ lote, galponLabel, constantes, onClose }) => {
 };
 
 // ── Página ──────────────────────────────────────────────────────────────────
+// Cada sexo es un botón grande: se toca uno y sale entero. Deshabilitado si de
+// ese sexo ya no queda nada en el galpón.
+const OpcionSexo = ({ valor, titulo, disponibles, elegido, onElegir, disabled }) => (
+  <button
+    type="button"
+    className={`btn w-100 text-start p-3 ${elegido === valor ? "btn-danger" : "btn-outline-secondary"}`}
+    onClick={() => onElegir(valor)}
+    disabled={disabled || disponibles <= 0}
+  >
+    <div className="fw-bold">{titulo}</div>
+    <div className={elegido === valor ? "" : "text-muted"}>
+      {disponibles > 0 ? `${formatearNumero(disponibles)} en el galpón` : "no quedan en el galpón"}
+    </div>
+  </button>
+);
+
+// ── Modal: enviar a faena ───────────────────────────────────────────────────
+// Al fin de ciclo las aves se faenan en el frigorífico. A diferencia de Granja
+// acá no se elige la cantidad: sale TODO lo que hay de ese sexo y el galpón
+// queda vacío en el acto. Gallinas y gallos viajan separados, así que el galpón
+// se levanta en dos veces y el plantel cierra cuando salieron los dos.
+const EnviarAFaenaModal = ({ lote, onClose, onHecho }) => {
+  const [sexo, setSexo] = useState(null);
+  const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
+  const [saving, setSaving] = useState(false);
+
+  const hembras = lote.hembras?.actual || 0;
+  const machos  = lote.machos?.actual  || 0;
+  const cantidad = sexo === "hembra" ? hembras : sexo === "macho" ? machos : 0;
+  const quedan   = sexo === "hembra" ? machos  : sexo === "macho" ? hembras : 0;
+  const otroNombre = sexo === "hembra" ? "gallos" : "gallinas";
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!sexo || cantidad <= 0) return;
+
+    const aves = sexo === "hembra" ? "gallinas" : "gallos";
+    const confirma = await Swal.fire({
+      icon: "warning",
+      title: `¿Enviar ${formatearNumero(cantidad)} ${aves} a faena?`,
+      html:
+        `Salen <strong>todas</strong> las ${aves} del plantel #${lote.numeroLote} y el galpón ` +
+        `queda sin ${aves} en el acto.` +
+        (quedan > 0
+          ? `<br/><span class="text-muted">Quedan ${formatearNumero(quedan)} ${otroNombre} en el galpón.</span>`
+          : `<br/><span class="text-muted">Con esto el plantel queda finalizado.</span>`),
+      showCancelButton: true,
+      confirmButtonText: "Sí, enviar a faena",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#d33",
+    });
+    if (!confirma.isConfirmed) return;
+
+    setSaving(true);
+    try {
+      const orden = await enviarPlantelAFaena({
+        loteReproductor: lote._id,
+        sexo,
+        fechaEmision: fecha,
+      });
+      await onHecho();
+      Swal.fire({
+        icon: "success",
+        title: `Orden ${orden.numero}`,
+        html:
+          `${formatearNumero(orden.cantidadEstimada)} ${aves} en camino al frigorífico.` +
+          `<br/>Código de retiro: <strong class="fs-4">${orden.codigoRetiro}</strong>`,
+        confirmButtonText: "Listo",
+      });
+    } catch (err) {
+      Swal.fire("Error", err.message || "No se pudo emitir la orden.", "error");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="modal show d-block" tabIndex="-1">
+        <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+          <div className="modal-content">
+            <div className="modal-header bg-danger text-white py-2">
+              <h5 className="modal-title fs-6">
+                <i className="bi bi-truck me-2"></i>
+                Enviar a faena — plantel #{lote.numeroLote}
+              </h5>
+              <button className="btn-close btn-close-white" onClick={onClose} disabled={saving}></button>
+            </div>
+            <form
+              onSubmit={handleSubmit}
+              className="d-flex flex-column flex-grow-1"
+              style={{ minHeight: 0 }}
+            >
+              <div className="modal-body">
+                <p className="small text-muted">
+                  Sale <strong>todo</strong> lo que hay de lo que elijas — la cantidad no se
+                  escribe. Gallinas y gallos viajan separados, así que el galpón se levanta en
+                  dos viajes.
+                </p>
+
+                <div className="d-grid gap-2 mb-3">
+                  <OpcionSexo
+                    valor="hembra" titulo="Gallinas" disponibles={hembras}
+                    elegido={sexo} onElegir={setSexo} disabled={saving}
+                  />
+                  <OpcionSexo
+                    valor="macho" titulo="Gallos" disponibles={machos}
+                    elegido={sexo} onElegir={setSexo} disabled={saving}
+                  />
+                </div>
+
+                <label className="form-label fw-semibold small mb-1">Fecha de salida</label>
+                <input
+                  type="date"
+                  className="form-control form-control-sm"
+                  value={fecha}
+                  onChange={(e) => setFecha(e.target.value)}
+                  disabled={saving}
+                  required
+                />
+
+                {sexo && (
+                  <div className="alert alert-warning py-2 mt-3 mb-0 small">
+                    <i className="bi bi-exclamation-triangle me-1"></i>
+                    Salen <strong>{formatearNumero(cantidad)}</strong>{" "}
+                    {sexo === "hembra" ? "gallinas" : "gallos"} y el galpón queda sin{" "}
+                    {sexo === "hembra" ? "gallinas" : "gallos"}.{" "}
+                    {quedan > 0
+                      ? `Quedan ${formatearNumero(quedan)} ${otroNombre}.`
+                      : "Con esto el plantel queda finalizado."}
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer py-2">
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  onClick={onClose}
+                  disabled={saving}
+                >
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn-danger" disabled={saving || !sexo}>
+                  {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
+                  <i className="bi bi-truck me-1"></i>Enviar a faena
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+      <div className="modal-backdrop show"></div>
+    </>
+  );
+};
+
 const ReproductoresLotesPage = () => {
   const [constantes, setConstantes] = useState(null);
   const [lotes, setLotes] = useState([]);
@@ -310,6 +466,7 @@ const ReproductoresLotesPage = () => {
   const [mudanzaLote, setMudanzaLote] = useState(null);
   const [produccionLote, setProduccionLote] = useState(null);
   const [datosLote, setDatosLote] = useState(null);
+  const [faenaLote, setFaenaLote] = useState(null);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -475,6 +632,17 @@ const ReproductoresLotesPage = () => {
                   <i className="bi bi-graph-up me-1"></i>Ver producción
                 </button>
               )}
+              {/* Al fin de ciclo las aves se faenan. El botón se destaca recién
+                  cuando el plantel llegó al final: antes existe igual (puede
+                  levantarse por sanidad) pero sin gritar. */}
+              {lote.sector === "postura" && (lote.hembras?.actual > 0 || lote.machos?.actual > 0) && (
+                <button
+                  className={`btn btn-sm ${faltanParaFin <= 0 ? "btn-danger" : "btn-outline-danger"}`}
+                  onClick={() => setFaenaLote(lote)}
+                >
+                  <i className="bi bi-truck me-1"></i>Enviar a faena
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -595,6 +763,16 @@ const ReproductoresLotesPage = () => {
           galponLabel={nombreGalpon(constantes?.galpones, datosLote.sector, datosLote.galpon)}
           constantes={constantes}
           onClose={() => setDatosLote(null)}
+        />
+      )}
+      {faenaLote && (
+        <EnviarAFaenaModal
+          lote={faenaLote}
+          onClose={() => setFaenaLote(null)}
+          onHecho={async () => {
+            setFaenaLote(null);
+            await cargar();
+          }}
         />
       )}
     </Layout>

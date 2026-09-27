@@ -1293,6 +1293,14 @@ export const obtenerOrdenesCargaPollitos = async (filtros = {}) => {
   return handleResponse(response);
 };
 
+// Enviar a faena un plantel de Reproductoras. Se lleva TODAS las aves del sexo
+// elegido: la cantidad no se manda, la pone el galpón.
+export const enviarPlantelAFaena = async (data) => {
+  const response = await fetch(`${API_URL}/ordenes-carga/reproductoras`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
 export const crearOrdenCargaPollitos = async (data) => {
   const response = await fetch(`${API_URL}/ordenes-carga-pollitos`, {
     method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
