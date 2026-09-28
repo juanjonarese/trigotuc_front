@@ -1,13 +1,13 @@
 import React, { useState, useMemo } from "react";
 import CalibreTable, { calcularCajones } from "./CalibreTable";
 import { trozadoLabel } from "./TrozadoTable";
+import { BADGE_ESPECIE, especieDe, etiquetaEspecie, claveEntero, claveTrozado, hayVariasEspecies } from "../utils/especies";
 import { editarEnvioCamara } from "../services/api";
 import { ajustarFechaParaGuardar } from "../utils/dateUtils";
 import Swal from "sweetalert2";
 
 const camaraLabel = (v) => (v === "cañete" ? "Cañete" : v === "trigotuc" ? "Trigotuc" : v);
 const formatNum   = (n) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n);
-const trozKey     = (t) => `${t.tipo}|${t.clase || "A"}`;
 
 /**
  * Modal para corregir un envío entre cámaras ya cargado.
@@ -34,11 +34,11 @@ const EditarEnvioModal = ({ envio, camiones = [], choferes = [], resumen, onCerr
     observaciones: envio.observaciones || "",
   }));
   const [lineas, setLineas] = useState(() =>
-    (envio.calibres || []).map((c) => ({ calibre: c.calibre, pollos: c.pollos, cajones: c.cajones }))
+    (envio.calibres || []).map((c) => ({ especie: especieDe(c), calibre: c.calibre, pollos: c.pollos, cajones: c.cajones }))
   );
   const [trozados, setTrozados] = useState(() =>
     (envio.trozados || []).map((t) => ({
-      tipo: t.tipo, clase: t.clase || "A", kgCaja: t.kgCaja, cajas: String(t.cajas),
+      especie: especieDe(t), tipo: t.tipo, clase: t.clase || "A", kgCaja: t.kgCaja, cajas: String(t.cajas),
     }))
   );
   const [submitting, setSubmitting] = useState(false);
@@ -52,11 +52,15 @@ const EditarEnvioModal = ({ envio, camiones = [], choferes = [], resumen, onCerr
     const base = envio.camaraOrigen === "cañete"
       ? (resumen?.stockCañete   || [])
       : (resumen?.stockTrigotuc || []);
-    const mapa = new Map(base.map((s) => [s.calibre, s.cajones]));
+    // Clave (especie, calibre): agrupar por calibre solo sumaría el pollo y la
+    // gallina del 7 en un disponible que no existe.
+    const mapa = new Map(base.map((s) => [claveEntero(s), { especie: especieDe(s), calibre: s.calibre, cajones: s.cajones }]));
     for (const c of envio.calibres || []) {
-      mapa.set(c.calibre, (mapa.get(c.calibre) || 0) + c.cajones);
+      const k = claveEntero(c);
+      const prev = mapa.get(k);
+      mapa.set(k, { especie: especieDe(c), calibre: c.calibre, cajones: (prev?.cajones || 0) + c.cajones });
     }
-    return [...mapa].map(([calibre, cajones]) => ({ calibre, cajones }));
+    return [...mapa.values()];
   }, [envio, resumen]);
 
   // Unión de los trozados con stock en origen y los que el envío ya trae: si un
@@ -68,11 +72,12 @@ const EditarEnvioModal = ({ envio, camiones = [], choferes = [], resumen, onCerr
       : (resumen?.trozadosTrigotucDetalle || []);
     const mapa = new Map();
     for (const t of base) {
-      if (t.cajas > 0) mapa.set(trozKey(t), { tipo: t.tipo, clase: t.clase || "A", kgCaja: t.kgCaja, cajas: t.cajas });
+      if (t.cajas > 0) mapa.set(claveTrozado(t), { especie: especieDe(t), tipo: t.tipo, clase: t.clase || "A", kgCaja: t.kgCaja, cajas: t.cajas });
     }
     for (const t of envio.trozados || []) {
-      const prev = mapa.get(trozKey(t));
-      mapa.set(trozKey(t), {
+      const prev = mapa.get(claveTrozado(t));
+      mapa.set(claveTrozado(t), {
+        especie: especieDe(t),
         tipo:  t.tipo,
         clase: t.clase || "A",
         // El kg/caja del envío manda sobre el de la cámara: así una línea que no se
@@ -120,11 +125,11 @@ const EditarEnvioModal = ({ envio, camiones = [], choferes = [], resumen, onCerr
         camion:        form.camion || null,
         chofer:        form.chofer || null,
         observaciones: form.observaciones,
-        calibres:      lineasValidas.map(({ calibre, pollos, cajones }) => ({
-          calibre: Number(calibre), pollos: Number(pollos), cajones,
+        calibres:      lineasValidas.map((l) => ({
+          especie: especieDe(l), calibre: Number(l.calibre), pollos: Number(l.pollos), cajones: l.cajones,
         })),
         trozados:      trozadosValidos.map((t) => ({
-          tipo: t.tipo, kgCaja: Number(t.kgCaja), cajas: Number(t.cajas), clase: t.clase || "A",
+          especie: especieDe(t), tipo: t.tipo, kgCaja: Number(t.kgCaja), cajas: Number(t.cajas), clase: t.clase || "A",
         })),
       });
       const numero = envio.numeroEnvio;
@@ -256,6 +261,7 @@ const EditarEnvioModal = ({ envio, camiones = [], choferes = [], resumen, onCerr
                     <table className="table table-sm table-bordered align-middle mb-0">
                       <thead className="table-light">
                         <tr>
+                          {hayVariasEspecies(trozadosDisponibles) && <th>Producto</th>}
                           <th>Tipo</th>
                           <th>Clase</th>
                           <th className="text-end">Disponible (cajas)</th>
@@ -265,10 +271,17 @@ const EditarEnvioModal = ({ envio, camiones = [], choferes = [], resumen, onCerr
                       </thead>
                       <tbody>
                         {trozadosDisponibles.map((t) => {
-                          const linea = trozados.find((l) => l.tipo === t.tipo && (l.clase || "A") === t.clase)
-                            || { tipo: t.tipo, clase: t.clase, cajas: "", kgCaja: t.kgCaja };
+                          const linea = trozados.find((l) => claveTrozado(l) === claveTrozado(t))
+                            || { especie: especieDe(t), tipo: t.tipo, clase: t.clase, cajas: "", kgCaja: t.kgCaja };
                           return (
-                            <tr key={`${t.tipo}-${t.clase}`}>
+                            <tr key={claveTrozado(t)}>
+                              {hayVariasEspecies(trozadosDisponibles) && (
+                                <td>
+                                  <span className={`badge ${BADGE_ESPECIE[especieDe(t)]}`}>
+                                    {etiquetaEspecie(especieDe(t))}
+                                  </span>
+                                </td>
+                              )}
                               <td className="fw-semibold">{trozadoLabel(t.tipo)}</td>
                               <td><span className="badge bg-secondary">Clase {t.clase}</span></td>
                               <td className="text-end text-muted">{formatNum(t.cajas)}</td>
@@ -281,8 +294,8 @@ const EditarEnvioModal = ({ envio, camiones = [], choferes = [], resumen, onCerr
                                   onChange={(ev) => {
                                     const val = ev.target.value;
                                     setTrozados((prev) => {
-                                      const idx = prev.findIndex((l) => l.tipo === t.tipo && (l.clase || "A") === t.clase);
-                                      const nueva = { tipo: t.tipo, clase: t.clase, cajas: val, kgCaja: t.kgCaja };
+                                      const idx = prev.findIndex((l) => claveTrozado(l) === claveTrozado(t));
+                                      const nueva = { especie: especieDe(t), tipo: t.tipo, clase: t.clase, cajas: val, kgCaja: t.kgCaja };
                                       if (idx === -1) return [...prev, nueva];
                                       return prev.map((l, i) => (i === idx ? nueva : l));
                                     });

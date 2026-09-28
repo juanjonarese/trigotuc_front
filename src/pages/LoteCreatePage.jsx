@@ -11,6 +11,7 @@ import {
   enviarLoteACamara,
 } from "../services/api";
 import { obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
+import { BADGE_ESPECIE, especieDelLote, etiquetaEspecie } from "../utils/especies";
 import { validarDestinoFaena, advertirRestosDeCajon } from "../utils/faenaValidacion";
 import { exportarLibroExcel } from "../utils/exportarExcel";
 import DesgloseFaena from "../components/DesgloseFaena";
@@ -519,6 +520,9 @@ const LoteCreatePage = () => {
                       <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
                         <div className="d-flex align-items-center gap-2 flex-wrap">
                           {lote.numeroLote && <span className="badge bg-dark fs-6 px-3">#{lote.numeroLote}</span>}
+                          <span className={`badge ${BADGE_ESPECIE[especieDelLote(lote)]}`}>
+                            {etiquetaEspecie(especieDelLote(lote))}
+                          </span>
                           <span className="text-muted small">
                             <i className="bi bi-calendar3 me-1"></i>{new Date(lote.fechaIngreso).toLocaleDateString("es-AR")}
                           </span>
@@ -584,6 +588,11 @@ const LoteCreatePage = () => {
                         {lote.numeroLote && (
                           <span className="badge bg-dark fs-6 px-3">#{lote.numeroLote}</span>
                         )}
+                        {/* De qué es la faena. Un lote sale de una sola orden,
+                            así que es de una sola especie. */}
+                        <span className={`badge ${BADGE_ESPECIE[especieDelLote(lote)]}`}>
+                          {etiquetaEspecie(especieDelLote(lote))}
+                        </span>
                         <span className="text-muted small">
                           <i className="bi bi-calendar3 me-1"></i>
                           {new Date(lote.fechaIngreso).toLocaleDateString("es-AR")}

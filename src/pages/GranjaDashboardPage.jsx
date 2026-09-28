@@ -5,6 +5,9 @@ import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
 import BotonExcel from "../components/BotonExcel";
 import { escapeHtml } from "../utils/escapeHtml";
+import {
+  BADGE_ESPECIE, especieDe, etiquetaEspecie, claveEntero, claveTrozado,
+} from "../utils/especies";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
 import DesgloseFaena from "../components/DesgloseFaena";
 import { obtenerResumenStock, obtenerLotes, eliminarLote, actualizarLote, obtenerMovimientosCamara } from "../services/api";
@@ -593,11 +596,16 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
               {/* Pollos faenados */}
               {resumen.cajonesDisponibles > 0 && (
                 <div>
-                  <div className="text-muted small mb-2">Pollos faenados</div>
+                  <div className="text-muted small mb-2">Faenado (entero)</div>
                   <div className="d-flex flex-wrap gap-2">
+                    {/* ⚠️ La misma clave no es el calibre: pollo, gallina y gallo
+                        comparten calibres y son stocks distintos. Cada tarjeta
+                        lleva su especie o no se sabe qué se está mirando. */}
                     {(resumen.porCalibre || []).map((c) => (
-                      <div key={c.calibre} className="text-center border rounded px-2 py-1">
-                        <span className="badge bg-info text-dark d-block mb-1">Cal. {c.calibre}</span>
+                      <div key={claveEntero(c)} className="text-center border rounded px-2 py-1">
+                        <span className={`badge d-block mb-1 ${BADGE_ESPECIE[especieDe(c)]}`}>
+                          {etiquetaEspecie(especieDe(c))} · Cal. {c.calibre}
+                        </span>
                         <div className="fw-bold small">{formatNum(c.cajones)} caj</div>
                         <div className="text-muted" style={{ fontSize: "0.72rem" }}>{formatNum(c.cajones * 20)} kg</div>
                       </div>
@@ -617,8 +625,10 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
                   <div className="text-muted small mb-2">Trozados</div>
                   <div className="d-flex flex-wrap gap-2">
                     {trozadosTotales.map((t) => (
-                      <div key={`${t.tipo}-${t.clase}`} className="text-center border rounded px-2 py-1">
-                        <span className="badge bg-warning text-dark d-block mb-1">{TIPOS_LABEL[t.tipo]} · {t.clase}</span>
+                      <div key={claveTrozado(t)} className="text-center border rounded px-2 py-1">
+                        <span className={`badge d-block mb-1 ${BADGE_ESPECIE[especieDe(t)]}`}>
+                          {etiquetaEspecie(especieDe(t))} · {TIPOS_LABEL[t.tipo]} · {t.clase}
+                        </span>
                         <div className="fw-bold small">{formatNum(t.cajas)} cajas</div>
                         <div className="text-muted" style={{ fontSize: "0.72rem" }}>{formatNum(t.kgTotal)} kg</div>
                       </div>
@@ -663,11 +673,13 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
                   <>
                     {(resumen.stockCañete || []).length > 0 && (
                       <>
-                        <div className="text-muted small mb-1">Pollos faenados</div>
+                        <div className="text-muted small mb-1">Faenado (entero)</div>
                         <div className="d-flex flex-wrap gap-2 mb-2">
                           {(resumen.stockCañete || []).map((c) => (
-                            <div key={c.calibre} className="text-center border rounded px-2 py-1">
-                              <span className="badge bg-info text-dark d-block mb-1">Cal. {c.calibre}</span>
+                            <div key={claveEntero(c)} className="text-center border rounded px-2 py-1">
+                              <span className={`badge d-block mb-1 ${BADGE_ESPECIE[especieDe(c)]}`}>
+                                {etiquetaEspecie(especieDe(c))} · Cal. {c.calibre}
+                              </span>
                               <div className="fw-bold small">{formatNum(c.cajones)} caj</div>
                               <div className="text-muted" style={{ fontSize: "0.72rem" }}>{formatNum(c.cajones * 20)} kg</div>
                             </div>
@@ -680,9 +692,9 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
                         <div className="text-muted small mb-1">Trozados</div>
                         <div className="d-flex flex-wrap gap-2 mb-2">
                           {((resumen.trozadosCañeteDetalle || resumen.trozadosCañete) || []).filter((t) => t.cajas > 0).map((t) => (
-                            <div key={`${t.tipo}-${t.clase || "sc"}`} className="text-center border rounded px-2 py-1">
-                              <span className="badge bg-warning text-dark d-block mb-1">
-                                {TIPOS_LABEL[t.tipo] || t.tipo}{t.clase ? ` · ${t.clase}` : ""}
+                            <div key={claveTrozado(t)} className="text-center border rounded px-2 py-1">
+                              <span className={`badge d-block mb-1 ${BADGE_ESPECIE[especieDe(t)]}`}>
+                                {etiquetaEspecie(especieDe(t))} · {TIPOS_LABEL[t.tipo] || t.tipo}{t.clase ? ` · ${t.clase}` : ""}
                               </span>
                               <div className="fw-bold small">{formatNum(t.cajas)} caj</div>
                               <div className="text-muted" style={{ fontSize: "0.72rem" }}>{formatNum(t.kgTotal)} kg</div>
@@ -715,11 +727,13 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
                   <>
                     {(resumen.stockTrigotuc || []).length > 0 && (
                       <>
-                        <div className="text-muted small mb-1">Pollos faenados</div>
+                        <div className="text-muted small mb-1">Faenado (entero)</div>
                         <div className="d-flex flex-wrap gap-2 mb-2">
                           {(resumen.stockTrigotuc || []).map((c) => (
-                            <div key={c.calibre} className="text-center border rounded px-2 py-1">
-                              <span className="badge bg-primary d-block mb-1">Cal. {c.calibre}</span>
+                            <div key={claveEntero(c)} className="text-center border rounded px-2 py-1">
+                              <span className={`badge d-block mb-1 ${BADGE_ESPECIE[especieDe(c)]}`}>
+                                {etiquetaEspecie(especieDe(c))} · Cal. {c.calibre}
+                              </span>
                               <div className="fw-bold small">{formatNum(c.cajones)} caj</div>
                               <div className="text-muted" style={{ fontSize: "0.72rem" }}>{formatNum(c.cajones * 20)} kg</div>
                             </div>
@@ -732,9 +746,9 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
                         <div className="text-muted small mb-1">Trozados</div>
                         <div className="d-flex flex-wrap gap-2 mb-2">
                           {((resumen.trozadosTrigotucDetalle || resumen.trozadosTrigotuc) || []).filter((t) => t.cajas > 0).map((t) => (
-                            <div key={`${t.tipo}-${t.clase || "sc"}`} className="text-center border rounded px-2 py-1">
-                              <span className="badge bg-warning text-dark d-block mb-1">
-                                {TIPOS_LABEL[t.tipo] || t.tipo}{t.clase ? ` · ${t.clase}` : ""}
+                            <div key={claveTrozado(t)} className="text-center border rounded px-2 py-1">
+                              <span className={`badge d-block mb-1 ${BADGE_ESPECIE[especieDe(t)]}`}>
+                                {etiquetaEspecie(especieDe(t))} · {TIPOS_LABEL[t.tipo] || t.tipo}{t.clase ? ` · ${t.clase}` : ""}
                               </span>
                               <div className="fw-bold small">{formatNum(t.cajas)} caj</div>
                               <div className="text-muted" style={{ fontSize: "0.72rem" }}>{formatNum(t.kgTotal)} kg</div>

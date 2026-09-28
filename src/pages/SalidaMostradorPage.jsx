@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import BotonExcel from "../components/BotonExcel";
 import CalibreTable from "../components/CalibreTable";
+import { BADGE_ESPECIE, especieDe, etiquetaEspecie, mismoEntero, claveTrozado, hayVariasEspecies } from "../utils/especies";
 import {
   obtenerResumenStock,
   obtenerStockHuevosMostrador,
@@ -29,11 +30,11 @@ const detalleAEditable = (detalle = []) => {
       continue;
     }
     if (d.clase === "entero") {
-      enteros.push({ calibre: Number(d.calibre), cajones: Number(d.cajones) });
+      enteros.push({ especie: especieDe(d), calibre: Number(d.calibre), cajones: Number(d.cajones) });
     } else if (d.clase === "trozado") {
       const cajas = Number(d.cajas);
       const kgCaja = d.kgCaja != null ? Number(d.kgCaja) : (cajas ? Number(d.kg) / cajas : 0);
-      trozados.push({ tipo: d.tipo, clase: d.claseTrozado || "A", cajas, kgCaja });
+      trozados.push({ especie: especieDe(d), tipo: d.tipo, clase: d.claseTrozado || "A", cajas, kgCaja });
     }
   }
   return { enteros, trozados, huevos };
@@ -43,9 +44,13 @@ const detalleAEditable = (detalle = []) => {
 const resumenLineas = (detalle = [], etiquetasHuevo = {}) => {
   const partes = [];
   for (const d of detalle) {
-    if (d.clase === "entero") partes.push(`Cal. ${d.calibre}: ${fmt(d.cajones)} caj`);
+    if (d.clase === "entero")
+      partes.push(`${etiquetaEspecie(especieDe(d))} Cal. ${d.calibre}: ${fmt(d.cajones)} caj`);
     else if (d.clase === "trozado")
-      partes.push(`${TIPOS_LABEL[d.tipo] || d.tipo}${d.claseTrozado ? ` ${d.claseTrozado}` : ""}: ${fmt(d.cajas)} cajas`);
+      partes.push(
+        `${etiquetaEspecie(especieDe(d))} ${TIPOS_LABEL[d.tipo] || d.tipo}` +
+        `${d.claseTrozado ? ` ${d.claseTrozado}` : ""}: ${fmt(d.cajas)} cajas`
+      );
     else if (d.clase === "huevo")
       partes.push(`${etiquetasHuevo[d.tipo] || d.tipo}: ${fmt(d.maples)} maples`);
   }
@@ -155,6 +160,8 @@ const SalidaMostradorPage = () => {
 
   const stockEnteros = resumen?.stockTrigotuc || [];
   const trozadosDisp = (resumen?.trozadosTrigotucDetalle || []).filter((t) => t.cajas > 0);
+  // La columna de producto solo aparece si hay más de uno en la cámara.
+  const variasEspeciesTroz = hayVariasEspecies(trozadosDisp);
   const huevosDisp = stockHuevos?.porTipo || [];
   const huevosPorMaple = stockHuevos?.huevosPorMaple ?? 30;
   // { apiSucio: "API sucio", ... } para poder nombrar los tipos en los resúmenes.
@@ -187,16 +194,16 @@ const SalidaMostradorPage = () => {
 
     // Validar stock disponible
     for (const t of trozadosValidos) {
-      const disp = trozadosDisp.find((d) => d.tipo === t.tipo && d.clase === t.clase)?.cajas || 0;
+      const disp = trozadosDisp.find((d) => claveTrozado(d) === claveTrozado(t))?.cajas || 0;
       if (Number(t.cajas) > disp) {
-        Swal.fire("Error", `Stock insuficiente de ${TIPOS_LABEL[t.tipo] || t.tipo} clase ${t.clase}. Disponible: ${disp} cajas.`, "error");
+        Swal.fire("Error", `Stock insuficiente de ${etiquetaEspecie(especieDe(t))} ${TIPOS_LABEL[t.tipo] || t.tipo} clase ${t.clase}. Disponible: ${disp} cajas.`, "error");
         return;
       }
     }
     for (const c of calibresValidos) {
-      const disp = stockEnteros.find((s) => s.calibre === Number(c.calibre))?.cajones || 0;
+      const disp = stockEnteros.find((s) => mismoEntero(s, c))?.cajones || 0;
       if (Number(c.cajones) > disp) {
-        Swal.fire("Error", `Stock insuficiente de Cal. ${c.calibre}. Disponible: ${disp} cajones.`, "error");
+        Swal.fire("Error", `Stock insuficiente de ${etiquetaEspecie(especieDe(c))} Cal. ${c.calibre}. Disponible: ${disp} cajones.`, "error");
         return;
       }
     }
@@ -204,8 +211,8 @@ const SalidaMostradorPage = () => {
     setSaving(true);
     try {
       await registrarSalidaMostrador({
-        calibres: calibresValidos.map((c) => ({ calibre: Number(c.calibre), cajones: Number(c.cajones) })),
-        trozados: trozadosValidos.map((t) => ({ tipo: t.tipo, clase: t.clase, cajas: Number(t.cajas), kgCaja: Number(t.kgCaja) })),
+        calibres: calibresValidos.map((c) => ({ especie: especieDe(c), calibre: Number(c.calibre), cajones: Number(c.cajones) })),
+        trozados: trozadosValidos.map((t) => ({ especie: especieDe(t), tipo: t.tipo, clase: t.clase, cajas: Number(t.cajas), kgCaja: Number(t.kgCaja) })),
         huevos: huevosCargados,
       });
       await Swal.fire({ icon: "success", title: "Salida registrada", text: "Se descontó el stock de Trigotuc.", timer: 1500, showConfirmButton: false });
@@ -242,10 +249,10 @@ const SalidaMostradorPage = () => {
   const guardarEdicion = async () => {
     const calibres = editSalida.enteros
       .filter((e) => Number(e.cajones) > 0)
-      .map((e) => ({ calibre: Number(e.calibre), cajones: Number(e.cajones) }));
+      .map((e) => ({ especie: especieDe(e), calibre: Number(e.calibre), cajones: Number(e.cajones) }));
     const trozados = editSalida.trozados
       .filter((t) => Number(t.cajas) > 0)
-      .map((t) => ({ tipo: t.tipo, clase: t.clase, cajas: Number(t.cajas), kgCaja: Number(t.kgCaja) }));
+      .map((t) => ({ especie: especieDe(t), tipo: t.tipo, clase: t.clase, cajas: Number(t.cajas), kgCaja: Number(t.kgCaja) }));
     const huevos = (editSalida.huevos || [])
       .filter((h) => Number(h.maples) > 0)
       .map((h) => ({ tipo: h.tipo, maples: Number(h.maples) }));
@@ -336,7 +343,7 @@ const SalidaMostradorPage = () => {
                     {/* Enteros */}
                     {stockEnteros.length > 0 && (
                       <div className="mb-3">
-                        <label className="form-label fw-semibold">Pollo entero (por cajón)</label>
+                        <label className="form-label fw-semibold">Entero (por cajón)</label>
                         <CalibreTable lineas={lineas} onChange={setLineas} inputCajones showPollos={false} stockCalibres={stockEnteros} />
                       </div>
                     )}
@@ -348,6 +355,7 @@ const SalidaMostradorPage = () => {
                         <table className="table table-sm table-bordered align-middle mb-0">
                           <thead className="table-light">
                             <tr>
+                              {variasEspeciesTroz && <th>Producto</th>}
                               <th>Tipo</th>
                               <th>Clase</th>
                               <th className="text-end">Disponible</th>
@@ -357,9 +365,20 @@ const SalidaMostradorPage = () => {
                           </thead>
                           <tbody>
                             {trozadosDisp.map((t) => {
-                              const linea = trozadosLineas.find((l) => l.tipo === t.tipo && l.clase === t.clase) || { tipo: t.tipo, clase: t.clase, cajas: "", kgCaja: t.kgCaja };
+                              // La fila se identifica por (especie, tipo, clase): una pata
+                              // de gallina no es una pata de pollo.
+                              const linea =
+                                trozadosLineas.find((l) => claveTrozado(l) === claveTrozado(t)) ||
+                                { especie: especieDe(t), tipo: t.tipo, clase: t.clase, cajas: "", kgCaja: t.kgCaja };
                               return (
-                                <tr key={`${t.tipo}-${t.clase || "A"}`}>
+                                <tr key={claveTrozado(t)}>
+                                  {variasEspeciesTroz && (
+                                    <td>
+                                      <span className={`badge ${BADGE_ESPECIE[especieDe(t)]}`}>
+                                        {etiquetaEspecie(especieDe(t))}
+                                      </span>
+                                    </td>
+                                  )}
                                   <td className="text-capitalize fw-semibold">{TIPOS_LABEL[t.tipo] || t.tipo}</td>
                                   <td><span className="badge bg-secondary">Clase {t.clase || "A"}</span></td>
                                   <td className="text-end text-muted">{fmt(t.cajas)} cajas</td>
@@ -372,8 +391,8 @@ const SalidaMostradorPage = () => {
                                       onChange={(e) => {
                                         const val = e.target.value;
                                         setTrozadosLineas((prev) => {
-                                          const idx = prev.findIndex((l) => l.tipo === t.tipo && l.clase === t.clase);
-                                          const nueva = { tipo: t.tipo, clase: t.clase, cajas: val, kgCaja: t.kgCaja };
+                                          const idx = prev.findIndex((l) => claveTrozado(l) === claveTrozado(t));
+                                          const nueva = { especie: especieDe(t), tipo: t.tipo, clase: t.clase, cajas: val, kgCaja: t.kgCaja };
                                           return idx === -1 ? [...prev, nueva] : prev.map((l, i) => i === idx ? nueva : l);
                                         });
                                       }}
@@ -575,10 +594,20 @@ const SalidaMostradorPage = () => {
                   <div className="mb-2">
                     <label className="form-label fw-semibold mb-1">Trozados (cajas)</label>
                     <table className="table table-sm table-bordered align-middle mb-0">
-                      <thead className="table-light"><tr><th>Tipo</th><th>Clase</th><th style={{ width: "9rem" }}>Cajas</th></tr></thead>
+                      <thead className="table-light"><tr>
+                        {hayVariasEspecies(editSalida.trozados) && <th>Producto</th>}
+                        <th>Tipo</th><th>Clase</th><th style={{ width: "9rem" }}>Cajas</th>
+                      </tr></thead>
                       <tbody>
                         {editSalida.trozados.map((t, idx) => (
-                          <tr key={`${t.tipo}-${t.clase}`}>
+                          <tr key={claveTrozado(t)}>
+                            {hayVariasEspecies(editSalida.trozados) && (
+                              <td>
+                                <span className={`badge ${BADGE_ESPECIE[especieDe(t)]}`}>
+                                  {etiquetaEspecie(especieDe(t))}
+                                </span>
+                              </td>
+                            )}
                             <td className="fw-semibold">{TIPOS_LABEL[t.tipo] || t.tipo}</td>
                             <td><span className="badge bg-secondary">Clase {t.clase}</span></td>
                             <td>

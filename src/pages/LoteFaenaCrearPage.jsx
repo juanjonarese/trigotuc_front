@@ -7,10 +7,27 @@ import { crearLote, obtenerOrdenesCarga } from "../services/api";
 import { obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
 import { validarDestinoFaena, advertirRestosDeCajon } from "../utils/faenaValidacion";
 import DesgloseFaena from "../components/DesgloseFaena";
+import {
+  BADGE_ESPECIE,
+  especieDeOrden,
+  etiquetaEspecie,
+  etiquetaEspeciePlural,
+} from "../utils/especies";
 import Swal from "sweetalert2";
 
 const fmtNum = (n) =>
   n != null ? new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n) : "—";
+
+// De dónde viene la carga. Granja tiene granja + galpón; Reproductoras no lleva
+// granja (Cañete / Los Pinos no aplica), sino el plantel y su galpón de postura.
+const origenOrden = (o) => {
+  if (!o) return "";
+  if (o.origen === "reproductoras") {
+    const plantel = o.loteReproductor?.numeroLote;
+    return `Reproductoras · Plantel #${plantel ?? "?"}${o.galpon ? ` G${o.galpon}` : ""}`;
+  }
+  return `${o.granja === "cañete" ? "Cañete" : "Los Pinos"}${o.galpon ? ` G${o.galpon}` : ""}`;
+};
 
 const FORM_VACIO = {
   fechaIngreso:        obtenerFechaHoy(),
@@ -54,6 +71,8 @@ const LoteFaenaCrearPage = () => {
       return;
     }
     setLoadingRec(true);
+    // Granja y Reproductoras juntas: la especie que se faena la define la orden
+    // (Granja → pollo, hembras → gallina, machos → gallo), no esta pantalla.
     obtenerOrdenesCarga({ estado: "entregada", tipo: "pedido_frigorifico" })
       .then((data) => setRecepciones(data.filter((o) => !o.loteAsociado || o.faenaPendiente)))
       .catch(() => {})
@@ -227,7 +246,7 @@ const LoteFaenaCrearPage = () => {
                   <option value="">— Seleccioná una recepción —</option>
                   {recepciones.map((o) => (
                     <option key={o._id} value={o._id}>
-                      {o.numero} · {o.granja === "cañete" ? "Cañete" : "Los Pinos"}{o.galpon ? ` G${o.galpon}` : ""} · ~{fmtNum(o.cantidadEstimada)} pollos{o.faenaPendiente ? " · ⚠ faena parcial" : ""}
+                      {o.numero} · {origenOrden(o)} · ~{fmtNum(o.cantidadEstimada)} {etiquetaEspeciePlural(especieDeOrden(o), o.cantidadEstimada)}{o.faenaPendiente ? " · ⚠ faena parcial" : ""}
                     </option>
                   ))}
                 </select>
@@ -243,9 +262,12 @@ const LoteFaenaCrearPage = () => {
                 <div className="d-flex align-items-center gap-2 mb-2">
                   <i className="bi bi-box-arrow-in-down fs-5"></i>
                   <strong>Recepción {recepcionSel.numero}</strong>
-                  <span className="text-muted small">
-                    — {recepcionSel.granja === "cañete" ? "Cañete" : "Los Pinos"}
-                    {recepcionSel.galpon && ` G${recepcionSel.galpon}`}
+                  <span className="text-muted small">— {origenOrden(recepcionSel)}</span>
+                  {/* Qué se está faenando. No es una opción de la pantalla: lo dice
+                      la orden, así que se muestra para que el operario lo vea. */}
+                  <span className={`badge ${BADGE_ESPECIE[especieDeOrden(recepcionSel)]}`}>
+                    <i className="bi bi-tag me-1"></i>
+                    Se faena {etiquetaEspeciePlural(especieDeOrden(recepcionSel), 2)}
                   </span>
                   {recepcionSel.faenaPendiente && (
                     <span className="badge bg-warning text-dark ms-1">
@@ -255,7 +277,7 @@ const LoteFaenaCrearPage = () => {
                 </div>
                 <div className="d-flex flex-wrap gap-3">
                   <div className="text-center px-3 border-end">
-                    <div className="text-muted small">Pollos pedidos (est.)</div>
+                    <div className="text-muted small">{etiquetaEspecie(especieDeOrden(recepcionSel))} pedidos (est.)</div>
                     <div className="fw-bold">{fmtNum(recepcionSel.cantidadEstimada)}</div>
                   </div>
                   <div className="text-center px-3 border-end">

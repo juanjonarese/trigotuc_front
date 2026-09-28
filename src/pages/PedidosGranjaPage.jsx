@@ -666,7 +666,9 @@ const PedidosGranjaPage = () => {
     try {
       const [l, p] = await Promise.all([
         obtenerLotesGranja({ estado: "en_crianza" }),
-        obtenerOrdenesCarga({ tipo: "pedido_frigorifico" }),
+        // Solo las de Granja: las de Reproductoras no tienen granja (Cañete /
+        // Los Pinos no aplica) y esta pantalla las mostraría como "Los Pinos".
+        obtenerOrdenesCarga({ tipo: "pedido_frigorifico", origen: "granja" }),
       ]);
       setLotes(l);
       setPedidos(p);

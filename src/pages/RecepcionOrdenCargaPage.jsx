@@ -488,7 +488,9 @@ const RecepcionOrdenCargaPage = () => {
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
-      const params = { ...(filtroEstado ? { estado: filtroEstado } : {}) };
+      // Solo las de Granja: las de Reproductoras nacen ya entregadas (emitirlas es
+      // el envío) y no pasan por esta recepción, así que acá solo harían ruido.
+      const params = { origen: "granja", ...(filtroEstado ? { estado: filtroEstado } : {}) };
       const data = await obtenerOrdenesCarga(params);
       setOrdenes(data);
     } catch (e) {

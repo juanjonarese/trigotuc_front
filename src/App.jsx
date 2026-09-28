@@ -40,6 +40,9 @@ import IncubadoraPage from "./pages/IncubadoraPage";
 // import VentaPollitosPage from "./pages/VentaPollitosPage";
 import ProyeccionPage from "./pages/ProyeccionPage";
 import OrdenCargaPollitosPage from "./pages/OrdenCargaPollitosPage";
+import AlimentoEnviosPage from "./pages/AlimentoEnviosPage";
+import AlimentoRecepcionPage from "./pages/AlimentoRecepcionPage";
+import AlimentoSilosPage from "./pages/AlimentoSilosPage";
 import PlanPollitosPage from "./pages/PlanPollitosPage";
 import StockHuevosPage from "./pages/StockHuevosPage";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -105,6 +108,12 @@ function App() {
         <Route path="/reproductores/asignaciones" element={<Navigate to="/reproductores/plan" replace />} />
         {/* Órdenes de carga de pollitos: la salida del stock de nacimientos hacia el cliente. */}
         <Route path="/reproductores/ordenes-carga" element={<ProtectedRoute><OrdenCargaPollitosPage /></ProtectedRoute>} />
+
+        {/* Alimento: Trigotuc despacha a las granjas. Módulo hermano de Granja,
+            Reproductoras y Frigorífico. */}
+        <Route path="/alimento/envios"    element={<ProtectedRoute><AlimentoEnviosPage /></ProtectedRoute>} />
+        <Route path="/alimento/recepcion" element={<ProtectedRoute><AlimentoRecepcionPage /></ProtectedRoute>} />
+        <Route path="/alimento/silos"     element={<ProtectedRoute><AlimentoSilosPage /></ProtectedRoute>} />
         <Route path="/reproductores/stock-huevos" element={<ProtectedRoute><StockHuevosPage /></ProtectedRoute>} />
         {/* Ventas de Reproductores: en pausa por pedido del cliente.
         <Route path="/reproductores/ventas-huevos" element={<ProtectedRoute><VentaHuevosPage /></ProtectedRoute>} />

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef } from "react";
 import SelectDropdown from "./SelectDropdown";
+import { ESPECIE_DEFAULT, BADGE_ESPECIE, especieDe, etiquetaEspecie, claveEntero } from "../utils/especies";
 
 const CALIBRES = [5, 6, 7, 8, 9, 10, 11];
 
@@ -17,7 +18,7 @@ const calcularCajones = (pollos, calibre) =>
  *   inputCajones:     bool  (default false)
  *     false → el usuario ingresa POLLOS (ingreso/actualización de lote)
  *     true  → el usuario ingresa CAJONES (ventas y envíos)
- *   stockCalibres:    [{ calibre, cajones }] | null
+ *   stockCalibres:    [{ especie?, calibre, cajones }] | null
  *     Muestra el stock disponible por calibre en el selector y deshabilita los que no tienen stock.
  *   preciosPorCalibre: { [calibre]: number } | null
  *     Precio sugerido por calibre (de la lista del cliente). Se autocarga al cambiar el calibre.
@@ -32,18 +33,40 @@ const CalibreTable = forwardRef(({
   stockCalibres = null,
   preciosPorCalibre = null,
 }, ref) => {
-  const calibresUsados = lineas.map((l) => Number(l.calibre));
+  // ⚠️ Una posición de stock es (especie, calibre): pollo y gallina del mismo
+  // calibre son dos stocks distintos. Toda la identidad va por esa clave.
+  const clavesUsadas = lineas.map(claveEntero);
 
-  // Primer calibre con stock disponible (o simplemente el primero libre)
-  const primerCalibreDisponible = () =>
-    CALIBRES.find((c) => {
-      if (calibresUsados.includes(c)) return false;
+  // Qué especies hay para elegir. Sin stock (caso faena) es una sola: la especie
+  // la define la orden de carga del otro lado, acá no se elige.
+  const especiesDisponibles = stockCalibres
+    ? [...new Set(stockCalibres.map(especieDe))]
+    : [ESPECIE_DEFAULT];
+  const variasEspecies = especiesDisponibles.length > 1;
+
+  // Todas las combinaciones ofrecibles, en orden: primero por especie, después
+  // por calibre.
+  const opciones = especiesDisponibles.flatMap((especie) =>
+    CALIBRES.map((calibre) => ({ especie, calibre }))
+  );
+
+  const cajonesDe = (o) =>
+    stockCalibres
+      ? (stockCalibres.find((s) => especieDe(s) === o.especie && s.calibre === o.calibre)?.cajones ?? 0)
+      : null;
+
+  // Primera combinación con stock disponible (o simplemente la primera libre)
+  const primeraOpcionDisponible = () =>
+    opciones.find((o) => {
+      if (clavesUsadas.includes(claveEntero(o))) return false;
       if (!stockCalibres) return true;
-      return (stockCalibres.find((s) => s.calibre === c)?.cajones ?? 0) > 0;
-    }) ?? CALIBRES.find((c) => !calibresUsados.includes(c)) ?? CALIBRES[0];
+      return cajonesDe(o) > 0;
+    }) ?? opciones.find((o) => !clavesUsadas.includes(claveEntero(o))) ?? opciones[0];
 
+  const primeraOpcion = primeraOpcionDisponible();
   const [draft, setDraft] = useState({
-    calibre: primerCalibreDisponible(),
+    especie: primeraOpcion.especie,
+    calibre: primeraOpcion.calibre,
     valor: "",
     precioPorCajon: 0,
   });
@@ -53,10 +76,10 @@ const CalibreTable = forwardRef(({
   // ── Cuando cambia stockCalibres (lote/cámara cambia): saltar al primer calibre con stock ──
   useEffect(() => {
     if (!stockCalibres) return;
-    const stockActual = stockCalibres.find((s) => s.calibre === draft.calibre)?.cajones ?? 0;
+    const stockActual = cajonesDe(draft) ?? 0;
     if (stockActual <= 0) {
-      const primero = primerCalibreDisponible();
-      setDraft((prev) => ({ ...prev, calibre: primero, valor: "" }));
+      const primero = primeraOpcionDisponible();
+      setDraft((prev) => ({ ...prev, especie: primero.especie, calibre: primero.calibre, valor: "" }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stockCalibres]);
@@ -77,13 +100,13 @@ const CalibreTable = forwardRef(({
   const draftPollos  = inputCajones ? draftNum * Number(draft.calibre) : draftNum;
 
   // Stock disponible del calibre seleccionado en el draft
-  const stockDraftCalibre = stockCalibres
-    ? (stockCalibres.find((s) => s.calibre === draft.calibre)?.cajones ?? 0)
-    : null;
+  const stockDraftCalibre = cajonesDe(draft);
 
   // ── Cambiar calibre en el draft ──────────────────────────────────────
-  const handleCalibreChange = (nuevoCalib) => {
-    const updates = { calibre: nuevoCalib, valor: "" };
+  const handleCalibreChange = (clave) => {
+    const [especie, calibreStr] = String(clave).split("|");
+    const nuevoCalib = Number(calibreStr);
+    const updates = { especie, calibre: nuevoCalib, valor: "" };
     if (showPrecio && preciosPorCalibre?.[nuevoCalib] !== undefined) {
       updates.precioPorCajon = preciosPorCalibre[nuevoCalib];
     }
@@ -99,8 +122,12 @@ const CalibreTable = forwardRef(({
       inputRef.current?.focus();
       return;
     }
-    if (calibresUsados.includes(Number(draft.calibre))) {
-      setErrorDraft(`El calibre ${draft.calibre} ya fue ingresado`);
+    if (clavesUsadas.includes(claveEntero(draft))) {
+      setErrorDraft(
+        variasEspecies
+          ? `${etiquetaEspecie(draft.especie)} calibre ${draft.calibre} ya fue ingresado`
+          : `El calibre ${draft.calibre} ya fue ingresado`
+      );
       return;
     }
     if (stockCalibres && draftCajones > (stockDraftCalibre ?? Infinity)) {
@@ -111,6 +138,7 @@ const CalibreTable = forwardRef(({
     }
 
     const nuevaLinea = {
+      especie: draft.especie,
       calibre: Number(draft.calibre),
       pollos:  draftPollos,
       cajones: draftCajones,
@@ -118,19 +146,19 @@ const CalibreTable = forwardRef(({
     };
     onChange([...lineas, nuevaLinea]);
 
-    // Avanzar al siguiente calibre con stock disponible
-    const nuevosUsados = [...calibresUsados, Number(draft.calibre)];
-    const siguiente = CALIBRES.find((c) => {
-      if (nuevosUsados.includes(c)) return false;
-      if (!stockCalibres) return true;
-      return (stockCalibres.find((s) => s.calibre === c)?.cajones ?? 0) > 0;
-    });
+    // Avanzar a la siguiente combinación con stock disponible
+    const nuevasClaves = [...clavesUsadas, claveEntero(draft)];
+    const siguiente =
+      opciones.find((o) => {
+        if (nuevasClaves.includes(claveEntero(o))) return false;
+        if (!stockCalibres) return true;
+        return cajonesDe(o) > 0;
+      }) ?? opciones.find((o) => !nuevasClaves.includes(claveEntero(o))) ?? opciones[0];
     setDraft({
-      calibre: siguiente ?? CALIBRES.find((c) => !nuevosUsados.includes(c)) ?? CALIBRES[0],
+      especie: siguiente.especie,
+      calibre: siguiente.calibre,
       valor: "",
-      precioPorCajon: siguiente && preciosPorCalibre?.[siguiente] !== undefined
-        ? preciosPorCalibre[siguiente]
-        : 0,
+      precioPorCajon: preciosPorCalibre?.[siguiente.calibre] ?? 0,
     });
     setErrorDraft("");
     setTimeout(() => inputRef.current?.focus(), 0);
@@ -140,9 +168,15 @@ const CalibreTable = forwardRef(({
   const eliminar = (index) => {
     const removida = lineas[index];
     onChange(lineas.filter((_, i) => i !== index));
-    const restantes = calibresUsados.filter((c) => c !== Number(removida.calibre));
-    if (restantes.includes(Number(draft.calibre))) {
-      setDraft((prev) => ({ ...prev, calibre: Number(removida.calibre) }));
+    // Si la que se borró deja libre su lugar y el draft apunta a uno ocupado,
+    // el draft se muda al que se acaba de liberar.
+    const restantes = clavesUsadas.filter((k) => k !== claveEntero(removida));
+    if (restantes.includes(claveEntero(draft))) {
+      setDraft((prev) => ({
+        ...prev,
+        especie: especieDe(removida),
+        calibre: Number(removida.calibre),
+      }));
     }
   };
 
@@ -166,12 +200,9 @@ const CalibreTable = forwardRef(({
   const totalKg       = totalCajones * 20;
   const subtotalBruto = lineasComp.reduce((acc, l) => acc + l.subtotal, 0);
 
-  const todosUsados  = calibresUsados.length >= CALIBRES.length;
+  const todosUsados  = clavesUsadas.length >= opciones.length;
   const sinStockTotal = stockCalibres !== null &&
-    CALIBRES.every((c) =>
-      calibresUsados.includes(c) ||
-      (stockCalibres.find((s) => s.calibre === c)?.cajones ?? 0) === 0
-    );
+    opciones.every((o) => clavesUsadas.includes(claveEntero(o)) || cajonesDe(o) === 0);
 
   const formatNum = (n) =>
     new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n);
@@ -187,8 +218,9 @@ const CalibreTable = forwardRef(({
   useImperativeHandle(ref, () => ({
     getLineas: () => {
       if (!draft.valor || draftNum <= 0) return lineas;
-      if (calibresUsados.includes(Number(draft.calibre))) return lineas;
+      if (clavesUsadas.includes(claveEntero(draft))) return lineas;
       const nuevaLinea = {
+        especie: draft.especie,
         calibre: Number(draft.calibre),
         pollos:  inputCajones ? draftNum * Number(draft.calibre) : draftNum,
         cajones: draftCajones,
@@ -210,22 +242,26 @@ const CalibreTable = forwardRef(({
 
             {/* Calibre */}
             <div className={showPrecio ? "col-12 col-sm-5 col-md-3" : "col-12 col-sm-5 col-md-4"}>
-              <label className="form-label form-label-sm mb-1 fw-semibold">Calibre</label>
+              <label className="form-label form-label-sm mb-1 fw-semibold">
+                {variasEspecies ? "Producto y calibre" : "Calibre"}
+              </label>
               <SelectDropdown
-                value={draft.calibre}
-                onChange={(v) => handleCalibreChange(Number(v))}
-                options={CALIBRES.map((c) => {
-                  const yaUsado   = calibresUsados.includes(c);
-                  const stockItem = stockCalibres?.find((s) => s.calibre === c);
-                  const cajDisp   = stockItem?.cajones ?? null;
-                  const sinStock  = stockCalibres !== null && (cajDisp === null || cajDisp === 0);
-                  let label = `Cal. ${c}`;
-                  if (stockCalibres && cajDisp !== null) {
-                    label += ` — ${cajDisp} caj`;
-                  }
+                value={claveEntero(draft)}
+                onChange={handleCalibreChange}
+                options={opciones.map((o) => {
+                  const clave    = claveEntero(o);
+                  const yaUsado  = clavesUsadas.includes(clave);
+                  const cajDisp  = cajonesDe(o);
+                  const sinStock = stockCalibres !== null && !cajDisp;
+                  // El nombre del producto solo aparece cuando hay más de uno:
+                  // si solo hay pollo, la lista queda igual que siempre.
+                  let label = variasEspecies
+                    ? `${etiquetaEspecie(o.especie)} · Cal. ${o.calibre}`
+                    : `Cal. ${o.calibre}`;
+                  if (stockCalibres && cajDisp !== null) label += ` — ${cajDisp} caj`;
                   if (yaUsado)       label += " ✓";
                   else if (sinStock) label += " (sin stock)";
-                  return { value: c, label, disabled: yaUsado || sinStock };
+                  return { value: clave, label, disabled: yaUsado || sinStock };
                 })}
               />
             </div>
@@ -349,10 +385,16 @@ const CalibreTable = forwardRef(({
             </thead>
             <tbody>
               {lineasComp.map((l, idx) => (
-                <tr key={l.calibre}>
+                <tr key={claveEntero(l)}>
                   <td>
-                    <span className="badge bg-primary">Cal. {l.calibre}</span>
-                    <span className="text-muted small ms-2">{l.calibre} pol/cajón</span>
+                    {variasEspecies ? (
+                      <span className={`badge ${BADGE_ESPECIE[especieDe(l)]}`}>
+                        {etiquetaEspecie(especieDe(l))} · Cal. {l.calibre}
+                      </span>
+                    ) : (
+                      <span className="badge bg-primary">Cal. {l.calibre}</span>
+                    )}
+                    <span className="text-muted small ms-2">{l.calibre} por cajón</span>
                   </td>
                   {inputCajones ? (
                     <>
