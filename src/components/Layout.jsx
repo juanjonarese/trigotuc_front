@@ -23,6 +23,7 @@ const seccionDeRuta = (path) => {
     return "granja";
   }
   if (path.startsWith("/reproductores")) return "reproductores";
+  if (path.startsWith("/alimento")) return "alimento";
   return null;
 };
 
@@ -32,7 +33,7 @@ const Layout = ({ children }) => {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // Acordeón: una sola sección abierta a la vez ("altas" | "granja" |
-  // "reproductores" | "frigorifico" | null).
+  // "reproductores" | "alimento" | "frigorifico" | null).
   const [seccionAbierta, setSeccionAbierta] = useState(() =>
     seccionDeRuta(location.pathname)
   );
@@ -359,6 +360,58 @@ const Layout = ({ children }) => {
                   <span>Venta de Pollitos</span>
                 </a>
                 */}
+              </div>
+            )}
+          </div>
+          )}
+
+          {/* Alimento — Trigotuc despacha a las granjas. Sección hermana de
+              Granja, Reproductoras y Frigorífico: no cuelga de ninguna porque el
+              alimento va a todas. Despacha administración; acepta y ajusta la granja. */}
+          {(mandaTodo || rolUsuario === "reproductoras") && (
+          <div className="nav-section mb-2">
+            <a
+              href="#"
+              className="nav-link text-white-50 d-flex align-items-center justify-content-between rounded"
+              onClick={(e) => { e.preventDefault(); toggleSeccion("alimento"); }}
+            >
+              <div className="d-flex align-items-center gap-2">
+                <i className="bi bi-basket fs-5"></i>
+                <span>Alimento</span>
+              </div>
+              <i className={`bi bi-chevron-${seccionAbierta === "alimento" ? "down" : "right"}`}></i>
+            </a>
+            {seccionAbierta === "alimento" && (
+              <div className="ps-4 mt-2">
+                {/* 1 — Despachar: solo administración (el envío sale de Trigotuc) */}
+                {mandaTodo && (
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/alimento/envios") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/alimento/envios"); }}
+                >
+                  <i className="bi bi-truck"></i>
+                  <span>Envíos</span>
+                </a>
+                )}
+                {/* 2 — Recibir: lo acepta la granja */}
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/alimento/recepcion") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/alimento/recepcion"); }}
+                >
+                  <i className="bi bi-box-arrow-in-down"></i>
+                  <span>Recepción</span>
+                </a>
+                {/* 3 — Silos: el stock y su ajuste por recuento */}
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/alimento/silos") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/alimento/silos"); }}
+                >
+                  <i className="bi bi-database"></i>
+                  <span>Silos</span>
+                </a>
               </div>
             )}
           </div>

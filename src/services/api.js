@@ -1328,3 +1328,57 @@ export const anularOrdenCargaPollitos = async (id, motivo) => {
   });
   return handleResponse(response);
 };
+
+// ───────────────────────────── ALIMENTO ─────────────────────────────
+// Trigotuc despacha a las granjas. No lleva stock propio: el stock vive en los
+// silos de la granja y nace cuando ahí aceptan el envío.
+export const obtenerConstantesAlimento = async () => {
+  const response = await fetch(`${API_URL}/envios-alimento/constantes`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+export const obtenerEnviosAlimento = async (filtros = {}) => {
+  const params = new URLSearchParams(filtros);
+  const response = await fetch(`${API_URL}/envios-alimento?${params}`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+export const crearEnvioAlimento = async (data) => {
+  const response = await fetch(`${API_URL}/envios-alimento`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+export const editarEnvioAlimento = async (id, data) => {
+  const response = await fetch(`${API_URL}/envios-alimento/${id}`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+// La granja confirma lo que recibió y a qué silo entró cada línea.
+export const aceptarEnvioAlimento = async (id, data) => {
+  const response = await fetch(`${API_URL}/envios-alimento/${id}/aceptar`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+export const anularEnvioAlimento = async (id, motivo) => {
+  const response = await fetch(`${API_URL}/envios-alimento/${id}`, {
+    method: "DELETE", headers: getAuthHeaders(), body: JSON.stringify({ motivo }),
+  });
+  return handleResponse(response);
+};
+export const obtenerStockSilos = async (destino = "reproductoras") => {
+  const response = await fetch(`${API_URL}/envios-alimento/stock-silos?destino=${destino}`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+// Ajuste contra el recuento real: se manda lo que se contó, no la diferencia.
+export const ajustarSilo = async (data) => {
+  const response = await fetch(`${API_URL}/envios-alimento/ajustes`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+export const obtenerAjustesSilo = async (filtros = {}) => {
+  const params = new URLSearchParams(filtros);
+  const response = await fetch(`${API_URL}/envios-alimento/ajustes?${params}`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
