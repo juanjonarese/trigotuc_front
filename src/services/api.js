@@ -1382,3 +1382,13 @@ export const obtenerAjustesSilo = async (filtros = {}) => {
   const response = await fetch(`${API_URL}/envios-alimento/ajustes?${params}`, { headers: getAuthHeaders() });
   return handleResponse(response);
 };
+
+// Vacía el galpón de un sexo SIN destino definido. Al fin de ciclo el galpón tiene
+// que quedar vacío aunque no se sepa a dónde va todo (hoy, los gallos): salen
+// igual y quedan contados en el egreso como pendientes de destino.
+export const sacarSinDestino = async (loteId, data) => {
+  const response = await fetch(`${API_URL}/lotes-reproductores/${loteId}/salida-sin-destino`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
