@@ -467,7 +467,14 @@ const AlimentoEnviosPage = () => {
                                 {l.presentacion === "bolsa"
                                   ? `${fmt(l.bolsas)} bolsas de ${fmt(l.kgPorBolsa)} kg`
                                   : `${fmt(l.kg)} kg granel`}
-                                {l.silo ? <span className="text-muted"> → silo {l.silo}</span> : null}
+                                {l.reparto?.length ? (
+                                  <span className="text-muted">
+                                    {" → "}
+                                    {l.reparto.length === 1
+                                      ? `silo ${l.reparto[0].silo}`
+                                      : l.reparto.map((t) => `silo ${t.silo} (${fmt(t.kg)} kg)`).join(" + ")}
+                                  </span>
+                                ) : null}
                               </div>
                             ))}
                           </td>

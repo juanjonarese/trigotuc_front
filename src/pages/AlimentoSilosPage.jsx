@@ -86,60 +86,97 @@ const AlimentoSilosPage = () => {
           </div></div>
         ) : (
           <>
-            <div className="row g-3 mb-3">
-              <div className="col-12 col-md-4">
-                <div className="card shadow-sm h-100 border-primary">
-                  <div className="card-body text-center">
-                    <div className="text-muted small">Total en los silos</div>
-                    <div className="display-6 fw-bold">{fmt(stock?.kgTotal)}</div>
-                    <div className="text-muted small">kg</div>
-                    {stock?.proximo && (
-                      <div className="alert alert-info py-1 px-2 small mt-3 mb-0 text-start">
-                        <i className="bi bi-arrow-down-circle me-1"></i>
-                        Lo próximo que se consume:{" "}
-                        <strong>{etiquetaTipo(stock.proximo.tipo)}</strong> del silo{" "}
-                        {stock.proximo.silo} ({fmt(stock.proximo.kg)} kg)
-                      </div>
-                    )}
-                  </div>
+            <div className="card shadow-sm mb-3 border-primary">
+              <div className="card-body d-flex flex-wrap justify-content-between align-items-center gap-2 py-2">
+                <div>
+                  <span className="text-muted small me-2">Total en los silos</span>
+                  <span className="fs-4 fw-bold">{fmt(stock?.kgTotal)}</span>
+                  <span className="text-muted small"> de {fmt(stock?.capacidadTotalKg)} kg</span>
+                </div>
+                <div className="text-muted small">
+                  {(stock?.silos || []).length} silos de {fmt(stock?.silos?.[0]?.capacidadKg)} kg
                 </div>
               </div>
+            </div>
 
-              {(stock?.silos || []).map((s) => (
-                <div className="col-12 col-md-4" key={s.silo}>
+            {/* Un bloque por galpón (o pareja): cada galpón come solo de sus silos,
+                así que es la unidad con la que se decide cuándo mandar más. */}
+            <div className="row g-3 mb-3">
+              {(stock?.grupos || []).map((g) => (
+                <div className="col-12 col-lg-6" key={g.clave}>
                   <div className="card shadow-sm h-100">
                     <div className="card-header bg-white d-flex justify-content-between align-items-center py-2">
-                      <span className="fw-bold">{s.nombre}</span>
-                      <span className="badge bg-primary">{fmt(s.kg)} kg</span>
+                      <span className="fw-bold">
+                        <i className="bi bi-house me-1"></i>{g.nombre}
+                      </span>
+                      <span className="badge bg-primary">
+                        {fmt(g.kg)} / {fmt(g.capacidadKg)} kg
+                      </span>
                     </div>
                     <div className="card-body">
-                      {s.tipos.length === 0 ? (
-                        <div className="text-muted small">Vacío</div>
-                      ) : (
-                        s.tipos.map((t) => (
-                          <div
-                            key={t.tipo}
-                            className="d-flex justify-content-between align-items-center border-bottom py-1"
-                          >
-                            <div>
-                              <div className="small fw-semibold">{t.etiqueta}</div>
-                              <div className="text-muted" style={{ fontSize: ".72rem" }}>
-                                desde {formatearFechaLocal(t.desde)}
-                              </div>
-                            </div>
-                            <div className="text-end">
-                              <div className="fw-semibold small">{fmt(t.kg)} kg</div>
-                              <button
-                                className="btn btn-link btn-sm p-0 text-decoration-none"
-                                style={{ fontSize: ".72rem" }}
-                                onClick={() => setAjustando({ silo: s.silo, tipo: t.tipo, kgSistema: t.kg })}
-                              >
-                                ajustar
-                              </button>
-                            </div>
-                          </div>
-                        ))
+                      {g.proximo && (
+                        <div className="alert alert-info py-1 px-2 small mb-2">
+                          <i className="bi bi-arrow-down-circle me-1"></i>
+                          Lo próximo que come: <strong>{etiquetaTipo(g.proximo.tipo)}</strong>{" "}
+                          del silo {g.proximo.silo} ({fmt(g.proximo.kg)} kg)
+                        </div>
                       )}
+                      <div className="row g-2">
+                        {(stock?.silos || [])
+                          .filter((s) => g.silos.includes(s.silo))
+                          .map((s) => {
+                            const pct = s.capacidadKg ? Math.min(100, (s.kg / s.capacidadKg) * 100) : 0;
+                            return (
+                              <div className={g.silos.length > 1 ? "col-12 col-sm-6" : "col-12"} key={s.silo}>
+                                <div className="border rounded p-2 h-100">
+                                  <div className="d-flex justify-content-between align-items-baseline">
+                                    <span className="fw-semibold small">{s.nombre}</span>
+                                    <span className="small">
+                                      <strong>{fmt(s.kg)}</strong>
+                                      <span className="text-muted"> / {fmt(s.capacidadKg)} kg</span>
+                                    </span>
+                                  </div>
+                                  <div className="progress my-1" style={{ height: 8 }}>
+                                    <div
+                                      className={`progress-bar ${pct >= 90 ? "bg-success" : pct <= 15 ? "bg-danger" : "bg-primary"}`}
+                                      style={{ width: `${pct}%` }}
+                                    ></div>
+                                  </div>
+                                  <div className="text-muted mb-1" style={{ fontSize: ".72rem" }}>
+                                    libre {fmt(s.libreKg)} kg
+                                  </div>
+                                  {s.tipos.length === 0 ? (
+                                    <div className="text-muted small">Vacío</div>
+                                  ) : (
+                                    s.tipos.map((t) => (
+                                      <div
+                                        key={t.tipo}
+                                        className="d-flex justify-content-between align-items-center border-top py-1"
+                                      >
+                                        <div>
+                                          <div className="small fw-semibold">{t.etiqueta}</div>
+                                          <div className="text-muted" style={{ fontSize: ".72rem" }}>
+                                            desde {formatearFechaLocal(t.desde)}
+                                          </div>
+                                        </div>
+                                        <div className="text-end">
+                                          <div className="fw-semibold small">{fmt(t.kg)} kg</div>
+                                          <button
+                                            className="btn btn-link btn-sm p-0 text-decoration-none"
+                                            style={{ fontSize: ".72rem" }}
+                                            onClick={() => setAjustando({ silo: s.silo, tipo: t.tipo, kgSistema: t.kg })}
+                                          >
+                                            ajustar
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -296,7 +333,9 @@ const AjusteModal = ({ inicial, silos, tipos, stock, onClose, onHecho }) => {
                     >
                       <option value="">— Elegí —</option>
                       {silos.map((s) => (
-                        <option key={s.numero} value={s.numero}>{s.nombre}</option>
+                        <option key={s.numero} value={s.numero}>
+                          {s.nombre} (galpón {(s.galpones || []).join(" y ")})
+                        </option>
                       ))}
                     </select>
                   </div>
