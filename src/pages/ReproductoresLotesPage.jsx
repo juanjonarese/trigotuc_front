@@ -321,43 +321,47 @@ const OpcionSexo = ({ valor, titulo, disponibles, elegido, onElegir, disabled })
 );
 
 // ── Modal: enviar a faena ───────────────────────────────────────────────────
-// Al fin de ciclo las aves se faenan en el frigorífico. A diferencia de Granja
-// acá no se elige la cantidad: sale TODO lo que hay de ese sexo y el galpón
-// queda vacío en el acto. Gallinas y gallos viajan separados, así que el galpón
-// se levanta en dos veces y el plantel cierra cuando salieron los dos.
+// El plantel se levanta POR TANDAS, igual que Granja (cliente, 2026-09-29): se
+// elige el sexo y cuántas salen esta vez, y el galpón queda con el resto para
+// las próximas. Gallinas y gallos viajan separados.
+//
+// A diferencia de Granja no hay reserva: el galpón se descuenta en el acto,
+// porque el que emite la orden es la misma granja y las aves ya suben al camión.
+//
+// Vaciar el galpón al final —con los gallos cuyo destino no se definió— es otra
+// acción, con su propio botón en la tarjeta del plantel.
 const EnviarAFaenaModal = ({ lote, onClose, onHecho }) => {
   const [sexo, setSexo] = useState(null);
+  const [cantidad, setCantidad] = useState("");
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
-  // Al fin de ciclo el galpón tiene que quedar VACÍO, así que viene marcado: el
-  // otro sexo sale igual, aunque su destino todavía no se sepa.
-  const [vaciarResto, setVaciarResto] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const hembras = lote.hembras?.actual || 0;
   const machos  = lote.machos?.actual  || 0;
-  const cantidad = sexo === "hembra" ? hembras : sexo === "macho" ? machos : 0;
-  const quedan   = sexo === "hembra" ? machos  : sexo === "macho" ? hembras : 0;
-  const otroNombre = sexo === "hembra" ? "gallos" : "gallinas";
+  const disponible = sexo === "hembra" ? hembras : sexo === "macho" ? machos : 0;
+
+  const salen = Number(cantidad) || 0;
+  const invalida = salen <= 0 || salen > disponible;
+  const restan = disponible - salen;
+  const aves = sexo === "hembra" ? "gallinas" : "gallos";
+
+  // Cambiar de sexo limpia la cantidad: el tope es otro.
+  const elegirSexo = (v) => { setSexo(v); setCantidad(""); };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!sexo || cantidad <= 0) return;
+    if (!sexo || invalida) return;
 
-    const aves = sexo === "hembra" ? "gallinas" : "gallos";
     const confirma = await Swal.fire({
       icon: "warning",
-      title: `¿Vaciar el galpón del plantel #${lote.numeroLote}?`,
+      title: `¿Enviar ${formatearNumero(salen)} ${aves} a faena?`,
       html:
-        `<strong>${formatearNumero(cantidad)} ${aves}</strong> van a faena con su orden de carga.` +
-        (vaciarResto && quedan > 0
-          ? `<br/><strong>${formatearNumero(quedan)} ${otroNombre}</strong> también salen del galpón, ` +
-            `pero <u>sin destino definido</u>: quedan anotados para cuando se decida.`
-          : quedan > 0
-            ? `<br/><span class="text-muted">Quedan ${formatearNumero(quedan)} ${otroNombre} en el galpón.</span>`
-            : "") +
-        `<br/><span class="text-muted">${(vaciarResto || quedan === 0) ? "El plantel queda finalizado." : ""}</span>`,
+        `Salen del galpón del plantel #${lote.numeroLote} en el acto.` +
+        (restan > 0
+          ? `<br/><span class="text-muted">Quedan ${formatearNumero(restan)} ${aves} para las próximas tandas.</span>`
+          : `<br/><span class="text-muted">Con esta tanda no quedan más ${aves} en el galpón.</span>`),
       showCancelButton: true,
-      confirmButtonText: "Sí, vaciar el galpón",
+      confirmButtonText: "Sí, enviar a faena",
       cancelButtonText: "Cancelar",
       confirmButtonColor: "#d33",
     });
@@ -368,36 +372,20 @@ const EnviarAFaenaModal = ({ lote, onClose, onHecho }) => {
       const orden = await enviarPlantelAFaena({
         loteReproductor: lote._id,
         sexo,
+        cantidad: salen,
         fechaEmision: fecha,
       });
-
-      // El galpón tiene que quedar vacío aunque no se sepa el destino del resto:
-      // salen igual y quedan contados como pendientes de definir. Si esto falla,
-      // la orden de faena YA se emitió, así que se avisa en vez de romper todo.
-      let avisoResto = "";
-      if (vaciarResto && quedan > 0) {
-        try {
-          await sacarSinDestino(lote._id, {
-            sexo: sexo === "hembra" ? "macho" : "hembra",
-            fecha,
-            observaciones: "Salieron al vaciar el galpón al fin de ciclo; destino a definir",
-          });
-          avisoResto =
-            `<br/><span class="text-muted">${formatearNumero(quedan)} ${otroNombre} salieron sin destino definido.</span>`;
-        } catch (err2) {
-          avisoResto =
-            `<br/><span class="text-danger">Los ${otroNombre} NO salieron: ${err2.message}</span>`;
-        }
-      }
 
       await onHecho();
       Swal.fire({
         icon: "success",
         title: `Orden ${orden.numero}`,
         html:
-          `${formatearNumero(orden.cantidadEstimada)} ${aves} en camino al frigorífico.` +
-          `<br/>Código de retiro: <strong class="fs-4">${orden.codigoRetiro}</strong>` +
-          avisoResto,
+          `<strong class="fs-4">${formatearNumero(orden.cantidadEstimada)}</strong> ${aves} ` +
+          `en camino al frigorífico.` +
+          (restan > 0
+            ? `<br/><span class="text-muted">Quedan ${formatearNumero(restan)} ${aves} en el galpón.</span>`
+            : ""),
         confirmButtonText: "Listo",
       });
     } catch (err) {
@@ -425,21 +413,54 @@ const EnviarAFaenaModal = ({ lote, onClose, onHecho }) => {
             >
               <div className="modal-body">
                 <p className="small text-muted">
-                  Sale <strong>todo</strong> lo que hay de lo que elijas — la cantidad no se
-                  escribe. Gallinas y gallos viajan separados, así que el galpón se levanta en
-                  dos viajes.
+                  El plantel se levanta <strong>por tandas</strong>: elegí qué sale y cuántas
+                  esta vez. Lo que quede se manda en los viajes siguientes.
                 </p>
 
                 <div className="d-grid gap-2 mb-3">
                   <OpcionSexo
                     valor="hembra" titulo="Gallinas" disponibles={hembras}
-                    elegido={sexo} onElegir={setSexo} disabled={saving}
+                    elegido={sexo} onElegir={elegirSexo} disabled={saving}
                   />
                   <OpcionSexo
                     valor="macho" titulo="Gallos" disponibles={machos}
-                    elegido={sexo} onElegir={setSexo} disabled={saving}
+                    elegido={sexo} onElegir={elegirSexo} disabled={saving}
                   />
                 </div>
+
+                {sexo && (
+                  <>
+                    <label className="form-label fw-semibold small mb-1">
+                      ¿Cuántas {aves} salen en esta tanda?
+                    </label>
+                    <div className="input-group input-group-sm mb-1">
+                      <input
+                        type="number"
+                        className={`form-control ${cantidad !== "" && invalida ? "is-invalid" : ""}`}
+                        min="1"
+                        max={disponible}
+                        value={cantidad}
+                        onChange={(e) => setCantidad(e.target.value)}
+                        disabled={saving}
+                        placeholder="0"
+                        autoFocus
+                      />
+                      {/* Para la última tanda, que es cuando se lleva lo que queda. */}
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary"
+                        onClick={() => setCantidad(String(disponible))}
+                        disabled={saving}
+                        title="Llevar todo lo que queda en el galpón"
+                      >
+                        Todo
+                      </button>
+                    </div>
+                    <div className="form-text mb-3">
+                      Hay {formatearNumero(disponible)} {aves} en el galpón.
+                    </div>
+                  </>
+                )}
 
                 <label className="form-label fw-semibold small mb-1">Fecha de salida</label>
                 <input
@@ -451,39 +472,22 @@ const EnviarAFaenaModal = ({ lote, onClose, onHecho }) => {
                   required
                 />
 
-                {/* El destino de los gallos está sin definir (2026-09-28), pero el
-                    galpón tiene que quedar vacío igual. Salen y quedan anotados. */}
-                {sexo && quedan > 0 && (
-                  <div className="form-check mt-3">
-                    <input
-                      className="form-check-input"
-                      type="checkbox"
-                      id="vaciar-resto"
-                      checked={vaciarResto}
-                      onChange={(e) => setVaciarResto(e.target.checked)}
-                      disabled={saving}
-                    />
-                    <label className="form-check-label small" htmlFor="vaciar-resto">
-                      Vaciar el galpón del todo: sacar también{" "}
-                      <strong>{formatearNumero(quedan)} {otroNombre}</strong>
-                      <div className="text-muted" style={{ fontSize: ".78rem" }}>
-                        Salen del galpón <u>sin destino definido</u> y quedan anotados en el
-                        egreso del plantel, para ir a buscarlos cuando se decida qué se hace.
-                      </div>
-                    </label>
-                  </div>
-                )}
-
-                {sexo && (
-                  <div className="alert alert-warning py-2 mt-3 mb-0 small">
+                {sexo && salen > 0 && (
+                  <div className={`alert py-2 mt-3 mb-0 small ${invalida ? "alert-danger" : "alert-warning"}`}>
                     <i className="bi bi-exclamation-triangle me-1"></i>
-                    Van a faena <strong>{formatearNumero(cantidad)}</strong>{" "}
-                    {sexo === "hembra" ? "gallinas" : "gallos"}.{" "}
-                    {quedan === 0
-                      ? "El galpón queda vacío y el plantel finalizado."
-                      : vaciarResto
-                        ? `Los ${formatearNumero(quedan)} ${otroNombre} salen sin destino definido: el galpón queda vacío y el plantel finalizado.`
-                        : `Quedan ${formatearNumero(quedan)} ${otroNombre} en el galpón.`}
+                    {invalida ? (
+                      <>
+                        En el galpón hay <strong>{formatearNumero(disponible)}</strong> {aves}: no
+                        se pueden sacar {formatearNumero(salen)}.
+                      </>
+                    ) : (
+                      <>
+                        Salen <strong>{formatearNumero(salen)}</strong> {aves} del galpón.{" "}
+                        {restan > 0
+                          ? `Quedan ${formatearNumero(restan)} para las próximas tandas.`
+                          : `Con esta no quedan más ${aves}.`}
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -496,7 +500,7 @@ const EnviarAFaenaModal = ({ lote, onClose, onHecho }) => {
                 >
                   Cancelar
                 </button>
-                <button type="submit" className="btn btn-danger" disabled={saving || !sexo}>
+                <button type="submit" className="btn btn-danger" disabled={saving || !sexo || invalida}>
                   {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
                   <i className="bi bi-truck me-1"></i>Enviar a faena
                 </button>
@@ -539,6 +543,67 @@ const ReproductoresLotesPage = () => {
   useEffect(() => {
     cargar();
   }, [cargar]);
+
+  /**
+   * Cierra el plantel sacando del galpón lo que haya quedado, SIN destino
+   * definido. Es lo último del ciclo: las tandas ya se levantaron y queda el
+   * resto — hoy, los gallos, cuyo destino todavía no se decidió.
+   *
+   * No emite orden de carga ni mueve stock de cámara: solo vacía y deja anotado
+   * cuántas aves salieron, para ir a buscarlas cuando se defina qué se hace.
+   */
+  const vaciarGalpon = async (lote) => {
+    const hembras = lote.hembras?.actual || 0;
+    const machos  = lote.machos?.actual  || 0;
+    const partes = [
+      hembras > 0 ? `${formatearNumero(hembras)} gallinas` : null,
+      machos  > 0 ? `${formatearNumero(machos)} gallos`    : null,
+    ].filter(Boolean);
+
+    const { value: motivo, isConfirmed } = await Swal.fire({
+      icon: "warning",
+      title: `¿Vaciar el galpón del plantel #${lote.numeroLote}?`,
+      html:
+        `Salen <strong>${partes.join(" y ")}</strong> del galpón y el plantel queda finalizado.` +
+        `<br/><span class="text-muted">Quedan anotadas como <u>sin destino definido</u>, ` +
+        `para ir a buscarlas cuando se decida qué se hace con ellas.</span>`,
+      input: "text",
+      inputPlaceholder: "Por qué se vacía (opcional)",
+      showCancelButton: true,
+      confirmButtonText: "Sí, vaciar y cerrar",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#6c757d",
+    });
+    if (!isConfirmed) return;
+
+    const fecha = new Date().toISOString().slice(0, 10);
+    const observaciones = motivo || "Se vació el galpón al cerrar el ciclo; destino a definir";
+
+    // Los dos sexos son dos llamadas: si la segunda falla, la primera ya salió y
+    // hay que decirlo en vez de dejar creer que se vació entero.
+    const errores = [];
+    for (const [sexo, cuantas] of [["hembra", hembras], ["macho", machos]]) {
+      if (cuantas <= 0) continue;
+      try {
+        await sacarSinDestino(lote._id, { sexo, fecha, observaciones });
+      } catch (err) {
+        errores.push(`${sexo === "hembra" ? "Gallinas" : "Gallos"}: ${err.message}`);
+      }
+    }
+
+    await cargar();
+    if (errores.length) {
+      Swal.fire("El galpón no quedó vacío", errores.join("<br/>"), "error");
+    } else {
+      Swal.fire({
+        icon: "success",
+        title: "Galpón vacío",
+        text: `El plantel #${lote.numeroLote} quedó finalizado.`,
+        timer: 2500,
+        showConfirmButton: false,
+      });
+    }
+  };
 
   const semanasCiclo = constantes?.semanasCicloVida ?? 65;
   const semanaPostura = constantes?.semanaInicioPostura ?? 24;
@@ -693,6 +758,18 @@ const ReproductoresLotesPage = () => {
                   onClick={() => setFaenaLote(lote)}
                 >
                   <i className="bi bi-truck me-1"></i>Enviar a faena
+                </button>
+              )}
+              {/* Cerrar el plantel cuando ya se levantaron las tandas. Sale lo que
+                  quede aunque su destino no esté definido (hoy, los gallos): si no,
+                  el galpón nunca queda vacío. Va aparte del envío a faena porque
+                  es otra cosa — acá no se emite ninguna orden. */}
+              {lote.sector === "postura" && (lote.hembras?.actual > 0 || lote.machos?.actual > 0) && (
+                <button
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={() => vaciarGalpon(lote)}
+                >
+                  <i className="bi bi-box-arrow-right me-1"></i>Vaciar galpón y cerrar
                 </button>
               )}
             </div>
