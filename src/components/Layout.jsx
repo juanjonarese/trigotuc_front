@@ -377,7 +377,7 @@ const Layout = ({ children }) => {
             >
               <div className="d-flex align-items-center gap-2">
                 <i className="bi bi-basket fs-5"></i>
-                <span>Alimento</span>
+                <span>Envío de alimento</span>
               </div>
               <i className={`bi bi-chevron-${seccionAbierta === "alimento" ? "down" : "right"}`}></i>
             </a>
