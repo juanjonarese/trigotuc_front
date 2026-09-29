@@ -156,6 +156,7 @@ Secciones: `USUARIOS`, `CLIENTES`, `LOTES (FAENA)`, `ENVÍOS CÁMARA`, `DESPACHO
 | `SelectDropdown.jsx` | Dropdown custom (usado por `CalibreTable`) |
 | `Pagination.jsx` | Paginación genérica |
 | `Footer.jsx` | Footer (login + algunas páginas) |
+| `CamaraOrigen.jsx` | `BadgeCamara`, `FranjaCamara` ("SALE DE …") y `FiltroCamara`. El color de cada cámara (azul Cañete, naranja Trigotuc) vive solo en `utils/camaras.js`, para que el personal no cargue una orden de la cámara equivocada |
 
 ### Hooks / Utils
 

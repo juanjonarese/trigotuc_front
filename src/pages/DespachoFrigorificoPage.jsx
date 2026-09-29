@@ -18,6 +18,8 @@ import { normalizarWhatsapp } from "../utils/whatsappUtils";
 import { ajustarFechaParaGuardar } from "../utils/dateUtils";
 import Swal from "sweetalert2";
 import { exportarTablaExcel } from "../utils/exportarExcel";
+import { CAMARAS, camaraLbl, estiloCamara, bordeCamara } from "../utils/camaras";
+import { FranjaCamara, FiltroCamara } from "../components/CamaraOrigen";
 
 const TIPOS_TROZADO = [
   { tipo: "filet",   label: "Filet"      },
@@ -29,7 +31,6 @@ const TIPOS_TROZADO = [
 
 const fmt       = (n) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n ?? 0);
 const fmtFecha  = (f) => f ? new Date(f).toLocaleDateString("es-AR") : "—";
-const camaraLbl = (v) => v === "cañete" ? "Cañete" : v === "trigotuc" ? "Trigotuc" : v;
 const tipoLbl   = (tipo) => TIPOS_TROZADO.find((x) => x.tipo === tipo)?.label || tipo;
 
 // ── Badge de estado ───────────────────────────────────────────────────────────
@@ -102,8 +103,13 @@ const renderCopiaDespacho = (doc, d, etiqueta) => {
   doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.setTextColor(130);
   doc.text("CÁMARA", 14, y + 4);
   if (d.turno) doc.text("TURNO", W / 2, y + 4);
-  doc.setFontSize(11); doc.setFont("helvetica", "normal"); doc.setTextColor(0);
-  doc.text(camara, 14, y + 11);
+  // La cámara va en un recuadro de SU color (azul Cañete, naranja Trigotuc),
+  // para que quien carga no vaya a la cámara equivocada.
+  doc.setFillColor(...estiloCamara(d.camara).rgb);
+  doc.roundedRect(14, y + 5.5, 62, 9, 2, 2, "F");
+  doc.setFontSize(11); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255);
+  doc.text(`SALE DE ${camara.toUpperCase()}`, 45, y + 11.6, { align: "center" });
+  doc.setFont("helvetica", "normal"); doc.setTextColor(0);
   if (d.turno) {
     doc.setFont("helvetica", "bold");
     doc.text(d.turno, W / 2, y + 11);
@@ -491,16 +497,22 @@ const NuevaOrdenModal = ({ onClose, onCreada }) => {
                     Cámara de origen <span className="text-danger">*</span>
                   </label>
                   <div className="d-flex gap-2">
-                    {[
-                      { value: "cañete",   label: "Cañete"   },
-                      { value: "trigotuc", label: "Trigotuc" },
-                    ].map((c) => (
-                      <button key={c.value} type="button"
-                        className={`btn flex-grow-1 py-2 ${camara === c.value ? "btn-success" : "btn-outline-secondary"}`}
-                        onClick={() => handleCamara(c.value)}>
-                        <i className="bi bi-snow me-1"></i>{c.label}
-                      </button>
-                    ))}
+                    {CAMARAS.map((c) => {
+                      const e = estiloCamara(c.value);
+                      const sel = camara === c.value;
+                      return (
+                        <button key={c.value} type="button"
+                          className="btn flex-grow-1 py-2 fw-semibold"
+                          style={{
+                            border: `2px solid ${e.color}`,
+                            background: sel ? e.color : "#fff",
+                            color: sel ? "#fff" : e.color,
+                          }}
+                          onClick={() => handleCamara(c.value)}>
+                          <i className="bi bi-snow me-1"></i>{c.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -934,16 +946,22 @@ const EditarDespachoModal = ({ despacho, onClose, onGuardado }) => {
                     Cámara de origen <span className="text-danger">*</span>
                   </label>
                   <div className="d-flex gap-2">
-                    {[
-                      { value: "cañete",   label: "Cañete"   },
-                      { value: "trigotuc", label: "Trigotuc" },
-                    ].map((c) => (
-                      <button key={c.value} type="button"
-                        className={`btn flex-grow-1 py-2 ${camara === c.value ? "btn-success" : "btn-outline-secondary"}`}
-                        onClick={() => handleCamara(c.value)}>
-                        <i className="bi bi-snow me-1"></i>{c.label}
-                      </button>
-                    ))}
+                    {CAMARAS.map((c) => {
+                      const e = estiloCamara(c.value);
+                      const sel = camara === c.value;
+                      return (
+                        <button key={c.value} type="button"
+                          className="btn flex-grow-1 py-2 fw-semibold"
+                          style={{
+                            border: `2px solid ${e.color}`,
+                            background: sel ? e.color : "#fff",
+                            color: sel ? "#fff" : e.color,
+                          }}
+                          onClick={() => handleCamara(c.value)}>
+                          <i className="bi bi-snow me-1"></i>{c.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -1111,6 +1129,7 @@ const DespachoFrigorificoPage = () => {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [editDespacho, setEditDespacho] = useState(null);
   const [filtro, setFiltro]             = useState("pendiente");
+  const [filtroCamara, setFiltroCamara] = useState("");
 
   const cargarDatos = useCallback(async () => {
     setLoading(true);
@@ -1170,7 +1189,9 @@ const DespachoFrigorificoPage = () => {
     }
   };
 
-  const despachosVisibles = filtro ? despachos.filter((d) => d.estado === filtro) : despachos;
+  const despachosVisibles = despachos
+    .filter((d) => !filtro || d.estado === filtro)
+    .filter((d) => !filtroCamara || d.camara === filtroCamara);
   // Excel: una fila por orden, con el detalle de calibres y cortes concatenado.
   const exportarExcel = () => exportarTablaExcel({
     filas: despachosVisibles,
@@ -1224,6 +1245,7 @@ const DespachoFrigorificoPage = () => {
                 {l}
               </button>
             ))}
+            <FiltroCamara valor={filtroCamara} onChange={setFiltroCamara} />
             <BotonExcel
               onClick={exportarExcel}
               disabled={despachosVisibles.length === 0}
@@ -1248,17 +1270,16 @@ const DespachoFrigorificoPage = () => {
           <div className="row g-3">
             {despachosVisibles.map((d) => (
               <div key={d._id} className="col-12 col-md-6 col-lg-4">
-                <div className="card border-0 shadow-sm h-100"
-                  style={{ borderLeft: `4px solid ${d.estado === "pendiente" ? "#ffc107" : "#198754"}` }}>
+                <div className="card shadow-sm h-100" style={bordeCamara(d.camara)}>
+                  {/* De qué cámara sale, antes que nada: es lo que el personal no
+                      tiene que confundir. */}
+                  <FranjaCamara camara={d.camara} />
                   <div className="card-body">
 
                     {/* Número + badges */}
                     <div className="d-flex justify-content-between align-items-start mb-2">
                       <span className="badge bg-dark fs-6">{d.numeroOrden}</span>
                       <div className="d-flex gap-1 flex-wrap justify-content-end">
-                        <span className="badge bg-secondary">
-                          <i className="bi bi-snow me-1"></i>{camaraLbl(d.camara)}
-                        </span>
                         {d.modalidadEntrega === "delivery_chofer" ? (
                           <span className="badge bg-info text-dark">
                             <i className="bi bi-truck me-1"></i>

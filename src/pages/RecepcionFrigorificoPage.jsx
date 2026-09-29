@@ -19,6 +19,8 @@ import { imprimirOrdenEnvio } from "../utils/imprimirOrdenEnvio";
 import EditarEnvioModal from "../components/EditarEnvioModal";
 import Swal from "sweetalert2";
 import { exportarTablaExcel } from "../utils/exportarExcel";
+import { camaraLbl, estiloCamara, bordeCamara } from "../utils/camaras";
+import { BadgeCamara, FranjaCamara, FiltroCamara } from "../components/CamaraOrigen";
 
 const TIPOS_TROZADO = [
   { tipo: "filet",   label: "Filet"      },
@@ -32,7 +34,6 @@ const ITEMS_POR_PAGINA = 50;
 
 const fmt       = (n) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n ?? 0);
 const fmtFecha  = (f) => f ? new Date(f).toLocaleDateString("es-AR") : "—";
-const camaraLbl = (v) => v === "cañete" ? "Cañete" : v === "trigotuc" ? "Trigotuc" : v;
 
 // Calibres y cortes de un envío en una sola línea, para que entren en una celda.
 const detalleCalibresTxt = (e) => (e.calibres || [])
@@ -79,13 +80,14 @@ const imprimirRemito = (despacho) => {
       <div class="copia-label">${copia}</div>
       <div class="logo">Trigotuc <span>Avícola</span></div>
       <div class="subtitulo">Orden de Carga — Frigorifico</div>
+      <div class="franja-camara" style="background:${estiloCamara(despacho.camara).color}">SALE DE ${camara.toUpperCase()}</div>
 
       <h2>Datos de la orden</h2>
       <div class="grid">
         <div class="fila"><span class="lbl">N° Orden</span><span class="val">${despacho.numeroOrden}</span></div>
         <div class="fila"><span class="lbl">Fecha</span><span class="val">${fecha}</span></div>
         <div class="fila"><span class="lbl">Cliente</span><span class="val">${cliente}</span></div>
-        <div class="fila"><span class="lbl">Cámara / Turno</span><span class="val">${camara} — ${turno}</span></div>
+        <div class="fila"><span class="lbl">Cámara / Turno</span><span class="val"><span style="color:${estiloCamara(despacho.camara).color}">${camara}</span> — ${turno}</span></div>
         <div class="fila"><span class="lbl">Fecha de entrega</span><span class="val">${hoy}</span></div>
       </div>
 
@@ -139,6 +141,7 @@ const imprimirRemito = (despacho) => {
       .logo { font-size: 16px; font-weight: bold; margin-bottom: 1px; }
       .logo span { color: #f59e0b; }
       .subtitulo { font-size: 10px; color: #666; margin-bottom: 8px; }
+      .franja-camara { color: #fff; font-weight: 700; font-size: 13px; letter-spacing: 1.5px; text-align: center; padding: 4px; border-radius: 4px; margin-bottom: 6px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       h2 { font-size: 11px; border-bottom: 2px solid #222; padding-bottom: 3px; margin: 8px 0 6px; text-transform: uppercase; letter-spacing: .5px; }
       .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; margin-bottom: 8px; }
       .fila { display: flex; flex-direction: column; }
@@ -240,6 +243,7 @@ const ConfirmarModal = ({ despacho, onClose, onConfirmado, esAdmin }) => {
               </div>
               <button className="btn-close btn-close-white" onClick={onClose} disabled={saving}></button>
             </div>
+            <FranjaCamara camara={despacho.camara} />
 
             <div className="modal-body">
 
@@ -410,6 +414,7 @@ const RecepcionFrigorificoPage = () => {
   const [envioEditando, setEnvioEditando] = useState(null);
   const [loading, setLoading]         = useState(true);
   const [filtroEstado, setFiltroEstado] = useState("pendiente");
+  const [filtroCamara, setFiltroCamara] = useState("");
   const [busqueda, setBusqueda]       = useState("");
   const [despachoModal, setDespachoModal] = useState(null);
   const [preparando, setPreparando]   = useState(null);
@@ -533,6 +538,7 @@ const RecepcionFrigorificoPage = () => {
 
   const despachosVisibles = despachos
     .filter((d) => filtroEstado === "" || d.estado === filtroEstado)
+    .filter((d) => !filtroCamara || d.camara === filtroCamara)
     .filter((d) => {
       if (!busqueda) return true;
       const txt = busqueda.toLowerCase();
@@ -628,7 +634,13 @@ const RecepcionFrigorificoPage = () => {
             <i className="bi bi-box-arrow-in-down me-2 text-success"></i>
             Recepción de Órdenes
           </h1>
-          <div className="d-flex gap-2 align-items-center">
+          <div className="d-flex gap-2 align-items-center flex-wrap">
+            {tab === "clientes" && (
+              <FiltroCamara
+                valor={filtroCamara}
+                onChange={(v) => { setFiltroCamara(v); setPaginaDespachos(1); }}
+              />
+            )}
             <BotonExcel
               onClick={tab === "clientes" ? exportarDespachosExcel : exportarEnviosExcel}
               disabled={tab === "clientes" ? despachosVisibles.length === 0 : enviosVisibles.length === 0}
@@ -899,17 +911,16 @@ const RecepcionFrigorificoPage = () => {
           <div className="row g-3 d-lg-none">
             {despachosPagina.map((d) => (
               <div key={d._id} className="col-12 col-md-6">
-                <div className="card border-0 shadow-sm h-100"
-                  style={{ borderLeft: "4px solid #198754" }}>
+                <div className="card shadow-sm h-100" style={bordeCamara(d.camara)}>
+                  {/* De qué cámara sale, antes que nada: es lo que el personal no
+                      tiene que confundir. */}
+                  <FranjaCamara camara={d.camara} />
                   <div className="card-body">
 
-                    {/* Número + turno + cámara */}
+                    {/* Número + turno */}
                     <div className="d-flex justify-content-between align-items-start mb-2">
                       <span className="badge bg-dark fs-6">{d.numeroOrden}</span>
                       <div className="d-flex gap-1 flex-wrap justify-content-end">
-                        <span className="badge bg-secondary">
-                          <i className="bi bi-snow me-1"></i>{camaraLbl(d.camara)}
-                        </span>
                         {d.modalidadEntrega === "delivery_chofer" ? (
                           <span className="badge bg-info text-dark">
                             <i className="bi bi-truck me-1"></i>
@@ -1066,7 +1077,7 @@ const RecepcionFrigorificoPage = () => {
                   </thead>
                   <tbody>
                     {despachosPagina.map((d) => (
-                      <tr key={d._id}>
+                      <tr key={d._id} style={{ boxShadow: `inset 5px 0 0 ${estiloCamara(d.camara).color}` }}>
                         <td>
                           <span className={`badge ${d.estado === "completada" ? "bg-success" : "bg-warning text-dark"}`}>
                             {d.numeroOrden}
@@ -1074,7 +1085,7 @@ const RecepcionFrigorificoPage = () => {
                         </td>
                         <td className="small">{fmtFecha(d.fecha)}</td>
                         <td className="fw-semibold small">{d.cliente?.razonSocial || "—"}</td>
-                        <td><span className="badge bg-secondary">{camaraLbl(d.camara)}</span></td>
+                        <td><BadgeCamara camara={d.camara} /></td>
                         <td className="small text-muted">{d.turno || "—"}</td>
                         <td>
                           {d.modalidadEntrega === "delivery_chofer" ? (
