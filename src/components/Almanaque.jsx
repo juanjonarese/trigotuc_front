@@ -35,6 +35,18 @@ const ANCHO_PILL = ANCHO_DIA;
 const INSET_PILL = 2;
 const ALTO_PILL = 22;
 
+/**
+ * El total del día tiene que entrar en los 56px de la columna. Hasta 5 dígitos
+ * (99.999) entra completo; de ahí para arriba se abrevia en miles, que para
+ * mirar el almanaque alcanza — el número exacto está en el tooltip.
+ */
+const compactoMiles = (n) => {
+  const v = Number(n || 0);
+  if (v < 100000) return formatearNumero(v);
+  const miles = v / 1000;
+  return `${formatearNumero(Math.round(miles * 10) / 10)}k`;
+};
+
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
 const partesClave = (clave) => {
@@ -459,29 +471,54 @@ const Almanaque = ({ data }) => {
   const dias = useMemo(() => data?.faena || [], [data]);
   const indices = useMemo(() => new Map(dias.map((d, i) => [d.clave, i])), [dias]);
 
-  // Apilado de las pastillas de nacimiento en carriles.
+  // Una pastilla POR DÍA con el total, no una por tanda.
   //
-  // Ahora que la pastilla mide un día exacto, dos tandas de días distintos no se
-  // pisan nunca. El apilado queda igual porque sigue haciendo falta para el caso
-  // que sí se pisa: dos tandas que nacen el MISMO día. Ahí la segunda baja a un
-  // carril nuevo en vez de taparse con la primera.
-  const carrilesNacimientos = useMemo(() => {
-    const items = (data?.nacimientos || [])
-      .filter((n) => indices.has(n.fechaClave))
-      .sort((a, b) => indices.get(a.fechaClave) - indices.get(b.fechaClave));
+  // Antes cada tanda tenía la suya y las que nacían el mismo día se apilaban en
+  // carriles. Con varias tandas juntas (el 14/10 son un montón) eso llenaba la
+  // pantalla de pastillas chiquitas y la pregunta que importa —cuántos pollitos
+  // nacen ese día— había que contestarla sumando a ojo.
+  //
+  // Ahora se suma por día: un solo renglón, un número por día. El desglose por
+  // tanda sigue estando, en el tooltip.
+  const nacimientosPorDia = useMemo(() => {
+    const porClave = new Map();
 
-    const finPorCarril = [];
-    const ubicados = items.map((n) => {
-      const izq = indices.get(n.fechaClave) * ANCHO_DIA;
-      let carril = finPorCarril.findIndex((fin) => fin <= izq);
-      if (carril === -1) carril = finPorCarril.length;
-      // Sin margen extra: una pastilla del día siguiente arranca justo donde
-      // termina esta, así que entra en el mismo carril.
-      finPorCarril[carril] = izq + ANCHO_PILL;
-      return { n, izq, carril };
-    });
+    for (const n of data?.nacimientos || []) {
+      if (!indices.has(n.fechaClave)) continue;
+      const g = porClave.get(n.fechaClave) || {
+        fechaClave: n.fechaClave,
+        pollitos: 0,
+        conDestino: 0,
+        sinAsignar: 0,
+        sobreasignado: 0,
+        asignadoAGalpon: 0,
+        asignadoAGranjaSinGalpon: 0,
+        asignadoAClientes: 0,
+        // Si alguna ya nació, el total del día deja de ser una estimación pura.
+        algunoReal: false,
+        todosReales: true,
+        tandas: [],
+      };
 
-    return { ubicados, cantidad: Math.max(1, finPorCarril.length) };
+      g.pollitos                 += Number(n.pollitos || 0);
+      g.conDestino               += Number(n.conDestino || 0);
+      g.sinAsignar               += Number(n.sinAsignar || 0);
+      g.sobreasignado            += Number(n.sobreasignado || 0);
+      g.asignadoAGalpon          += Number(n.asignadoAGalpon || 0);
+      g.asignadoAGranjaSinGalpon += Number(n.asignadoAGranjaSinGalpon || 0);
+      g.asignadoAClientes        += Number(n.asignadoAClientes || 0);
+      g.algunoReal  = g.algunoReal  || !!n.nacio;
+      g.todosReales = g.todosReales && !!n.nacio;
+      g.tandas.push(n);
+
+      porClave.set(n.fechaClave, g);
+    }
+
+    const ubicados = [...porClave.values()]
+      .sort((a, b) => indices.get(a.fechaClave) - indices.get(b.fechaClave))
+      .map((g) => ({ g, izq: indices.get(g.fechaClave) * ANCHO_DIA }));
+
+    return { ubicados };
   }, [data, indices]);
 
   // Huevos por día, indexados por clave. Se dibujan contra el MISMO array de
@@ -563,7 +600,9 @@ const Almanaque = ({ data }) => {
   const totalDias = dias.length;
   const anchoTotal = ANCHO_LABEL + totalDias * ANCHO_DIA;
   // El carril de nacimientos crece con la cantidad de filas que hicieron falta.
-  const altoNacimientos = 10 + carrilesNacimientos.cantidad * (ALTO_PILL + 3);
+  // Un solo renglón: ahora hay una pastilla por día, no una por tanda, así que
+  // ya no hacen falta carriles apilados.
+  const altoNacimientos = 10 + (ALTO_PILL + 3);
   const altoGalpones =
     ALTO_ENCABEZADO +
     altoNacimientos +
@@ -1345,22 +1384,24 @@ const Almanaque = ({ data }) => {
                       height: altoNacimientos,
                     }}
                   >
-                    {carrilesNacimientos.ubicados.map(({ n, izq, carril }) => {
-                      // Lo que importa acá es lo que FALTA decidir, no el total:
-                      // el total no se mueve nunca y no dice si terminaste. El
-                      // relleno verde muestra cuánto ya tiene destino.
-                      const listo = n.sinAsignar === 0;
-                      const avance = n.pollitos
-                        ? Math.min(100, Math.round((n.conDestino / n.pollitos) * 100))
+                    {nacimientosPorDia.ubicados.map(({ g, izq }) => {
+                      // El número que se ve es el TOTAL del día: es la pregunta
+                      // que esta pantalla vino a contestar. Cuánto falta decidir
+                      // lo sigue diciendo el relleno verde, y el desglose tanda
+                      // por tanda está en el tooltip.
+                      const listo = g.sinAsignar === 0;
+                      const avance = g.pollitos
+                        ? Math.min(100, Math.round((g.conDestino / g.pollitos) * 100))
                         : 0;
+                      const varias = g.tandas.length > 1;
 
                       return (
                         <div
-                          key={n._id}
+                          key={g.fechaClave}
                           className="position-absolute rounded-pill text-center fw-semibold overflow-hidden"
                           style={{
                             left: izq + INSET_PILL,
-                            top: 5 + carril * (ALTO_PILL + 3),
+                            top: 5,
                             height: ALTO_PILL,
                             lineHeight: `${ALTO_PILL}px`,
                             width: ANCHO_PILL - INSET_PILL * 2,
@@ -1368,39 +1409,51 @@ const Almanaque = ({ data }) => {
                             paddingInline: 3,
                             // Relleno proporcional a lo ya asignado: la pastilla
                             // se "llena" de verde a medida que repartís la tanda.
-                            background: n.sobreasignado
+                            background: g.sobreasignado
                               ? "#dc3545"
                               : `linear-gradient(90deg,#198754 0 ${avance}%,#ffc107 ${avance}% 100%)`,
-                            color: listo || n.sobreasignado ? "#fff" : "#212529",
+                            color: listo || g.sobreasignado ? "#fff" : "#212529",
                             border: "1px solid rgba(0,0,0,.15)",
                           }}
                           title={
-                            `Tanda ${n.numeroTanda} · nace ${etiquetaLarga(n.fechaClave)}\n` +
-                            `${formatearNumero(n.pollitos)} pollitos ${
-                              n.nacio ? "(real)" : "(estimado 80%)"
-                            }\n` +
-                            `─────────────\n` +
-                            `A galpón:        ${formatearNumero(n.asignadoAGalpon)}\n` +
-                            (n.asignadoAGranjaSinGalpon
-                              ? `A granja s/galpón: ${formatearNumero(n.asignadoAGranjaSinGalpon)}\n`
+                            `${etiquetaLarga(g.fechaClave)}\n` +
+                            `${formatearNumero(g.pollitos)} pollitos ${
+                              g.todosReales
+                                ? "(real)"
+                                : g.algunoReal
+                                ? "(parte real, parte estimado)"
+                                : "(estimado 80%)"
+                            }` +
+                            (varias ? ` · ${g.tandas.length} tandas` : "") +
+                            `\n─────────────\n` +
+                            `A galpón:        ${formatearNumero(g.asignadoAGalpon)}\n` +
+                            (g.asignadoAGranjaSinGalpon
+                              ? `A granja s/galpón: ${formatearNumero(g.asignadoAGranjaSinGalpon)}\n`
                               : "") +
-                            (n.asignadoAClientes
-                              ? `A clientes:      ${formatearNumero(n.asignadoAClientes)}\n`
+                            (g.asignadoAClientes
+                              ? `A clientes:      ${formatearNumero(g.asignadoAClientes)}\n`
                               : "") +
-                            (n.sobreasignado
-                              ? `⚠ SOBREASIGNADO en ${formatearNumero(n.sobreasignado)}`
-                              : `FALTA DECIDIR:   ${formatearNumero(n.sinAsignar)}`)
+                            (g.sobreasignado
+                              ? `⚠ SOBREASIGNADO en ${formatearNumero(g.sobreasignado)}`
+                              : `FALTA DECIDIR:   ${formatearNumero(g.sinAsignar)}`) +
+                            // El detalle por tanda no se pierde al agrupar: baja acá.
+                            (varias
+                              ? `\n─────────────\n` +
+                                g.tandas
+                                  .map(
+                                    (t) =>
+                                      `Tanda ${t.numeroTanda}: ${formatearNumero(t.pollitos)}` +
+                                      (t.sinAsignar
+                                        ? ` (falta ${formatearNumero(t.sinAsignar)})`
+                                        : " ✓")
+                                  )
+                                  .join("\n")
+                              : "")
                           }
                         >
-                          {/* En un día entra un solo número, así que va el que
-                              se mueve: lo que falta decidir. El total lo tapaba
-                              y encima nunca cambia — está en el tooltip. El
-                              relleno verde ya cuenta cuánto se repartió. */}
-                          {n.sobreasignado
-                            ? `+${formatearNumero(n.sobreasignado)}`
-                            : listo
-                            ? "✓"
-                            : formatearNumero(n.sinAsignar)}
+                          {/* El TOTAL del día, que es lo que se vino a mirar.
+                              Se abrevia si no entra en los 56px de la columna. */}
+                          {compactoMiles(g.pollitos)}
                         </div>
                       );
                     })}

@@ -10,6 +10,7 @@ import {
 } from "../services/api";
 import { formatearFechaLocal } from "../utils/dateUtils";
 import { obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
+import { imprimirRemitoAlimento } from "../utils/imprimirRemitoAlimento";
 import Swal from "sweetalert2";
 
 const fmt = (n) =>
@@ -74,6 +75,28 @@ const AlimentoEnviosPage = () => {
   const tipos = constantes?.tipos || [];
   const etiquetaTipo = (key) => tipos.find((t) => t.key === key)?.etiqueta || key;
 
+  const etiquetaDestino = (key) =>
+    (constantes?.destinos || []).find((d) => d.key === key)?.etiqueta || key;
+
+  // El remito sale por triplicado. Si el navegador bloquea la ventana emergente
+  // hay que decirlo: si no, el usuario cree que imprimió y no salió nada.
+  // Cómo se nombra cada alimento en el papel. Lo define el back para que el
+  // remito y las pantallas no se puedan despegar.
+  const detalleTipo = (key) =>
+    tipos.find((t) => t.key === key)?.detalleRemito ||
+    `ALIMENTO BALANCEADO ${(etiquetaTipo(key) || key).toUpperCase()}`;
+
+  const imprimir = (envio) => {
+    const ok = imprimirRemitoAlimento(envio, { detalleTipo, etiquetaDestino });
+    if (!ok) {
+      Swal.fire(
+        "No se pudo abrir la impresión",
+        "El navegador bloqueó la ventana. Permitila para este sitio y volvé a tocar Imprimir en la lista.",
+        "warning"
+      );
+    }
+  };
+
   const setLinea = (i, campo, valor) =>
     setLineas((prev) => prev.map((l, idx) => (idx === i ? { ...l, [campo]: valor } : l)));
 
@@ -114,13 +137,16 @@ const AlimentoEnviosPage = () => {
       });
       limpiar();
       await cargar();
+      // Se imprime apenas se carga, que es como se usa: el papel va con el camión.
+      imprimir(envio);
       Swal.fire({
         icon: "success",
         title: `Envío ${envio.numero}`,
         html:
           `${fmt(envio.kgTotales)} kg en camino.` +
+          `<br/><span class="text-muted">Se abrió el remito por triplicado para imprimir.</span>` +
           `<br/><span class="text-muted">La granja tiene que aceptarlo para que entre al silo.</span>`,
-        timer: 3500,
+        timer: 4000,
         showConfirmButton: false,
       });
     } catch (err) {
@@ -214,14 +240,15 @@ const AlimentoEnviosPage = () => {
                 </div>
                 <div className="col-12 col-md-3">
                   <label className="form-label fw-semibold small mb-1">
-                    N° de remito <span className="text-muted fw-normal">(opcional)</span>
+                    N° de remito <span className="text-danger">*</span>
                   </label>
                   <input
                     type="text" className="form-control form-control-sm"
                     value={form.numeroRemito}
                     onChange={(e) => setForm((f) => ({ ...f, numeroRemito: e.target.value }))}
-                    disabled={saving} placeholder="El del papel"
+                    disabled={saving} placeholder="0002 - 00024117" required
                   />
+                  <div className="form-text">El del talonario: sale impreso en el remito.</div>
                 </div>
                 <div className="col-6 col-md-3">
                   <label className="form-label fw-semibold small mb-1">
@@ -464,7 +491,14 @@ const AlimentoEnviosPage = () => {
                               <i className={`bi ${est.icono} me-1`}></i>{est.label}
                             </span>
                           </td>
-                          <td className="text-end">
+                          <td className="text-end text-nowrap">
+                            <button
+                              className="btn btn-sm btn-outline-secondary me-1"
+                              onClick={() => imprimir(e)}
+                              title="Imprimir el remito por triplicado"
+                            >
+                              <i className="bi bi-printer"></i>
+                            </button>
                             {e.estado !== "anulado" && (
                               <button
                                 className="btn btn-sm btn-outline-danger"
