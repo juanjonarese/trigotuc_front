@@ -15,7 +15,7 @@ import {
 import Swal from "sweetalert2";
 import { exportarLibroExcel } from "../utils/exportarExcel";
 
-const TIPOS_LABEL = { filet: "Filet", pata: "Pata muslo", alita: "Alita", menudo: "Menudo", carcaza: "Carcaza" };
+const TIPOS_LABEL = { filet: "Filet", pata: "Pata muslo", alita: "Alita", menudo: "Menudo", carcaza: "Carcaza", trocitos: "Trocitos" };
 const fmt = (n) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n);
 const hoyISO = () => new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD en tz local
 

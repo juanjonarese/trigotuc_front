@@ -11,6 +11,9 @@ export const TROZADO_TIPOS = [
   { tipo: "pata",    label: "Pata muslo", kgCajaDefault: 15, editableKg: false, clases: true  },
   { tipo: "alita",   label: "Alita",      kgCajaDefault: 15, editableKg: false, clases: true  },
   { tipo: "carcaza", label: "Carcaza",    kgCajaDefault: 12, editableKg: true,  clases: false },
+  // Trocitos (2026-09-30): caja de 15 kg con 3 bolsas de 5 kg, como el resto.
+  // Son siempre clase A: no se separan en A/B, pero la clase se guarda igual.
+  { tipo: "trocitos", label: "Trocitos",  kgCajaDefault: 15, editableKg: false, clases: false, claseFija: "A" },
 ];
 
 // Etiqueta visible de un tipo de trozado (el `tipo` guardado sigue siendo el enum).
@@ -19,11 +22,14 @@ export const trozadoLabel = (tipo) => TROZADO_TIPOS.find((t) => t.tipo === tipo)
 // Identidad de una fila/línea de trozado: tipo + clase ("-" si no tiene).
 export const trozadoKey = (t) => `${t.tipo}|${t.clase || "-"}`;
 
-// Filas visibles de la tabla: los tipos con clases:true generan una fila A y una B.
+// Filas visibles de la tabla: los tipos con clases:true generan una fila A y una B;
+// los de claseFija, una sola fila con esa clase.
 export const TROZADO_FILAS = TROZADO_TIPOS.flatMap((t) =>
   t.clases
     ? ["A", "B"].map((clase) => ({ ...t, clase, label: `${t.label} ${clase}` }))
-    : [{ ...t, clase: null }]
+    : t.claseFija
+      ? [{ ...t, clase: t.claseFija, label: `${t.label} ${t.claseFija}` }]
+      : [{ ...t, clase: null }]
 );
 
 // Estado inicial de la tabla de trozados (todas las líneas en 0 cajas).
