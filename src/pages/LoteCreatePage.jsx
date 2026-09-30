@@ -11,7 +11,7 @@ import {
   enviarLoteACamara,
 } from "../services/api";
 import { obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
-import { BADGE_ESPECIE, especieDelLote, etiquetaEspecie } from "../utils/especies";
+import { BADGE_ESPECIE, especieDe, especieDelLote, etiquetaEspecie } from "../utils/especies";
 import { validarDestinoFaena, advertirRestosDeCajon } from "../utils/faenaValidacion";
 import { exportarLibroExcel } from "../utils/exportarExcel";
 import DesgloseFaena from "../components/DesgloseFaena";
@@ -40,7 +40,7 @@ const EditarLoteModal = ({ lote, onClose, onGuardado }) => {
     observaciones:       lote.observaciones ?? "",
   });
   const [lineas, setLineas]   = useState(
-    (lote.calibres || []).map((c) => ({ calibre: c.calibre, pollos: c.pollos }))
+    (lote.calibres || []).map((c) => ({ especie: especieDe(c), calibre: c.calibre, pollos: c.pollos }))
   );
   // Trozados por tipo: precargados desde lo guardado (cámara + pendientes + histórico).
   const trozadosLote = (lote.trozadosCañete?.length || lote.trozadosPendientes?.length)
@@ -199,7 +199,7 @@ const EditarLoteModal = ({ lote, onClose, onGuardado }) => {
 
                 <label className="form-label fw-semibold mt-3">Calibres</label>
                 <p className="text-muted small mb-2">El calibre indica cuántos pollos entran en un cajón de 20 kg.</p>
-                <CalibreTable ref={calibreRef} lineas={lineas} onChange={setLineas} />
+                <CalibreTable ref={calibreRef} lineas={lineas} onChange={setLineas} especie={especieDelLote(lote)} />
 
                 {(hayEnteros || hayTrozados) && (
                   <div className="mt-3 p-3 rounded border small">

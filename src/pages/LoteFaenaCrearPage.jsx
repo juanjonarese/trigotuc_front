@@ -9,6 +9,7 @@ import { validarDestinoFaena, advertirRestosDeCajon } from "../utils/faenaValida
 import DesgloseFaena from "../components/DesgloseFaena";
 import {
   BADGE_ESPECIE,
+  especieDe,
   especieDeOrden,
   etiquetaEspecie,
   etiquetaEspeciePlural,
@@ -94,6 +95,11 @@ const LoteFaenaCrearPage = () => {
     }
     const rec = recepciones.find((o) => o._id === id) || null;
     setRecepcionSel(rec);
+    // Si cambia lo que se faena (pollo ↔ gallina ↔ gallo), los calibres ya
+    // aceptados de la otra especie no valen: la gallina ni siquiera tiene los
+    // mismos calibres.
+    const especieNueva = especieDeOrden(rec);
+    setLineas((prev) => prev.filter((l) => especieDe(l) === especieNueva));
     if (rec) {
       // kgVivos y unidadesRecibidas no se autofill:
       // esos datos reales solo se conocen al terminar la faena (no en la recepción).
@@ -443,7 +449,12 @@ const LoteFaenaCrearPage = () => {
                 )}
               </label>
               <p className="text-muted small mb-2">El calibre indica cuántos pollos entran en un cajón de 20 kg.</p>
-              <CalibreTable ref={calibreRef} lineas={lineas} onChange={setLineas} />
+              <CalibreTable
+                ref={calibreRef}
+                lineas={lineas}
+                onChange={setLineas}
+                especie={especieDeOrden(recepcionSel)}
+              />
 
               {/* Destino: regla fija. Enteros → cámara; trozados → pendientes (congelado). */}
               {hayTrozados && (

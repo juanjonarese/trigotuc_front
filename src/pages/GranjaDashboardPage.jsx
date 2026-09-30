@@ -6,7 +6,7 @@ import Pagination from "../components/Pagination";
 import BotonExcel from "../components/BotonExcel";
 import { escapeHtml } from "../utils/escapeHtml";
 import {
-  BADGE_ESPECIE, especieDe, etiquetaEspecie, claveEntero, claveTrozado,
+  BADGE_ESPECIE, especieDe, especieDelLote, etiquetaEspecie, claveEntero, claveTrozado,
 } from "../utils/especies";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
 import DesgloseFaena from "../components/DesgloseFaena";
@@ -22,7 +22,7 @@ const EditarLoteModal = ({ lote, onClose, onGuardado }) => {
   const calibreRef = useRef(null);
   const [saving, setSaving] = useState(false);
   const [lineas, setLineas] = useState(
-    (lote.calibres || []).map((c) => ({ calibre: c.calibre, pollos: c.pollos }))
+    (lote.calibres || []).map((c) => ({ especie: especieDe(c), calibre: c.calibre, pollos: c.pollos }))
   );
   const [form, setForm] = useState({
     // Se guarda `unidadesFaenadas`; lo recibido se reconstruye sumándole de vuelta
@@ -92,7 +92,7 @@ const EditarLoteModal = ({ lote, onClose, onGuardado }) => {
                   <div className="fw-semibold mb-2 small text-uppercase text-muted" style={{ letterSpacing: "0.05em" }}>
                     Calibres en cámara
                   </div>
-                  <CalibreTable ref={calibreRef} lineas={lineas} onChange={setLineas} showTotals />
+                  <CalibreTable ref={calibreRef} lineas={lineas} onChange={setLineas} especie={especieDelLote(lote)} showTotals />
                 </div>
 
                 {/* Datos de faena */}
