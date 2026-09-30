@@ -12,7 +12,11 @@ const seccionDeRuta = (path) => {
   ) {
     return "altas";
   }
-  if (path.startsWith("/frigorifico") && path !== "/frigorifico/historial-accesos") {
+  if (
+    path.startsWith("/frigorifico") &&
+    path !== "/frigorifico/historial-accesos" &&
+    path !== "/frigorifico/salida-mostrador"
+  ) {
     return "frigorifico";
   }
   if (
@@ -22,7 +26,7 @@ const seccionDeRuta = (path) => {
   ) {
     return "granja";
   }
-  if (path.startsWith("/reproductores")) return "reproductores";
+  if (path.startsWith("/reproductores") || path.startsWith("/alimento/silos")) return "reproductores";
   if (path.startsWith("/alimento")) return "alimento";
   return null;
 };
@@ -229,6 +233,66 @@ const Layout = ({ children }) => {
           )}
 
 
+          {/* Salida Mostrador — al primer nivel (2026-09-30): saca pollo de la
+              cámara Trigotuc y huevo, así que no es del frigorífico. La ruta
+              sigue siendo /frigorifico/salida-mostrador para no romper enlaces. */}
+          {(mandaTodo || rolUsuario === "administracion_frigorifico" || rolUsuario === "administracion_granja") && (
+            <a
+              href="#"
+              className={`nav-link d-flex align-items-center gap-2 mb-2 rounded ${
+                isActive("/frigorifico/salida-mostrador") ? "text-white" : "text-white-50"
+              }`}
+              onClick={(e) => { e.preventDefault(); navigate("/frigorifico/salida-mostrador"); }}
+            >
+              <i className="bi bi-shop fs-5"></i>
+              <span>Salida Mostrador</span>
+            </a>
+          )}
+
+          {/* Alimento — Trigotuc despacha a las granjas. Sección hermana de
+              Granja, Reproductoras y Frigorífico: no cuelga de ninguna porque el
+              alimento va a todas. Despacha administración; acepta y ajusta la granja. */}
+          {(mandaTodo || rolUsuario === "reproductoras") && (
+          <div className="nav-section mb-2">
+            <a
+              href="#"
+              className="nav-link text-white-50 d-flex align-items-center justify-content-between rounded"
+              onClick={(e) => { e.preventDefault(); toggleSeccion("alimento"); }}
+            >
+              <div className="d-flex align-items-center gap-2">
+                <i className="bi bi-basket fs-5"></i>
+                <span>Envío de alimento</span>
+              </div>
+              <i className={`bi bi-chevron-${seccionAbierta === "alimento" ? "down" : "right"}`}></i>
+            </a>
+            {seccionAbierta === "alimento" && (
+              <div className="ps-4 mt-2">
+                {/* 1 — Despachar: solo administración (el envío sale de Trigotuc) */}
+                {mandaTodo && (
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/alimento/envios") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/alimento/envios"); }}
+                >
+                  <i className="bi bi-truck"></i>
+                  <span>Envíos</span>
+                </a>
+                )}
+                {/* 2 — Recibir: lo acepta la granja */}
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/alimento/recepcion") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/alimento/recepcion"); }}
+                >
+                  <i className="bi bi-box-arrow-in-down"></i>
+                  <span>Recepción</span>
+                </a>
+                {/* Silos se mudó a Reproductoras (2026-09-30). */}
+              </div>
+            )}
+          </div>
+          )}
+
           {/* Reproductores (postura + incubación) — sección hermana de Granja y Frigorífico.
               El rol `reproductoras` es el operativo del módulo: solo ve esta sección. */}
           {(mandaTodo || rolUsuario === "reproductoras") && (
@@ -272,6 +336,18 @@ const Layout = ({ children }) => {
                 >
                   <i className="bi bi-pencil-square"></i>
                   <span>Datos Semanales</span>
+                </a>
+                {/* 3b — Silos (2026-09-30, antes en Envío de alimento): el stock de
+                    alimento de los galpones y su ajuste por recuento. Va al lado de
+                    Datos Semanales, que es donde se carga el consumo que lo descuenta.
+                    La ruta sigue en /alimento/silos. */}
+                <a
+                  href="#"
+                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/alimento/silos") ? "text-white" : "text-white-50"}`}
+                  onClick={(e) => { e.preventDefault(); navigate("/alimento/silos"); }}
+                >
+                  <i className="bi bi-database"></i>
+                  <span>Silos</span>
                 </a>
                 {/* 4 — Recolección de Huevos */}
                 <a
@@ -360,58 +436,6 @@ const Layout = ({ children }) => {
                   <span>Venta de Pollitos</span>
                 </a>
                 */}
-              </div>
-            )}
-          </div>
-          )}
-
-          {/* Alimento — Trigotuc despacha a las granjas. Sección hermana de
-              Granja, Reproductoras y Frigorífico: no cuelga de ninguna porque el
-              alimento va a todas. Despacha administración; acepta y ajusta la granja. */}
-          {(mandaTodo || rolUsuario === "reproductoras") && (
-          <div className="nav-section mb-2">
-            <a
-              href="#"
-              className="nav-link text-white-50 d-flex align-items-center justify-content-between rounded"
-              onClick={(e) => { e.preventDefault(); toggleSeccion("alimento"); }}
-            >
-              <div className="d-flex align-items-center gap-2">
-                <i className="bi bi-basket fs-5"></i>
-                <span>Envío de alimento</span>
-              </div>
-              <i className={`bi bi-chevron-${seccionAbierta === "alimento" ? "down" : "right"}`}></i>
-            </a>
-            {seccionAbierta === "alimento" && (
-              <div className="ps-4 mt-2">
-                {/* 1 — Despachar: solo administración (el envío sale de Trigotuc) */}
-                {mandaTodo && (
-                <a
-                  href="#"
-                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/alimento/envios") ? "text-white" : "text-white-50"}`}
-                  onClick={(e) => { e.preventDefault(); navigate("/alimento/envios"); }}
-                >
-                  <i className="bi bi-truck"></i>
-                  <span>Envíos</span>
-                </a>
-                )}
-                {/* 2 — Recibir: lo acepta la granja */}
-                <a
-                  href="#"
-                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/alimento/recepcion") ? "text-white" : "text-white-50"}`}
-                  onClick={(e) => { e.preventDefault(); navigate("/alimento/recepcion"); }}
-                >
-                  <i className="bi bi-box-arrow-in-down"></i>
-                  <span>Recepción</span>
-                </a>
-                {/* 3 — Silos: el stock y su ajuste por recuento */}
-                <a
-                  href="#"
-                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/alimento/silos") ? "text-white" : "text-white-50"}`}
-                  onClick={(e) => { e.preventDefault(); navigate("/alimento/silos"); }}
-                >
-                  <i className="bi bi-database"></i>
-                  <span>Silos</span>
-                </a>
               </div>
             )}
           </div>
@@ -602,19 +626,6 @@ const Layout = ({ children }) => {
                   >
                     <i className="bi bi-truck"></i>
                     <span>Envío Cámara</span>
-                  </a>
-                )}
-                {/* 6b — Salida Mostrador (descuenta Trigotuc) */}
-                {(mandaTodo || rolUsuario === "administracion_frigorifico" || rolUsuario === "administracion_granja") && (
-                  <a
-                    href="#"
-                    className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${
-                      isActive("/frigorifico/salida-mostrador") ? "text-white" : "text-white-50"
-                    }`}
-                    onClick={(e) => { e.preventDefault(); navigate("/frigorifico/salida-mostrador"); }}
-                  >
-                    <i className="bi bi-shop"></i>
-                    <span>Salida Mostrador</span>
                   </a>
                 )}
                 {/* 6c — Recepción de Cámara (granja recibe envíos a Trigotuc) */}

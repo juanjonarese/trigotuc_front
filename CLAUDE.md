@@ -33,7 +33,7 @@ There are no automated tests.
 | `/frigorifico/pedidos-granja` | `PedidosGranjaPage` | Frigorífico |
 | `/frigorifico/envios` | `EnvioCamaraPage` | Frigorífico |
 | `/frigorifico/decomisados` | `DecomisadosPage` | Frigorífico |
-| `/frigorifico/salida-mostrador` | `SalidaMostradorPage` (pollo de cámara **y huevo** de Trigotuc) | Frigorífico (por ahora) |
+| `/frigorifico/salida-mostrador` | `SalidaMostradorPage` (pollo de cámara **y huevo** de Trigotuc) | Primer nivel del sidebar |
 | `/frigorifico/stock-empaque` | `StockEmpaquePage` | Frigorífico |
 | `/frigorifico/ordenes-carga` | `DespachoFrigorificoPage` | Frigorífico |
 | `/frigorifico/recepcion` | `RecepcionFrigorificoPage` | Frigorífico |
@@ -111,6 +111,12 @@ Secciones colapsables, fondo oscuro, auto-expande según la ruta activa. Visibil
 - **Altas** (colapsable) — `superadmin` / `administracion_frigorifico` / `administracion_granja`:
   - Clientes; Usuarios (solo `superadmin`); Camiones.
 - **Actividad** (`/frigorifico/historial-accesos`) — solo `superadmin`.
+- **Salida Mostrador** (`/frigorifico/salida-mostrador`) — ítem suelto de primer
+  nivel: `superadmin` / `administracion_frigorifico` / `administracion_granja`.
+- **Envío de alimento** (colapsable) — `superadmin` / `reproductoras`: Envíos
+  (solo `superadmin`) y Recepción. Va antes de Reproductoras. **Silos** se mudó
+  a Reproductoras (2026-09-30), después de Datos Semanales; la ruta sigue siendo
+  `/alimento/silos` y `seccionDeRuta()` la manda a la sección Reproductoras.
 - **Granja** (colapsable) — `superadmin` / `administracion_granja` / `granja`:
   - Ingreso de pollitos, Galpones, Datos Semanales (solo `superadmin`/`granja`), Órdenes de Carga (Venta) (solo `superadmin`/`administracion_granja`), Recepción de Órdenes.
 - **Reproductores** (colapsable) — solo `superadmin` por ahora (hasta definir los roles del módulo):
@@ -188,8 +194,10 @@ el mostrador tiene que poder vender pollo igual.
 Solo aparecen los tipos **vendibles con stock**; el API incubable no se lista, y
 el backend lo rechaza aunque se lo mande a mano.
 
-⚠️ La página sigue colgando de **Frigorífico**, pero el usuario ya avisó que la
-va a mover a otro nivel: es de mostrador, no del frigorífico.
+Desde el 2026-09-30 está en el **primer nivel** del sidebar, antes de "Envío de
+alimento" y de Reproductoras: es de mostrador, no del frigorífico. La **ruta** no
+cambió (`/frigorifico/salida-mostrador`), y `seccionDeRuta()` la excluye para que
+no abra la sección Frigorífico.
 
 ## Important Notes
 
