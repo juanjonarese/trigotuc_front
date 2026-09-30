@@ -311,7 +311,7 @@ const GranjaDashboardPage = () => {
       faena: "Faena (ingreso)", venta_pos: "Venta POS", venta_mostrador: "Venta mostrador",
       despacho: "Despacho", envio_camara: "Envío entre cámaras", ajuste_manual: "Ajuste manual",
     };
-    const TIPOS = { filet: "Filet", pata: "Pata muslo", alita: "Alita", menudo: "Menudo", carcaza: "Carcaza" };
+    const TIPOS = { filet: "Filet", pata: "Pata muslo", alita: "Alita", menudo: "Menudo", carcaza: "Carcaza", trocitos: "Trocitos" };
     const detalleTxt = (m) => (m.detalle || []).map((d) =>
       d.clase === "entero"
         ? "Cal." + d.calibre + ": " + d.cajones + " caj"
@@ -523,8 +523,8 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
   const totalTrigotucKg        = (resumen.stockTrigotuc || []).reduce((a, c) => a + c.cajones * 20, 0);
   const totalCañeteTrozadosKg  = (resumen.trozadosCañete || []).reduce((a, t) => a + t.kgTotal, 0);
   const totalTrigotucTrozadosKg = (resumen.trozadosTrigotuc || []).reduce((a, t) => a + t.kgTotal, 0);
-  const TIPOS_LABEL = { filet: "Filet", pata: "Pata muslo", alita: "Alita", menudo: "Menudo", carcaza: "Carcaza" };
-  const TIPOS_ORDER = ["filet", "pata", "alita", "menudo", "carcaza"];
+  const TIPOS_LABEL = { filet: "Filet", pata: "Pata muslo", alita: "Alita", menudo: "Menudo", carcaza: "Carcaza", trocitos: "Trocitos" };
+  const TIPOS_ORDER = ["filet", "pata", "alita", "menudo", "carcaza", "trocitos"];
 
   // Total combinado por tipo + clase (suma Cañete + Trigotuc), para mostrar A/B.
   const trozadosTotalesMap = {};

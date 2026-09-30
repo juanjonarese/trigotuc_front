@@ -6,7 +6,7 @@ import { obtenerEnviosCamara, recibirEnvioCamara } from "../services/api";
 import Swal from "sweetalert2";
 import { exportarLibroExcel } from "../utils/exportarExcel";
 
-const TIPOS_LABEL = { filet: "Filet", pata: "Pata muslo", alita: "Alita", menudo: "Menudo", carcaza: "Carcaza" };
+const TIPOS_LABEL = { filet: "Filet", pata: "Pata muslo", alita: "Alita", menudo: "Menudo", carcaza: "Carcaza", trocitos: "Trocitos" };
 const camaraLbl = (c) => (c === "cañete" ? "Cañete" : c === "trigotuc" ? "Trigotuc" : c);
 const fmt = (n) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n);
 const fmtFecha = (f) => (f ? new Date(f).toLocaleDateString("es-AR") : "—");

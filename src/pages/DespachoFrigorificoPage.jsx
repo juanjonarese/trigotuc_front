@@ -27,6 +27,7 @@ const TIPOS_TROZADO = [
   { tipo: "alita",   label: "Alita"      },
   { tipo: "menudo",  label: "Menudo"     },
   { tipo: "carcaza", label: "Carcaza"    },
+  { tipo: "trocitos", label: "Trocitos"   },
 ];
 
 const fmt       = (n) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n ?? 0);
