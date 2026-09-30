@@ -35,6 +35,19 @@ export const BADGE_ESPECIE = {
   gallo:   "bg-danger-subtle text-danger-emphasis",
 };
 
+// Calibres posibles de cada especie. El pollo va de 5 a 11; la gallina sale
+// SOLO en calibre 6 y 7 (definición del cliente, 2026-09-30). El gallo, por
+// ahora, con los del pollo hasta que se defina.
+const CALIBRES_POLLO = [5, 6, 7, 8, 9, 10, 11];
+export const CALIBRES_POR_ESPECIE = {
+  pollo:   CALIBRES_POLLO,
+  gallina: [6, 7],
+  gallo:   CALIBRES_POLLO,
+};
+
+export const calibresDeEspecie = (especie) =>
+  CALIBRES_POR_ESPECIE[especie || ESPECIE_DEFAULT] || CALIBRES_POLLO;
+
 export const especieDe = (linea) => linea?.especie || ESPECIE_DEFAULT;
 
 export const etiquetaEspecie = (especie) =>

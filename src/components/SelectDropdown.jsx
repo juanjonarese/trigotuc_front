@@ -17,6 +17,7 @@ const SelectDropdown = ({
   const [menuStyle, setMenuStyle] = useState({});
   const btnRef = useRef(null);
   const menuRef = useRef(null);
+  const arrastroRef = useRef(false);
 
   const selected = options.find((o) => String(o.value) === String(value));
 
@@ -57,7 +58,11 @@ const SelectDropdown = ({
     setOpen((v) => !v);
   };
 
-  // Cerrar al hacer click fuera o al hacer scroll
+  // Cerrar al hacer click fuera. El scroll de afuera (modal, página) acompaña el
+  // menú en vez de cerrarlo.
+  // ⚠️ El scroll de la PROPIA lista no se toca: el listener va en captura sobre
+  // window y también lo recibe. Antes cerraba el menú, y con listas largas
+  // (pollo + gallina en la orden de carga) no se podía bajar hasta la opción.
   useEffect(() => {
     if (!open) return;
     const close = (e) => {
@@ -65,7 +70,16 @@ const SelectDropdown = ({
       if (menuRef.current && menuRef.current.contains(e.target)) return;
       setOpen(false);
     };
-    const closeOnScroll = () => setOpen(false);
+    const closeOnScroll = (e) => {
+      if (menuRef.current && menuRef.current.contains(e.target)) return;
+      // Si el botón quedó fuera de la pantalla no tiene sentido seguirlo.
+      const rect = btnRef.current?.getBoundingClientRect();
+      if (!rect || rect.bottom < 0 || rect.top > window.innerHeight) {
+        setOpen(false);
+        return;
+      }
+      calcPosition();
+    };
     document.addEventListener("mousedown", close);
     document.addEventListener("touchstart", close);
     window.addEventListener("scroll", closeOnScroll, true);
@@ -124,7 +138,11 @@ const SelectDropdown = ({
                     onChange(o.value);
                     setOpen(false);
                   }}
+                  onTouchStart={() => { arrastroRef.current = false; }}
+                  onTouchMove={() => { arrastroRef.current = true; }}
                   onTouchEnd={(e) => {
+                    // Si el dedo se movió, estaba bajando la lista, no eligiendo.
+                    if (arrastroRef.current) return;
                     e.preventDefault();
                     if (o.disabled) return;
                     onChange(o.value);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef } from "react";
 import SelectDropdown from "./SelectDropdown";
-import { ESPECIE_DEFAULT, BADGE_ESPECIE, especieDe, etiquetaEspecie, claveEntero } from "../utils/especies";
+import { ESPECIE_DEFAULT, BADGE_ESPECIE, especieDe, etiquetaEspecie, claveEntero, calibresDeEspecie } from "../utils/especies";
 
 const CALIBRES = [5, 6, 7, 8, 9, 10, 11];
 
@@ -22,6 +22,9 @@ const calcularCajones = (pollos, calibre) =>
  *     Muestra el stock disponible por calibre en el selector y deshabilita los que no tienen stock.
  *   preciosPorCalibre: { [calibre]: number } | null
  *     Precio sugerido por calibre (de la lista del cliente). Se autocarga al cambiar el calibre.
+ *   especie:          string | null
+ *     Sin stock (faena): la especie que se está cargando, que la define la orden.
+ *     Limita los calibres a los de esa especie (la gallina solo tiene 6 y 7).
  */
 const CalibreTable = forwardRef(({
   lineas,
@@ -32,6 +35,7 @@ const CalibreTable = forwardRef(({
   showPollos = true,
   stockCalibres = null,
   preciosPorCalibre = null,
+  especie = null,
 }, ref) => {
   // ⚠️ Una posición de stock es (especie, calibre): pollo y gallina del mismo
   // calibre son dos stocks distintos. Toda la identidad va por esa clave.
@@ -41,13 +45,13 @@ const CalibreTable = forwardRef(({
   // la define la orden de carga del otro lado, acá no se elige.
   const especiesDisponibles = stockCalibres
     ? [...new Set(stockCalibres.map(especieDe))]
-    : [ESPECIE_DEFAULT];
+    : [especie || ESPECIE_DEFAULT];
   const variasEspecies = especiesDisponibles.length > 1;
 
   // Todas las combinaciones ofrecibles, en orden: primero por especie, después
-  // por calibre.
-  const opciones = especiesDisponibles.flatMap((especie) =>
-    CALIBRES.map((calibre) => ({ especie, calibre }))
+  // por calibre. Cada especie con sus calibres: la gallina solo tiene 6 y 7.
+  const opciones = especiesDisponibles.flatMap((esp) =>
+    calibresDeEspecie(esp).map((calibre) => ({ especie: esp, calibre }))
   );
 
   const cajonesDe = (o) =>
@@ -83,6 +87,15 @@ const CalibreTable = forwardRef(({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stockCalibres]);
+
+  // ── Cuando cambia la especie (faena: se eligió otra orden): el draft puede
+  // quedar en un calibre que la especie nueva no tiene ──
+  useEffect(() => {
+    if (stockCalibres) return;
+    const primero = primeraOpcionDisponible();
+    setDraft((prev) => ({ ...prev, especie: primero.especie, calibre: primero.calibre, valor: "" }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [especie]);
 
   // ── Cuando cambia la lista de precios (cliente cambia): actualizar precio del draft ──
   useEffect(() => {
