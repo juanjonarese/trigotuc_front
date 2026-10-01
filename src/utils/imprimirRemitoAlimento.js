@@ -88,7 +88,7 @@ const hoja = (envio, copia, detalleTipo, etiquetaDestino) => {
 
   return `
   <div class="hoja">
-    <div class="copia">${copia}</div>
+    <div class="copia-fila"><div class="copia">${copia}</div></div>
 
     <header>
       <div class="emisor">
@@ -171,8 +171,10 @@ export const imprimirRemitoAlimento = (envio, { detalleTipo, etiquetaDestino }) 
     .hoja { page-break-after: always; position: relative; padding-bottom: 6mm; }
     .hoja:last-child { page-break-after: auto; }
 
+    /* La copia va en su propio renglón, arriba del encabezado. Estuvo flotando
+       (position: absolute) en la esquina y se montaba sobre "REMITO". */
+    .copia-fila { display: flex; justify-content: flex-end; margin-bottom: 2mm; }
     .copia {
-      position: absolute; top: 0; right: 0;
       font-size: 9pt; letter-spacing: 2px; font-weight: bold;
       border: 1px solid #000; padding: 2px 8px;
     }
@@ -185,7 +187,9 @@ export const imprimirRemitoAlimento = (envio, { detalleTipo, etiquetaDestino }) 
     .dir   { font-size: 8.5pt; line-height: 1.35; }
     .iva   { font-size: 8.5pt; font-weight: bold; margin-top: 2mm; }
 
-    .doc { text-align: right; min-width: 70mm; }
+    /* Como en el papel: "REMITO", el número y los datos fiscales van alineados
+       a la izquierda de su columna. */
+    .doc { text-align: left; min-width: 70mm; }
     .titulo { font-size: 20pt; font-weight: bold; letter-spacing: 1px; }
     .noval  { font-size: 8pt; }
     /* Se dice en cada copia: este documento NO es el comprobante fiscal. */
