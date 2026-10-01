@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { aceptarEnvioAlimento } from "../services/api";
+import { aceptarEnvioAlimento, editarRecepcionAlimento } from "../services/api";
 import { obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
 import Swal from "sweetalert2";
 
@@ -21,8 +21,16 @@ const fmt = (n) =>
  * cada uno) y el resto al siguiente; el reparto queda editable.
  */
 const RecepcionAlimentoModal = ({ envio, silos, grupos, stock, etiquetaTipo, onClose, onHecho }) => {
-  const [fecha, setFecha] = useState(obtenerFechaHoy());
-  const [motivo, setMotivo] = useState("");
+  // Si el envío ya está recibido, el modal CORRIGE esa recepción (2026-09-30):
+  // arranca con lo que se cargó y al guardar el back la deshace y la rehace.
+  const edicion = envio.estado === "aceptado";
+  const grupoDeReparto = (reparto = []) =>
+    reparto.length ? grupos.find((g) => g.silos.includes(reparto[0].silo))?.clave || "" : "";
+
+  const [fecha, setFecha] = useState(
+    edicion && envio.fechaAcepta ? String(envio.fechaAcepta).split("T")[0] : obtenerFechaHoy()
+  );
+  const [motivo, setMotivo] = useState(edicion ? envio.motivoDiferencia || "" : "");
   const [saving, setSaving] = useState(false);
   const [lineas, setLineas] = useState(() =>
     (envio.lineas || []).map((l) => ({
@@ -32,18 +40,30 @@ const RecepcionAlimentoModal = ({ envio, silos, grupos, stock, etiquetaTipo, onC
       bolsas: l.bolsas,
       kgPorBolsa: l.kgPorBolsa,
       kgEnviados: l.kg,
-      // Precargado con lo enviado; se corrige con lo que marcó la balanza.
-      kgReales: String(l.kg ?? ""),
-      grupo: "",
-      reparto: {}, // { [silo]: "kg" }
+      // Nuevo: precargado con lo enviado. Corrección: con lo que se pesó.
+      kgReales: String(edicion ? l.kgReales ?? 0 : l.kg ?? ""),
+      grupo: edicion ? grupoDeReparto(l.reparto) : "",
+      reparto: edicion
+        ? Object.fromEntries((l.reparto || []).map((t) => [t.silo, String(t.kg)]))
+        : {}, // { [silo]: "kg" }
     }))
   );
 
   const kgRecibidosDe = (l) => Number(l.kgReales) || 0;
 
+  // Lo que este mismo envío ocupa hoy en cada silo: al corregir se devuelve antes
+  // de volver a cargarlo, así que cuenta como lugar libre.
+  const ocupaEsteEnvio = (silo) =>
+    edicion
+      ? (envio.lineas || []).reduce(
+          (acc, l) => acc + (l.reparto || []).filter((t) => t.silo === silo).reduce((a, t) => a + t.kg, 0),
+          0
+        )
+      : 0;
+
   const capacidadDe = (silo) => silos.find((s) => s.numero === silo)?.capacidadKg ?? 0;
   const libreEnStock = (silo) =>
-    (stock?.silos || []).find((s) => s.silo === silo)?.libreKg ?? capacidadDe(silo);
+    ((stock?.silos || []).find((s) => s.silo === silo)?.libreKg ?? capacidadDe(silo)) + ocupaEsteEnvio(silo);
 
   // Lo libre de un silo descontando lo que YA le asignaron las otras líneas.
   const libreParaLinea = (todas, idx, silo) =>
@@ -115,7 +135,8 @@ const RecepcionAlimentoModal = ({ envio, silos, grupos, stock, etiquetaTipo, onC
     if (bloqueado) return;
     setSaving(true);
     try {
-      const actualizado = await aceptarEnvioAlimento(envio._id, {
+      const guardar = edicion ? editarRecepcionAlimento : aceptarEnvioAlimento;
+      const actualizado = await guardar(envio._id, {
         fechaAcepta: ajustarFechaParaGuardar(fecha),
         motivoDiferencia: hayDiferencia ? motivo.trim() : undefined,
         lineas: lineas.map((l) => ({
@@ -129,7 +150,7 @@ const RecepcionAlimentoModal = ({ envio, silos, grupos, stock, etiquetaTipo, onC
       await onHecho();
       Swal.fire({
         icon: "success",
-        title: `${envio.numero} recibido`,
+        title: `${envio.numero} ${edicion ? "corregido" : "recibido"}`,
         html:
           `Entraron <strong>${fmt(actualizado.kgTotalesReales)} kg</strong> a los silos.` +
           (hayDiferencia
@@ -139,7 +160,7 @@ const RecepcionAlimentoModal = ({ envio, silos, grupos, stock, etiquetaTipo, onC
         showConfirmButton: false,
       });
     } catch (err) {
-      Swal.fire("Error", err.message || "No se pudo recibir el envío.", "error");
+      Swal.fire("Error", err.message || (edicion ? "No se pudo corregir la recepción." : "No se pudo recibir el envío."), "error");
       setSaving(false);
     }
   };
@@ -151,7 +172,8 @@ const RecepcionAlimentoModal = ({ envio, silos, grupos, stock, etiquetaTipo, onC
           <div className="modal-content">
             <div className="modal-header bg-success text-white py-2">
               <h5 className="modal-title fs-6">
-                <i className="bi bi-box-arrow-in-down me-2"></i>Recibir {envio.numero}
+                <i className={`bi ${edicion ? "bi-pencil" : "bi-box-arrow-in-down"} me-2`}></i>
+                {edicion ? `Corregir la recepción de ${envio.numero}` : `Recibir ${envio.numero}`}
               </h5>
               <button className="btn-close btn-close-white" onClick={onClose} disabled={saving}></button>
             </div>
@@ -163,6 +185,13 @@ const RecepcionAlimentoModal = ({ envio, silos, grupos, stock, etiquetaTipo, onC
               style={{ minHeight: 0 }}
             >
               <div className="modal-body py-2">
+                {edicion && (
+                  <div className="alert alert-warning py-2 small">
+                    <i className="bi bi-info-circle me-1"></i>
+                    Al guardar se deshace la recepción anterior y se carga esta en su lugar.
+                    Solo se puede mientras no se haya usado alimento de este envío.
+                  </div>
+                )}
                 <p className="small text-muted">
                   Cargá los <strong>kg que marcó la balanza</strong> al pesar el camión: eso es lo
                   que entra al silo. Viene precargado con lo que salió. Elegí a qué{" "}
@@ -317,7 +346,7 @@ const RecepcionAlimentoModal = ({ envio, silos, grupos, stock, etiquetaTipo, onC
                 </button>
                 <button type="submit" className="btn btn-success" disabled={saving || bloqueado}>
                   {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
-                  <i className="bi bi-check2-circle me-1"></i>Confirmar recepción
+                  <i className="bi bi-check2-circle me-1"></i>{edicion ? "Guardar corrección" : "Confirmar recepción"}
                 </button>
               </div>
             </form>

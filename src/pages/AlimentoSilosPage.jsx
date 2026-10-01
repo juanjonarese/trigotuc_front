@@ -4,6 +4,9 @@ import {
   obtenerConstantesAlimento,
   obtenerStockSilos,
   ajustarSilo,
+  editarAjusteSilo,
+  eliminarAjusteSilo,
+  deshacerRecepcionAlimento,
   obtenerAjustesSilo,
   obtenerEnviosAlimento,
 } from "../services/api";
@@ -58,6 +61,63 @@ const AlimentoSilosPage = () => {
   }, []);
 
   useEffect(() => { cargar(); }, [cargar]);
+
+  // ── Corregir / deshacer (2026-09-30) ─────────────────────────────────────
+  // Solo el último ajuste de cada (silo, tipo) se puede tocar: la lista viene
+  // del más nuevo al más viejo, así que es el primero que aparece de cada uno.
+  const ultimosAjustes = new Set();
+  {
+    const vistos = new Set();
+    for (const a of ajustes) {
+      const k = `${a.silo}|${a.tipo}`;
+      if (!vistos.has(k)) { vistos.add(k); ultimosAjustes.add(a._id); }
+    }
+  }
+
+  const deshacerRecepcion = async (e) => {
+    const { isConfirmed } = await Swal.fire({
+      icon: "warning",
+      title: `¿Deshacer la recepción de ${e.numero}?`,
+      html:
+        `Salen de los silos los <strong>${fmt(e.kgTotalesReales)} kg</strong> que entraron y el envío ` +
+        `vuelve a <strong>Por recibir</strong>, para recibirlo de nuevo.` +
+        `<br/><span class="text-muted">Solo se puede si todavía no se usó alimento de este envío.</span>`,
+      showCancelButton: true,
+      confirmButtonText: "Sí, deshacer",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#dc3545",
+    });
+    if (!isConfirmed) return;
+    try {
+      await deshacerRecepcionAlimento(e._id);
+      await cargar();
+      Swal.fire({ icon: "success", title: "Recepción deshecha", text: `${e.numero} quedó por recibir.`, timer: 2500, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire("No se pudo deshacer", err.message, "error");
+    }
+  };
+
+  const borrarAjuste = async (a) => {
+    const { isConfirmed } = await Swal.fire({
+      icon: "warning",
+      title: "¿Borrar el ajuste?",
+      html:
+        `Silo ${a.silo}, ${etiquetaTipo(a.tipo)}: se deshacen sus ` +
+        `<strong>${a.diferencia > 0 ? "+" : ""}${fmt(a.diferencia)} kg</strong> y el silo vuelve a lo que tenía antes.`,
+      showCancelButton: true,
+      confirmButtonText: "Sí, borrar",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#dc3545",
+    });
+    if (!isConfirmed) return;
+    try {
+      await eliminarAjusteSilo(a._id);
+      await cargar();
+      Swal.fire({ icon: "success", title: "Ajuste borrado", timer: 2000, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire("No se pudo borrar", err.message, "error");
+    }
+  };
 
   const tipos = constantes?.tipos || [];
   const etiquetaTipo = (key) => tipos.find((t) => t.key === key)?.etiqueta || key;
@@ -262,6 +322,7 @@ const AlimentoSilosPage = () => {
                           <th className="small text-end">Diferencia</th>
                           <th className="small">Motivo</th>
                           <th className="small">Quién</th>
+                          <th></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -296,6 +357,16 @@ const AlimentoSilosPage = () => {
                               </td>
                               <td className="small">{e.motivoDiferencia || ""}</td>
                               <td className="small text-muted">{e.aceptadoPor?.nombreUsuario || "—"}</td>
+                              <td className="text-end text-nowrap">
+                                <button className="btn btn-sm btn-link p-0 me-2" title="Corregir la recepción"
+                                  onClick={() => setRecibiendo(e)}>
+                                  <i className="bi bi-pencil"></i>
+                                </button>
+                                <button className="btn btn-sm btn-link text-danger p-0" title="Deshacer la recepción"
+                                  onClick={() => deshacerRecepcion(e)}>
+                                  <i className="bi bi-arrow-counterclockwise"></i>
+                                </button>
+                              </td>
                             </tr>
                           );
                         })}
@@ -329,6 +400,7 @@ const AlimentoSilosPage = () => {
                           <th className="small text-end">Diferencia</th>
                           <th className="small">Motivo</th>
                           <th className="small">Quién</th>
+                          <th></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -344,6 +416,23 @@ const AlimentoSilosPage = () => {
                             </td>
                             <td className="small">{a.motivo}</td>
                             <td className="small text-muted">{a.registradoPor?.nombreUsuario || "—"}</td>
+                            <td className="text-end text-nowrap">
+                              {ultimosAjustes.has(a._id) ? (
+                                <>
+                                  <button className="btn btn-sm btn-link p-0 me-2" title="Corregir el ajuste"
+                                    onClick={() => setAjustando({ ajuste: a })}>
+                                    <i className="bi bi-pencil"></i>
+                                  </button>
+                                  <button className="btn btn-sm btn-link text-danger p-0" title="Borrar el ajuste"
+                                    onClick={() => borrarAjuste(a)}>
+                                    <i className="bi bi-trash"></i>
+                                  </button>
+                                </>
+                              ) : (
+                                <i className="bi bi-lock text-muted small"
+                                  title="Hubo otro ajuste después de este en el mismo silo y tipo: solo se corrige el último"></i>
+                              )}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -386,19 +475,26 @@ const AlimentoSilosPage = () => {
 // Se carga LO QUE SE MIDIÓ, no la diferencia: es más difícil equivocarse anotando
 // un recuento que una corrección con signo. El sistema hace la resta.
 const AjusteModal = ({ inicial, silos, tipos, stock, onClose, onHecho }) => {
-  const [silo, setSilo] = useState(inicial.silo ? String(inicial.silo) : "");
-  const [tipo, setTipo] = useState(inicial.tipo || "");
-  const [kgReal, setKgReal] = useState("");
-  const [motivo, setMotivo] = useState("");
-  const [fecha, setFecha] = useState(obtenerFechaHoy());
+  // Con `inicial.ajuste` el modal CORRIGE ese ajuste (2026-09-30): silo y tipo
+  // quedan fijos, y el back lo deshace antes de aplicar el recuento nuevo.
+  const ajuste = inicial.ajuste || null;
+  const edicion = !!ajuste;
+  const [silo, setSilo] = useState(inicial.silo ? String(inicial.silo) : ajuste ? String(ajuste.silo) : "");
+  const [tipo, setTipo] = useState(inicial.tipo || ajuste?.tipo || "");
+  const [kgReal, setKgReal] = useState(edicion ? String(ajuste.kgReal) : "");
+  const [motivo, setMotivo] = useState(edicion ? ajuste.motivo || "" : "");
+  const [fecha, setFecha] = useState(
+    edicion ? String(ajuste.fecha).split("T")[0] : obtenerFechaHoy()
+  );
   const [saving, setSaving] = useState(false);
 
   // Lo que el sistema cree que hay de ese (silo, tipo), para mostrar la resta
-  // antes de confirmar.
+  // antes de confirmar. Al corregir, sin el efecto de este mismo ajuste.
   const kgSistema = (() => {
     if (!silo || !tipo) return null;
     const s = (stock?.silos || []).find((x) => x.silo === Number(silo));
-    return s?.tipos.find((t) => t.tipo === tipo)?.kg ?? 0;
+    const hoy = s?.tipos.find((t) => t.tipo === tipo)?.kg ?? 0;
+    return edicion ? hoy - ajuste.diferencia : hoy;
   })();
 
   const real = Number(kgReal);
@@ -411,18 +507,26 @@ const AjusteModal = ({ inicial, silos, tipos, stock, onClose, onHecho }) => {
     if (!puedeGuardar) return;
     setSaving(true);
     try {
-      await ajustarSilo({
-        destino: "reproductoras",
-        silo: Number(silo),
-        tipo,
-        kgReal: real,
-        motivo: motivo.trim(),
-        fecha: ajustarFechaParaGuardar(fecha),
-      });
+      if (edicion) {
+        await editarAjusteSilo(ajuste._id, {
+          kgReal: real,
+          motivo: motivo.trim(),
+          fecha: ajustarFechaParaGuardar(fecha),
+        });
+      } else {
+        await ajustarSilo({
+          destino: "reproductoras",
+          silo: Number(silo),
+          tipo,
+          kgReal: real,
+          motivo: motivo.trim(),
+          fecha: ajustarFechaParaGuardar(fecha),
+        });
+      }
       await onHecho();
       Swal.fire({
         icon: "success",
-        title: "Silo ajustado",
+        title: edicion ? "Ajuste corregido" : "Silo ajustado",
         html:
           `Quedó en <strong>${fmt(real)} kg</strong>` +
           `<br/><span class="text-muted">${diferencia > 0 ? "+" : ""}${fmt(diferencia)} kg respecto de lo que decía el sistema.</span>`,
@@ -442,7 +546,7 @@ const AjusteModal = ({ inicial, silos, tipos, stock, onClose, onHecho }) => {
           <div className="modal-content">
             <div className="modal-header bg-warning py-2">
               <h5 className="modal-title fs-6">
-                <i className="bi bi-sliders me-2"></i>Ajustar por recuento
+                <i className="bi bi-sliders me-2"></i>{edicion ? "Corregir ajuste" : "Ajustar por recuento"}
               </h5>
               <button className="btn-close" onClick={onClose} disabled={saving}></button>
             </div>
@@ -464,7 +568,7 @@ const AjusteModal = ({ inicial, silos, tipos, stock, onClose, onHecho }) => {
                       className="form-select form-select-sm"
                       value={silo}
                       onChange={(e) => setSilo(e.target.value)}
-                      disabled={saving}
+                      disabled={saving || edicion}
                     >
                       <option value="">— Elegí —</option>
                       {silos.map((s) => (
@@ -480,7 +584,7 @@ const AjusteModal = ({ inicial, silos, tipos, stock, onClose, onHecho }) => {
                       className="form-select form-select-sm"
                       value={tipo}
                       onChange={(e) => setTipo(e.target.value)}
-                      disabled={saving}
+                      disabled={saving || edicion}
                     >
                       <option value="">— Elegí —</option>
                       {tipos.map((t) => (
@@ -492,7 +596,7 @@ const AjusteModal = ({ inicial, silos, tipos, stock, onClose, onHecho }) => {
 
                 {kgSistema != null && (
                   <div className="alert alert-light border py-1 px-2 small mb-2">
-                    El sistema tiene <strong>{fmt(kgSistema)} kg</strong> de eso en ese silo.
+                    {edicion ? "Sin este ajuste, el" : "El"} sistema tiene <strong>{fmt(kgSistema)} kg</strong> de eso en ese silo.
                   </div>
                 )}
 

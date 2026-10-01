@@ -1377,6 +1377,32 @@ export const ajustarSilo = async (data) => {
   });
   return handleResponse(response);
 };
+// Corregir / borrar un ajuste y corregir / deshacer una recepción (2026-09-30).
+// Todos deshacen lo que el registro movió en el silo antes de cambiarlo.
+export const editarAjusteSilo = async (id, data) => {
+  const response = await fetch(`${API_URL}/envios-alimento/ajustes/${id}`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+export const eliminarAjusteSilo = async (id) => {
+  const response = await fetch(`${API_URL}/envios-alimento/ajustes/${id}`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+export const editarRecepcionAlimento = async (id, data) => {
+  const response = await fetch(`${API_URL}/envios-alimento/${id}/recepcion`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+export const deshacerRecepcionAlimento = async (id) => {
+  const response = await fetch(`${API_URL}/envios-alimento/${id}/recepcion`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
 export const obtenerAjustesSilo = async (filtros = {}) => {
   const params = new URLSearchParams(filtros);
   const response = await fetch(`${API_URL}/envios-alimento/ajustes?${params}`, { headers: getAuthHeaders() });
