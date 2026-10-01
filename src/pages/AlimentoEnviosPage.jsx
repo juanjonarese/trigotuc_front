@@ -78,23 +78,21 @@ const AlimentoEnviosPage = () => {
   const etiquetaDestino = (key) =>
     (constantes?.destinos || []).find((d) => d.key === key)?.etiqueta || key;
 
-  // El remito sale por triplicado. Si el navegador bloquea la ventana emergente
-  // hay que decirlo: si no, el usuario cree que imprimió y no salió nada.
   // Cómo se nombra cada alimento en el papel. Lo define el back para que el
   // remito y las pantallas no se puedan despegar.
   const detalleTipo = (key) =>
     tipos.find((t) => t.key === key)?.detalleRemito ||
     `ALIMENTO BALANCEADO ${(etiquetaTipo(key) || key).toUpperCase()}`;
 
+  // El remito sale por triplicado, directo al diálogo de la impresora: no abre
+  // ninguna pestaña, así que tampoco lo puede bloquear el navegador.
   const imprimir = (envio) => {
-    const ok = imprimirRemitoAlimento(envio, { detalleTipo, etiquetaDestino });
-    if (!ok) {
-      Swal.fire(
-        "No se pudo abrir la impresión",
-        "El navegador bloqueó la ventana. Permitila para este sitio y volvé a tocar Imprimir en la lista.",
-        "warning"
-      );
-    }
+    // El remito recibe el NOMBRE del destino ya resuelto, no la función que lo
+    // busca: pasarle la función imprimía su código fuente en "Destino:".
+    imprimirRemitoAlimento(envio, {
+      detalleTipo,
+      etiquetaDestino: etiquetaDestino(envio.destino),
+    });
   };
 
   const setLinea = (i, campo, valor) =>
@@ -486,6 +484,11 @@ const AlimentoEnviosPage = () => {
                                 {dif !== 0 && (
                                   <div className={`small ${dif < 0 ? "text-danger" : "text-success"}`}>
                                     {dif > 0 ? "+" : ""}{fmt(dif)} kg
+                                  </div>
+                                )}
+                                {e.motivoDiferencia && (
+                                  <div className="small text-muted" title="Motivo de la diferencia">
+                                    {e.motivoDiferencia}
                                   </div>
                                 )}
                               </>

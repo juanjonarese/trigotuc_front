@@ -41,7 +41,6 @@ import IncubadoraPage from "./pages/IncubadoraPage";
 import ProyeccionPage from "./pages/ProyeccionPage";
 import OrdenCargaPollitosPage from "./pages/OrdenCargaPollitosPage";
 import AlimentoEnviosPage from "./pages/AlimentoEnviosPage";
-import AlimentoRecepcionPage from "./pages/AlimentoRecepcionPage";
 import AlimentoSilosPage from "./pages/AlimentoSilosPage";
 import PlanPollitosPage from "./pages/PlanPollitosPage";
 import StockHuevosPage from "./pages/StockHuevosPage";
@@ -112,7 +111,8 @@ function App() {
         {/* Alimento: Trigotuc despacha a las granjas. Módulo hermano de Granja,
             Reproductoras y Frigorífico. */}
         <Route path="/alimento/envios"    element={<ProtectedRoute><AlimentoEnviosPage /></ProtectedRoute>} />
-        <Route path="/alimento/recepcion" element={<ProtectedRoute><AlimentoRecepcionPage /></ProtectedRoute>} />
+        {/* La recepción de alimento se hace en Silos desde el 2026-09-30. */}
+        <Route path="/alimento/recepcion" element={<Navigate to="/alimento/silos" replace />} />
         <Route path="/alimento/silos"     element={<ProtectedRoute><AlimentoSilosPage /></ProtectedRoute>} />
         <Route path="/reproductores/stock-huevos" element={<ProtectedRoute><StockHuevosPage /></ProtectedRoute>} />
         {/* Ventas de Reproductores: en pausa por pedido del cliente.

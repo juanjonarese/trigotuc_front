@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import Layout from "../components/Layout";
 import HistorialReproductor from "../components/HistorialReproductor";
 import MudanzaPosturaModal from "../components/MudanzaPosturaModal";
+import ComparativaPesoReproductores from "../components/ComparativaPesoReproductores";
 import {
   obtenerConstantesReproductores,
   obtenerLotesReproductores,
@@ -289,7 +290,9 @@ const DatosGalponModal = ({ lote, galponLabel, constantes, onClose }) => {
               </div>
             </div>
 
-            <HistorialReproductor lote={lote} />
+            {/* Sanidad va en su propia pestaña, como mortandad y el resto. Se
+                carga en Datos Semanales; acá es solo lectura. */}
+            <HistorialReproductor lote={lote} mostrarSanidad />
           </div>
 
           <div className="modal-footer">
@@ -816,6 +819,14 @@ const ReproductoresLotesPage = () => {
             <div className="row g-3 mb-4">
               {tarjetasSector("postura").map((t) => renderTarjeta(t, "postura"))}
             </div>
+
+            {/* Cómo viene el peso contra la tabla Arbor Acres (2026-09-30):
+                mismo diseño que la comparativa de galpones de Granja. */}
+            <ComparativaPesoReproductores
+              lotes={lotes}
+              constantes={constantes}
+              nombreGalpon={(l) => nombreGalpon(constantes?.galpones, l.sector, l.galpon)}
+            />
 
             {finalizados.length > 0 && (
               <div className="card shadow-sm">

@@ -1,5 +1,6 @@
 import { escapeHtml } from "./escapeHtml";
 import { formatearFechaLocal } from "./dateUtils";
+import { imprimirHtml } from "./imprimirHtml";
 
 /**
  * Remito imprimible del envío de alimento, en A4 y POR TRIPLICADO.
@@ -88,7 +89,7 @@ const hoja = (envio, copia, detalleTipo, etiquetaDestino) => {
 
   return `
   <div class="hoja">
-    <div class="copia">${copia}</div>
+    <div class="copia-fila"><div class="copia">${copia}</div></div>
 
     <header>
       <div class="emisor">
@@ -148,13 +149,18 @@ const hoja = (envio, copia, detalleTipo, etiquetaDestino) => {
 };
 
 /**
- * Abre el diálogo de impresión con las tres copias, una por hoja.
+ * Abre el diálogo de la impresora con las tres copias, una por hoja, sin abrir
+ * el remito en otra pestaña.
  *
  * `etiquetaTipo` y `etiquetaDestino` vienen de las constantes del módulo, para no
  * duplicar acá los nombres de los alimentos (viven en utils/alimentos.js del back).
  */
 export const imprimirRemitoAlimento = (envio, { detalleTipo, etiquetaDestino }) => {
-  const hojas = COPIAS.map((c) => hoja(envio, c, detalleTipo, etiquetaDestino)).join("");
+  // Se acepta el nombre o la función que lo busca: pasar la función sin llamarla
+  // imprimía su código en "Destino:" (2026-09-30).
+  const destino =
+    typeof etiquetaDestino === "function" ? etiquetaDestino(envio.destino) : etiquetaDestino;
+  const hojas = COPIAS.map((c) => hoja(envio, c, detalleTipo, destino || envio.destino || "")).join("");
 
   const html = `
 <!DOCTYPE html>
@@ -171,8 +177,10 @@ export const imprimirRemitoAlimento = (envio, { detalleTipo, etiquetaDestino }) 
     .hoja { page-break-after: always; position: relative; padding-bottom: 6mm; }
     .hoja:last-child { page-break-after: auto; }
 
+    /* La copia va en su propio renglón, arriba del encabezado. Estuvo flotando
+       (position: absolute) en la esquina y se montaba sobre "REMITO". */
+    .copia-fila { display: flex; justify-content: flex-end; margin-bottom: 2mm; }
     .copia {
-      position: absolute; top: 0; right: 0;
       font-size: 9pt; letter-spacing: 2px; font-weight: bold;
       border: 1px solid #000; padding: 2px 8px;
     }
@@ -185,7 +193,9 @@ export const imprimirRemitoAlimento = (envio, { detalleTipo, etiquetaDestino }) 
     .dir   { font-size: 8.5pt; line-height: 1.35; }
     .iva   { font-size: 8.5pt; font-weight: bold; margin-top: 2mm; }
 
-    .doc { text-align: right; min-width: 70mm; }
+    /* Como en el papel: "REMITO", el número y los datos fiscales van alineados
+       a la izquierda de su columna. */
+    .doc { text-align: left; min-width: 70mm; }
     .titulo { font-size: 20pt; font-weight: bold; letter-spacing: 1px; }
     .noval  { font-size: 8pt; }
     /* Se dice en cada copia: este documento NO es el comprobante fiscal. */
@@ -224,13 +234,7 @@ export const imprimirRemitoAlimento = (envio, { detalleTipo, etiquetaDestino }) 
 <body>${hojas}</body>
 </html>`;
 
-  const win = window.open("", "_blank");
-  if (!win) return false; // el navegador bloqueó la ventana
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  // Esperar al layout antes de imprimir: sin esto, Chrome a veces abre el
-  // diálogo con la hoja todavía vacía.
-  win.onload = () => setTimeout(() => win.print(), 250);
-  return true;
+  // Directo al diálogo de la impresora, sin abrir el remito en otra pestaña
+  // (2026-09-30). Ver utils/imprimirHtml.js.
+  return imprimirHtml(html);
 };

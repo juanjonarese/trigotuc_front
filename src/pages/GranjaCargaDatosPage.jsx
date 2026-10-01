@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import Layout from "../components/Layout";
+import SanidadGalpon from "../components/SanidadGalpon";
 import {
   obtenerLotesGranja,
   registrarPesajeGranja,
@@ -862,6 +863,35 @@ const GranjaCargaDatosPage = () => {
                       <i className="bi bi-arrow-left-right fs-4 d-block mb-1"></i>
                       Mudar pollos
                     </button>
+                    <button
+                      className="btn btn-outline-info px-4 py-3"
+                      style={{ minWidth: "150px" }}
+                      onClick={() => setModo("sanidad")}
+                    >
+                      <i className="bi bi-shield-plus fs-4 d-block mb-1"></i>
+                      Vacunas y tratamientos
+                      {((loteSeleccionado.vacunas?.length || 0) + (loteSeleccionado.tratamientos?.length || 0)) > 0 && (
+                        <span className="badge bg-info text-dark ms-1">
+                          {(loteSeleccionado.vacunas?.length || 0) + (loteSeleccionado.tratamientos?.length || 0)}
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                {/* ── Vacunas y tratamientos (2026-09-30): la planilla de sanidad ── */}
+                {modo === "sanidad" && (
+                  <div>
+                    <button type="button" className="btn btn-link btn-sm text-muted p-0 mb-3"
+                      onClick={() => setModo(null)}>
+                      <i className="bi bi-arrow-left me-1"></i>Volver
+                    </button>
+                    <SanidadGalpon
+                      lote={loteSeleccionado}
+                      modulo="granja"
+                      editable
+                      onActualizado={() => recargarYSincronizar()}
+                    />
                   </div>
                 )}
 

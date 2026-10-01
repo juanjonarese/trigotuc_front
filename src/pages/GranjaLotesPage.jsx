@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Layout from "../components/Layout";
+import SanidadGalpon from "../components/SanidadGalpon";
 import { obtenerLotesGranja } from "../services/api";
 import { formatearFechaLocal } from "../utils/dateUtils";
 
@@ -204,6 +205,17 @@ const GalponModal = ({ lote, galponLabel, onClose }) => {
                   {bajas > 0 && <span className="badge bg-danger ms-1">{bajas}</span>}
                 </button>
               </li>
+              {/* Vacunas y tratamientos (2026-09-30): se cargan en Datos Semanales. */}
+              <li className="nav-item">
+                <button className={`nav-link ${tab === "sanidad" ? "active" : ""}`} onClick={() => setTab("sanidad")}>
+                  <i className="bi bi-shield-plus me-1"></i>Sanidad
+                  {((lote.vacunas?.length || 0) + (lote.tratamientos?.length || 0)) > 0 && (
+                    <span className="badge bg-info text-dark ms-1">
+                      {(lote.vacunas?.length || 0) + (lote.tratamientos?.length || 0)}
+                    </span>
+                  )}
+                </button>
+              </li>
             </ul>
             <div className="p-3">
               {tab === "pesaje" && (() => {
@@ -354,6 +366,7 @@ const GalponModal = ({ lote, galponLabel, onClose }) => {
                     </>
                   )
               )}
+              {tab === "sanidad" && <SanidadGalpon lote={lote} modulo="granja" />}
             </div>
           </div>
 

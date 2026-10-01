@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Layout from "../components/Layout";
 import HistorialReproductor from "../components/HistorialReproductor";
+import SanidadGalpon from "../components/SanidadGalpon";
 import MudanzaPosturaModal from "../components/MudanzaPosturaModal";
 import {
   obtenerConstantesReproductores,
@@ -1060,7 +1061,40 @@ const ReproductoresDatosPage = () => {
                           Mudar a postura
                         </button>
                       )}
+                      <button
+                        className="btn btn-outline-info px-4 py-3"
+                        style={{ minWidth: "150px" }}
+                        onClick={() => setModo("sanidad")}
+                      >
+                        <i className="bi bi-shield-plus fs-4 d-block mb-1"></i>
+                        Vacunas y tratamientos
+                        {((lote.vacunas?.length || 0) + (lote.tratamientos?.length || 0)) > 0 && (
+                          <span className="badge bg-info text-dark ms-1">
+                            {(lote.vacunas?.length || 0) + (lote.tratamientos?.length || 0)}
+                          </span>
+                        )}
+                      </button>
                     </div>
+                  )}
+
+                  {/* ── Vacunas y tratamientos (2026-09-30): la planilla de sanidad,
+                      del galpón entero (no van por sexo) ── */}
+                  {modo === "sanidad" && (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-link btn-sm text-muted p-0 mb-3"
+                        onClick={() => setModo(null)}
+                      >
+                        <i className="bi bi-arrow-left me-1"></i>Volver
+                      </button>
+                      <SanidadGalpon
+                        lote={lote}
+                        modulo="reproductores"
+                        editable
+                        onActualizado={() => cargar()}
+                      />
+                    </>
                   )}
 
                   {/* ── Cargar datos ── */}

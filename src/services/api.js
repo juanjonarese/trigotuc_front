@@ -1377,6 +1377,32 @@ export const ajustarSilo = async (data) => {
   });
   return handleResponse(response);
 };
+// Corregir / borrar un ajuste y corregir / deshacer una recepción (2026-09-30).
+// Todos deshacen lo que el registro movió en el silo antes de cambiarlo.
+export const editarAjusteSilo = async (id, data) => {
+  const response = await fetch(`${API_URL}/envios-alimento/ajustes/${id}`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+export const eliminarAjusteSilo = async (id) => {
+  const response = await fetch(`${API_URL}/envios-alimento/ajustes/${id}`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+export const editarRecepcionAlimento = async (id, data) => {
+  const response = await fetch(`${API_URL}/envios-alimento/${id}/recepcion`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+export const deshacerRecepcionAlimento = async (id) => {
+  const response = await fetch(`${API_URL}/envios-alimento/${id}/recepcion`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
 export const obtenerAjustesSilo = async (filtros = {}) => {
   const params = new URLSearchParams(filtros);
   const response = await fetch(`${API_URL}/envios-alimento/ajustes?${params}`, { headers: getAuthHeaders() });
@@ -1389,6 +1415,35 @@ export const obtenerAjustesSilo = async (filtros = {}) => {
 export const sacarSinDestino = async (loteId, data) => {
   const response = await fetch(`${API_URL}/lotes-reproductores/${loteId}/salida-sin-destino`, {
     method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+// ============================================
+// SANIDAD DEL GALPÓN (vacunas y tratamientos)
+// ============================================
+// Mismo formulario en Granja y en Reproductoras (2026-09-30). `modulo` elige el
+// back: "granja" → /lotes-granja, "reproductores" → /lotes-reproductores.
+// `tipo` es "vacuna" o "tratamiento". Todas devuelven el lote actualizado.
+const BASE_SANIDAD = { granja: "lotes-granja", reproductores: "lotes-reproductores" };
+
+export const agregarSanidad = async (modulo, loteId, tipo, data) => {
+  const response = await fetch(`${API_URL}/${BASE_SANIDAD[modulo]}/${loteId}/${tipo}`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const editarSanidad = async (modulo, loteId, tipo, registroId, data) => {
+  const response = await fetch(`${API_URL}/${BASE_SANIDAD[modulo]}/${loteId}/${tipo}/${registroId}`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const eliminarSanidad = async (modulo, loteId, tipo, registroId) => {
+  const response = await fetch(`${API_URL}/${BASE_SANIDAD[modulo]}/${loteId}/${tipo}/${registroId}`, {
+    method: "DELETE", headers: getAuthHeaders(),
   });
   return handleResponse(response);
 };
