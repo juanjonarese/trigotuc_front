@@ -488,6 +488,11 @@ const AlimentoEnviosPage = () => {
                                     {dif > 0 ? "+" : ""}{fmt(dif)} kg
                                   </div>
                                 )}
+                                {e.motivoDiferencia && (
+                                  <div className="small text-muted" title="Motivo de la diferencia">
+                                    {e.motivoDiferencia}
+                                  </div>
+                                )}
                               </>
                             ) : (
                               <span className="text-muted">—</span>

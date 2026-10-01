@@ -27,7 +27,6 @@ const seccionDeRuta = (path) => {
     return "granja";
   }
   if (path.startsWith("/reproductores") || path.startsWith("/alimento/silos")) return "reproductores";
-  if (path.startsWith("/alimento")) return "alimento";
   return null;
 };
 
@@ -37,7 +36,7 @@ const Layout = ({ children }) => {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // Acordeón: una sola sección abierta a la vez ("altas" | "granja" |
-  // "reproductores" | "alimento" | "frigorifico" | null).
+  // "reproductores" | "frigorifico" | null).
   const [seccionAbierta, setSeccionAbierta] = useState(() =>
     seccionDeRuta(location.pathname)
   );
@@ -249,48 +248,20 @@ const Layout = ({ children }) => {
             </a>
           )}
 
-          {/* Alimento — Trigotuc despacha a las granjas. Sección hermana de
-              Granja, Reproductoras y Frigorífico: no cuelga de ninguna porque el
-              alimento va a todas. Despacha administración; acepta y ajusta la granja. */}
-          {(mandaTodo || rolUsuario === "reproductoras") && (
-          <div className="nav-section mb-2">
+          {/* Envío de alimento — Trigotuc despacha a las granjas. Solo despacha
+              administración. Desde el 2026-09-30 es un botón suelto: la recepción
+              y los silos viven en Reproductoras (Silos), donde se recibe y se pesa. */}
+          {mandaTodo && (
             <a
               href="#"
-              className="nav-link text-white-50 d-flex align-items-center justify-content-between rounded"
-              onClick={(e) => { e.preventDefault(); toggleSeccion("alimento"); }}
+              className={`nav-link d-flex align-items-center gap-2 mb-2 rounded ${
+                isActive("/alimento/envios") ? "text-white" : "text-white-50"
+              }`}
+              onClick={(e) => { e.preventDefault(); navigate("/alimento/envios"); }}
             >
-              <div className="d-flex align-items-center gap-2">
-                <i className="bi bi-basket fs-5"></i>
-                <span>Envío de alimento</span>
-              </div>
-              <i className={`bi bi-chevron-${seccionAbierta === "alimento" ? "down" : "right"}`}></i>
+              <i className="bi bi-basket fs-5"></i>
+              <span>Envío de alimento</span>
             </a>
-            {seccionAbierta === "alimento" && (
-              <div className="ps-4 mt-2">
-                {/* 1 — Despachar: solo administración (el envío sale de Trigotuc) */}
-                {mandaTodo && (
-                <a
-                  href="#"
-                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/alimento/envios") ? "text-white" : "text-white-50"}`}
-                  onClick={(e) => { e.preventDefault(); navigate("/alimento/envios"); }}
-                >
-                  <i className="bi bi-truck"></i>
-                  <span>Envíos</span>
-                </a>
-                )}
-                {/* 2 — Recibir: lo acepta la granja */}
-                <a
-                  href="#"
-                  className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/alimento/recepcion") ? "text-white" : "text-white-50"}`}
-                  onClick={(e) => { e.preventDefault(); navigate("/alimento/recepcion"); }}
-                >
-                  <i className="bi bi-box-arrow-in-down"></i>
-                  <span>Recepción</span>
-                </a>
-                {/* Silos se mudó a Reproductoras (2026-09-30). */}
-              </div>
-            )}
-          </div>
           )}
 
           {/* Reproductores (postura + incubación) — sección hermana de Granja y Frigorífico.
@@ -338,8 +309,9 @@ const Layout = ({ children }) => {
                   <span>Datos Semanales</span>
                 </a>
                 {/* 3b — Silos (2026-09-30, antes en Envío de alimento): el stock de
-                    alimento de los galpones y su ajuste por recuento. Va al lado de
-                    Datos Semanales, que es donde se carga el consumo que lo descuenta.
+                    alimento de los galpones, la RECEPCIÓN de los envíos (se pesa el
+                    camión acá) y el ajuste por recuento. Va al lado de Datos
+                    Semanales, que es donde se carga el consumo que lo descuenta.
                     La ruta sigue en /alimento/silos. */}
                 <a
                   href="#"

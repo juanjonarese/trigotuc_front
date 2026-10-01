@@ -113,10 +113,14 @@ Secciones colapsables, fondo oscuro, auto-expande según la ruta activa. Visibil
 - **Actividad** (`/frigorifico/historial-accesos`) — solo `superadmin`.
 - **Salida Mostrador** (`/frigorifico/salida-mostrador`) — ítem suelto de primer
   nivel: `superadmin` / `administracion_frigorifico` / `administracion_granja`.
-- **Envío de alimento** (colapsable) — `superadmin` / `reproductoras`: Envíos
-  (solo `superadmin`) y Recepción. Va antes de Reproductoras. **Silos** se mudó
-  a Reproductoras (2026-09-30), después de Datos Semanales; la ruta sigue siendo
-  `/alimento/silos` y `seccionDeRuta()` la manda a la sección Reproductoras.
+- **Envío de alimento** (`/alimento/envios`) — ítem suelto de primer nivel, solo
+  `superadmin` / `admin`: es el que despacha. Va antes de Reproductoras.
+- **Silos** (`/alimento/silos`, 2026-09-30) vive en **Reproductoras**, después de
+  Datos Semanales, y **ahí se recibe el alimento**: arriba "Por recibir" con el
+  modal `RecepcionAlimentoModal`, abajo el historial de recepciones con la
+  diferencia y su motivo. Lo que entra al silo es lo **pesado** en la recepción
+  (también en las líneas en bolsa); con diferencia, el motivo es obligatorio.
+  `AlimentoRecepcionPage` se eliminó y `/alimento/recepcion` redirige a Silos.
 - **Granja** (colapsable) — `superadmin` / `administracion_granja` / `granja`:
   - Ingreso de pollitos, Galpones, Datos Semanales (solo `superadmin`/`granja`), Órdenes de Carga (Venta) (solo `superadmin`/`administracion_granja`), Recepción de Órdenes.
 - **Reproductores** (colapsable) — solo `superadmin` por ahora (hasta definir los roles del módulo):
