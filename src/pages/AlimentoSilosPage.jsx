@@ -9,6 +9,10 @@ import {
   deshacerRecepcionAlimento,
   obtenerAjustesSilo,
   obtenerEnviosAlimento,
+  transferirAlimentoSilo,
+  editarTransferenciaSilo,
+  eliminarTransferenciaSilo,
+  obtenerTransferenciasSilo,
 } from "../services/api";
 import RecepcionAlimentoModal from "../components/RecepcionAlimentoModal";
 import { formatearFechaLocal, obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
@@ -37,20 +41,24 @@ const AlimentoSilosPage = () => {
   const [loading, setLoading] = useState(true);
   const [ajustando, setAjustando] = useState(null); // { silo, tipo?, kgSistema }
   const [recibiendo, setRecibiendo] = useState(null); // envío abierto para recibir
+  const [transferencias, setTransferencias] = useState([]);
+  const [transfiriendo, setTransfiriendo] = useState(null); // { siloOrigen?, tipo? } o { transferencia }
 
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
-      const [cons, st, aj, viaje, rec] = await Promise.all([
+      const [cons, st, aj, viaje, rec, trs] = await Promise.all([
         obtenerConstantesAlimento(),
         obtenerStockSilos("reproductoras"),
         obtenerAjustesSilo({ destino: "reproductoras", limite: 30 }),
         obtenerEnviosAlimento({ destino: "reproductoras", estado: "en_viaje" }),
         obtenerEnviosAlimento({ destino: "reproductoras", estado: "aceptado", limite: 30 }),
+        obtenerTransferenciasSilo({ destino: "reproductoras", limite: 30 }),
       ]);
       setConstantes(cons);
       setStock(st);
       setAjustes(aj);
+      setTransferencias(trs);
       setEnViaje(viaje);
       setRecibidos(rec);
     } catch (err) {
@@ -119,6 +127,29 @@ const AlimentoSilosPage = () => {
     }
   };
 
+  const borrarTransferencia = async (t) => {
+    const { isConfirmed } = await Swal.fire({
+      icon: "warning",
+      title: "¿Deshacer la transferencia?",
+      html:
+        `Los <strong>${fmt(t.kg)} kg</strong> de ${etiquetaTipo(t.tipo)} vuelven del silo ${t.siloDestino} ` +
+        `al silo ${t.siloOrigen}.` +
+        `<br/><span class="text-muted">Solo se puede si en el silo ${t.siloDestino} todavía no se usó nada de eso.</span>`,
+      showCancelButton: true,
+      confirmButtonText: "Sí, deshacer",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#dc3545",
+    });
+    if (!isConfirmed) return;
+    try {
+      await eliminarTransferenciaSilo(t._id);
+      await cargar();
+      Swal.fire({ icon: "success", title: "Transferencia deshecha", timer: 2000, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire("No se pudo deshacer", err.message, "error");
+    }
+  };
+
   const tipos = constantes?.tipos || [];
   const etiquetaTipo = (key) => tipos.find((t) => t.key === key)?.etiqueta || key;
 
@@ -137,6 +168,9 @@ const AlimentoSilosPage = () => {
           <div className="d-flex gap-2">
             <button className="btn btn-outline-secondary" onClick={cargar} disabled={loading}>
               <i className="bi bi-arrow-clockwise me-1"></i>Actualizar
+            </button>
+            <button className="btn btn-info" onClick={() => setTransfiriendo({})}>
+              <i className="bi bi-arrow-left-right me-1"></i>Transferir entre silos
             </button>
             <button className="btn btn-warning" onClick={() => setAjustando({})}>
               <i className="bi bi-sliders me-1"></i>Ajustar por recuento
@@ -278,6 +312,13 @@ const AlimentoSilosPage = () => {
                                         <div className="text-end">
                                           <div className="fw-semibold small">{fmt(t.kg)} kg</div>
                                           <button
+                                            className="btn btn-link btn-sm p-0 text-decoration-none me-2"
+                                            style={{ fontSize: ".72rem" }}
+                                            onClick={() => setTransfiriendo({ siloOrigen: s.silo, tipo: t.tipo })}
+                                          >
+                                            transferir
+                                          </button>
+                                          <button
                                             className="btn btn-link btn-sm p-0 text-decoration-none"
                                             style={{ fontSize: ".72rem" }}
                                             onClick={() => setAjustando({ silo: s.silo, tipo: t.tipo, kgSistema: t.kg })}
@@ -377,6 +418,60 @@ const AlimentoSilosPage = () => {
               </div>
             </div>
 
+            {/* ── Transferencias: alimento que se pasó de un silo a otro ── */}
+            <div className="card shadow-sm mb-3">
+              <div className="card-header bg-white py-2 fw-semibold">
+                Transferencias entre silos
+              </div>
+              <div className="card-body p-0">
+                {transferencias.length === 0 ? (
+                  <div className="p-4 text-center text-muted small">
+                    Todavía no se pasó alimento de un silo a otro.
+                  </div>
+                ) : (
+                  <div className="table-responsive">
+                    <table className="table table-sm align-middle mb-0">
+                      <thead className="table-light">
+                        <tr>
+                          <th className="small">Fecha</th>
+                          <th className="small">De → a</th>
+                          <th className="small">Tipo</th>
+                          <th className="small text-end">Kg</th>
+                          <th className="small">Motivo</th>
+                          <th className="small">Quién</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {transferencias.map((t) => (
+                          <tr key={t._id}>
+                            <td className="small">{formatearFechaLocal(t.fecha)}</td>
+                            <td className="small">
+                              Silo {t.siloOrigen} <i className="bi bi-arrow-right"></i> Silo {t.siloDestino}
+                            </td>
+                            <td className="small">{etiquetaTipo(t.tipo)}</td>
+                            <td className="small text-end fw-semibold">{fmt(t.kg)}</td>
+                            <td className="small">{t.motivo || ""}</td>
+                            <td className="small text-muted">{t.registradoPor?.nombreUsuario || "—"}</td>
+                            <td className="text-end text-nowrap">
+                              <button className="btn btn-sm btn-link p-0 me-2" title="Corregir la transferencia"
+                                onClick={() => setTransfiriendo({ transferencia: t })}>
+                                <i className="bi bi-pencil"></i>
+                              </button>
+                              <button className="btn btn-sm btn-link text-danger p-0" title="Deshacer la transferencia"
+                                onClick={() => borrarTransferencia(t)}>
+                                <i className="bi bi-arrow-counterclockwise"></i>
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* ── Historial de ajustes: el rastro de las correcciones ── */}
             <div className="card shadow-sm">
               <div className="card-header bg-white py-2 fw-semibold">
@@ -453,6 +548,17 @@ const AlimentoSilosPage = () => {
           stock={stock}
           onClose={() => setAjustando(null)}
           onHecho={async () => { setAjustando(null); await cargar(); }}
+        />
+      )}
+
+      {transfiriendo && (
+        <TransferenciaModal
+          inicial={transfiriendo}
+          silos={(constantes?.destinos || []).find((d) => d.key === "reproductoras")?.silos || []}
+          tipos={tipos}
+          stock={stock}
+          onClose={() => setTransfiriendo(null)}
+          onHecho={async () => { setTransfiriendo(null); await cargar(); }}
         />
       )}
 
@@ -668,6 +774,214 @@ const AjusteModal = ({ inicial, silos, tipos, stock, onClose, onHecho }) => {
                 <button type="submit" className="btn btn-warning" disabled={saving || !puedeGuardar}>
                   {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
                   <i className="bi bi-check2-circle me-1"></i>Registrar ajuste
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+      <div className="modal-backdrop show"></div>
+    </>
+  );
+};
+
+// ── Modal: transferencia entre silos (2026-10-01) ───────────────────────────
+// Sale del silo de origen (lo más viejo primero) y entra al de destino arriba de
+// lo que ya tenía. Con `inicial.transferencia` corrige esa transferencia: el back
+// la deshace y la vuelve a aplicar.
+const TransferenciaModal = ({ inicial, silos, tipos, stock, onClose, onHecho }) => {
+  const tr = inicial.transferencia || null;
+  const edicion = !!tr;
+  const [siloOrigen, setSiloOrigen] = useState(
+    String(tr?.siloOrigen ?? inicial.siloOrigen ?? "")
+  );
+  const [siloDestino, setSiloDestino] = useState(String(tr?.siloDestino ?? ""));
+  const [tipo, setTipo] = useState(tr?.tipo || inicial.tipo || "");
+  const [kg, setKg] = useState(edicion ? String(tr.kg) : "");
+  const [motivo, setMotivo] = useState(tr?.motivo || "");
+  const [fecha, setFecha] = useState(edicion ? String(tr.fecha).split("T")[0] : obtenerFechaHoy());
+  const [saving, setSaving] = useState(false);
+
+  const siloDeStock = (n) => (stock?.silos || []).find((s) => s.silo === Number(n));
+
+  // Al corregir, lo que esta misma transferencia movió vuelve a contarse donde
+  // estaba: el back la deshace antes de aplicar la nueva.
+  const mismaTr = (silo, t) => edicion && t === tr.tipo && Number(silo) === tr.siloOrigen;
+  const kgDe = (silo, t) => {
+    const hoy = siloDeStock(silo)?.tipos.find((x) => x.tipo === t)?.kg ?? 0;
+    return hoy + (mismaTr(silo, t) ? tr.kg : 0);
+  };
+
+  // En el origen solo se ofrecen los tipos que tiene.
+  const tiposOrigen = siloOrigen
+    ? tipos.filter((t) => kgDe(siloOrigen, t.key) > 0 || (edicion && t.key === tr.tipo))
+    : [];
+
+  const disponible = siloOrigen && tipo ? kgDe(siloOrigen, tipo) : null;
+  const libreDestino = (() => {
+    if (!siloDestino) return null;
+    let libre = siloDeStock(siloDestino)?.libreKg ?? 0;
+    if (edicion && Number(siloDestino) === tr.siloDestino) libre += tr.kg;
+    if (edicion && Number(siloDestino) === tr.siloOrigen) libre -= tr.kg;
+    return libre;
+  })();
+
+  const n = Number(kg);
+  const hayKg = kg !== "" && Number.isFinite(n) && n > 0;
+  const pasaOrigen = hayKg && disponible != null && n > disponible + 0.001;
+  const pasaDestino = hayKg && libreDestino != null && n > libreDestino + 0.001;
+  const mismoSilo = siloOrigen && siloOrigen === siloDestino;
+  const puedeGuardar =
+    !!siloOrigen && !!siloDestino && !mismoSilo && !!tipo && hayKg && !pasaOrigen && !pasaDestino;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!puedeGuardar) return;
+    setSaving(true);
+    const data = {
+      destino: "reproductoras",
+      siloOrigen: Number(siloOrigen),
+      siloDestino: Number(siloDestino),
+      tipo,
+      kg: n,
+      motivo: motivo.trim(),
+      fecha: ajustarFechaParaGuardar(fecha),
+    };
+    try {
+      if (edicion) await editarTransferenciaSilo(tr._id, data);
+      else await transferirAlimentoSilo(data);
+      await onHecho();
+      Swal.fire({
+        icon: "success",
+        title: edicion ? "Transferencia corregida" : "Alimento transferido",
+        html: `${fmt(n)} kg del silo ${siloOrigen} al silo ${siloDestino}.`,
+        timer: 2500,
+        showConfirmButton: false,
+      });
+    } catch (err) {
+      Swal.fire("Error", err.message || "No se pudo transferir.", "error");
+      setSaving(false);
+    }
+  };
+
+  const opcionSilo = (s) => (
+    <option key={s.numero} value={s.numero}>
+      {s.nombre} (galpón {(s.galpones || []).join(" y ")}) — {fmt(siloDeStock(s.numero)?.kg ?? 0)} kg
+    </option>
+  );
+
+  return (
+    <>
+      <div className="modal show d-block" tabIndex="-1">
+        <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+          <div className="modal-content">
+            <div className="modal-header bg-info py-2">
+              <h5 className="modal-title fs-6">
+                <i className="bi bi-arrow-left-right me-2"></i>
+                {edicion ? "Corregir transferencia" : "Transferir entre silos"}
+              </h5>
+              <button className="btn-close" onClick={onClose} disabled={saving}></button>
+            </div>
+            <form onSubmit={handleSubmit} className="d-flex flex-column flex-grow-1" style={{ minHeight: 0 }}>
+              <div className="modal-body py-2">
+                <p className="small text-muted">
+                  Sale del silo de origen (lo más viejo primero) y entra al de destino, arriba de
+                  lo que ya tiene. El total de los silos no cambia.
+                </p>
+
+                <div className="row g-2 mb-2">
+                  <div className="col-6">
+                    <label className="form-label fw-semibold small mb-1">De (origen)</label>
+                    <select
+                      className="form-select form-select-sm"
+                      value={siloOrigen}
+                      onChange={(e) => { setSiloOrigen(e.target.value); setTipo(""); }}
+                      disabled={saving}
+                    >
+                      <option value="">— Elegí —</option>
+                      {silos.map(opcionSilo)}
+                    </select>
+                  </div>
+                  <div className="col-6">
+                    <label className="form-label fw-semibold small mb-1">A (destino)</label>
+                    <select
+                      className="form-select form-select-sm"
+                      value={siloDestino}
+                      onChange={(e) => setSiloDestino(e.target.value)}
+                      disabled={saving}
+                    >
+                      <option value="">— Elegí —</option>
+                      {silos.filter((s) => String(s.numero) !== siloOrigen).map(opcionSilo)}
+                    </select>
+                  </div>
+                </div>
+
+                <label className="form-label fw-semibold small mb-1">Tipo de alimento</label>
+                <select
+                  className="form-select form-select-sm mb-2"
+                  value={tipo}
+                  onChange={(e) => setTipo(e.target.value)}
+                  disabled={saving || !siloOrigen}
+                >
+                  <option value="">
+                    {siloOrigen && tiposOrigen.length === 0 ? "— El silo está vacío —" : "— Elegí —"}
+                  </option>
+                  {tiposOrigen.map((t) => (
+                    <option key={t.key} value={t.key}>
+                      {t.etiqueta} ({fmt(kgDe(siloOrigen, t.key))} kg)
+                    </option>
+                  ))}
+                </select>
+
+                <label className="form-label fw-semibold small mb-1">¿Cuántos kg se pasaron?</label>
+                <input
+                  type="number" min="0" step="0.1"
+                  className={`form-control form-control-sm ${pasaOrigen || pasaDestino ? "is-invalid" : ""}`}
+                  value={kg}
+                  onChange={(e) => setKg(e.target.value)}
+                  disabled={saving || !tipo}
+                  placeholder="0"
+                />
+                <div className="form-text mb-2">
+                  {disponible != null && <>En el origen hay {fmt(disponible)} kg de eso. </>}
+                  {libreDestino != null && <>Al destino le entran {fmt(libreDestino)} kg.</>}
+                </div>
+                {pasaOrigen && (
+                  <div className="alert alert-danger py-1 px-2 small mb-2">
+                    El origen no tiene tanto. Si en el silo hay más de lo que dice el sistema,
+                    primero ajustalo por recuento.
+                  </div>
+                )}
+                {pasaDestino && (
+                  <div className="alert alert-danger py-1 px-2 small mb-2">
+                    No entra en el silo de destino.
+                  </div>
+                )}
+
+                <label className="form-label fw-semibold small mb-1">Fecha</label>
+                <input
+                  type="date" className="form-control form-control-sm mb-2"
+                  value={fecha} onChange={(e) => setFecha(e.target.value)}
+                  disabled={saving} required
+                />
+
+                <label className="form-label fw-semibold small mb-1">Motivo (opcional)</label>
+                <input
+                  type="text" className="form-control form-control-sm"
+                  value={motivo}
+                  onChange={(e) => setMotivo(e.target.value)}
+                  disabled={saving}
+                  placeholder="Ej: limpieza del silo"
+                />
+              </div>
+              <div className="modal-footer py-2">
+                <button type="button" className="btn btn-outline-secondary" onClick={onClose} disabled={saving}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn-info" disabled={saving || !puedeGuardar}>
+                  {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
+                  <i className="bi bi-check2-circle me-1"></i>
+                  {edicion ? "Guardar corrección" : "Transferir"}
                 </button>
               </div>
             </form>

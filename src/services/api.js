@@ -1408,6 +1408,30 @@ export const obtenerAjustesSilo = async (filtros = {}) => {
   const response = await fetch(`${API_URL}/envios-alimento/ajustes?${params}`, { headers: getAuthHeaders() });
   return handleResponse(response);
 };
+// Transferencia de alimento entre silos (2026-10-01): sale de uno y entra en otro.
+export const transferirAlimentoSilo = async (data) => {
+  const response = await fetch(`${API_URL}/envios-alimento/transferencias`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+export const editarTransferenciaSilo = async (id, data) => {
+  const response = await fetch(`${API_URL}/envios-alimento/transferencias/${id}`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+export const eliminarTransferenciaSilo = async (id) => {
+  const response = await fetch(`${API_URL}/envios-alimento/transferencias/${id}`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+export const obtenerTransferenciasSilo = async (filtros = {}) => {
+  const params = new URLSearchParams(filtros);
+  const response = await fetch(`${API_URL}/envios-alimento/transferencias?${params}`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
 
 // Vacía el galpón de un sexo SIN destino definido. Al fin de ciclo el galpón tiene
 // que quedar vacío aunque no se sepa a dónde va todo (hoy, los gallos): salen
