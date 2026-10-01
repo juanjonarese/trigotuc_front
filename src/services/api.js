@@ -1191,6 +1191,15 @@ export const eliminarReservaPollitos = async (id) => {
   return handleResponse(response);
 };
 
+// Pasa una reserva a otra carga (2026-10-01): `{ tanda }` para llevarla a una
+// carga real, `{ fechaNacimiento: "AAAA-MM-DD" }` para otro día proyectado.
+export const pasarReservaPollitos = async (id, data) => {
+  const response = await fetch(`${API_URL}/reservas-pollitos/${id}/pasar`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
 // ── Ventas del módulo (huevos de descarte y pollitos) ──
 export const descartarApiHuevos = async (data) => {
   const response = await fetch(`${API_URL}/reproductores/descarte-api`, {

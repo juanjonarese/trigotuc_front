@@ -421,7 +421,9 @@ const FilaGalpon = ({ galpon, indices, totalDias }) => {
                       `\nA la salida: ${formatearNumero(t.pollosSalida)} pollos` +
                       (t.kgSalida ? ` · ${formatearNumero(t.kgSalida)} kg` : "") +
                       (t.origen === "proyectado" ? "\nPROYECTADO (reserva sin nacer)" : "") +
-                      `\n${t.ref.tipo === "lote" ? "Lote" : "Tanda"} ${t.ref.numero ?? "?"}`
+                      (t.ref.proyectada
+                        ? "\nDe una carga proyectada (todavía no se cargó la incubadora)"
+                        : `\n${t.ref.tipo === "lote" ? "Lote" : "Tanda"} ${t.ref.numero ?? "?"}`)
                     : t.tipo === "estancado"
                     ? `EXCEDE TIEMPO · tenía que salir el ${etiquetaLarga(t.desdeClave)} y sigue adentro ` +
                       `hace ${t.dias} días.\n${formatearNumero(t.pollitos)} pollos · ` +

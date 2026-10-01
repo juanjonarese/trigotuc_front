@@ -7,6 +7,7 @@ import {
   obtenerClientes,
   crearReservaPollitos,
   eliminarReservaPollitos,
+  pasarReservaPollitos,
   crearOrdenCargaPollitos,
 } from "../services/api";
 import { formatearFechaLocal } from "../utils/dateUtils";
@@ -31,6 +32,12 @@ import Swal from "sweetalert2";
 // La unidad es la CARGA `(lote, fechaIngreso)`, no la tanda: una carga son hasta
 // 12 carros y partir el bloque en 12 pedazos hace la pantalla inservible para
 // decidir. El reparto se hace desde el modal que abre cada carga.
+//
+// Desde el 2026-10-01 también se reparten las cargas PROYECTADAS: la empresa
+// vende a futuro contando con lo que va a nacer. Esas reservas van ancladas a la
+// fecha de nacimiento y, cuando se hace la carga real, se PASAN A MANO (botón
+// "Pasar" de cada línea). Si la carga proyectada de ese día desaparece antes de
+// pasarlas, quedan en una fila "sin carga" en rojo.
 //
 // ⚠️ Todo se posiciona por la clave "AAAA-MM-DD" que manda el backend, NUNCA
 // parseando la fecha ISO: el server corre en UTC y el navegador argentino en
@@ -68,6 +75,7 @@ const diasDelMes = (anio, mes) => new Date(anio, mes + 1, 0).getDate();
 // ── El color de una carga ───────────────────────────────────────────────────
 // Es el semáforo de la pantalla: sobrevendida manda sobre todo lo demás.
 const tonoCarga = (f) => {
+  if (f.tipo === "sin_carga") return { clase: "border-danger border-2 bg-danger-subtle", texto: "text-danger-emphasis" };
   if (f.sobrevendida) return { clase: "border-danger bg-danger-subtle", texto: "text-danger-emphasis" };
   if (f.tipo === "proyectada")
     return { clase: "border-secondary-subtle bg-body-secondary", texto: "text-secondary-emphasis" };
@@ -101,7 +109,13 @@ const Pastilla = ({ fila, onAbrir }) => {
       className={`btn btn-sm w-100 text-start border rounded p-1 mb-1 ${tono.clase}`}
       onClick={() => onAbrir(fila)}
       title={
-        `${fila.tipo === "proyectada" ? "Carga proyectada" : `Plantel #${fila.lote?.numeroLote}`}` +
+        `${
+          fila.tipo === "sin_carga"
+            ? "Compromisos sin carga: hay que pasarlos a la carga real"
+            : fila.tipo === "proyectada"
+            ? "Carga proyectada"
+            : `Plantel #${fila.lote?.numeroLote}`
+        }` +
         ` · a nacer ${formatearNumero(fila.aNacer)} · libre ${formatearNumero(fila.libre)}` +
         (fila.lineas.length
           ? `\n${fila.lineas
@@ -112,7 +126,11 @@ const Pastilla = ({ fila, onAbrir }) => {
     >
       <div className="d-flex justify-content-between align-items-baseline lh-1">
         <span className={`small fw-semibold ${tono.texto}`}>
-          {fila.tipo === "proyectada" ? (
+          {fila.tipo === "sin_carga" ? (
+            <>
+              <i className="bi bi-exclamation-octagon me-1"></i>sin carga
+            </>
+          ) : fila.tipo === "proyectada" ? (
             <>
               <i className="bi bi-hourglass-split me-1"></i>proy.
             </>
@@ -126,7 +144,9 @@ const Pastilla = ({ fila, onAbrir }) => {
       </div>
 
       <div className="lh-1 mt-1" style={{ fontSize: "0.72rem" }}>
-        {fila.sobrevendida ? (
+        {fila.tipo === "sin_carga" ? (
+          <span className="text-danger fw-bold">pasar {formatearNumero(fila.comprometido)}</span>
+        ) : fila.sobrevendida ? (
           <span className="text-danger fw-bold">se pasa {formatearNumero(-fila.libre)}</span>
         ) : fila.libre === 0 ? (
           <span className="text-primary fw-semibold">todo vendido</span>
@@ -152,7 +172,9 @@ const Pastilla = ({ fila, onAbrir }) => {
               >
                 <i
                   className={`bi ${
-                    l.destino === "granja"
+                    l.proyectada
+                      ? "bi-hourglass-split text-secondary"
+                      : l.destino === "granja"
                       ? "bi-house-door text-success"
                       : l.orden
                       ? "bi-truck text-success"
@@ -172,15 +194,47 @@ const Pastilla = ({ fila, onAbrir }) => {
 };
 
 // ── Modal de una carga: el reparto + el alta ────────────────────────────────
-const CargaModal = ({ fila, clientes, onCerrar, onEmitir, onBorrar, onAgregada }) => {
+const CargaModal = ({ fila, destinos, clientes, onCerrar, onEmitir, onBorrar, onPasar, onAgregada }) => {
   const [form, setForm] = useState(FORM_VACIO);
   const [saving, setSaving] = useState(false);
+  // La línea que se está pasando a otra carga, y a cuál.
+  const [pasando, setPasando] = useState(null);
+  const [destinoPaso, setDestinoPaso] = useState("");
 
   const setCampo = (campo, valor) => setForm((p) => ({ ...p, [campo]: valor }));
   const galponesDisp = GRANJAS.find((g) => g.key === form.granja)?.galpones || 0;
   const pedidos = Number(form.cantidad) || 0;
   const excede = pedidos > fila.libre;
   const esProy = fila.tipo === "proyectada";
+  const sinCarga = fila.tipo === "sin_carga";
+
+  // A dónde se puede pasar una reserva: cualquier carga real, u otra proyectada.
+  const opcionesPaso = destinos.filter((f) => f.clave !== fila.clave && f.tipo !== "sin_carga");
+
+  const abrirPaso = (l) => {
+    // Se sugiere la carga real que nace el mismo día que se prometió, que es el
+    // caso normal: se hizo la carga y hay que pasarle lo comprometido.
+    const mismoDia = opcionesPaso.find(
+      (f) => f.tipo === "real" && f.claveNacimiento === l.claveNacimientoProyectada
+    );
+    setDestinoPaso(mismoDia?.clave || "");
+    setPasando(l);
+  };
+
+  const confirmarPaso = async () => {
+    const dest = opcionesPaso.find((f) => f.clave === destinoPaso);
+    if (!dest || !pasando) return;
+    setSaving(true);
+    try {
+      await onPasar(
+        pasando,
+        dest.tipo === "real" ? { tanda: dest.tandaReferencia } : { fechaNacimiento: dest.claveNacimiento }
+      );
+      setPasando(null);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const agregar = async (e) => {
     e.preventDefault();
@@ -193,8 +247,9 @@ const CargaModal = ({ fila, clientes, onCerrar, onEmitir, onBorrar, onAgregada }
     try {
       await crearReservaPollitos({
         // Las reservas cuelgan de una tanda; todas las de una carga comparten
-        // lote y fecha de ingreso, así que el back las agrupa igual.
-        tanda: fila.tandaReferencia,
+        // lote y fecha de ingreso, así que el back las agrupa igual. Una carga
+        // proyectada no tiene tanda: la reserva va contra el día en que nace.
+        ...(esProy ? { fechaNacimiento: fila.claveNacimiento } : { tanda: fila.tandaReferencia }),
         destino: form.destino,
         ...(form.destino === "cliente"
           ? { cliente: form.cliente }
@@ -222,18 +277,24 @@ const CargaModal = ({ fila, clientes, onCerrar, onEmitir, onBorrar, onAgregada }
               <div>
                 <h5 className="modal-title mb-0">
                   <i className="bi bi-egg-fried text-success me-2"></i>
-                  {esProy ? "Carga proyectada" : `Plantel #${fila.lote?.numeroLote ?? "?"}`}
+                  {sinCarga
+                    ? "Compromisos sin carga"
+                    : esProy
+                    ? "Carga proyectada"
+                    : `Plantel #${fila.lote?.numeroLote ?? "?"}`}
                   <span className="text-muted fw-normal">
                     {" · nacen el "}
                     {formatearFechaLocal(fila.fechaNacimiento)}
                   </span>
                 </h5>
-                <div className="small text-muted mt-1">
-                  Entra a la incubadora el {formatearFechaLocal(fila.fechaIngreso)} ·{" "}
-                  {formatearNumero(fila.huevosIngresados)} huevos · gordos el{" "}
-                  {formatearFechaLocal(fila.fechaGordo)}
-                  {!fila.nacio && ` · ${textoDias(diasHasta(fila.fechaNacimiento))}`}
-                </div>
+                {!sinCarga && (
+                  <div className="small text-muted mt-1">
+                    Entra a la incubadora el {formatearFechaLocal(fila.fechaIngreso)} ·{" "}
+                    {formatearNumero(fila.huevosIngresados)} huevos · gordos el{" "}
+                    {formatearFechaLocal(fila.fechaGordo)}
+                    {!fila.nacio && ` · ${textoDias(diasHasta(fila.fechaNacimiento))}`}
+                  </div>
+                )}
               </div>
               <button type="button" className="btn-close" onClick={onCerrar}></button>
             </div>
@@ -272,113 +333,176 @@ const CargaModal = ({ fila, clientes, onCerrar, onEmitir, onBorrar, onAgregada }
                 </div>
               </div>
 
-              {esProy ? (
-                <div className="alert alert-secondary py-2 small mb-0">
+              {sinCarga && (
+                <div className="alert alert-danger py-2 small">
+                  <i className="bi bi-exclamation-octagon me-1"></i>
+                  Estos pollitos se comprometieron sobre una carga proyectada que nacía este día, y esa
+                  carga ya no está (se hizo la real o la proyección se corrió). Pasalos a la carga
+                  real con <i className="bi bi-arrow-right-square"></i>, o a otro día proyectado.
+                </div>
+              )}
+              {esProy && (
+                <div className="alert alert-secondary py-2 small">
                   <i className="bi bi-info-circle me-1"></i>
-                  Esta carga todavía no se hizo: sale de la proyección de huevos de los planteles.
-                  Se puede mirar para vender, pero recién se le pueden asignar pollitos cuando se
-                  cargue la incubadora.
+                  Esta carga todavía no se hizo: sale de la proyección de huevos de los planteles. Lo
+                  que comprometas acá queda para este día y, cuando se cargue la incubadora, lo pasás a
+                  la carga real con <i className="bi bi-arrow-right-square"></i>.
+                </div>
+              )}
+              {fila.lineas.length > 0 ? (
+                <div className="table-responsive mb-3">
+                  <table className="table table-sm align-middle mb-0">
+                    <thead>
+                      <tr className="text-muted small">
+                        <th>Destino</th>
+                        <th className="text-end">Pollitos</th>
+                        <th>Estado</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {fila.lineas.map((l) => {
+                        const esGranja = l.destino === "granja";
+                        const puedeEmitir =
+                          !esGranja && !l.orden && fila.nacio && l.estado !== "cancelada";
+                        return (
+                          <tr key={l._id}>
+                            <td>
+                              {esGranja ? (
+                                <>
+                                  <i className="bi bi-house-door text-success me-1"></i>
+                                  <span className="fw-semibold">{labelGranja(l.granja)}</span>
+                                  <span className="text-muted small">
+                                    {l.galpon
+                                      ? ` · ${prefijoGranja(l.granja)}${l.galpon}`
+                                      : " · galpón a definir"}
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <i className="bi bi-person text-primary me-1"></i>
+                                  <span className="fw-semibold">{nombreCliente(l.cliente)}</span>
+                                  {l.cliente?.telefono && (
+                                    <span className="text-muted small">
+                                      {" · "}
+                                      {l.cliente.telefono}
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                            </td>
+                            <td className="text-end fw-semibold">
+                              {formatearNumero(l.cantidad)}
+                            </td>
+                            <td>
+                              {l.proyectada ? (
+                                <span className="badge bg-secondary-subtle text-secondary-emphasis">
+                                  <i className="bi bi-hourglass-split me-1"></i>a futuro
+                                </span>
+                              ) : l.orden ? (
+                                <span
+                                  className={`badge ${
+                                    l.orden.estado === "entregada"
+                                      ? "bg-success"
+                                      : "bg-warning text-dark"
+                                  }`}
+                                >
+                                  {l.orden.numero} · {l.orden.estado}
+                                </span>
+                              ) : esGranja ? (
+                                <span className="badge bg-success-subtle text-success-emphasis">
+                                  a engorde
+                                </span>
+                              ) : (
+                                <span className="badge bg-secondary-subtle text-secondary-emphasis">
+                                  comprometido
+                                </span>
+                              )}
+                            </td>
+                            <td className="text-end text-nowrap">
+                              {puedeEmitir && (
+                                <button
+                                  className="btn btn-sm btn-outline-success me-1"
+                                  onClick={() => onEmitir(fila, l)}
+                                  title="Emitir la orden de carga de estos pollitos"
+                                >
+                                  <i className="bi bi-truck"></i>
+                                </button>
+                              )}
+                              {l.proyectada && l.estado === "reservada" && (
+                                <button
+                                  className="btn btn-sm btn-outline-primary me-1"
+                                  onClick={() => abrirPaso(l)}
+                                  title="Pasar a la carga real (o a otro día)"
+                                >
+                                  <i className="bi bi-arrow-right-square"></i>
+                                </button>
+                              )}
+                              {!l.orden && (
+                                <button
+                                  className="btn btn-sm btn-outline-danger"
+                                  onClick={() => onBorrar(l)}
+                                  title="Liberar estos pollitos"
+                                >
+                                  <i className="bi bi-trash"></i>
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               ) : (
-                <>
-                  {fila.lineas.length > 0 ? (
-                    <div className="table-responsive mb-3">
-                      <table className="table table-sm align-middle mb-0">
-                        <thead>
-                          <tr className="text-muted small">
-                            <th>Destino</th>
-                            <th className="text-end">Pollitos</th>
-                            <th>Estado</th>
-                            <th></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {fila.lineas.map((l) => {
-                            const esGranja = l.destino === "granja";
-                            const puedeEmitir =
-                              !esGranja && !l.orden && fila.nacio && l.estado !== "cancelada";
-                            return (
-                              <tr key={l._id}>
-                                <td>
-                                  {esGranja ? (
-                                    <>
-                                      <i className="bi bi-house-door text-success me-1"></i>
-                                      <span className="fw-semibold">{labelGranja(l.granja)}</span>
-                                      <span className="text-muted small">
-                                        {l.galpon
-                                          ? ` · ${prefijoGranja(l.granja)}${l.galpon}`
-                                          : " · galpón a definir"}
-                                      </span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <i className="bi bi-person text-primary me-1"></i>
-                                      <span className="fw-semibold">{nombreCliente(l.cliente)}</span>
-                                      {l.cliente?.telefono && (
-                                        <span className="text-muted small">
-                                          {" · "}
-                                          {l.cliente.telefono}
-                                        </span>
-                                      )}
-                                    </>
-                                  )}
-                                </td>
-                                <td className="text-end fw-semibold">
-                                  {formatearNumero(l.cantidad)}
-                                </td>
-                                <td>
-                                  {l.orden ? (
-                                    <span
-                                      className={`badge ${
-                                        l.orden.estado === "entregada"
-                                          ? "bg-success"
-                                          : "bg-warning text-dark"
-                                      }`}
-                                    >
-                                      {l.orden.numero} · {l.orden.estado}
-                                    </span>
-                                  ) : esGranja ? (
-                                    <span className="badge bg-success-subtle text-success-emphasis">
-                                      a engorde
-                                    </span>
-                                  ) : (
-                                    <span className="badge bg-secondary-subtle text-secondary-emphasis">
-                                      comprometido
-                                    </span>
-                                  )}
-                                </td>
-                                <td className="text-end text-nowrap">
-                                  {puedeEmitir && (
-                                    <button
-                                      className="btn btn-sm btn-outline-success me-1"
-                                      onClick={() => onEmitir(fila, l)}
-                                      title="Emitir la orden de carga de estos pollitos"
-                                    >
-                                      <i className="bi bi-truck"></i>
-                                    </button>
-                                  )}
-                                  {!l.orden && (
-                                    <button
-                                      className="btn btn-sm btn-outline-danger"
-                                      onClick={() => onBorrar(l)}
-                                      title="Liberar estos pollitos"
-                                    >
-                                      <i className="bi bi-trash"></i>
-                                    </button>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <p className="text-muted small mb-3">
-                      <i className="bi bi-inbox me-1"></i>Esta carga todavía no tiene nada repartido.
-                    </p>
-                  )}
+                <p className="text-muted small mb-3">
+                  <i className="bi bi-inbox me-1"></i>Esta carga todavía no tiene nada repartido.
+                </p>
+              )}
 
+              {pasando && (
+                <div className="border border-primary rounded p-2 mb-3 bg-primary-subtle">
+                  <div className="small fw-semibold mb-2">
+                    Pasar {formatearNumero(pasando.cantidad)} pollitos de {nombreCorto(pasando)} a:
+                  </div>
+                  <div className="d-flex flex-wrap gap-2">
+                    <select
+                      className="form-select form-select-sm flex-grow-1 w-auto"
+                      value={destinoPaso}
+                      onChange={(e) => setDestinoPaso(e.target.value)}
+                      disabled={saving}
+                    >
+                      <option value="">— Elegí la carga —</option>
+                      {opcionesPaso.map((f) => (
+                        <option key={f.clave} value={f.clave}>
+                          {`Nace ${formatearFechaLocal(f.fechaNacimiento)} · ${
+                            f.tipo === "real" ? `Plantel #${f.lote?.numeroLote ?? "?"} (real)` : "proyectada"
+                          } · libre ${formatearNumero(f.libre)}`}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-primary"
+                      onClick={confirmarPaso}
+                      disabled={saving || !destinoPaso}
+                    >
+                      Pasar
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-secondary"
+                      onClick={() => setPasando(null)}
+                      disabled={saving}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {!sinCarga && (
+                <>
                   <hr />
 
                   <form onSubmit={agregar} className="row g-2 align-items-end">
@@ -668,6 +792,19 @@ const PlanPollitosPage = () => {
     }
   };
 
+  // Pasar una reserva a otra carga: lo comprometido sobre una proyectada, a la
+  // carga real cuando se hace (o a otro día si la proyección se corrió).
+  const pasarLinea = async (linea, destino) => {
+    try {
+      await pasarReservaPollitos(linea._id, destino);
+      await cargar();
+      Swal.fire({ icon: "success", title: "Reserva pasada", timer: 1800, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire("Error", err.message || "No se pudo pasar la reserva.", "error");
+      throw err;
+    }
+  };
+
   // Excel: una fila por línea del reparto, con la carga a la que pertenece.
   const exportarExcel = () =>
     exportarTablaExcel({
@@ -678,7 +815,11 @@ const PlanPollitosPage = () => {
         { header: "Nace", valor: ({ f }) => formatearFechaLocal(f.fechaNacimiento) },
         { header: "Gordo", valor: ({ f }) => formatearFechaLocal(f.fechaGordo) },
         { header: "Ingreso incubadora", valor: ({ f }) => formatearFechaLocal(f.fechaIngreso) },
-        { header: "Plantel", valor: ({ f }) => f.lote?.numeroLote ?? "proyectada" },
+        {
+          header: "Plantel",
+          valor: ({ f }) =>
+            f.lote?.numeroLote ?? (f.tipo === "sin_carga" ? "sin carga (a pasar)" : "proyectada"),
+        },
         { header: "Huevos", valor: ({ f }) => f.huevosIngresados },
         { header: "A nacer", valor: ({ f }) => f.aNacer },
         { header: "Estimado", valor: ({ f }) => (f.estimado ? "Sí" : "No") },
@@ -700,6 +841,7 @@ const PlanPollitosPage = () => {
             l?.destino === "granja" && l.galpon ? `${prefijoGranja(l.granja)}${l.galpon}` : "",
         },
         { header: "Pollitos", valor: ({ l }) => l?.cantidad ?? "" },
+        { header: "A futuro", valor: ({ l }) => (l?.proyectada ? "Sí" : "") },
         { header: "Orden de carga", valor: ({ l }) => l?.orden?.numero ?? "" },
         { header: "Estado orden", valor: ({ l }) => l?.orden?.estado ?? "" },
       ],
@@ -783,6 +925,32 @@ const PlanPollitosPage = () => {
                 </div>
               </div>
             </div>
+
+            {/* Compromisos tomados sobre cargas proyectadas que ya no están: no se
+                pasan solos a la carga real (decisión del usuario), así que se avisa
+                arriba de todo para que no queden olvidados. */}
+            {resumen?.pendientesDePasar > 0 && (
+              <div className="alert alert-danger d-flex flex-wrap align-items-center gap-2 py-2 small">
+                <i className="bi bi-exclamation-octagon"></i>
+                <span>
+                  Hay <strong>{formatearNumero(resumen.pendientesDePasar)}</strong> pollitos comprometidos
+                  sobre cargas proyectadas que ya no están ({resumen.diasPendientesDePasar} día(s)).
+                  Pasalos a la carga real.
+                </span>
+                <button
+                  className="btn btn-sm btn-danger ms-auto"
+                  onClick={() => {
+                    const f = filas.find((x) => x.tipo === "sin_carga");
+                    if (!f) return;
+                    const pc = partesClave(f.claveNacimiento);
+                    setMes({ anio: pc.anio, mes: pc.mes });
+                    setAbierta(f.clave);
+                  }}
+                >
+                  Ver el primero
+                </button>
+              </div>
+            )}
 
             {resumen?.sobrevendidas > 0 && (
               <div className="alert alert-warning py-2 small">
@@ -949,11 +1117,16 @@ const PlanPollitosPage = () => {
                   </span>
                   proyectada (todavía no se cargó la incubadora)
                 </span>
+                <span>
+                  <span className="badge border border-danger border-2 bg-danger-subtle me-1">&nbsp;</span>
+                  sin carga (compromisos a pasar)
+                </span>
                 <span className="ms-auto">
                   <span className="badge bg-dark-subtle text-dark-emphasis me-1">0.000</span>
                   nacen ese día ·{" "}
                   <i className="bi bi-person text-primary"></i> cliente ·{" "}
                   <i className="bi bi-truck text-success"></i> con orden emitida ·{" "}
+                  <i className="bi bi-hourglass-split text-secondary"></i> a futuro ·{" "}
                   <i className="bi bi-house-door text-success"></i> engorde propio
                 </span>
               </div>
@@ -971,7 +1144,9 @@ const PlanPollitosPage = () => {
       {filaAbierta && (
         <CargaModal
           fila={filaAbierta}
+          destinos={filas}
           clientes={clientes}
+          onPasar={pasarLinea}
           onCerrar={() => setAbierta(null)}
           onEmitir={emitirOrden}
           onBorrar={borrarLinea}
