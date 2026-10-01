@@ -9,6 +9,7 @@ import {
 } from "../services/api";
 import Layout from "../components/Layout";
 import { trozadoLabel } from "../components/TrozadoTable";
+import { claveEntero, nombrarEspecie, ordenarPorEspecie, textoCalibre } from "../utils/especies";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer,
@@ -164,17 +165,23 @@ const DashboardPage = () => {
   // ── Gráfico stock por calibre ──────────────────────────────────────────────
   const dataBarStock = (() => {
     if (!stockGranja) return [];
-    const calibres = new Set([
-      ...(stockGranja.stockCañete   || []).map((c) => c.calibre),
-      ...(stockGranja.stockTrigotuc || []).map((c) => c.calibre),
-    ]);
-    const mCañete   = Object.fromEntries((stockGranja.stockCañete   || []).map((c) => [c.calibre, c.cajones]));
-    const mTrigotuc = Object.fromEntries((stockGranja.stockTrigotuc || []).map((c) => [c.calibre, c.cajones]));
-    return [...calibres].sort((a, b) => a - b).map((cal) => ({
-      calibre: `Cal. ${cal}`,
-      Cañete:   mCañete[cal]   || 0,
-      Trigotuc: mTrigotuc[cal] || 0,
-    }));
+    // Por (especie, calibre): el stock trae una fila por cada una, y agrupar solo
+    // por calibre hacía que la gallina calibre 7 pisara al pollo calibre 7.
+    const todas = [...(stockGranja.stockCañete || []), ...(stockGranja.stockTrigotuc || [])];
+    const nombrar = nombrarEspecie(todas);
+    const filas = new Map();
+    // Por calibre y después agrupado por especie (el sort es estable).
+    for (const c of ordenarPorEspecie([...todas].sort((a, b) => a.calibre - b.calibre))) {
+      if (!filas.has(claveEntero(c))) filas.set(claveEntero(c), c);
+    }
+    const mCañete   = Object.fromEntries((stockGranja.stockCañete   || []).map((c) => [claveEntero(c), c.cajones]));
+    const mTrigotuc = Object.fromEntries((stockGranja.stockTrigotuc || []).map((c) => [claveEntero(c), c.cajones]));
+    return [...filas.entries()]
+      .map(([k, c]) => ({
+        calibre:  textoCalibre(c, nombrar),
+        Cañete:   mCañete[k]   || 0,
+        Trigotuc: mTrigotuc[k] || 0,
+      }));
   })();
 
   const trozadosStock = (() => {

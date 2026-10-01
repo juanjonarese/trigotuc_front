@@ -77,6 +77,42 @@ export const mismoEntero = (a, b) =>
 export const hayVariasEspecies = (lineas = []) =>
   new Set((lineas || []).map(especieDe)).size > 1;
 
+// ── La especie en las ÓRDENES (2026-10-01) ──────────────────────────────────
+// En una orden (impresa, en PDF o en su detalle) "Cal. 7" no alcanza: el que
+// carga en la cámara tiene que saber si es pollo o gallina. La regla para las
+// órdenes NO es `hayVariasEspecies`: una orden que lleva SOLO gallina tiene una
+// sola especie y sin el nombre se leería como pollo. Se nombra la especie en
+// cada renglón siempre que haya algo que no sea pollo; una orden solo de pollo
+// se ve como siempre.
+
+/** ¿Hay que decir la especie en cada renglón de esta orden? */
+export const nombrarEspecie = (lineas = []) =>
+  (lineas || []).some((l) => especieDe(l) !== ESPECIE_DEFAULT);
+
+/** Lo mismo, mirando los calibres y los trozados de una orden juntos. */
+export const nombrarEspecieOrden = (orden) =>
+  nombrarEspecie([...(orden?.calibres || []), ...(orden?.trozados || [])]);
+
+/** "Cal. 7", o "Gallina · Cal. 7" si la orden lleva algo que no es pollo. */
+export const textoCalibre = (linea, conEspecie) =>
+  conEspecie
+    ? `${etiquetaEspecie(especieDe(linea))} · Cal. ${linea.calibre}`
+    : `Cal. ${linea.calibre}`;
+
+/** Antepone la especie a un texto ya armado (el corte de un trozado, por ejemplo). */
+export const conEspecie = (linea, texto, nombrar) =>
+  nombrar ? `${etiquetaEspecie(especieDe(linea))} · ${texto}` : texto;
+
+/**
+ * Las líneas agrupadas por especie (pollo, gallina, gallo), conservando el orden
+ * dentro de cada una: así el "calibre 7" de pollo y el de gallina no quedan
+ * intercalados en el papel.
+ */
+export const ordenarPorEspecie = (lineas = []) =>
+  [...(lineas || [])].sort(
+    (a, b) => ESPECIES.indexOf(especieDe(a)) - ESPECIES.indexOf(especieDe(b))
+  );
+
 /**
  * La especie de un lote de faena. Un lote sale de UNA orden de carga, así que
  * todas sus líneas son de lo mismo: alcanza con mirar la primera que haya.

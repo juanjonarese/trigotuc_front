@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import { trozadoLabel } from "../components/TrozadoTable";
 import { escapeHtml } from "./escapeHtml";
+import { especieDe, nombrarEspecieOrden, textoCalibre, conEspecie, ordenarPorEspecie } from "./especies";
 
 const camaraNombre = (v) => (v === "cañete" ? "Cañete" : v === "trigotuc" ? "Trigotuc" : v);
 const fmtNumOrden  = (n) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(Number(n || 0));
@@ -13,34 +14,38 @@ export const imprimirOrdenEnvio = (e) => {
   const chofer  = e.chofer?.nombreUsuario ? escapeHtml(e.chofer.nombreUsuario) : "—";
   const camion  = e.camion ? escapeHtml(`${e.camion.marca || ""} ${e.camion.patente ? "— " + e.camion.patente : ""}`.trim()) : "—";
   const fecha   = new Date(e.fecha).toLocaleDateString("es-AR");
+  // Si viaja gallina (o gallo), cada renglón dice qué es: "Calibre 7" solo no
+  // le dice a quien recibe si es pollo o gallina.
+  const nombrar = nombrarEspecieOrden(e);
+  const resaltar = (l) => (nombrar && especieDe(l) !== "pollo" ? ' class="otra-especie"' : "");
 
-  const filasCalibres = (e.calibres || []).map((c) => `
-    <tr>
-      <td>Calibre ${escapeHtml(String(c.calibre))}</td>
+  const filasCalibres = ordenarPorEspecie(e.calibres).map((c) => `
+    <tr${resaltar(c)}>
+      <td>${escapeHtml(nombrar ? textoCalibre(c, true) : `Calibre ${c.calibre}`)}</td>
       <td class="num">${fmtNumOrden(c.cajones)}</td>
       <td class="num">${fmtNumOrden(c.pollos)}</td>
       <td class="num">${fmtNumOrden(Number(c.cajones) * 20)}</td>
     </tr>`).join("");
 
-  const filasTrozados = (e.trozados || []).map((t) => `
-    <tr>
-      <td>${escapeHtml(trozadoLabel(t.tipo))} <span class="clase">Clase ${escapeHtml(t.clase || "A")}</span></td>
+  const filasTrozados = ordenarPorEspecie(e.trozados).map((t) => `
+    <tr${resaltar(t)}>
+      <td>${escapeHtml(conEspecie(t, trozadoLabel(t.tipo), nombrar))} <span class="clase">Clase ${escapeHtml(t.clase || "A")}</span></td>
       <td class="num">${fmtNumOrden(t.cajas)}</td>
       <td class="num">—</td>
       <td class="num">${fmtNumOrden(t.kgTotal != null ? t.kgTotal : Number(t.cajas) * Number(t.kgCaja))}</td>
     </tr>`).join("");
 
   const seccionCalibres = filasCalibres
-    ? `<h2>Calibres (pollo entero)</h2>
+    ? `<h2>${nombrar ? "Calibres (entero)" : "Calibres (pollo entero)"}</h2>
        <table class="detalle">
-         <thead><tr><th>Detalle</th><th class="num">Cajones</th><th class="num">Pollos</th><th class="num">Kg</th></tr></thead>
+         <thead><tr><th>Detalle</th><th class="num">Cajones</th><th class="num">${nombrar ? "Aves" : "Pollos"}</th><th class="num">Kg</th></tr></thead>
          <tbody>${filasCalibres}</tbody>
        </table>` : "";
 
   const seccionTrozados = filasTrozados
     ? `<h2>Trozados</h2>
        <table class="detalle">
-         <thead><tr><th>Detalle</th><th class="num">Cajas</th><th class="num">Pollos</th><th class="num">Kg</th></tr></thead>
+         <thead><tr><th>Detalle</th><th class="num">Cajas</th><th class="num">${nombrar ? "Aves" : "Pollos"}</th><th class="num">Kg</th></tr></thead>
          <tbody>${filasTrozados}</tbody>
        </table>` : "";
 
@@ -64,6 +69,7 @@ export const imprimirOrdenEnvio = (e) => {
       table.detalle .num { text-align: right; }
       .cap { text-transform: capitalize; }
       .clase { font-size: 10px; color: #888; }
+      tr.otra-especie td:first-child { font-weight: bold; }
       .totales { display: flex; justify-content: flex-end; gap: 24px; margin: 12px 0 20px; font-size: 13px; }
       .totales b { font-size: 16px; }
       .firmas { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 48px; }
@@ -85,7 +91,7 @@ export const imprimirOrdenEnvio = (e) => {
     ${seccionTrozados}
     <div class="totales">
       <span>Total cajones: <b>${fmtNumOrden(e.totalCajones)}</b></span>
-      <span>Total pollos: <b>${fmtNumOrden(e.totalPollos)}</b></span>
+      <span>Total ${nombrar ? "aves" : "pollos"}: <b>${fmtNumOrden(e.totalPollos)}</b></span>
       <span>Total kg: <b>${fmtNumOrden(Number(e.pesoTotalKg || 0) + Number(e.totalKgTrozados || 0))}</b></span>
     </div>
     ${e.observaciones ? `<p style="font-size:13px;color:#555"><strong>Obs:</strong> ${escapeHtml(e.observaciones)}</p>` : ""}
@@ -110,6 +116,7 @@ const construirPDFOrdenEnvio = (e) => {
   const chofer  = e.chofer?.nombreUsuario || "—";
   const camion  = e.camion ? `${e.camion.marca || ""}${e.camion.patente ? " — " + e.camion.patente : ""}`.trim() || "—" : "—";
   const fecha   = new Date(e.fecha).toLocaleDateString("es-AR");
+  const nombrar = nombrarEspecieOrden(e);
 
   // ── Header ──
   doc.setFontSize(20); doc.setFont("helvetica", "bold"); doc.setTextColor(0);
@@ -151,10 +158,10 @@ const construirPDFOrdenEnvio = (e) => {
   y += 16;
 
   // ── Calibres ──
-  const calibres = (e.calibres || []).filter((c) => Number(c.cajones) > 0);
+  const calibres = ordenarPorEspecie((e.calibres || []).filter((c) => Number(c.cajones) > 0));
   if (calibres.length > 0) {
     doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.setTextColor(130);
-    doc.text("CALIBRES (POLLO ENTERO)", 14, y + 4);
+    doc.text(nombrar ? "CALIBRES (ENTERO)" : "CALIBRES (POLLO ENTERO)", 14, y + 4);
     y += 7;
     doc.setDrawColor(200); doc.setLineWidth(0.3); doc.line(14, y, W - 14, y); y += 2;
 
@@ -162,14 +169,16 @@ const construirPDFOrdenEnvio = (e) => {
     doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.setTextColor(80);
     doc.text("Calibre", 16, y + 5.5);
     doc.text("Cajones", W / 2 - 10, y + 5.5, { align: "right" });
-    doc.text("Pollos", W / 2 + 30, y + 5.5, { align: "right" });
+    doc.text(nombrar ? "Aves" : "Pollos", W / 2 + 30, y + 5.5, { align: "right" });
     doc.text("Kg total", W - 16, y + 5.5, { align: "right" });
     y += 8;
 
     calibres.forEach((c, i) => {
       if (i % 2 === 1) { doc.setFillColor(250, 250, 250); doc.rect(14, y, W - 28, 7, "F"); }
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(0);
-      doc.text(`Cal. ${c.calibre}`, 16, y + 5);
+      doc.setFont("helvetica", nombrar && especieDe(c) !== "pollo" ? "bold" : "normal");
+      doc.text(textoCalibre(c, nombrar), 16, y + 5);
+      doc.setFont("helvetica", "normal");
       doc.text(fmtNumOrden(c.cajones), W / 2 - 10, y + 5, { align: "right" });
       doc.text(fmtNumOrden(c.pollos), W / 2 + 30, y + 5, { align: "right" });
       doc.text(`${fmtNumOrden(Number(c.cajones) * 20)} kg`, W - 16, y + 5, { align: "right" });
@@ -179,7 +188,7 @@ const construirPDFOrdenEnvio = (e) => {
   }
 
   // ── Trozados ──
-  const trozados = (e.trozados || []).filter((t) => Number(t.cajas) > 0);
+  const trozados = ordenarPorEspecie((e.trozados || []).filter((t) => Number(t.cajas) > 0));
   if (trozados.length > 0) {
     doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.setTextColor(130);
     doc.text("TROZADOS", 14, y + 4);
@@ -196,7 +205,9 @@ const construirPDFOrdenEnvio = (e) => {
     trozados.forEach((t, i) => {
       if (i % 2 === 1) { doc.setFillColor(250, 250, 250); doc.rect(14, y, W - 28, 7, "F"); }
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(0);
-      doc.text(`${trozadoLabel(t.tipo)} (Clase ${t.clase || "A"})`, 16, y + 5);
+      doc.setFont("helvetica", nombrar && especieDe(t) !== "pollo" ? "bold" : "normal");
+      doc.text(conEspecie(t, `${trozadoLabel(t.tipo)} (Clase ${t.clase || "A"})`, nombrar), 16, y + 5);
+      doc.setFont("helvetica", "normal");
       doc.text(fmtNumOrden(t.cajas), W / 2, y + 5, { align: "right" });
       doc.text(`${fmtNumOrden(t.kgTotal != null ? t.kgTotal : Number(t.cajas) * Number(t.kgCaja))} kg`, W - 16, y + 5, { align: "right" });
       y += 7;
@@ -209,7 +220,7 @@ const construirPDFOrdenEnvio = (e) => {
   doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.setTextColor(0);
   const totalKg = Number(e.pesoTotalKg || 0) + Number(e.totalKgTrozados || 0);
   doc.text(
-    `Total cajones: ${fmtNumOrden(e.totalCajones)}    Total pollos: ${fmtNumOrden(e.totalPollos)}    Total kg: ${fmtNumOrden(totalKg)}`,
+    `Total cajones: ${fmtNumOrden(e.totalCajones)}    Total ${nombrar ? "aves" : "pollos"}: ${fmtNumOrden(e.totalPollos)}    Total kg: ${fmtNumOrden(totalKg)}`,
     W - 14, y, { align: "right" }
   );
   y += 10;

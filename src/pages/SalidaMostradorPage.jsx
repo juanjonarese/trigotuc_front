@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Layout from "../components/Layout";
 import BotonExcel from "../components/BotonExcel";
 import CalibreTable from "../components/CalibreTable";
-import { BADGE_ESPECIE, especieDe, etiquetaEspecie, mismoEntero, claveTrozado, hayVariasEspecies } from "../utils/especies";
+import { BADGE_ESPECIE, especieDe, etiquetaEspecie, mismoEntero, claveEntero, claveTrozado, hayVariasEspecies, nombrarEspecie, textoCalibre } from "../utils/especies";
 import {
   obtenerResumenStock,
   obtenerStockHuevosMostrador,
@@ -105,9 +105,10 @@ const SalidaMostradorPage = () => {
             { header: "Fecha",   valor: (f) => new Date(f.s.fecha).toLocaleDateString("es-AR") },
             { header: "Hora",    valor: (f) => new Date(f.s.fecha).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }) },
             { header: "Producto", valor: (f) => {
-                if (f.d.clase === "entero") return "Entero Cal." + f.d.calibre;
                 if (f.d.clase === "huevo") return etiquetasHuevo[f.d.tipo] || f.d.tipo;
-                return (TIPOS_LABEL[f.d.tipo] || f.d.tipo) + (f.d.claseTrozado ? " " + f.d.claseTrozado : "");
+                const esp = etiquetaEspecie(especieDe(f.d));
+                if (f.d.clase === "entero") return esp + " entero Cal." + f.d.calibre;
+                return esp + " " + (TIPOS_LABEL[f.d.tipo] || f.d.tipo) + (f.d.claseTrozado ? " " + f.d.claseTrozado : "");
               } },
             { header: "Clase",   valor: (f) => f.d.clase },
             { header: "Calibre", valor: (f) => (f.d.clase === "entero" ? f.d.calibre : "") },
@@ -572,13 +573,15 @@ const SalidaMostradorPage = () => {
 
                 {editSalida.enteros.length > 0 && (
                   <div className="mb-3">
-                    <label className="form-label fw-semibold mb-1">Pollo entero (cajones)</label>
+                    <label className="form-label fw-semibold mb-1">
+                      {nombrarEspecie(editSalida.enteros) ? "Entero (cajones)" : "Pollo entero (cajones)"}
+                    </label>
                     <table className="table table-sm table-bordered align-middle mb-0">
                       <thead className="table-light"><tr><th>Calibre</th><th style={{ width: "9rem" }}>Cajones</th></tr></thead>
                       <tbody>
                         {editSalida.enteros.map((e, idx) => (
-                          <tr key={e.calibre}>
-                            <td><span className="badge bg-primary">Cal. {e.calibre}</span></td>
+                          <tr key={claveEntero(e)}>
+                            <td><span className="badge bg-primary">{textoCalibre(e, nombrarEspecie(editSalida.enteros))}</span></td>
                             <td>
                               <input type="number" min="0" step="1" className="form-control form-control-sm text-center"
                                 value={e.cajones} onChange={(ev) => setEnteroCajones(idx, ev.target.value)} />
