@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import SanidadGalpon from "./SanidadGalpon";
 import { formatearFechaLocal } from "../utils/dateUtils";
 import {
   formatearNumero,
@@ -119,6 +120,9 @@ const HistorialReproductor = ({
   tab: tabControlado,
   onTabChange,
   mostrarTabs = true,
+  // Pestaña de vacunas y tratamientos (solo lectura). La usa el modal del galpón;
+  // en Datos Semanales la sanidad tiene su propia acción para cargarla.
+  mostrarSanidad = false,
 }) => {
   const grupos = agruparMortandadPorSemana(lote?.mortandad);
   const [tabInterno, setTabInterno] = useState(tabInicial);
@@ -138,6 +142,7 @@ const HistorialReproductor = ({
   const controles = [...(lote?.controlesSemanales || [])].sort((a, b) => b.semana - a.semana);
   const semanaActual = lote?.semanaVida ?? 0;
   const bajas = (lote?.mortandad || []).reduce((s, m) => s + m.cantidad, 0);
+  const registrosSanidad = (lote?.vacunas?.length || 0) + (lote?.tratamientos?.length || 0);
 
   return (
     <>
@@ -174,11 +179,26 @@ const HistorialReproductor = ({
             )}
           </button>
         </li>
+        {mostrarSanidad && (
+          <li className="nav-item">
+            <button
+              className={`nav-link ${tab === "sanidad" ? "active" : ""}`}
+              onClick={() => setTab("sanidad")}
+            >
+              <i className="bi bi-shield-plus me-1"></i>Sanidad
+              {registrosSanidad > 0 && (
+                <span className="badge bg-info text-dark ms-1">{registrosSanidad}</span>
+              )}
+            </button>
+          </li>
+        )}
       </ul>
       )}
 
       <div className={`p-3 ${mostrarTabs ? "border border-top-0 rounded-bottom" : "border rounded"}`}>
-        {tab === "pesaje" ? (
+        {tab === "sanidad" && mostrarSanidad ? (
+          <SanidadGalpon lote={lote} modulo="reproductores" />
+        ) : tab === "pesaje" ? (
           filasPeso.length === 0 ? (
             <p className="text-muted small text-center py-3 mb-0">Sin pesajes registrados</p>
           ) : (
@@ -230,8 +250,8 @@ const HistorialReproductor = ({
               </table>
               <div className="alert alert-light border small mt-3 mb-0">
                 <i className="bi bi-info-circle me-1"></i>
-                Todavía no hay tabla de peso esperado para reproductores. Cuando la tengan, se
-                agrega igual que en crianza y la tabla muestra la diferencia contra el objetivo.
+                La comparación de estos pesos contra la tabla Arbor Acres está en la pantalla
+                de Galpones, en la "Comparativa de peso por galpón".
               </div>
             </div>
           )

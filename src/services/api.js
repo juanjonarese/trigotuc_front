@@ -1392,3 +1392,32 @@ export const sacarSinDestino = async (loteId, data) => {
   });
   return handleResponse(response);
 };
+
+// ============================================
+// SANIDAD DEL GALPÓN (vacunas y tratamientos)
+// ============================================
+// Mismo formulario en Granja y en Reproductoras (2026-09-30). `modulo` elige el
+// back: "granja" → /lotes-granja, "reproductores" → /lotes-reproductores.
+// `tipo` es "vacuna" o "tratamiento". Todas devuelven el lote actualizado.
+const BASE_SANIDAD = { granja: "lotes-granja", reproductores: "lotes-reproductores" };
+
+export const agregarSanidad = async (modulo, loteId, tipo, data) => {
+  const response = await fetch(`${API_URL}/${BASE_SANIDAD[modulo]}/${loteId}/${tipo}`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const editarSanidad = async (modulo, loteId, tipo, registroId, data) => {
+  const response = await fetch(`${API_URL}/${BASE_SANIDAD[modulo]}/${loteId}/${tipo}/${registroId}`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const eliminarSanidad = async (modulo, loteId, tipo, registroId) => {
+  const response = await fetch(`${API_URL}/${BASE_SANIDAD[modulo]}/${loteId}/${tipo}/${registroId}`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
