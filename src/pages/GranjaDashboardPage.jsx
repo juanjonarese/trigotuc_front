@@ -7,6 +7,7 @@ import BotonExcel from "../components/BotonExcel";
 import { escapeHtml } from "../utils/escapeHtml";
 import {
   BADGE_ESPECIE, especieDe, especieDelLote, etiquetaEspecie, claveEntero, claveTrozado,
+  nombrarEspecie, textoCalibre, conEspecie,
 } from "../utils/especies";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
 import DesgloseFaena from "../components/DesgloseFaena";
@@ -312,11 +313,14 @@ const GranjaDashboardPage = () => {
       despacho: "Despacho", envio_camara: "Envío entre cámaras", ajuste_manual: "Ajuste manual",
     };
     const TIPOS = { filet: "Filet", pata: "Pata muslo", alita: "Alita", menudo: "Menudo", carcaza: "Carcaza", trocitos: "Trocitos" };
-    const detalleTxt = (m) => (m.detalle || []).map((d) =>
-      d.clase === "entero"
-        ? "Cal." + d.calibre + ": " + d.cajones + " caj"
-        : (TIPOS[d.tipo] || d.tipo) + ": " + d.cajas + " cajas"
-    ).join(" · ");
+    const detalleTxt = (m) => {
+      const nombrar = nombrarEspecie(m.detalle);
+      return (m.detalle || []).map((d) =>
+        d.clase === "entero"
+          ? textoCalibre(d, nombrar) + ": " + d.cajones + " caj"
+          : conEspecie(d, TIPOS[d.tipo] || d.tipo, nombrar) + ": " + d.cajas + " cajas"
+      ).join(" · ");
+    };
 
     exportarTablaExcel({
       filas: cuentaCorriente,
@@ -389,7 +393,7 @@ const GranjaDashboardPage = () => {
     const fmt = (n) => n != null ? new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n) : "—";
 
     const calibresHtml = (lote.calibres || []).map(c =>
-      `<span class="badge">Cal. ${c.calibre}: ${fmt(c.cajones)} cajones (${fmt(c.cajones * 20)} kg)</span>`
+      `<span class="badge">${textoCalibre(c, nombrarEspecie(lote.calibres))}: ${fmt(c.cajones)} cajones (${fmt(c.cajones * 20)} kg)</span>`
     ).join("");
 
     const html = `<!DOCTYPE html>
@@ -499,7 +503,7 @@ const GranjaDashboardPage = () => {
       ["Kg totales",      lote.pesoTotal],
       ["Kg/pollo",        lote.pesoPromedio || "—"],
       [""],
-      ...(lote.calibres || []).map(c => [`Cal. ${c.calibre}`, `${c.cajones} cajones`]),
+      ...(lote.calibres || []).map(c => [textoCalibre(c, nombrarEspecie(lote.calibres)), `${c.cajones} cajones`]),
       [""],
       ["DATOS DE FAENA"],
       ["Pollos vivos",         lote.unidadesFaenadas || "—"],

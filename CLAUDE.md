@@ -121,6 +121,9 @@ Secciones colapsables, fondo oscuro, auto-expande según la ruta activa. Visibil
   diferencia y su motivo. Lo que entra al silo es lo **pesado** en la recepción
   (también en las líneas en bolsa); con diferencia, el motivo es obligatorio.
   `AlimentoRecepcionPage` se eliminó y `/alimento/recepcion` redirige a Silos.
+  Desde el 2026-10-01 también se **transfiere** alimento de un silo a otro
+  (`TransferenciaModal`, botón "Transferir entre silos" o el link "transferir"
+  de cada tipo), con su historial para corregir o deshacer.
 - **Granja** (colapsable) — `superadmin` / `administracion_granja` / `granja`:
   - Ingreso de pollitos, Galpones, Datos Semanales (solo `superadmin`/`granja`), Órdenes de Carga (Venta) (solo `superadmin`/`administracion_granja`), Recepción de Órdenes.
 - **Reproductores** (colapsable) — solo `superadmin` por ahora (hasta definir los roles del módulo):

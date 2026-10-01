@@ -1191,6 +1191,15 @@ export const eliminarReservaPollitos = async (id) => {
   return handleResponse(response);
 };
 
+// Pasa una reserva a otra carga (2026-10-01): `{ tanda }` para llevarla a una
+// carga real, `{ fechaNacimiento: "AAAA-MM-DD" }` para otro día proyectado.
+export const pasarReservaPollitos = async (id, data) => {
+  const response = await fetch(`${API_URL}/reservas-pollitos/${id}/pasar`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
 // ── Ventas del módulo (huevos de descarte y pollitos) ──
 export const descartarApiHuevos = async (data) => {
   const response = await fetch(`${API_URL}/reproductores/descarte-api`, {
@@ -1406,6 +1415,30 @@ export const deshacerRecepcionAlimento = async (id) => {
 export const obtenerAjustesSilo = async (filtros = {}) => {
   const params = new URLSearchParams(filtros);
   const response = await fetch(`${API_URL}/envios-alimento/ajustes?${params}`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+// Transferencia de alimento entre silos (2026-10-01): sale de uno y entra en otro.
+export const transferirAlimentoSilo = async (data) => {
+  const response = await fetch(`${API_URL}/envios-alimento/transferencias`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+export const editarTransferenciaSilo = async (id, data) => {
+  const response = await fetch(`${API_URL}/envios-alimento/transferencias/${id}`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+export const eliminarTransferenciaSilo = async (id) => {
+  const response = await fetch(`${API_URL}/envios-alimento/transferencias/${id}`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+export const obtenerTransferenciasSilo = async (filtros = {}) => {
+  const params = new URLSearchParams(filtros);
+  const response = await fetch(`${API_URL}/envios-alimento/transferencias?${params}`, { headers: getAuthHeaders() });
   return handleResponse(response);
 };
 

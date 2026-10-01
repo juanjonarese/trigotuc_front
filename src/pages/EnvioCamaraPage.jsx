@@ -4,7 +4,10 @@ import Layout from "../components/Layout";
 import BotonExcel from "../components/BotonExcel";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
 import { trozadoLabel } from "../components/TrozadoTable";
-import { BADGE_ESPECIE, especieDe, etiquetaEspecie, claveTrozado, hayVariasEspecies } from "../utils/especies";
+import {
+  BADGE_ESPECIE, especieDe, etiquetaEspecie, claveTrozado, hayVariasEspecies,
+  nombrarEspecieOrden, textoCalibre, conEspecie, ordenarPorEspecie,
+} from "../utils/especies";
 import EditarEnvioModal from "../components/EditarEnvioModal";
 import { crearEnvioCamara, obtenerEnviosCamara, obtenerCamiones, obtenerChoferes, eliminarEnvioCamara, obtenerResumenStock } from "../services/api";
 import { ajustarFechaParaGuardar } from "../utils/dateUtils";
@@ -127,10 +130,10 @@ const EnvioCamaraPage = () => {
       { header: "Destino",     valor: (e) => camaraLabel(e.camaraDestino) },
       { header: "Camión",      valor: (e) => (e.camion ? e.camion.marca + " — " + e.camion.patente : "") },
       { header: "Chofer",      valor: (e) => e.chofer?.nombreUsuario },
-      { header: "Calibres",    valor: (e) => (e.calibres || [])
-          .map((c) => "Cal." + c.calibre + ": " + c.cajones + " caj").join(" · "), ancho: 36 },
-      { header: "Trozados",    valor: (e) => (e.trozados || [])
-          .map((t) => trozadoLabel(t.tipo) + (t.clase ? " " + t.clase : "") + ": " + t.cajas + " cajas").join(" · "), ancho: 36 },
+      { header: "Calibres",    valor: (e) => ordenarPorEspecie(e.calibres)
+          .map((c) => textoCalibre(c, nombrarEspecieOrden(e)) + ": " + c.cajones + " caj").join(" · "), ancho: 36 },
+      { header: "Trozados",    valor: (e) => ordenarPorEspecie(e.trozados)
+          .map((t) => conEspecie(t, trozadoLabel(t.tipo) + (t.clase ? " " + t.clase : ""), nombrarEspecieOrden(e)) + ": " + t.cajas + " cajas").join(" · "), ancho: 36 },
       { header: "Pollos",      valor: (e) => e.totalPollos ?? 0 },
       { header: "Cajones",     valor: (e) => e.totalCajones ?? 0 },
       { header: "Kg enteros",  valor: (e) => e.pesoTotalKg ?? 0 },
@@ -514,14 +517,14 @@ const EnvioCamaraPage = () => {
                           </div>
                         )}
                         <div className="d-flex flex-wrap gap-1 mb-2">
-                          {e.calibres.map((c, i) => (
+                          {ordenarPorEspecie(e.calibres).map((c, i) => (
                             <span key={i} className="badge bg-info text-dark">
-                              Cal.{c.calibre}: {formatNum(c.cajones)} caj
+                              {textoCalibre(c, nombrarEspecieOrden(e))}: {formatNum(c.cajones)} caj
                             </span>
                           ))}
-                          {(e.trozados || []).map((t, i) => (
+                          {ordenarPorEspecie(e.trozados).map((t, i) => (
                             <span key={`t${i}`} className="badge bg-warning text-dark">
-                              {trozadoLabel(t.tipo)}{t.clase ? ` · ${t.clase}` : ""}: {formatNum(t.cajas)} caj
+                              {conEspecie(t, `${trozadoLabel(t.tipo)}${t.clase ? ` · ${t.clase}` : ""}`, nombrarEspecieOrden(e))}: {formatNum(t.cajas)} caj
                             </span>
                           ))}
                         </div>
@@ -586,14 +589,14 @@ const EnvioCamaraPage = () => {
                           </td>
                           <td>
                             <div className="d-flex flex-wrap gap-1">
-                              {e.calibres.map((c, i) => (
+                              {ordenarPorEspecie(e.calibres).map((c, i) => (
                                 <span key={i} className="badge bg-info text-dark">
-                                  Cal.{c.calibre}: {formatNum(c.cajones)} caj
+                                  {textoCalibre(c, nombrarEspecieOrden(e))}: {formatNum(c.cajones)} caj
                                 </span>
                               ))}
-                              {(e.trozados || []).map((t, i) => (
+                              {ordenarPorEspecie(e.trozados).map((t, i) => (
                                 <span key={`t${i}`} className="badge bg-warning text-dark">
-                                  {trozadoLabel(t.tipo)}{t.clase ? ` · ${t.clase}` : ""}: {formatNum(t.cajas)} caj
+                                  {conEspecie(t, `${trozadoLabel(t.tipo)}${t.clase ? ` · ${t.clase}` : ""}`, nombrarEspecieOrden(e))}: {formatNum(t.cajas)} caj
                                 </span>
                               ))}
                             </div>

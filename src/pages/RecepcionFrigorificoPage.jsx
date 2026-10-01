@@ -21,6 +21,7 @@ import Swal from "sweetalert2";
 import { exportarTablaExcel } from "../utils/exportarExcel";
 import { camaraLbl, estiloCamara, bordeCamara } from "../utils/camaras";
 import { BadgeCamara, FranjaCamara, FiltroCamara } from "../components/CamaraOrigen";
+import { especieDe, nombrarEspecieOrden, textoCalibre, conEspecie, ordenarPorEspecie } from "../utils/especies";
 
 const TIPOS_TROZADO = [
   { tipo: "filet",   label: "Filet"      },
@@ -37,10 +38,11 @@ const fmt       = (n) => new Intl.NumberFormat("es-AR", { maximumFractionDigits:
 const fmtFecha  = (f) => f ? new Date(f).toLocaleDateString("es-AR") : "—";
 
 // Calibres y cortes de un envío en una sola línea, para que entren en una celda.
-const detalleCalibresTxt = (e) => (e.calibres || [])
-  .map((c) => "Cal." + c.calibre + ": " + c.cajones + " caj").join(" · ");
-const detalleTrozadosTxt = (e) => (e.trozados || [])
-  .map((t) => t.tipo + (t.clase ? " " + t.clase : "") + ": " + t.cajas + " cajas").join(" · ");
+// Si lleva gallina (o gallo), cada renglón dice qué es.
+const detalleCalibresTxt = (e) => ordenarPorEspecie(e.calibres)
+  .map((c) => calLbl(e, c) + ": " + c.cajones + " caj").join(" · ");
+const detalleTrozadosTxt = (e) => ordenarPorEspecie(e.trozados)
+  .map((t) => conEspecie(t, t.tipo + (t.clase ? " " + t.clase : ""), nombrarEspecieOrden(e)) + ": " + t.cajas + " cajas").join(" · ");
 
 const tipoLbl   = (tipo) => TIPOS_TROZADO.find((x) => x.tipo === tipo)?.label || tipo;
 
@@ -49,7 +51,11 @@ const tipoLbl   = (tipo) => TIPOS_TROZADO.find((x) => x.tipo === tipo)?.label ||
 // muslo B 32". Sin la clase se ven dos filas idénticas y quien recibe no sabe cuál
 // es cuál. La clase ausente se lee como "A", igual que en el resto del sistema.
 const claseLbl   = (t) => t?.clase || "A";
-const trozadoLbl = (t) => `${tipoLbl(t.tipo)} ${claseLbl(t)}`;
+// Con la orden, para nombrar la especie si lleva algo que no es pollo: "Cal. 7"
+// o "Filet A" solos no dicen si es pollo o gallina.
+const trozadoLbl = (t, orden) =>
+  conEspecie(t, `${tipoLbl(t.tipo)} ${claseLbl(t)}`, nombrarEspecieOrden(orden));
+const calLbl = (orden, c) => textoCalibre(c, nombrarEspecieOrden(orden));
 
 // ── Imprimir remito de entrega ────────────────────────────────────────────────
 const imprimirRemito = (despacho) => {
@@ -62,16 +68,19 @@ const imprimirRemito = (despacho) => {
     ? "Firma del chofer — entregado conforme"
     : "Firma del encargado de frigorifico";
 
-  const filasCalibres = (despacho.calibres || []).map((c) => `
+  const nombrar = nombrarEspecieOrden(despacho);
+  const negrita = (l) => (nombrar && especieDe(l) !== "pollo" ? ";font-weight:bold" : "");
+
+  const filasCalibres = ordenarPorEspecie(despacho.calibres).map((c) => `
     <tr>
-      <td style="padding:3px 8px;border:1px solid #dee2e6">Cal. ${c.calibre}</td>
+      <td style="padding:3px 8px;border:1px solid #dee2e6${negrita(c)}">${calLbl(despacho, c)}</td>
       <td style="padding:3px 8px;border:1px solid #dee2e6;text-align:right">${fmt(c.cajones)}</td>
       <td style="padding:3px 8px;border:1px solid #dee2e6;text-align:right">${fmt(c.cajones * 20)} kg</td>
     </tr>`).join("");
 
-  const filasTrozados = (despacho.trozados || []).map((t) => `
+  const filasTrozados = ordenarPorEspecie(despacho.trozados).map((t) => `
     <tr>
-      <td style="padding:3px 8px;border:1px solid #dee2e6">${trozadoLbl(t)}</td>
+      <td style="padding:3px 8px;border:1px solid #dee2e6${negrita(t)}">${trozadoLbl(t, despacho)}</td>
       <td style="padding:3px 8px;border:1px solid #dee2e6;text-align:right">${fmt(t.cajas)} cajas</td>
       <td style="padding:3px 8px;border:1px solid #dee2e6;text-align:right">${fmt(t.kgTotal)} kg</td>
     </tr>`).join("");
@@ -93,7 +102,7 @@ const imprimirRemito = (despacho) => {
       </div>
 
       ${filasCalibres ? `
-        <h2>Pollos faenados (por calibre)</h2>
+        <h2>${nombrar ? "Entero (por calibre)" : "Pollos faenados (por calibre)"}</h2>
         <table>
           <thead><tr>
             <th>Calibre</th>
@@ -310,15 +319,15 @@ const ConfirmarModal = ({ despacho, onClose, onConfirmado, esAdmin }) => {
                   {/* Calibres */}
                   {despacho.calibres?.length > 0 && (
                     <div className="mb-3">
-                      <div className="small text-muted fw-semibold text-uppercase mb-2" style={{ letterSpacing: "0.05em" }}>Pollos faenados</div>
+                      <div className="small text-muted fw-semibold text-uppercase mb-2" style={{ letterSpacing: "0.05em" }}>{nombrarEspecieOrden(despacho) ? "Entero (por calibre)" : "Pollos faenados"}</div>
                       <table className="table table-sm table-bordered align-middle mb-0">
                         <thead className="table-light">
                           <tr><th>Calibre</th><th className="text-end">Cajones</th><th className="text-end">Kg</th></tr>
                         </thead>
                         <tbody>
-                          {despacho.calibres.map((c, i) => (
+                          {ordenarPorEspecie(despacho.calibres).map((c, i) => (
                             <tr key={i}>
-                              <td><span className="badge bg-primary">Cal. {c.calibre}</span></td>
+                              <td><span className="badge bg-primary">{calLbl(despacho, c)}</span></td>
                               <td className="text-end fw-semibold">{fmt(c.cajones)}</td>
                               <td className="text-end text-muted">{fmt(c.cajones * 20)} kg</td>
                             </tr>
@@ -342,10 +351,10 @@ const ConfirmarModal = ({ despacho, onClose, onConfirmado, esAdmin }) => {
                           <tr><th>Tipo</th><th className="text-end">Cajas</th><th className="text-end">Kg</th></tr>
                         </thead>
                         <tbody>
-                          {despacho.trozados.map((t, i) => (
+                          {ordenarPorEspecie(despacho.trozados).map((t, i) => (
                             <tr key={i}>
                               <td className="fw-semibold">
-                                {tipoLbl(t.tipo)}
+                                {conEspecie(t, tipoLbl(t.tipo), nombrarEspecieOrden(despacho))}
                                 <span className="badge bg-secondary ms-2">Clase {claseLbl(t)}</span>
                               </td>
                               <td className="text-end">{fmt(t.cajas)}</td>
@@ -755,11 +764,11 @@ const RecepcionFrigorificoPage = () => {
                         </div>
                         {(e.calibres?.length > 0 || e.trozados?.length > 0) && (
                           <div className="d-flex flex-wrap gap-1 mb-2">
-                            {e.calibres?.map((c, i) => (
-                              <span key={i} className="badge bg-info text-dark">Cal.{c.calibre}: {fmt(c.cajones)} caj</span>
+                            {ordenarPorEspecie(e.calibres).map((c, i) => (
+                              <span key={i} className="badge bg-info text-dark">{calLbl(e, c)}: {fmt(c.cajones)} caj</span>
                             ))}
-                            {e.trozados?.map((t, i) => (
-                              <span key={`t${i}`} className="badge bg-warning text-dark">{trozadoLbl(t)}: {fmt(t.cajas)} caj</span>
+                            {ordenarPorEspecie(e.trozados).map((t, i) => (
+                              <span key={`t${i}`} className="badge bg-warning text-dark">{trozadoLbl(t, e)}: {fmt(t.cajas)} caj</span>
                             ))}
                           </div>
                         )}
@@ -834,11 +843,11 @@ const RecepcionFrigorificoPage = () => {
                             </td>
                             <td>
                               <div className="d-flex flex-wrap gap-1">
-                                {e.calibres?.map((c, i) => (
-                                  <span key={i} className="badge bg-info text-dark">Cal.{c.calibre}: {fmt(c.cajones)} caj</span>
+                                {ordenarPorEspecie(e.calibres).map((c, i) => (
+                                  <span key={i} className="badge bg-info text-dark">{calLbl(e, c)}: {fmt(c.cajones)} caj</span>
                                 ))}
-                                {e.trozados?.map((t, i) => (
-                                  <span key={`t${i}`} className="badge bg-warning text-dark">{trozadoLbl(t)}: {fmt(t.cajas)} caj</span>
+                                {ordenarPorEspecie(e.trozados).map((t, i) => (
+                                  <span key={`t${i}`} className="badge bg-warning text-dark">{trozadoLbl(t, e)}: {fmt(t.cajas)} caj</span>
                                 ))}
                                 {e.observaciones && (
                                   <span className="badge bg-light text-dark border" title={e.observaciones}>
@@ -966,7 +975,7 @@ const RecepcionFrigorificoPage = () => {
                     {(d.calibres?.length > 0 || d.trozados?.length > 0) && (
                       <div className="mb-2 rounded overflow-hidden"
                         style={{ border: "1px solid #d1fae5" }}>
-                        {d.calibres?.map((c, idx) => (
+                        {ordenarPorEspecie(d.calibres).map((c, idx) => (
                           <div key={idx}
                             className="d-flex justify-content-between align-items-center px-2 py-1"
                             style={{
@@ -974,18 +983,18 @@ const RecepcionFrigorificoPage = () => {
                                 ? "1px solid #d1fae5" : "none",
                               background: "#f0fdf4",
                             }}>
-                            <span className="fw-semibold text-success">Cal. {c.calibre}</span>
+                            <span className="fw-semibold text-success">{calLbl(d, c)}</span>
                             <span className="text-muted small">{fmt(c.cajones)} cajones · {fmt(c.cajones * 20)} kg</span>
                           </div>
                         ))}
-                        {d.trozados?.map((t, idx) => (
+                        {ordenarPorEspecie(d.trozados).map((t, idx) => (
                           <div key={`t${idx}`}
                             className="d-flex justify-content-between align-items-center px-2 py-1"
                             style={{
                               borderBottom: idx < d.trozados.length - 1 ? "1px solid #fef9c3" : "none",
                               background: "#fffbeb",
                             }}>
-                            <span className="fw-semibold text-warning">{trozadoLbl(t)}</span>
+                            <span className="fw-semibold text-warning">{trozadoLbl(t, d)}</span>
                             <span className="text-muted small">{fmt(t.cajas)} cajas · {fmt(t.kgTotal)} kg</span>
                           </div>
                         ))}
@@ -1101,12 +1110,12 @@ const RecepcionFrigorificoPage = () => {
                         </td>
                         <td>
                           <div className="d-flex flex-wrap gap-1">
-                            {d.calibres?.map((c, i) => (
-                              <span key={i} className="badge bg-primary">Cal.{c.calibre}: {fmt(c.cajones)} caj</span>
+                            {ordenarPorEspecie(d.calibres).map((c, i) => (
+                              <span key={i} className="badge bg-primary">{calLbl(d, c)}: {fmt(c.cajones)} caj</span>
                             ))}
-                            {d.trozados?.map((t, i) => (
+                            {ordenarPorEspecie(d.trozados).map((t, i) => (
                               <span key={`t${i}`} className="badge bg-warning text-dark">
-                                {trozadoLbl(t)}: {fmt(t.cajas)} caj
+                                {trozadoLbl(t, d)}: {fmt(t.cajas)} caj
                               </span>
                             ))}
                             {d.observaciones && (

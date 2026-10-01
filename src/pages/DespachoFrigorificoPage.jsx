@@ -3,7 +3,10 @@ import { jsPDF } from "jspdf";
 import Layout from "../components/Layout";
 import BotonExcel from "../components/BotonExcel";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
-import { BADGE_ESPECIE, especieDe, etiquetaEspecie, claveEntero, claveTrozado, hayVariasEspecies } from "../utils/especies";
+import {
+  BADGE_ESPECIE, especieDe, etiquetaEspecie, claveEntero, claveTrozado, hayVariasEspecies,
+  nombrarEspecieOrden, textoCalibre, conEspecie, ordenarPorEspecie,
+} from "../utils/especies";
 import {
   obtenerDespachosFrigorifico,
   crearDespachoFrigorifico,
@@ -118,11 +121,14 @@ const renderCopiaDespacho = (doc, d, etiqueta) => {
   }
   y += 18;
 
-  // ── Pollos faenados (por calibre) ──────────────────────────────────────────
-  const calibres = (d.calibres || []).filter((c) => Number(c.cajones) > 0);
+  // ── Faenado entero (por calibre) ───────────────────────────────────────────
+  // Si la orden lleva gallina (o gallo), cada renglón dice qué es: el calibre
+  // solo no alcanza para que quien carga en la cámara saque lo correcto.
+  const nombrar  = nombrarEspecieOrden(d);
+  const calibres = ordenarPorEspecie((d.calibres || []).filter((c) => Number(c.cajones) > 0));
   if (calibres.length > 0) {
     doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.setTextColor(130);
-    doc.text("POLLOS FAENADOS (POR CALIBRE)", 14, y + 4);
+    doc.text(nombrar ? "ENTERO (POR CALIBRE)" : "POLLOS FAENADOS (POR CALIBRE)", 14, y + 4);
     y += 7;
     doc.setDrawColor(200); doc.setLineWidth(0.3);
     doc.line(14, y, W - 14, y);
@@ -139,7 +145,9 @@ const renderCopiaDespacho = (doc, d, etiqueta) => {
     calibres.forEach((c, i) => {
       if (i % 2 === 1) { doc.setFillColor(250, 250, 250); doc.rect(14, y, W - 28, 7, "F"); }
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(0);
-      doc.text(`Cal. ${c.calibre}`, 16, y + 5);
+      doc.setFont("helvetica", nombrar && especieDe(c) !== "pollo" ? "bold" : "normal");
+      doc.text(textoCalibre(c, nombrar), 16, y + 5);
+      doc.setFont("helvetica", "normal");
       doc.text(fmt(c.cajones), W / 2, y + 5, { align: "right" });
       doc.text(`${fmt(c.cajones * 20)} kg`, W - 16, y + 5, { align: "right" });
       y += 7;
@@ -148,7 +156,7 @@ const renderCopiaDespacho = (doc, d, etiqueta) => {
   }
 
   // ── Trozados ────────────────────────────────────────────────────────────────
-  const trozados = (d.trozados || []).filter((t) => Number(t.cajas) > 0);
+  const trozados = ordenarPorEspecie((d.trozados || []).filter((t) => Number(t.cajas) > 0));
   if (trozados.length > 0) {
     doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.setTextColor(130);
     doc.text("TROZADOS", 14, y + 4);
@@ -170,7 +178,9 @@ const renderCopiaDespacho = (doc, d, etiqueta) => {
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(0);
       // Con la clase: una orden puede llevar pata A y pata B, y en el papel se
       // veían dos renglones idénticos.
-      doc.text(`${tipoLbl(t.tipo)} ${t.clase || "A"}`, 16, y + 5);
+      doc.setFont("helvetica", nombrar && especieDe(t) !== "pollo" ? "bold" : "normal");
+      doc.text(conEspecie(t, `${tipoLbl(t.tipo)} ${t.clase || "A"}`, nombrar), 16, y + 5);
+      doc.setFont("helvetica", "normal");
       doc.text(fmt(t.cajas), W / 2, y + 5, { align: "right" });
       doc.text(`${fmt(t.kgTotal)} kg`, W - 16, y + 5, { align: "right" });
       y += 7;
@@ -1205,10 +1215,10 @@ const DespachoFrigorificoPage = () => {
       { header: "CUIT",          valor: (d) => d.cliente?.cuit },
       { header: "Cámara",        valor: (d) => camaraLbl(d.camara) },
       { header: "Turno",         valor: (d) => d.turno },
-      { header: "Calibres",      valor: (d) => (d.calibres || [])
-          .map((c) => "Cal." + c.calibre + ": " + c.cajones + " caj").join(" · "), ancho: 36 },
-      { header: "Trozados",      valor: (d) => (d.trozados || [])
-          .map((t) => t.tipo + (t.clase ? " " + t.clase : "") + ": " + t.cajas + " cajas").join(" · "), ancho: 36 },
+      { header: "Calibres",      valor: (d) => ordenarPorEspecie(d.calibres)
+          .map((c) => textoCalibre(c, nombrarEspecieOrden(d)) + ": " + c.cajones + " caj").join(" · "), ancho: 36 },
+      { header: "Trozados",      valor: (d) => ordenarPorEspecie(d.trozados)
+          .map((t) => conEspecie(t, t.tipo + (t.clase ? " " + t.clase : ""), nombrarEspecieOrden(d)) + ": " + t.cajas + " cajas").join(" · "), ancho: 36 },
       { header: "Cajones",       valor: (d) => d.totalCajones ?? 0 },
       { header: "Kg enteros",    valor: (d) => d.pesoTotalKg ?? 0 },
       { header: "Kg trozados",   valor: (d) => d.totalKgTrozados ?? 0 },
@@ -1314,7 +1324,7 @@ const DespachoFrigorificoPage = () => {
                     {/* Detalle calibres + trozados */}
                     {(d.calibres?.length > 0 || d.trozados?.length > 0) && (
                       <div className="mb-2 rounded overflow-hidden" style={{ border: "1px solid #d1fae5" }}>
-                        {d.calibres?.map((c, idx) => (
+                        {ordenarPorEspecie(d.calibres).map((c, idx) => (
                           <div key={idx}
                             className="d-flex justify-content-between align-items-center px-2 py-1"
                             style={{
@@ -1323,19 +1333,21 @@ const DespachoFrigorificoPage = () => {
                               background: "#f0fdf4",
                             }}>
                             <span className="fw-semibold text-success">
-                              {etiquetaEspecie(especieDe(c))} Cal. {c.calibre}
+                              {textoCalibre(c, nombrarEspecieOrden(d))}
                             </span>
                             <span className="text-muted small">{fmt(c.cajones)} cajones · {fmt(c.cajones * 20)} kg</span>
                           </div>
                         ))}
-                        {d.trozados?.map((t, idx) => (
+                        {ordenarPorEspecie(d.trozados).map((t, idx) => (
                           <div key={`t${idx}`}
                             className="d-flex justify-content-between align-items-center px-2 py-1"
                             style={{
                               borderBottom: idx < d.trozados.length - 1 ? "1px solid #fef9c3" : "none",
                               background: "#fffbeb",
                             }}>
-                            <span className="fw-semibold text-warning">{tipoLbl(t.tipo)} {t.clase || "A"}</span>
+                            <span className="fw-semibold text-warning">
+                              {conEspecie(t, `${tipoLbl(t.tipo)} ${t.clase || "A"}`, nombrarEspecieOrden(d))}
+                            </span>
                             <span className="text-muted small">{fmt(t.cajas)} cajas · {fmt(t.kgTotal)} kg</span>
                           </div>
                         ))}

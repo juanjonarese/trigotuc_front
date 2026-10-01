@@ -5,6 +5,7 @@ import BotonExcel from "../components/BotonExcel";
 import { obtenerEnviosCamara, recibirEnvioCamara } from "../services/api";
 import Swal from "sweetalert2";
 import { exportarLibroExcel } from "../utils/exportarExcel";
+import { nombrarEspecieOrden, textoCalibre, conEspecie, ordenarPorEspecie } from "../utils/especies";
 
 const TIPOS_LABEL = { filet: "Filet", pata: "Pata muslo", alita: "Alita", menudo: "Menudo", carcaza: "Carcaza", trocitos: "Trocitos" };
 const camaraLbl = (c) => (c === "cañete" ? "Cañete" : c === "trigotuc" ? "Trigotuc" : c);
@@ -39,10 +40,10 @@ const RecepcionCamaraPage = () => {
     { header: "Fecha",       valor: (e) => fmtFecha(e.fecha) },
     { header: "Origen",      valor: (e) => camaraLbl(e.camaraOrigen) },
     { header: "Destino",     valor: (e) => camaraLbl(e.camaraDestino) },
-    { header: "Calibres",    valor: (e) => (e.calibres || [])
-        .map((c) => "Cal." + c.calibre + ": " + c.cajones + " caj").join(" · "), ancho: 36 },
-    { header: "Trozados",    valor: (e) => (e.trozados || [])
-        .map((t) => (TIPOS_LABEL[t.tipo] || t.tipo) + (t.clase ? " " + t.clase : "") + ": " + t.cajas + " cajas").join(" · "), ancho: 36 },
+    { header: "Calibres",    valor: (e) => ordenarPorEspecie(e.calibres)
+        .map((c) => textoCalibre(c, nombrarEspecieOrden(e)) + ": " + c.cajones + " caj").join(" · "), ancho: 36 },
+    { header: "Trozados",    valor: (e) => ordenarPorEspecie(e.trozados)
+        .map((t) => conEspecie(t, (TIPOS_LABEL[t.tipo] || t.tipo) + (t.clase ? " " + t.clase : ""), nombrarEspecieOrden(e)) + ": " + t.cajas + " cajas").join(" · "), ancho: 36 },
     { header: "Pollos",      valor: (e) => e.totalPollos ?? 0 },
     { header: "Cajones",     valor: (e) => e.totalCajones ?? 0 },
     { header: "Kg enteros",  valor: (e) => e.pesoTotalKg ?? 0 },
@@ -88,18 +89,22 @@ const RecepcionCamaraPage = () => {
     }
   };
 
-  const detalle = (e) => (
-    <div className="d-flex flex-wrap gap-1 mb-2">
-      {(e.calibres || []).map((c, i) => (
-        <span key={`c${i}`} className="badge bg-info text-dark">Cal.{c.calibre}: {fmt(c.cajones)} caj</span>
-      ))}
-      {(e.trozados || []).map((t, i) => (
-        <span key={`t${i}`} className="badge bg-warning text-dark">
-          {TIPOS_LABEL[t.tipo] || t.tipo}{t.clase ? ` · ${t.clase}` : ""}: {fmt(t.cajas)} caj
-        </span>
-      ))}
-    </div>
-  );
+  // Si el envío lleva gallina (o gallo), cada badge dice qué es.
+  const detalle = (e) => {
+    const nombrar = nombrarEspecieOrden(e);
+    return (
+      <div className="d-flex flex-wrap gap-1 mb-2">
+        {ordenarPorEspecie(e.calibres).map((c, i) => (
+          <span key={`c${i}`} className="badge bg-info text-dark">{textoCalibre(c, nombrar)}: {fmt(c.cajones)} caj</span>
+        ))}
+        {ordenarPorEspecie(e.trozados).map((t, i) => (
+          <span key={`t${i}`} className="badge bg-warning text-dark">
+            {conEspecie(t, `${TIPOS_LABEL[t.tipo] || t.tipo}${t.clase ? ` · ${t.clase}` : ""}`, nombrar)}: {fmt(t.cajas)} caj
+          </span>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <Layout>
