@@ -1,5 +1,6 @@
 import { escapeHtml } from "./escapeHtml";
 import { formatearFechaLocal } from "./dateUtils";
+import { imprimirHtml } from "./imprimirHtml";
 
 /**
  * Remito imprimible del envío de alimento, en A4 y POR TRIPLICADO.
@@ -148,13 +149,18 @@ const hoja = (envio, copia, detalleTipo, etiquetaDestino) => {
 };
 
 /**
- * Abre el diálogo de impresión con las tres copias, una por hoja.
+ * Abre el diálogo de la impresora con las tres copias, una por hoja, sin abrir
+ * el remito en otra pestaña.
  *
  * `etiquetaTipo` y `etiquetaDestino` vienen de las constantes del módulo, para no
  * duplicar acá los nombres de los alimentos (viven en utils/alimentos.js del back).
  */
 export const imprimirRemitoAlimento = (envio, { detalleTipo, etiquetaDestino }) => {
-  const hojas = COPIAS.map((c) => hoja(envio, c, detalleTipo, etiquetaDestino)).join("");
+  // Se acepta el nombre o la función que lo busca: pasar la función sin llamarla
+  // imprimía su código en "Destino:" (2026-09-30).
+  const destino =
+    typeof etiquetaDestino === "function" ? etiquetaDestino(envio.destino) : etiquetaDestino;
+  const hojas = COPIAS.map((c) => hoja(envio, c, detalleTipo, destino || envio.destino || "")).join("");
 
   const html = `
 <!DOCTYPE html>
@@ -228,13 +234,7 @@ export const imprimirRemitoAlimento = (envio, { detalleTipo, etiquetaDestino }) 
 <body>${hojas}</body>
 </html>`;
 
-  const win = window.open("", "_blank");
-  if (!win) return false; // el navegador bloqueó la ventana
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  // Esperar al layout antes de imprimir: sin esto, Chrome a veces abre el
-  // diálogo con la hoja todavía vacía.
-  win.onload = () => setTimeout(() => win.print(), 250);
-  return true;
+  // Directo al diálogo de la impresora, sin abrir el remito en otra pestaña
+  // (2026-09-30). Ver utils/imprimirHtml.js.
+  return imprimirHtml(html);
 };
