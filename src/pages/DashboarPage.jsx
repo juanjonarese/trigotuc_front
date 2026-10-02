@@ -8,6 +8,9 @@ import {
   obtenerDespachosFrigorifico,
 } from "../services/api";
 import Layout from "../components/Layout";
+import DashboardReproductoras from "../components/DashboardReproductoras";
+import { KpiCard, SectionTitle } from "../components/DashboardUI";
+import { fmtNum, fmtPct } from "../utils/formatoDashboard";
 import { trozadoLabel } from "../components/TrozadoTable";
 import { claveEntero, nombrarEspecie, ordenarPorEspecie, textoCalibre } from "../utils/especies";
 import {
@@ -15,34 +18,32 @@ import {
   Legend, ResponsiveContainer,
 } from "recharts";
 
-const fmtNum  = (n) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 1 }).format(n ?? 0);
-const fmtPct  = (n) => (n != null ? `${Number(n).toFixed(1)}%` : "—");
 const granjaLabel = (g) => g === "cañete" ? "Cañete" : "Los Pinos";
 
-const KpiCard = ({ icon, label, value, sub, color = "text-dark", onClick }) => (
-  <div className={`card border-0 shadow-sm h-100 ${onClick ? "cursor-pointer" : ""}`}
-    style={{ borderTop: `3px solid var(--bs-${color.replace("text-", "")}, #198754)` }}
-    onClick={onClick}>
-    <div className="card-body py-3">
-      <div className="d-flex align-items-center gap-2 mb-1">
-        <i className={`bi bi-${icon} fs-5 ${color}`}></i>
-        <span className="text-muted small text-uppercase fw-semibold" style={{ fontSize: "0.65rem", letterSpacing: "0.05em" }}>{label}</span>
-      </div>
-      <div className={`fw-bold fs-4 ${color}`}>{value}</div>
-      {sub && <div className="text-muted small mt-1">{sub}</div>}
-    </div>
-  </div>
-);
+// Las tres áreas del filtro. Reproductoras va con su propio permiso porque sus
+// endpoints están cerrados a superadmin / admin / reproductoras; Granja y
+// Frigorífico, al revés, no son del rol reproductoras.
+const AREAS = [
+  { k: "reproductoras", label: "Reproductoras", icon: "egg-fried",        roles: ["superadmin", "admin", "reproductoras"] },
+  { k: "granja",        label: "Granja",        icon: "house-heart-fill", excluir: ["reproductoras"] },
+  { k: "frigorifico",   label: "Frigorífico",   icon: "snow-fill",        excluir: ["reproductoras"] },
+];
+const areasDe = (rol) =>
+  AREAS.filter((a) => (a.roles ? a.roles.includes(rol) : !a.excluir.includes(rol)));
 
-const SectionTitle = ({ icon, title, color }) => (
-  <div className="d-flex align-items-center gap-2 mb-3">
-    <i className={`bi bi-${icon} fs-5 ${color}`}></i>
-    <h5 className="mb-0 fw-semibold">{title}</h5>
-  </div>
-);
+// La última área elegida se recuerda en este navegador.
+const CLAVE_AREA = "dashboardArea";
+const leerArea = () => { try { return localStorage.getItem(CLAVE_AREA); } catch { return null; } };
+const guardarArea = (k) => { try { localStorage.setItem(CLAVE_AREA, k); } catch { /* sin storage */ } };
 
 const DashboardPage = () => {
   const navigate = useNavigate();
+  const areas = areasDe(localStorage.getItem("rolUsuario"));
+  const [area, setArea] = useState(() => {
+    const guardada = leerArea();
+    return areas.some((a) => a.k === guardada) ? guardada : areas[0]?.k;
+  });
+  const elegirArea = (k) => { setArea(k); guardarArea(k); };
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState("");
   const [stockGranja, setStockGranja] = useState(null);
@@ -53,6 +54,8 @@ const DashboardPage = () => {
   useEffect(() => {
     const rol = localStorage.getItem("rolUsuario");
     if (rol === "frigorifico") { navigate("/frigorifico/lotes/nuevo"); return; }
+    // El rol reproductoras solo ve su solapa: no hace falta pedir lo de Granja y Frigorífico.
+    if (!areas.some((a) => a.k !== "reproductoras")) { setLoading(false); return; }
     cargarDatos();
   }, []);
 
@@ -215,13 +218,29 @@ const DashboardPage = () => {
     <Layout>
       <div className="container-fluid">
 
-        {/* Header */}
-        <div className="mb-4">
-          <h1 className="h3 mb-0"><i className="bi bi-speedometer2 me-2"></i>Dashboard</h1>
-          <p className="text-muted mb-0 small">Resumen general — Granja y Frigorifico</p>
+        {/* Header + filtro de área */}
+        <div className="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-4">
+          <div>
+            <h1 className="h3 mb-0"><i className="bi bi-speedometer2 me-2"></i>Dashboard</h1>
+            <p className="text-muted mb-0 small">Resumen de {areas.find((a) => a.k === area)?.label || "cada área"}</p>
+          </div>
+          {areas.length > 1 && (
+            <div className="btn-group" role="group" aria-label="Área">
+              {areas.map((a) => (
+                <button key={a.k} type="button"
+                  className={`btn btn-sm ${area === a.k ? "btn-dark" : "btn-outline-secondary"}`}
+                  onClick={() => elegirArea(a.k)}>
+                  <i className={`bi bi-${a.icon} me-1`}></i>{a.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* ── KPIs ── */}
+        {area === "reproductoras" && <DashboardReproductoras />}
+
+        {area === "granja" && (<>
+        {/* ── KPIs Granja ── */}
         <div className="row g-3 mb-4">
           <div className="col-6 col-md-3">
             {/* Reloj de arena y no un huevo: son pollos creciendo, con los 50
@@ -231,19 +250,19 @@ const DashboardPage = () => {
               color="text-success" onClick={() => navigate("/granja/galpones")} />
           </div>
           <div className="col-6 col-md-3">
-            <KpiCard icon="snow" label="Cajones en cámara" value={fmtNum(stockGranja?.cajonesDisponibles ?? 0)}
-              sub={`${fmtNum(stockGranja?.totalKg ?? 0)} kg`}
-              color="text-primary" onClick={() => navigate("/frigorifico")} />
+            <KpiCard icon="box-arrow-in-down" label="Pollos ingresados" value={fmtNum(totalIngresadosGranja)}
+              sub="de los galpones en crianza" color="text-info" onClick={() => navigate("/granja/galpones")} />
           </div>
           <div className="col-6 col-md-3">
-            <KpiCard icon="truck" label="Entregas (30 días)" value={fmtNum(entregas30d.length)}
-              sub={`${fmtNum(entregasPendientes.length)} pendiente${entregasPendientes.length !== 1 ? "s" : ""}`}
-              color="text-warning" onClick={() => navigate("/frigorifico/ordenes-carga")} />
+            <KpiCard icon="heartbreak" label="Mortandad" value={fmtPct(pctMortGlobal)}
+              sub={`${fmtNum(totalMortandadGranja)} bajas`}
+              color={pctMortGlobal > 3 ? "text-danger" : pctMortGlobal > 1.5 ? "text-warning" : "text-success"}
+              onClick={() => navigate("/granja/cargar-datos")} />
           </div>
           <div className="col-6 col-md-3">
-            <KpiCard icon="box-seam" label="Cajones despachados" value={fmtNum(cajonesDespachados)}
-              sub={`${fmtNum(kgDespachados)} kg entregados`}
-              color="text-info" onClick={() => navigate("/frigorifico/ordenes-carga")} />
+            <KpiCard icon="houses" label="Galpones activos" value={fmtNum(lotesGranja.length)}
+              sub={Object.entries(galponesPorGranja).map(([g, n]) => `${granjaLabel(g)}: ${n}`).join(" · ") || "—"}
+              color="text-secondary" onClick={() => navigate("/granja/galpones")} />
           </div>
         </div>
 
@@ -339,6 +358,28 @@ const DashboardPage = () => {
 
             </div>
           )}
+        </div>
+
+        </>)}
+
+        {area === "frigorifico" && (<>
+        {/* ── KPIs Frigorífico ── */}
+        <div className="row g-3 mb-4">
+          <div className="col-12 col-md-4">
+            <KpiCard icon="snow" label="Cajones en cámara" value={fmtNum(stockGranja?.cajonesDisponibles ?? 0)}
+              sub={`${fmtNum(stockGranja?.totalKg ?? 0)} kg`}
+              color="text-primary" onClick={() => navigate("/frigorifico")} />
+          </div>
+          <div className="col-6 col-md-4">
+            <KpiCard icon="truck" label="Entregas (30 días)" value={fmtNum(entregas30d.length)}
+              sub={`${fmtNum(entregasPendientes.length)} pendiente${entregasPendientes.length !== 1 ? "s" : ""}`}
+              color="text-warning" onClick={() => navigate("/frigorifico/ordenes-carga")} />
+          </div>
+          <div className="col-6 col-md-4">
+            <KpiCard icon="box-seam" label="Cajones despachados" value={fmtNum(cajonesDespachados)}
+              sub={`${fmtNum(kgDespachados)} kg entregados`}
+              color="text-info" onClick={() => navigate("/frigorifico/ordenes-carga")} />
+          </div>
         </div>
 
         {/* ══ FRIGORIFICO ══ */}
@@ -577,6 +618,7 @@ const DashboardPage = () => {
             </div>
           )}
         </div>
+        </>)}
 
 
       </div>
