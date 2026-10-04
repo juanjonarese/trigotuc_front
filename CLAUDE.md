@@ -54,7 +54,7 @@ There are no automated tests.
 | `/reproductores/recoleccion` | `RecoleccionHuevosPage` (clasifica en 4 tipos; queda en la granja) | Reproductores |
 | `/reproductores/remitos` | `RemitosHuevosPage` (envío granja → Trigotuc; cada celda lleva lo que viaja + los rotos al cargar) | Reproductores |
 | `/reproductores/incubadora` | `IncubadoraPage` (incubadora + nacedora + nacimientos) | Reproductores |
-| `/reproductores/plan` | `PlanPollitosPage` (almanaque mensual por CARGA: a nacer / vendido / engorde / **libre**; reparto en modal) | Reproductores |
+| `/reproductores/plan` | `PlanPollitosPage` (almanaque mensual por DÍA DE CARGA: a nacer / vendido / engorde / **libre**; cargas lunes y jueves movibles, feriados y días sin huevo "no nacen"; vista **Almanaque** o **Lista** (días para abajo, como el Excel "Programación Pollitos"); reparto en modal) | Reproductores |
 | `/reproductores/asignaciones` | → redirige a `/reproductores/plan` (página eliminada el 2026-09-20) | Reproductores |
 | `/reproductores/ordenes-carga` | `OrdenCargaPollitosPage` (salida de pollitos nacidos → cliente) | Reproductores |
 | `/reproductores/ventas-huevos` | `VentaHuevosPage` | Reproductores |

@@ -4,6 +4,7 @@ import BotonExcel from "../components/BotonExcel";
 import BuscadorCliente from "../components/BuscadorCliente";
 import {
   obtenerPlanPollitos,
+  moverCargaIncubadora,
   obtenerClientes,
   crearReservaPollitos,
   eliminarReservaPollitos,
@@ -24,14 +25,20 @@ import Swal from "sweetalert2";
 
 // Plan de Pollitos — la planilla del cliente hecha almanaque.
 //
-// Un calendario mensual: cada día muestra las CARGAS que nacen ese día, y cada
+// Un calendario mensual: cada día muestra la CARGA que nace ese día, y cada
 // carga contesta lo único que importa acá:
 //
 //     lo que va a nacer  −  lo que ya vendí  −  lo que mando a engorde  =  LIBRE
 //
-// La unidad es la CARGA `(lote, fechaIngreso)`, no la tanda: una carga son hasta
-// 12 carros y partir el bloque en 12 pedazos hace la pantalla inservible para
-// decidir. El reparto se hace desde el modal que abre cada carga.
+// La unidad es el DÍA DE CARGA, con todos sus planteles juntos (pedido del
+// cliente, 2026-10-04: el total del día, no partido por plantel ni por tanda).
+// El reparto se hace desde el modal que abre cada carga.
+//
+// Las cargas que vienen son los LUNES y JUEVES, como en la planilla P7 del
+// cliente: si el saldo de huevos no llena la máquina, ese día no se carga y 21
+// días después NO NACE NADA (pastilla "no alcanza"). Cada carga se puede correr
+// un día para un lado o el otro desde su modal, y los feriados se ven en el
+// almanaque.
 //
 // Desde el 2026-10-01 también se reparten las cargas PROYECTADAS: la empresa
 // vende a futuro contando con lo que va a nacer. Esas reservas van ancladas a la
@@ -72,10 +79,33 @@ const columnaDe = (anio, mes, dia) => (new Date(anio, mes, dia).getDay() + 6) % 
 
 const diasDelMes = (anio, mes) => new Date(anio, mes + 1, 0).getDate();
 
+// Correr una clave n días, sin pasar por ISO (se arma la fecha local).
+const correrClave = (k, n) => {
+  const { anio, mes, dia } = partesClave(k);
+  const d = new Date(anio, mes, dia + n);
+  return clave(d.getFullYear(), d.getMonth(), d.getDate());
+};
+
+const NOMBRE_DIA = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+
+// "lun 05/10", a partir de la clave.
+const textoClave = (k) => {
+  if (!k) return "-";
+  const { anio, mes, dia } = partesClave(k);
+  const nombre = NOMBRE_DIA[new Date(anio, mes, dia).getDay()];
+  return `${nombre} ${String(dia).padStart(2, "0")}/${String(mes + 1).padStart(2, "0")}`;
+};
+
+// Los planteles de una carga real: "#29 · #30".
+const textoLotes = (f) =>
+  f.lotes?.length ? f.lotes.map((l) => `#${l.numeroLote ?? "?"}`).join(" · ") : "";
+
 // ── El color de una carga ───────────────────────────────────────────────────
 // Es el semáforo de la pantalla: sobrevendida manda sobre todo lo demás.
 const tonoCarga = (f) => {
   if (f.tipo === "sin_carga") return { clase: "border-danger border-2 bg-danger-subtle", texto: "text-danger-emphasis" };
+  if (f.tipo === "no_alcanza")
+    return { clase: "border-danger bg-body-tertiary", texto: "text-danger-emphasis", punteado: true };
   if (f.sobrevendida) return { clase: "border-danger bg-danger-subtle", texto: "text-danger-emphasis" };
   if (f.tipo === "proyectada")
     return { clase: "border-secondary-subtle bg-body-secondary", texto: "text-secondary-emphasis" };
@@ -107,14 +137,19 @@ const Pastilla = ({ fila, onAbrir }) => {
     <button
       type="button"
       className={`btn btn-sm w-100 text-start border rounded p-1 mb-1 ${tono.clase}`}
+      style={tono.punteado ? { borderStyle: "dashed" } : undefined}
       onClick={() => onAbrir(fila)}
       title={
         `${
           fila.tipo === "sin_carga"
             ? "Compromisos sin carga: hay que pasarlos a la carga real"
+            : fila.tipo === "no_alcanza"
+            ? `No alcanza el huevo para cargar el ${textoClave(fila.claveIngreso)}: hay ${formatearNumero(
+                fila.carga?.huevosDisponibles || 0
+              )}`
             : fila.tipo === "proyectada"
-            ? "Carga proyectada"
-            : `Plantel #${fila.lote?.numeroLote}`
+            ? `Carga proyectada · entra el ${textoClave(fila.claveIngreso)}`
+            : `Planteles ${textoLotes(fila)}`
         }` +
         ` · a nacer ${formatearNumero(fila.aNacer)} · libre ${formatearNumero(fila.libre)}` +
         (fila.lineas.length
@@ -130,22 +165,36 @@ const Pastilla = ({ fila, onAbrir }) => {
             <>
               <i className="bi bi-exclamation-octagon me-1"></i>sin carga
             </>
+          ) : fila.tipo === "no_alcanza" ? (
+            <>
+              <i className="bi bi-x-octagon me-1"></i>no nacen
+            </>
           ) : fila.tipo === "proyectada" ? (
             <>
               <i className="bi bi-hourglass-split me-1"></i>proy.
+              {fila.carga?.motivo && (
+                <i
+                  className="bi bi-arrow-left-right ms-1"
+                  title={fila.carga.motivo === "feriado" ? "Corrida por feriado" : "Movida a mano"}
+                ></i>
+              )}
             </>
           ) : (
-            <>#{fila.lote?.numeroLote ?? "?"}</>
+            <>{textoLotes(fila)}</>
           )}
         </span>
         <span className="fw-bold" style={{ fontSize: "0.78rem" }}>
-          {formatearNumero(fila.aNacer)}
+          {fila.tipo === "no_alcanza" ? "0" : formatearNumero(fila.aNacer)}
         </span>
       </div>
 
       <div className="lh-1 mt-1" style={{ fontSize: "0.72rem" }}>
         {fila.tipo === "sin_carga" ? (
           <span className="text-danger fw-bold">pasar {formatearNumero(fila.comprometido)}</span>
+        ) : fila.tipo === "no_alcanza" && !fila.comprometido ? (
+          <span className="text-danger">
+            no alcanza el huevo
+          </span>
         ) : fila.sobrevendida ? (
           <span className="text-danger fw-bold">se pasa {formatearNumero(-fila.libre)}</span>
         ) : fila.libre === 0 ? (
@@ -194,7 +243,93 @@ const Pastilla = ({ fila, onAbrir }) => {
 };
 
 // ── Modal de una carga: el reparto + el alta ────────────────────────────────
-const CargaModal = ({ fila, destinos, clientes, onCerrar, onEmitir, onBorrar, onPasar, onAgregada }) => {
+// ── La carga de lunes/jueves: saldo de huevos y mover el día ────────────────
+// Solo para las cargas que todavía no se hicieron. Es lo que en la planilla P7
+// del cliente es la columna "Saldo Huevos" + el "NO se puede".
+const BloqueCarga = ({ fila, onMover }) => {
+  const [moviendo, setMoviendo] = useState(false);
+  const c = fila.carga;
+  if (!c) return null;
+  const noAlcanza = c.estado === "no_alcanza";
+
+  const mover = async (fecha) => {
+    setMoviendo(true);
+    try {
+      await onMover(c.fechaHabitual, fecha);
+    } finally {
+      setMoviendo(false);
+    }
+  };
+
+  return (
+    <div className={`border rounded p-2 mb-3 small ${noAlcanza ? "border-danger bg-danger-subtle" : "bg-body-tertiary"}`}>
+      {noAlcanza ? (
+        <div className="text-danger-emphasis mb-2">
+          <i className="bi bi-x-octagon me-1"></i>
+          <strong>No alcanza el huevo para cargar el {textoClave(c.claveIngreso)}.</strong> Hay{" "}
+          <strong>{formatearNumero(c.huevosDisponibles)}</strong> huevos incubables y hacen falta{" "}
+          {formatearNumero(57600)}
+          {c.carrosPosibles > 0 && ` (alcanza para ${c.carrosPosibles} carros)`}. Si no se carga, este
+          día <strong>no nacen pollitos</strong>; el huevo queda para la carga siguiente.
+        </div>
+      ) : (
+        <div className="mb-2">
+          <i className="bi bi-egg me-1 text-success"></i>
+          Huevos incubables para cargar el {textoClave(c.claveIngreso)}:{" "}
+          <strong>{formatearNumero(c.huevosDisponibles)}</strong> · después de cargar quedan{" "}
+          <strong>{formatearNumero(c.saldoDespues)}</strong>
+        </div>
+      )}
+
+      {c.naceEnFeriado && (
+        <div className="text-warning-emphasis mb-2">
+          <i className="bi bi-exclamation-triangle me-1"></i>
+          Nace en feriado ({c.naceEnFeriado}). Si ese día no se puede sacar, mové la carga.
+        </div>
+      )}
+
+      <div className="d-flex flex-wrap align-items-center gap-2">
+        <span className="text-muted">
+          Día de carga: <strong>{textoClave(c.claveIngreso)}</strong>
+          {c.motivo === "feriado" && ` (el ${textoClave(c.fechaHabitual)} es feriado: ${c.feriadoHabitual})`}
+          {c.motivo === "manual" && ` (movida; le tocaba el ${textoClave(c.fechaHabitual)})`}
+        </span>
+        <div className="btn-group btn-group-sm ms-auto">
+          <button
+            type="button"
+            className="btn btn-outline-secondary"
+            disabled={moviendo}
+            onClick={() => mover(correrClave(c.claveIngreso, -1))}
+            title="Cargar un día antes"
+          >
+            <i className="bi bi-chevron-left"></i> Un día antes
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline-secondary"
+            disabled={moviendo}
+            onClick={() => mover(correrClave(c.claveIngreso, 1))}
+            title="Cargar un día después"
+          >
+            Un día después <i className="bi bi-chevron-right"></i>
+          </button>
+        </div>
+        {c.motivo === "manual" && (
+          <button
+            type="button"
+            className="btn btn-sm btn-link p-0"
+            disabled={moviendo}
+            onClick={() => mover(null)}
+          >
+            Volver a su día
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const CargaModal = ({ fila, destinos, clientes, onCerrar, onEmitir, onBorrar, onPasar, onAgregada, onMover }) => {
   const [form, setForm] = useState(FORM_VACIO);
   const [saving, setSaving] = useState(false);
   // La línea que se está pasando a otra carga, y a cuál.
@@ -207,9 +342,12 @@ const CargaModal = ({ fila, destinos, clientes, onCerrar, onEmitir, onBorrar, on
   const excede = pedidos > fila.libre;
   const esProy = fila.tipo === "proyectada";
   const sinCarga = fila.tipo === "sin_carga";
+  const noAlcanza = fila.tipo === "no_alcanza";
 
   // A dónde se puede pasar una reserva: cualquier carga real, u otra proyectada.
-  const opcionesPaso = destinos.filter((f) => f.clave !== fila.clave && f.tipo !== "sin_carga");
+  const opcionesPaso = destinos.filter(
+    (f) => f.clave !== fila.clave && f.tipo !== "sin_carga" && f.tipo !== "no_alcanza"
+  );
 
   const abrirPaso = (l) => {
     // Se sugiere la carga real que nace el mismo día que se prometió, que es el
@@ -279,19 +417,22 @@ const CargaModal = ({ fila, destinos, clientes, onCerrar, onEmitir, onBorrar, on
                   <i className="bi bi-egg-fried text-success me-2"></i>
                   {sinCarga
                     ? "Compromisos sin carga"
+                    : noAlcanza
+                    ? "No nacen pollitos"
                     : esProy
                     ? "Carga proyectada"
-                    : `Plantel #${fila.lote?.numeroLote ?? "?"}`}
+                    : `Planteles ${textoLotes(fila)}`}
                   <span className="text-muted fw-normal">
-                    {" · nacen el "}
-                    {formatearFechaLocal(fila.fechaNacimiento)}
+                    {" · "}
+                    {noAlcanza || sinCarga ? "el " : "nacen el "}
+                    {textoClave(fila.claveNacimiento)}
                   </span>
                 </h5>
-                {!sinCarga && (
+                {!sinCarga && !noAlcanza && (
                   <div className="small text-muted mt-1">
-                    Entra a la incubadora el {formatearFechaLocal(fila.fechaIngreso)} ·{" "}
+                    Entra a la incubadora el {textoClave(fila.claveIngreso)} ·{" "}
                     {formatearNumero(fila.huevosIngresados)} huevos · gordos el{" "}
-                    {formatearFechaLocal(fila.fechaGordo)}
+                    {textoClave(fila.claveGordo)}
                     {!fila.nacio && ` · ${textoDias(diasHasta(fila.fechaNacimiento))}`}
                   </div>
                 )}
@@ -306,7 +447,10 @@ const CargaModal = ({ fila, destinos, clientes, onCerrar, onEmitir, onBorrar, on
                 <div className="col-3">
                   <div className="border rounded py-2">
                     <div className="text-muted" style={{ fontSize: "0.75rem" }}>
-                      A nacer{fila.estimado ? " (est.)" : ""}
+                      A nacer
+                      {fila.estimado
+                        ? ` (est.${fila.rendimiento ? ` ${Math.round(fila.rendimiento)}%` : ""})`
+                        : ""}
                     </div>
                     <div className="fw-bold">{formatearNumero(fila.aNacer)}</div>
                   </div>
@@ -333,6 +477,8 @@ const CargaModal = ({ fila, destinos, clientes, onCerrar, onEmitir, onBorrar, on
                 </div>
               </div>
 
+              {(esProy || noAlcanza) && <BloqueCarga fila={fila} onMover={onMover} />}
+
               {sinCarga && (
                 <div className="alert alert-danger py-2 small">
                   <i className="bi bi-exclamation-octagon me-1"></i>
@@ -349,6 +495,15 @@ const CargaModal = ({ fila, destinos, clientes, onCerrar, onEmitir, onBorrar, on
                   la carga real con <i className="bi bi-arrow-right-square"></i>.
                 </div>
               )}
+              {noAlcanza && fila.lineas.length > 0 && (
+                <div className="alert alert-danger py-2 small">
+                  <i className="bi bi-exclamation-octagon me-1"></i>
+                  Hay pollitos comprometidos para un día en que no nace nada. Mové la carga a un día
+                  en que alcance el huevo, o pasá cada reserva a otra carga con{" "}
+                  <i className="bi bi-arrow-right-square"></i>.
+                </div>
+              )}
+
               {fila.lineas.length > 0 ? (
                 <div className="table-responsive mb-3">
                   <table className="table table-sm align-middle mb-0">
@@ -454,7 +609,7 @@ const CargaModal = ({ fila, destinos, clientes, onCerrar, onEmitir, onBorrar, on
                     </tbody>
                   </table>
                 </div>
-              ) : (
+              ) : noAlcanza ? null : (
                 <p className="text-muted small mb-3">
                   <i className="bi bi-inbox me-1"></i>Esta carga todavía no tiene nada repartido.
                 </p>
@@ -475,8 +630,8 @@ const CargaModal = ({ fila, destinos, clientes, onCerrar, onEmitir, onBorrar, on
                       <option value="">— Elegí la carga —</option>
                       {opcionesPaso.map((f) => (
                         <option key={f.clave} value={f.clave}>
-                          {`Nace ${formatearFechaLocal(f.fechaNacimiento)} · ${
-                            f.tipo === "real" ? `Plantel #${f.lote?.numeroLote ?? "?"} (real)` : "proyectada"
+                          {`Nace ${textoClave(f.claveNacimiento)} · ${
+                            f.tipo === "real" ? `${textoLotes(f)} (real)` : "proyectada"
                           } · libre ${formatearNumero(f.libre)}`}
                         </option>
                       ))}
@@ -501,7 +656,7 @@ const CargaModal = ({ fila, destinos, clientes, onCerrar, onEmitir, onBorrar, on
                 </div>
               )}
 
-              {!sinCarga && (
+              {!sinCarga && !noAlcanza && (
                 <>
                   <hr />
 
@@ -613,6 +768,168 @@ const CargaModal = ({ fila, destinos, clientes, onCerrar, onEmitir, onBorrar, on
   );
 };
 
+// ── Vista de lista ──────────────────────────────────────────────────────────
+// La otra forma de ver el mes, pedida por el cliente (2026-10-04): como su
+// Excel "Programación Pollitos", los días para abajo y la información a la
+// derecha. Una fila por carga, más los feriados del mes, para ver de corrido
+// qué nace, a quién va y qué queda libre. El clic abre el mismo modal.
+const CLAVE_VISTA = "planPollitos.vista";
+
+const ListaMes = ({ filas, feriados, prefijoMes, claveHoy, onAbrir }) => {
+  // Los feriados del mes que no tienen carga también van, como fila suelta:
+  // son justamente los días en que hay que mover algo.
+  const conCarga = new Set(filas.map((f) => f.claveNacimiento));
+  const soloFeriados = [...feriados.entries()]
+    .filter(([k]) => prefijoMes && k.startsWith(prefijoMes) && !conCarga.has(k))
+    .map(([k, nombre]) => ({ feriado: true, clave: `fer|${k}`, claveNacimiento: k, nombre }));
+  const renglones = [...filas, ...soloFeriados].sort((a, b) =>
+    a.claveNacimiento < b.claveNacimiento ? -1 : a.claveNacimiento > b.claveNacimiento ? 1 : 0
+  );
+
+  if (!renglones.length)
+    return <p className="text-muted small m-3">No nace ninguna carga este mes.</p>;
+
+  return (
+    <div className="card-body p-0">
+      <div className="table-responsive">
+        <table className="table table-sm table-hover align-middle mb-0" style={{ minWidth: 900 }}>
+          <thead className="table-light small">
+            <tr>
+              <th>Nace</th>
+              <th>Entra</th>
+              <th>Gordo</th>
+              <th>Carga</th>
+              <th className="text-end">Huevos</th>
+              <th className="text-end">A nacer</th>
+              <th className="text-center" style={{ minWidth: 240 }}>A quién va</th>
+              <th className="text-end">Clientes</th>
+              <th className="text-end">Engorde</th>
+              <th className="text-end">Libre</th>
+            </tr>
+          </thead>
+          <tbody>
+            {renglones.map((f) => {
+              if (f.feriado)
+                return (
+                  <tr key={f.clave} className="table-danger">
+                    <td className="fw-semibold text-nowrap">{textoClave(f.claveNacimiento)}</td>
+                    <td colSpan={9} className="small text-danger-emphasis">
+                      <i className="bi bi-flag-fill me-1"></i>Feriado: {f.nombre}
+                    </td>
+                  </tr>
+                );
+
+              const noAlcanza = f.tipo === "no_alcanza";
+              const sinCarga = f.tipo === "sin_carga";
+              const feriado = feriados.get(f.claveNacimiento);
+              const esHoy = f.claveNacimiento === claveHoy;
+              return (
+                <tr
+                  key={f.clave}
+                  className={noAlcanza || sinCarga ? "table-danger" : esHoy ? "table-warning" : ""}
+                  style={{ cursor: "pointer" }}
+                  onClick={() => onAbrir(f)}
+                >
+                  <td className="fw-semibold text-nowrap">
+                    {textoClave(f.claveNacimiento)}
+                    {esHoy && <span className="badge bg-warning text-dark ms-1">hoy</span>}
+                    {feriado && (
+                      <div className="small text-danger-emphasis fw-normal" title={feriado}>
+                        <i className="bi bi-flag-fill me-1"></i>feriado
+                      </div>
+                    )}
+                  </td>
+                  <td className="text-nowrap small">
+                    {sinCarga ? "—" : textoClave(f.claveIngreso)}
+                    {f.carga?.motivo && (
+                      <i
+                        className="bi bi-arrow-left-right ms-1 text-muted"
+                        title={f.carga.motivo === "feriado" ? "Corrida por feriado" : "Movida a mano"}
+                      ></i>
+                    )}
+                  </td>
+                  <td className="text-nowrap small text-muted">
+                    {noAlcanza || sinCarga ? "—" : textoClave(f.claveGordo)}
+                  </td>
+                  <td className="small text-nowrap">
+                    {sinCarga ? (
+                      <span className="text-danger fw-semibold">
+                        <i className="bi bi-exclamation-octagon me-1"></i>sin carga
+                      </span>
+                    ) : noAlcanza ? (
+                      <span className="text-danger fw-semibold">
+                        <i className="bi bi-x-octagon me-1"></i>no alcanza el huevo
+                      </span>
+                    ) : f.tipo === "proyectada" ? (
+                      <span className="text-secondary">
+                        <i className="bi bi-hourglass-split me-1"></i>proyectada
+                      </span>
+                    ) : (
+                      <span>
+                        {textoLotes(f)}
+                        {f.nacio && <span className="badge bg-success ms-1">nació</span>}
+                      </span>
+                    )}
+                  </td>
+                  <td className="text-end small">
+                    {noAlcanza ? (
+                      <span className="text-danger" title="Huevos que había para cargar">
+                        hay {formatearNumero(f.carga?.huevosDisponibles || 0)}
+                      </span>
+                    ) : sinCarga ? (
+                      "—"
+                    ) : (
+                      formatearNumero(f.huevosIngresados)
+                    )}
+                  </td>
+                  <td className="text-end fw-bold text-nowrap">
+                    {formatearNumero(f.aNacer)}
+                    {f.estimado && f.rendimiento ? (
+                      <div className="small text-muted fw-normal">{Math.round(f.rendimiento)}% est.</div>
+                    ) : null}
+                  </td>
+                  <td className="small">
+                    {f.lineas.length === 0 ? (
+                      <div className="text-center text-muted fst-italic">sin asignar</div>
+                    ) : (
+                      f.lineas.map((l) => (
+                        <div key={l._id} className="d-flex justify-content-between gap-2">
+                          <span className="text-truncate" title={nombreCorto(l)}>
+                            <i
+                              className={`bi ${
+                                l.destino === "granja"
+                                  ? "bi-house-door text-success"
+                                  : l.orden
+                                  ? "bi-truck text-success"
+                                  : "bi-person text-primary"
+                              } me-1`}
+                            ></i>
+                            {nombreCorto(l)}
+                          </span>
+                          <span className="fw-semibold text-nowrap">{formatearNumero(l.cantidad)}</span>
+                        </div>
+                      ))
+                    )}
+                  </td>
+                  <td className="text-end text-primary">{formatearNumero(f.aClientes)}</td>
+                  <td className="text-end text-success">{formatearNumero(f.aGranja)}</td>
+                  <td
+                    className={`text-end fw-bold ${
+                      f.libre < 0 ? "text-danger" : f.libre === 0 ? "text-primary" : "text-success"
+                    }`}
+                  >
+                    {formatearNumero(f.libre)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
 // ── Página ──────────────────────────────────────────────────────────────────
 const PlanPollitosPage = () => {
   const [plan, setPlan] = useState(null);
@@ -620,12 +937,30 @@ const PlanPollitosPage = () => {
   const [dias, setDias] = useState(90);
   const [mes, setMes] = useState(null); // { anio, mes } — se fija al cargar
   const [abierta, setAbierta] = useState(null); // clave de la carga en el modal
+  // Almanaque o lista. Se recuerda en el navegador: es preferencia de quien mira.
+  const [vista, setVista] = useState(() => {
+    try {
+      return localStorage.getItem(CLAVE_VISTA) === "lista" ? "lista" : "almanaque";
+    } catch {
+      return "almanaque";
+    }
+  });
+  const cambiarVista = (v) => {
+    setVista(v);
+    try {
+      localStorage.setItem(CLAVE_VISTA, v);
+    } catch {
+      // Sin almacenamiento la vista vuelve al almanaque al recargar; no importa.
+    }
+  };
   const [loading, setLoading] = useState(true);
 
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
-      setPlan(await obtenerPlanPollitos({ dias }));
+      const nuevo = await obtenerPlanPollitos({ dias });
+      setPlan(nuevo);
+      return nuevo;
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudo cargar el plan.", "error");
     } finally {
@@ -648,6 +983,12 @@ const PlanPollitosPage = () => {
 
   const filas = useMemo(() => plan?.nacimientos || [], [plan]);
   const resumen = plan?.resumen;
+
+  // Los feriados del almanaque, por clave.
+  const feriados = useMemo(
+    () => new Map((plan?.feriados || []).map((f) => [f.clave, f.nombre])),
+    [plan]
+  );
 
   // El mes que se muestra lo maneja el usuario, así que se fija una sola vez
   // cuando llega el plan.
@@ -714,12 +1055,20 @@ const PlanPollitosPage = () => {
 
   // Totales del mes que se está mirando: el resumen de arriba es de la ventana
   // entera, y al navegar hace falta saber qué pasa en ESTE mes.
+  const prefijoMes = mesActual
+    ? `${mesActual.anio}-${String(mesActual.mes + 1).padStart(2, "0")}`
+    : null;
+  // Las cargas que nacen en el mes que se está mirando: las usan los totales y
+  // la vista de lista.
+  const filasMes = useMemo(
+    () => (prefijoMes ? filas.filter((f) => f.claveNacimiento.startsWith(prefijoMes)) : []),
+    [filas, prefijoMes]
+  );
+
   const totalesMes = useMemo(() => {
     const vacio = { aNacer: 0, aClientes: 0, aGranja: 0, libre: 0, cargas: 0 };
     if (!mesActual) return vacio;
-    const prefijo = `${mesActual.anio}-${String(mesActual.mes + 1).padStart(2, "0")}`;
-    return filas
-      .filter((f) => f.claveNacimiento.startsWith(prefijo))
+    return filasMes
       .reduce(
         (acc, f) => ({
           aNacer: acc.aNacer + f.aNacer,
@@ -730,7 +1079,7 @@ const PlanPollitosPage = () => {
         }),
         vacio
       );
-  }, [filas, mesActual]);
+  }, [filasMes, mesActual]);
 
   // La carga del modal se relee del plan en cada render: así, después de
   // agregar o borrar una línea, el modal muestra los números nuevos sin cerrarse.
@@ -805,6 +1154,33 @@ const PlanPollitosPage = () => {
     }
   };
 
+  // Mover una carga de lunes/jueves. Al moverla cambia su clave (es el día), así
+  // que el modal se vuelve a enganchar buscando la carga por su día habitual.
+  const moverCarga = async (fechaHabitual, fecha) => {
+    try {
+      const r = await moverCargaIncubadora(fechaHabitual, fecha);
+      const nuevo = await cargar();
+      const f = nuevo?.nacimientos?.find((x) => x.carga?.fechaHabitual === fechaHabitual);
+      if (f) {
+        const pc = partesClave(f.claveNacimiento);
+        setMes({ anio: pc.anio, mes: pc.mes });
+        setAbierta(f.clave);
+      } else {
+        setAbierta(null);
+      }
+      if (r.reservasMovidas)
+        Swal.fire({
+          icon: "info",
+          title: "Carga movida",
+          text: `Se movieron con ella ${r.reservasMovidas} reserva(s).`,
+          timer: 2200,
+          showConfirmButton: false,
+        });
+    } catch (err) {
+      Swal.fire("No se pudo mover", err.message || "Error al mover la carga.", "error");
+    }
+  };
+
   // Excel: una fila por línea del reparto, con la carga a la que pertenece.
   const exportarExcel = () =>
     exportarTablaExcel({
@@ -812,13 +1188,19 @@ const PlanPollitosPage = () => {
       nombreHoja: "Plan de pollitos",
       nombreArchivo: "Reproductoras_plan_pollitos",
       columnas: [
-        { header: "Nace", valor: ({ f }) => formatearFechaLocal(f.fechaNacimiento) },
-        { header: "Gordo", valor: ({ f }) => formatearFechaLocal(f.fechaGordo) },
-        { header: "Ingreso incubadora", valor: ({ f }) => formatearFechaLocal(f.fechaIngreso) },
+        { header: "Nace", valor: ({ f }) => textoClave(f.claveNacimiento) },
+        { header: "Gordo", valor: ({ f }) => textoClave(f.claveGordo) },
+        { header: "Ingreso incubadora", valor: ({ f }) => textoClave(f.claveIngreso) },
         {
-          header: "Plantel",
+          header: "Planteles",
           valor: ({ f }) =>
-            f.lote?.numeroLote ?? (f.tipo === "sin_carga" ? "sin carga (a pasar)" : "proyectada"),
+            f.tipo === "real"
+              ? textoLotes(f)
+              : f.tipo === "sin_carga"
+              ? "sin carga (a pasar)"
+              : f.tipo === "no_alcanza"
+              ? "no alcanza el huevo"
+              : "proyectada",
         },
         { header: "Huevos", valor: ({ f }) => f.huevosIngresados },
         { header: "A nacer", valor: ({ f }) => f.aNacer },
@@ -952,6 +1334,40 @@ const PlanPollitosPage = () => {
               </div>
             )}
 
+            {/* La cuenta corriente de huevos, como la columna "Saldo Huevos" de la
+                planilla P7: con cuánto se arranca hoy y cuántos lunes/jueves no
+                alcanzan. */}
+            {plan?.saldoHuevos && (
+              <div
+                className={`alert ${
+                  resumen?.cargasNoAlcanza ? "alert-danger" : "alert-light border"
+                } d-flex flex-wrap align-items-center gap-3 py-2 small`}
+              >
+                <span>
+                  <i className="bi bi-egg me-1"></i>
+                  Huevo incubable hoy:{" "}
+                  <strong>{formatearNumero(plan.saldoHuevos.inicial)}</strong>
+                  <span className="text-muted">
+                    {" "}
+                    (Trigotuc {formatearNumero(plan.saldoHuevos.enTrigotuc)} + granja{" "}
+                    {formatearNumero(plan.saldoHuevos.enGranja)})
+                  </span>
+                </span>
+                <span>
+                  Cargas lunes y jueves:{" "}
+                  <strong>{(plan.cargas || []).filter((c) => c.estado === "se_puede").length}</strong> se
+                  pueden
+                  {resumen?.cargasNoAlcanza > 0 && (
+                    <>
+                      {" · "}
+                      <strong className="text-danger">{resumen.cargasNoAlcanza} no alcanzan</strong>{" "}
+                      (esos días no nacen pollitos)
+                    </>
+                  )}
+                </span>
+              </div>
+            )}
+
             {resumen?.sobrevendidas > 0 && (
               <div className="alert alert-warning py-2 small">
                 <i className="bi bi-exclamation-triangle me-1"></i>
@@ -983,6 +1399,22 @@ const PlanPollitosPage = () => {
                   >
                     <i className="bi bi-chevron-right"></i>
                   </button>
+                  <div className="btn-group btn-group-sm ms-2" role="group" aria-label="Vista">
+                    <button
+                      type="button"
+                      className={`btn ${vista === "almanaque" ? "btn-success" : "btn-outline-success"}`}
+                      onClick={() => cambiarVista("almanaque")}
+                    >
+                      <i className="bi bi-calendar3 me-1"></i>Almanaque
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn ${vista === "lista" ? "btn-success" : "btn-outline-success"}`}
+                      onClick={() => cambiarVista("lista")}
+                    >
+                      <i className="bi bi-list-ul me-1"></i>Lista
+                    </button>
+                  </div>
                 </div>
                 <div className="d-flex flex-wrap gap-3 small">
                   <span>
@@ -1028,6 +1460,15 @@ const PlanPollitosPage = () => {
                 </div>
               )}
 
+              {vista === "lista" ? (
+                <ListaMes
+                  filas={filasMes}
+                  feriados={feriados}
+                  prefijoMes={prefijoMes}
+                  claveHoy={claveHoy}
+                  onAbrir={(x) => setAbierta(x.clave)}
+                />
+              ) : (
               <div className="card-body p-0">
                 <div className="table-responsive">
                   {/* El almanaque entra en el ancho que haya: un scroll
@@ -1057,10 +1498,13 @@ const PlanPollitosPage = () => {
                             // sumarlas de cabeza mirando la pantalla es
                             // exactamente lo que no hay que pedirle al usuario.
                             const nacenHoy = cargas.reduce((a, f) => a + f.aNacer, 0);
+                            const feriado = feriados.get(k);
                             return (
                               <td
                                 key={j}
-                                className={`align-top p-1 ${esHoy ? "bg-warning-subtle" : ""}`}
+                                className={`align-top p-1 ${
+                                  esHoy ? "bg-warning-subtle" : feriado ? "bg-danger-subtle" : ""
+                                }`}
                                 // minHeight, no height: un día puede tener más
                                 // de una carga y la celda tiene que crecer.
                                 style={{ minHeight: 118, height: 118, verticalAlign: "top" }}
@@ -1085,6 +1529,16 @@ const PlanPollitosPage = () => {
                                     </span>
                                   )}
                                 </div>
+                                {feriado && (
+                                  <div
+                                    className="text-danger-emphasis text-truncate mb-1"
+                                    style={{ fontSize: "0.68rem" }}
+                                    title={`Feriado: ${feriado}`}
+                                  >
+                                    <i className="bi bi-flag-fill me-1"></i>
+                                    {feriado}
+                                  </div>
+                                )}
                                 {cargas.map((f) => (
                                   <Pastilla key={f.clave} fila={f} onAbrir={(x) => setAbierta(x.clave)} />
                                 ))}
@@ -1097,6 +1551,7 @@ const PlanPollitosPage = () => {
                   </table>
                 </div>
               </div>
+              )}
 
               <div className="card-footer bg-white small text-muted d-flex flex-wrap gap-3">
                 <span>
@@ -1118,6 +1573,19 @@ const PlanPollitosPage = () => {
                   proyectada (todavía no se cargó la incubadora)
                 </span>
                 <span>
+                  <span
+                    className="badge border border-danger bg-body-tertiary me-1"
+                    style={{ borderStyle: "dashed" }}
+                  >
+                    &nbsp;
+                  </span>
+                  no nacen (no alcanza el huevo)
+                </span>
+                <span>
+                  <span className="badge bg-danger-subtle me-1">&nbsp;</span>
+                  feriado
+                </span>
+                <span>
                   <span className="badge border border-danger border-2 bg-danger-subtle me-1">&nbsp;</span>
                   sin carga (compromisos a pasar)
                 </span>
@@ -1134,8 +1602,11 @@ const PlanPollitosPage = () => {
 
             <p className="text-muted small mt-3 mb-0">
               <i className="bi bi-info-circle me-1"></i>
-              Las cargas que no nacieron se cuentan al{" "}
-              {plan?.parametros?.rendimientoEstimado ?? 80}% de los huevos, igual que la planilla.
+              Las cargas que no nacieron se cuentan según la edad de cada plantel, como la planilla
+              P8: {plan?.parametros?.rendimientoPorEdad?.base ?? 80}% + (
+              {plan?.parametros?.rendimientoPorEdad?.semanaBase ?? 38} − semana de vida) × 1%, con
+              tope de {plan?.parametros?.rendimientoPorEdad?.maximo ?? 85}%. Las gallinas jóvenes
+              dan más pollitos por huevo que las viejas.
             </p>
           </>
         )}
@@ -1151,6 +1622,7 @@ const PlanPollitosPage = () => {
           onEmitir={emitirOrden}
           onBorrar={borrarLinea}
           onAgregada={cargar}
+          onMover={moverCarga}
         />
       )}
     </Layout>
