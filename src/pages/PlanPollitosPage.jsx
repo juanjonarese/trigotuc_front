@@ -51,7 +51,10 @@ import Swal from "sweetalert2";
 // UTC−3, así que `new Date(iso).getDate()` corre el almanaque un día para atrás.
 // Misma convención que components/Almanaque.jsx.
 
-const VENTANAS = [60, 90, 120];
+// Por defecto 6 meses (pedido del usuario, 2026-10-04): las cargas se venden con
+// meses de anticipación.
+const VENTANAS = [60, 90, 120, 180];
+const VENTANA_POR_DEFECTO = 180;
 
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -171,7 +174,7 @@ const Pastilla = ({ fila, onAbrir }) => {
             </>
           ) : fila.tipo === "proyectada" ? (
             <>
-              <i className="bi bi-hourglass-split me-1"></i>proy.
+              <i className="bi bi-hourglass-split me-1"></i>proyección
               {fila.carga?.motivo && (
                 <i
                   className="bi bi-arrow-left-right ms-1"
@@ -934,7 +937,7 @@ const ListaMes = ({ filas, feriados, prefijoMes, claveHoy, onAbrir }) => {
 const PlanPollitosPage = () => {
   const [plan, setPlan] = useState(null);
   const [clientes, setClientes] = useState([]);
-  const [dias, setDias] = useState(90);
+  const [dias, setDias] = useState(VENTANA_POR_DEFECTO);
   const [mes, setMes] = useState(null); // { anio, mes } — se fija al cargar
   const [abierta, setAbierta] = useState(null); // clave de la carga en el modal
   // Almanaque o lista. Se recuerda en el navegador: es preferencia de quien mira.
@@ -1252,7 +1255,7 @@ const PlanPollitosPage = () => {
             >
               {VENTANAS.map((d) => (
                 <option key={d} value={d}>
-                  Próximos {d} días
+                  {d === 180 ? "Próximos 6 meses" : `Próximos ${d} días`}
                 </option>
               ))}
             </select>
@@ -1334,39 +1337,55 @@ const PlanPollitosPage = () => {
               </div>
             )}
 
-            {/* La cuenta corriente de huevos, como la columna "Saldo Huevos" de la
-                planilla P7: con cuánto se arranca hoy y cuántos lunes/jueves no
-                alcanzan. */}
-            {plan?.saldoHuevos && (
-              <div
-                className={`alert ${
-                  resumen?.cargasNoAlcanza ? "alert-danger" : "alert-light border"
-                } d-flex flex-wrap align-items-center gap-3 py-2 small`}
-              >
-                <span>
-                  <i className="bi bi-egg me-1"></i>
-                  Huevo incubable hoy:{" "}
-                  <strong>{formatearNumero(plan.saldoHuevos.inicial)}</strong>
-                  <span className="text-muted">
-                    {" "}
-                    (Trigotuc {formatearNumero(plan.saldoHuevos.enTrigotuc)} + granja{" "}
-                    {formatearNumero(plan.saldoHuevos.enGranja)})
-                  </span>
-                </span>
-                <span>
-                  Cargas lunes y jueves:{" "}
-                  <strong>{(plan.cargas || []).filter((c) => c.estado === "se_puede").length}</strong> se
-                  pueden
-                  {resumen?.cargasNoAlcanza > 0 && (
-                    <>
-                      {" · "}
-                      <strong className="text-danger">{resumen.cargasNoAlcanza} no alcanzan</strong>{" "}
-                      (esos días no nacen pollitos)
-                    </>
-                  )}
-                </span>
-              </div>
-            )}
+            {/* Los días en que NO nacen pollitos porque no alcanzó el huevo para
+                la carga de 21 días antes. Es lo que el cliente necesita saber de
+                antemano (pedido del usuario, 2026-10-04): cada uno lleva al día. */}
+            {plan?.cargas &&
+              (() => {
+                const sinNacimiento = plan.cargas.filter((c) => c.estado === "no_alcanza");
+                if (sinNacimiento.length === 0)
+                  return (
+                    <div className="alert alert-success d-flex align-items-center gap-2 py-2 small">
+                      <i className="bi bi-check2-circle"></i>
+                      <span>
+                        En {dias === 180 ? "los próximos 6 meses" : `los próximos ${dias} días`} no
+                        hay días sin nacimientos por falta de huevo.
+                      </span>
+                    </div>
+                  );
+                return (
+                  <div className="alert alert-danger py-2 small">
+                    <div className="fw-semibold mb-1">
+                      <i className="bi bi-x-octagon me-1"></i>
+                      {sinNacimiento.length === 1
+                        ? "1 día sin nacimientos por falta de huevo:"
+                        : `${sinNacimiento.length} días sin nacimientos por falta de huevo:`}
+                    </div>
+                    <div className="d-flex flex-wrap gap-2">
+                      {sinNacimiento.map((c) => (
+                        <button
+                          key={c.fechaHabitual}
+                          type="button"
+                          className="btn btn-sm btn-outline-danger bg-white"
+                          title={`La carga del ${textoClave(c.claveIngreso)} no llena la máquina: hay ${formatearNumero(
+                            c.huevosDisponibles
+                          )} huevos (${c.carrosPosibles} carros)`}
+                          onClick={() => {
+                            const pc = partesClave(c.claveNacimiento);
+                            setMes({ anio: pc.anio, mes: pc.mes });
+                            setAbierta(`noalc|${c.claveIngreso}`);
+                          }}
+                        >
+                          <strong>{textoClave(c.claveNacimiento)}/{c.claveNacimiento.slice(2, 4)}</strong>
+                          <span className="text-muted ms-1">
+                            · carga {textoClave(c.claveIngreso)} · hay {formatearNumero(c.huevosDisponibles)}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
             {resumen?.sobrevendidas > 0 && (
               <div className="alert alert-warning py-2 small">
@@ -1599,15 +1618,6 @@ const PlanPollitosPage = () => {
                 </span>
               </div>
             </div>
-
-            <p className="text-muted small mt-3 mb-0">
-              <i className="bi bi-info-circle me-1"></i>
-              Las cargas que no nacieron se cuentan según la edad de cada plantel, como la planilla
-              P8: {plan?.parametros?.rendimientoPorEdad?.base ?? 80}% + (
-              {plan?.parametros?.rendimientoPorEdad?.semanaBase ?? 38} − semana de vida) × 1%, con
-              tope de {plan?.parametros?.rendimientoPorEdad?.maximo ?? 85}%. Las gallinas jóvenes
-              dan más pollitos por huevo que las viejas.
-            </p>
           </>
         )}
       </div>
