@@ -794,50 +794,6 @@ const Almanaque = ({ data }) => {
               ({paramHuevos.cargasPorSemana} cargas de{" "}
               {formatearNumero(paramHuevos.huevosPorCarga)})
             </span>
-            <span
-              className="ms-auto d-flex flex-wrap align-items-center gap-2"
-              style={{ fontSize: ".68rem" }}
-            >
-              {seriesHuevos.map((serie) => (
-                <span
-                  key={serie._id}
-                  title={`${serie.etiqueta} · ${formatearNumero(serie.hembras)} hembras`}
-                >
-                  <span
-                    className="d-inline-block me-1"
-                    style={{
-                      width: 16,
-                      height: 0,
-                      borderTop: `2px solid ${serie.color}`,
-                      verticalAlign: "middle",
-                    }}
-                  />
-                  Plantel #{serie.numeroLote}
-                </span>
-              ))}
-              <span className="text-success">
-                <span
-                  className="d-inline-block me-1"
-                  style={{
-                    width: 16,
-                    height: 8,
-                    background: "rgba(25,135,84,.15)",
-                    borderTop: "4px solid #198754",
-                    verticalAlign: "middle",
-                  }}
-                />
-                total del día
-              </span>
-              {puntosReales.length > 0 && (
-                <span>
-                  <span
-                    className="d-inline-block rounded-circle me-1"
-                    style={{ width: 6, height: 6, background: "#212529", verticalAlign: "middle" }}
-                  />
-                  recolectado real
-                </span>
-              )}
-            </span>
           </div>
 
           {/* Los números de la ventana. Van acá y no arriba porque la fila de
@@ -1106,46 +1062,60 @@ const Almanaque = ({ data }) => {
             </div>
           </div>
 
+          {/* La leyenda del gráfico: qué es cada línea, con su color. */}
           <div
-            className="card-footer bg-white py-2 d-flex flex-wrap gap-3"
-            style={{ fontSize: ".7rem" }}
+            className="card-footer bg-white py-2 d-flex flex-wrap align-items-center gap-3"
+            style={{ fontSize: ".72rem" }}
           >
-            <span className="text-muted">
-              <i className="bi bi-info-circle me-1"></i>
-              Curva de la planilla del cliente: {paramHuevos.huevosVidaIncubables} huevos
-              incubables por gallina en las {paramHuevos.semanasCicloVida} semanas de vida.
-              Empieza a poner en la semana {paramHuevos.semanaInicioPostura}, es fértil desde la{" "}
-              {paramHuevos.semanaInicioFertilidad} y hace pico entre la{" "}
-              {paramHuevos.semanaPicoDesde} y la {paramHuevos.semanaPicoHasta}.
-            </span>
-            <span className="text-muted">
-              <i className="bi bi-graph-down me-1"></i>
-              Las curvas son <strong>incubables</strong>. Sumando el descarte, el total de la
-              ventana es {formatearNumero(resumenHuevos.huevosTotales)} huevos —{" "}
-              {formatearNumero(resumenHuevos.huevosDescarte)} de descarte que van a venta.
-            </span>
-            <span className="text-warning-emphasis">
-              <i className="bi bi-exclamation-triangle me-1"></i>
-              No descuenta la mortandad que todavía va a pasar: usa las hembras vivas de hoy.
-            </span>
-            {resumenHuevos.contraste && (
+            {seriesHuevos.map((serie) => (
               <span
-                className={
-                  Math.abs(resumenHuevos.contraste.desvioPorcentual || 0) > 15
-                    ? "text-danger"
-                    : "text-muted"
-                }
-                title={
-                  `Real ${formatearNumero(resumenHuevos.contraste.real)} vs proyectado ` +
-                  `${formatearNumero(resumenHuevos.contraste.proyectado)} en ` +
-                  `${resumenHuevos.contraste.dias} días con recolección cargada`
-                }
+                key={serie._id}
+                title={`${serie.etiqueta} · ${formatearNumero(serie.hembras)} hembras`}
               >
-                <i className="bi bi-check2-square me-1"></i>
-                Contra lo recolectado en los últimos días: {resumenHuevos.contraste.desvioPorcentual >= 0 ? "+" : ""}
-                {resumenHuevos.contraste.desvioPorcentual}%
+                <span
+                  className="d-inline-block me-1"
+                  style={{
+                    width: 18,
+                    height: 0,
+                    borderTop: `2px solid ${serie.color}`,
+                    verticalAlign: "middle",
+                  }}
+                />
+                Plantel #{serie.numeroLote}
               </span>
-            )}
+            ))}
+            <span className="text-success">
+              <span
+                className="d-inline-block me-1"
+                style={{
+                  width: 18,
+                  height: 8,
+                  background: "rgba(25,135,84,.15)",
+                  borderTop: "4px solid #198754",
+                  verticalAlign: "middle",
+                }}
+              />
+              Total del día (todos los planteles)
+            </span>
+            <span className="text-danger">
+              <span
+                className="d-inline-block me-1"
+                style={{
+                  width: 18,
+                  height: 0,
+                  borderTop: "1px dashed #dc3545",
+                  verticalAlign: "middle",
+                }}
+              />
+              Lo que pide la incubadora ({formatearNumero(paramHuevos.objetivoIncubablesDiario)} por día)
+            </span>
+            <span>
+              <span
+                className="d-inline-block rounded-circle me-1"
+                style={{ width: 6, height: 6, background: "#212529", verticalAlign: "middle" }}
+              />
+              Recolectado real
+            </span>
           </div>
         </div>
       )}

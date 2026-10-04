@@ -153,22 +153,22 @@ const DashboardReproductoras = () => {
       {/* ── KPIs ── */}
       <div className="row g-3 mb-4">
         <div className="col-6 col-md-3">
-          <KpiCard icon="egg-fried" label="Aves en planteles" value={fmtNum(hembras + machos)}
+          <KpiCard label="Aves en planteles" value={fmtNum(hembras + machos)}
             sub={`${fmtNum(hembras)} hembras · ${fmtNum(machos)} machos`}
             color="text-success" onClick={() => navigate("/reproductores/galpones")} />
         </div>
         <div className="col-6 col-md-3">
-          <KpiCard icon="basket" label={`Huevos (${DIAS_POSTURA} días)`} value={fmtNum(huevosSemana)}
+          <KpiCard label={`Huevos (${DIAS_POSTURA} días)`} value={fmtNum(huevosSemana)}
             sub={posturaGlobal != null ? `Postura ${fmtPct(posturaGlobal)}` : "Sin recolecciones"}
             color="text-warning" onClick={() => navigate("/reproductores/recoleccion")} />
         </div>
         <div className="col-6 col-md-3">
-          <KpiCard icon="thermometer-half" label="En incubadora" value={fmtNum(incubando)}
+          <KpiCard label="En incubadora" value={fmtNum(incubando)}
             sub={capacidad ? `${fmtPct((incubando / capacidad) * 100)} de ${fmtNum(capacidad)}` : `${fmtNum(enNacedora)} en nacedora`}
             color="text-danger" onClick={() => navigate("/reproductores/incubadora")} />
         </div>
         <div className="col-6 col-md-3">
-          <KpiCard icon="emoji-smile" label="Pollitos libres" value={fmtNum(pollitos?.libre ?? 0)}
+          <KpiCard label="Pollitos libres" value={fmtNum(pollitos?.libre ?? 0)}
             sub={`${fmtNum(pollitos?.total ?? 0)} en stock · ${fmtNum(pollitos?.comprometido ?? 0)} comprometidos`}
             color="text-primary" onClick={() => navigate("/reproductores/ordenes-carga")} />
         </div>

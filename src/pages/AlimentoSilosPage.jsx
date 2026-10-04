@@ -264,13 +264,6 @@ const AlimentoSilosPage = () => {
                       </span>
                     </div>
                     <div className="card-body">
-                      {g.proximo && (
-                        <div className="alert alert-info py-1 px-2 small mb-2">
-                          <i className="bi bi-arrow-down-circle me-1"></i>
-                          Lo próximo que come: <strong>{etiquetaTipo(g.proximo.tipo)}</strong>{" "}
-                          del silo {g.proximo.silo} ({fmt(g.proximo.kg)} kg)
-                        </div>
-                      )}
                       <div className="row g-2">
                         {(stock?.silos || [])
                           .filter((s) => g.silos.includes(s.silo))

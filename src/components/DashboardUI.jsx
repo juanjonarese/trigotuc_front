@@ -10,7 +10,8 @@ export const KpiCard = ({ icon, label, value, sub, color = "text-dark", onClick 
     onClick={onClick}>
     <div className="card-body py-3">
       <div className="d-flex align-items-center gap-2 mb-1">
-        <i className={`bi bi-${icon} fs-5 ${color}`}></i>
+        {/* Sin `icon` la tarjeta va solo con el texto (Reproductoras, 2026-10-04). */}
+        {icon && <i className={`bi bi-${icon} fs-5 ${color}`}></i>}
         <span className="text-muted small text-uppercase fw-semibold" style={{ fontSize: "0.65rem", letterSpacing: "0.05em" }}>{label}</span>
       </div>
       <div className={`fw-bold fs-4 ${color}`}>{value}</div>

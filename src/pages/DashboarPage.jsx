@@ -24,9 +24,9 @@ const granjaLabel = (g) => g === "cañete" ? "Cañete" : "Los Pinos";
 // endpoints están cerrados a superadmin / admin / reproductoras; Granja y
 // Frigorífico, al revés, no son del rol reproductoras.
 const AREAS = [
-  { k: "reproductoras", label: "Reproductoras", icon: "egg-fried",        roles: ["superadmin", "admin", "reproductoras"] },
-  { k: "granja",        label: "Granja",        icon: "house-heart-fill", excluir: ["reproductoras"] },
-  { k: "frigorifico",   label: "Frigorífico",   icon: "snow-fill",        excluir: ["reproductoras"] },
+  { k: "reproductoras", label: "Reproductoras", roles: ["superadmin", "admin", "reproductoras"] },
+  { k: "granja",        label: "Granja",        excluir: ["reproductoras"] },
+  { k: "frigorifico",   label: "Frigorífico",   excluir: ["reproductoras"] },
 ];
 const areasDe = (rol) =>
   AREAS.filter((a) => (a.roles ? a.roles.includes(rol) : !a.excluir.includes(rol)));
@@ -230,7 +230,7 @@ const DashboardPage = () => {
                 <button key={a.k} type="button"
                   className={`btn btn-sm ${area === a.k ? "btn-dark" : "btn-outline-secondary"}`}
                   onClick={() => elegirArea(a.k)}>
-                  <i className={`bi bi-${a.icon} me-1`}></i>{a.label}
+                  {a.label}
                 </button>
               ))}
             </div>
