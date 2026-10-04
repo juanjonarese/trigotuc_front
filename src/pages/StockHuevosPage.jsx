@@ -2,246 +2,205 @@ import React, { useState, useEffect, useCallback } from "react";
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
 import BotonExcel from "../components/BotonExcel";
-import {
-  obtenerStockHuevosDescarte,
-  obtenerSalidasHuevos,
-  crearSalidaHuevos,
-  anularSalidaHuevos,
-} from "../services/api";
-import { formatearFechaLocal, ajustarFechaParaGuardar, obtenerFechaHoy } from "../utils/dateUtils";
-import { formatearNumero, textoDesglose, ORIGEN_DESCARTE } from "../utils/reproductoresUtils";
+import { obtenerMovimientosHuevos } from "../services/api";
+import { formatearFechaLocal, formatearHoraLocal } from "../utils/dateUtils";
+import { formatearNumero, textoDesglose } from "../utils/reproductoresUtils";
 import { exportarLibroExcel } from "../utils/exportarExcel";
 import Swal from "sweetalert2";
 
-const ITEMS_POR_PAGINA = 15;
+// Stock de Huevos — el huevo que ya está en Trigotuc.
+//
+// Rediseño del 2026-10-04 (pedido del usuario: "no está muy claro"). El huevo de
+// Trigotuc sale solo por dos caminos: a la incubadora (API) o por la venta de
+// mostrador (consumo). Por eso:
+//   · se sacó el botón "Sacar del stock" (las salidas sueltas sin cliente);
+//   · arriba van los totales de cada stock;
+//   · abajo, dos solapas con los movimientos como CUENTA CORRIENTE: qué entró,
+//     qué salió y el saldo después de cada movimiento. Primero consumo, después
+//     API.
+// El saldo lo calcula el back anclado al stock de hoy (ver
+// services/movimientosHuevos.services.js): el saldo de arriba de todo es
+// siempre el stock real.
 
-const MOTIVOS = {
-  venta:   { label: "Venta", clase: "bg-success" },
-  consumo: { label: "Consumo interno", clase: "bg-info text-dark" },
-  rotura:  { label: "Rotura", clase: "bg-danger" },
-  otro:    { label: "Otro", clase: "bg-secondary" },
+const POR_PAGINA = 20;
+
+// Colores: los mismos que Remitos y Recepción de huevos (API verde, consumo azul).
+const CUENTAS = [
+  { key: "consumo", label: "Consumo", color: "primary", icono: "bi-egg", sale: "venta de mostrador" },
+  { key: "api", label: "API", color: "success", icono: "bi-thermometer-half", sale: "incubadora" },
+];
+
+// Ícono de cada tipo de movimiento, para leer la columna de un vistazo.
+const ICONO = {
+  remito: "bi-truck",
+  mostrador: "bi-shop",
+  incubadora: "bi-thermometer-half",
+  a_venta: "bi-arrow-left-right",
+  inoculacion: "bi-recycle",
+  salida: "bi-box-arrow-up",
+  venta: "bi-receipt",
+  saldo_inicial: "bi-flag",
 };
 
-// ── Modal: sacar huevos del stock ───────────────────────────────────────────
-// Provisorio: descuenta stock sin cliente ni comprobante, dejando registro de
-// cuánto salió y por qué. Cuando exista el módulo de ventas, la salida por
-// "venta" se reemplaza por la venta real con cliente.
-const SalidaModal = ({ stock, onClose, onHecho }) => {
-  const [fecha, setFecha] = useState(obtenerFechaHoy());
-  const [motivo, setMotivo] = useState("venta");
-  // Un número por tipo, en unidades: la salida puede llevar varios a la vez.
-  const [porTipo, setPorTipo] = useState({});
-  const [observaciones, setObservaciones] = useState("");
-  const [saving, setSaving] = useState(false);
+// Una tarjeta por stock, apaisada: las dos juntas ocupan el ancho de la página
+// y quedan bajas, con el total a la izquierda y los tipos en fila a la derecha.
+const TarjetaTotal = ({ cuenta, total, huevosPorMaple }) => (
+  <div className="col-12 col-md-6">
+    <div className={`card shadow-sm h-100 border border-2 border-${cuenta.color}`}>
+      <div className={`card-body bg-${cuenta.color}-subtle py-2 px-3`}>
+        <div className="d-flex flex-wrap align-items-center gap-3">
+          <div className="lh-sm">
+            <div className={`fw-bold text-uppercase small text-${cuenta.color}`}>
+              <i className={`bi ${cuenta.icono} me-1`}></i>
+              {cuenta.label}
+            </div>
+            <div className={`h4 fw-bold mb-0 text-${cuenta.color}`}>
+              {formatearNumero(total.disponible)}
+            </div>
+            <div className="text-muted" style={{ fontSize: ".72rem" }}>
+              {cuenta.key === "consumo"
+                ? `${formatearNumero(total.maples)} maples de ${huevosPorMaple}`
+                : textoDesglose(total.disponible)}
+            </div>
+          </div>
 
-  const porMaple = stock.huevosPorMaple || 30;
-  const tipos = stock.porTipo || [];
+          {total.porTipo?.length > 0 && (
+            <div className="d-flex flex-wrap gap-2 flex-grow-1">
+              {total.porTipo.map((t) => (
+                <div className="border rounded bg-white px-2 py-1 lh-sm" key={t.tipo}>
+                  <div className="text-muted" style={{ fontSize: ".7rem" }}>
+                    {t.etiqueta}
+                  </div>
+                  <div className="fw-bold small">
+                    {formatearNumero(t.cantidad)}
+                    {cuenta.key === "consumo" && (
+                      <span className="text-muted fw-normal" style={{ fontSize: ".7rem" }}>
+                        {" "}
+                        · {formatearNumero(t.maples)} maples
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
-  const cargado = (t) => Number(porTipo[t]) || 0;
-  const huevos = tipos.reduce((acc, t) => acc + cargado(t.tipo), 0);
-  const restante = stock.total - huevos;
-  // Cada tipo se valida contra su propio disponible, no contra el total.
-  const excedidos = tipos.filter((t) => cargado(t.tipo) > t.cantidad);
-  const excede = excedidos.length > 0;
+        {total.enViaje > 0 && (
+          <div className="text-muted mt-1" style={{ fontSize: ".72rem" }}>
+            <i className="bi bi-truck me-1"></i>
+            + {formatearNumero(total.enViaje)} en viaje (remitos sin recibir, no cuentan todavía)
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (huevos <= 0) {
-      Swal.fire("Falta la cantidad", "Cargá cuántos huevos salen de cada tipo.", "warning");
-      return;
-    }
-    if (excede) {
-      Swal.fire(
-        "No alcanza el stock",
-        excedidos
-          .map(
-            (t) =>
-              `${t.etiqueta}: pediste ${formatearNumero(cargado(t.tipo))} y hay ${formatearNumero(t.cantidad)}.`
-          )
-          .join("<br/>"),
-        "warning"
-      );
-      return;
-    }
+const CuentaCorriente = ({ cuenta, datos }) => {
+  const [pagina, setPagina] = useState(1);
+  const movs = datos?.movimientos || [];
+  const visibles = movs.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
+  const esUltimaPagina = pagina * POR_PAGINA >= movs.length;
 
-    setSaving(true);
-    try {
-      await crearSalidaHuevos({
-        porTipo,
-        fecha: ajustarFechaParaGuardar(fecha),
-        huevos,
-        motivo,
-        observaciones: observaciones || undefined,
-      });
-      onHecho();
-      Swal.fire({
-        icon: "success",
-        title: "Stock descontado",
-        text: `Salieron ${formatearNumero(huevos)} huevos.`,
-        timer: 2200,
-        showConfirmButton: false,
-      });
-    } catch (err) {
-      Swal.fire("Error", err.message || "No se pudo descontar el stock.", "error");
-    } finally {
-      setSaving(false);
-    }
-  };
+  if (!movs.length)
+    return (
+      <div className="card shadow-sm">
+        <div className="card-body text-center py-5 text-muted">
+          <i className="bi bi-inbox fs-1 d-block mb-2"></i>
+          Todavía no hay movimientos de {cuenta.label.toLowerCase()}.
+        </div>
+      </div>
+    );
 
   return (
     <>
-      <div className="modal show d-block" tabIndex="-1">
-        <div className="modal-dialog">
-          <div className="modal-content">
-            <div className="modal-header bg-warning">
-              <h5 className="modal-title">
-                <i className="bi bi-box-arrow-up me-2"></i>Sacar huevos del stock
-              </h5>
-              <button className="btn-close" onClick={onClose} disabled={saving}></button>
-            </div>
-            <form onSubmit={handleSubmit}>
-              <div className="modal-body">
-                <div className="d-flex justify-content-between border rounded px-3 py-2 mb-3 small">
-                  <span>
-                    <span className="text-muted">En stock</span>{" "}
-                    <strong>{formatearNumero(stock.total)}</strong>
-                  </span>
-                  <span>
-                    <span className="text-muted">Salen</span>{" "}
-                    <strong className="text-warning">{formatearNumero(huevos)}</strong>
-                  </span>
-                  <span>
-                    <span className="text-muted">Quedan</span>{" "}
-                    <strong className={excede ? "text-danger" : "text-success"}>
-                      {formatearNumero(restante)}
-                    </strong>
-                  </span>
-                </div>
-
-                <div className="row g-2 mb-3">
-                  <div className="col-6">
-                    <label className="form-label fw-semibold small">Fecha</label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      value={fecha}
-                      onChange={(e) => setFecha(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="col-6">
-                    <label className="form-label fw-semibold small">Motivo</label>
-                    <select
-                      className="form-select"
-                      value={motivo}
-                      onChange={(e) => setMotivo(e.target.value)}
-                    >
-                      {Object.entries(MOTIVOS).map(([key, m]) => (
-                        <option key={key} value={key}>
-                          {m.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <label className="form-label fw-semibold small">
-                  ¿Cuánto sale de cada tipo?
-                  <span className="text-muted fw-normal"> (en huevos)</span>
-                </label>
-                {tipos.length === 0 ? (
-                  <div className="alert alert-secondary py-2 small mb-3">
-                    No hay huevos en stock.
-                  </div>
-                ) : (
-                  <div className="mb-3">
-                    {tipos.map((t) => {
-                      const val = cargado(t.tipo);
-                      const pasado = val > t.cantidad;
-                      return (
-                        <div className="row g-2 align-items-center mb-2" key={t.tipo}>
-                          <div className="col-5">
-                            <div className="fw-semibold small">{t.etiqueta}</div>
-                            <div className="text-muted" style={{ fontSize: ".75rem" }}>
-                              hay {formatearNumero(t.cantidad)}
-                            </div>
-                          </div>
-                          <div className="col-4">
-                            <input
-                              type="number"
-                              className={`form-control ${pasado ? "is-invalid" : ""}`}
-                              min="0"
-                              max={t.cantidad}
-                              placeholder="0"
-                              value={porTipo[t.tipo] ?? ""}
-                              onChange={(e) =>
-                                setPorTipo({ ...porTipo, [t.tipo]: e.target.value })
-                              }
-                            />
-                          </div>
-                          <div className="col-3 text-muted small">
-                            {val > 0 && `${formatearNumero(Math.floor(val / porMaple))} maples`}
-                          </div>
-                        </div>
-                      );
-                    })}
-                    <div className="border-top pt-2 d-flex justify-content-between fw-semibold small">
-                      <span>Total</span>
-                      <span className={excede ? "text-danger" : ""}>
-                        {formatearNumero(huevos)} huevos ·{" "}
-                        {formatearNumero(Math.floor(huevos / porMaple))} maples
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                <div className="alert alert-light border small mb-3">
-                  <i className="bi bi-info-circle me-1"></i>
-                  Se descuenta <strong>FIFO</strong>: salen primero los huevos más viejos, sin
-                  importar de qué descarte vengan. Esta salida no registra cliente.
-                </div>
-
-                <label className="form-label fw-semibold small">
-                  Observaciones <span className="text-muted fw-normal">(opcional)</span>
-                </label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={observaciones}
-                  onChange={(e) => setObservaciones(e.target.value)}
-                  placeholder="A quién se le dio, remito, etc."
-                />
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-outline-secondary" onClick={onClose} disabled={saving}>
-                  Cancelar
-                </button>
-                <button type="submit" className="btn btn-warning" disabled={saving || excede}>
-                  {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
-                  Descontar del stock
-                </button>
-              </div>
-            </form>
-          </div>
+      <div className="d-flex flex-wrap gap-3 small mb-2">
+        <span>
+          <span className="text-muted">Entró </span>
+          <strong className="text-success">{formatearNumero(datos.entradas)}</strong>
+        </span>
+        <span>
+          <span className="text-muted">Salió </span>
+          <strong className="text-danger">{formatearNumero(datos.salidas)}</strong>
+        </span>
+        <span>
+          <span className="text-muted">Saldo </span>
+          <strong className={`text-${cuenta.color}`}>{formatearNumero(datos.stockActual)}</strong>
+        </span>
+      </div>
+      <div className="card shadow-sm">
+        <div className="table-responsive">
+          <table className="table table-sm table-hover align-middle mb-0">
+            <thead className="table-light">
+              <tr>
+                <th>Fecha</th>
+                <th>Movimiento</th>
+                <th>Detalle</th>
+                <th className="text-end">Entra</th>
+                <th className="text-end">Sale</th>
+                <th className="text-end">Saldo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibles.map((m, i) => (
+                <tr key={`${m.fecha}-${m.titulo}-${i}`}>
+                  <td className="text-nowrap small">
+                    {formatearFechaLocal(m.fecha)}
+                    {!m.soloFecha && (
+                      <span className="text-muted ms-1">{formatearHoraLocal(m.fecha)}</span>
+                    )}
+                  </td>
+                  <td className="text-nowrap fw-semibold">
+                    <i className={`bi ${ICONO[m.concepto] || "bi-dot"} me-1 text-muted`}></i>
+                    {m.titulo}
+                  </td>
+                  <td className="small text-muted">{m.detalle}</td>
+                  <td className="text-end text-success fw-semibold">
+                    {m.entra ? `+${formatearNumero(m.entra)}` : ""}
+                  </td>
+                  <td className="text-end text-danger fw-semibold">
+                    {m.sale ? `−${formatearNumero(m.sale)}` : ""}
+                  </td>
+                  <td className={`text-end fw-bold text-${cuenta.color}`}>
+                    {formatearNumero(m.saldo)}
+                  </td>
+                </tr>
+              ))}
+              {/* El saldo con el que arranca la cuenta, al pie de la última
+                  página: es lo que había antes del primer movimiento conocido. */}
+              {esUltimaPagina && (
+                <tr className="table-light">
+                  <td></td>
+                  <td colSpan={4} className="small text-muted fst-italic">
+                    Saldo anterior
+                  </td>
+                  <td className="text-end fw-bold">{formatearNumero(datos.saldoAnterior)}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
-      <div className="modal-backdrop show"></div>
+      <Pagination
+        currentPage={pagina}
+        totalItems={movs.length}
+        itemsPerPage={POR_PAGINA}
+        onPageChange={setPagina}
+      />
     </>
   );
 };
 
 const StockHuevosPage = () => {
-  const [stock, setStock] = useState(null);
-  const [salidas, setSalidas] = useState([]);
+  const [datos, setDatos] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState(false);
-  const [pagina, setPagina] = useState(1);
+  const [solapa, setSolapa] = useState("consumo");
 
   const cargar = useCallback(async () => {
+    setLoading(true);
     try {
-      const [stk, sal] = await Promise.all([obtenerStockHuevosDescarte(), obtenerSalidasHuevos()]);
-      setStock(stk);
-      setSalidas(Array.isArray(sal) ? sal : []);
+      setDatos(await obtenerMovimientosHuevos());
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudo cargar el stock.", "error");
     } finally {
@@ -253,64 +212,26 @@ const StockHuevosPage = () => {
     cargar();
   }, [cargar]);
 
-  const anular = async (salida) => {
-    const { isConfirmed, value } = await Swal.fire({
-      icon: "warning",
-      title: `¿Anular la salida ${salida.numeroSalida}?`,
-      text: `Vuelven al stock ${salida.huevosTotales} huevos.`,
-      input: "text",
-      inputPlaceholder: "Motivo (opcional)",
-      showCancelButton: true,
-      confirmButtonText: "Sí, anular",
-      cancelButtonText: "Volver",
-      confirmButtonColor: "#dc3545",
+  // Excel: una hoja por cuenta corriente, igual que las dos solapas.
+  const exportarExcel = () =>
+    exportarLibroExcel({
+      nombreArchivo: "Reproductoras_stock_huevos",
+      hojas: CUENTAS.map((c) => ({
+        nombre: c.label,
+        filas: datos?.[c.key]?.movimientos || [],
+        columnas: [
+          { header: "Fecha", valor: (m) => formatearFechaLocal(m.fecha) },
+          { header: "Hora", valor: (m) => (m.soloFecha ? "" : formatearHoraLocal(m.fecha)) },
+          { header: "Movimiento", valor: (m) => m.titulo },
+          { header: "Detalle", valor: (m) => m.detalle },
+          { header: "Entra", valor: (m) => m.entra || 0 },
+          { header: "Sale", valor: (m) => m.sale || 0 },
+          { header: "Saldo", valor: (m) => m.saldo },
+        ],
+      })),
     });
-    if (!isConfirmed) return;
-    try {
-      await anularSalidaHuevos(salida._id, value || undefined);
-      await cargar();
-    } catch (err) {
-      Swal.fire("Error", err.message, "error");
-    }
-  };
 
-  const salidasPagina = salidas.slice((pagina - 1) * ITEMS_POR_PAGINA, pagina * ITEMS_POR_PAGINA);
-  // Excel: las dos tablas de la pantalla en un mismo libro — las partidas que
-  // forman el stock y las salidas que lo descontaron. Separarlas en dos hojas
-  // porque son dos cosas distintas: una es saldo, la otra es movimiento.
-  const exportarExcel = () => exportarLibroExcel({
-    nombreArchivo: "Reproductoras_stock_huevos",
-    hojas: [
-      {
-        nombre: "Stock",
-        filas: stock?.partidas || [],
-        columnas: [
-          { header: "Fecha",       valor: (p) => formatearFechaLocal(p.fecha) },
-          { header: "Tipo",        valor: (p) => p.etiquetaTipo || "—" },
-          { header: "Origen",      valor: (p) => ORIGEN_DESCARTE[p.origen] || p.etiqueta || p.origen },
-          { header: "Plantel",     valor: (p) => p.numeroLote ?? "" },
-          { header: "Ingresaron",  valor: (p) => p.cantidad ?? 0 },
-          { header: "Disponibles", valor: (p) => p.disponible ?? 0 },
-          { header: "Equivale a",  valor: (p) => textoDesglose(p.disponible) },
-        ],
-      },
-      {
-        nombre: "Salidas",
-        filas: salidas,
-        columnas: [
-          { header: "Salida",        valor: (s) => s.numeroSalida },
-          { header: "Fecha",         valor: (s) => formatearFechaLocal(s.fecha) },
-          { header: "Motivo",        valor: (s) => MOTIVOS[s.motivo]?.label || s.motivo },
-          { header: "Huevos",        valor: (s) => s.huevosTotales ?? 0 },
-          { header: "Maples",        valor: (s) => s.maples ?? 0 },
-          { header: "Anulada",       valor: (s) => (s.anulada ? "Sí" : "") },
-          { header: "Fecha anulación", valor: (s) => (s.fechaAnulada ? formatearFechaLocal(s.fechaAnulada) : "") },
-          { header: "Observaciones", valor: (s) => s.observaciones },
-        ],
-      },
-    ],
-  });
-
+  const cuentaActiva = CUENTAS.find((c) => c.key === solapa);
 
   return (
     <Layout>
@@ -321,232 +242,61 @@ const StockHuevosPage = () => {
               <i className="bi bi-egg text-success me-2"></i>Stock de Huevos
             </h1>
             <p className="text-muted mb-0 small">
-              Huevos de descarte disponibles para la venta — de la clasificación, la carga a
-              incubadora y el miraje
+              El huevo que ya está en Trigotuc. El de consumo sale por la venta de mostrador; el
+              API, por la incubadora.
             </p>
           </div>
           <div className="d-flex gap-2">
             <BotonExcel
               onClick={exportarExcel}
-              disabled={loading || (!stock?.partidas?.length && !salidas.length)}
-              titulo="Descargar stock y salidas"
+              disabled={loading || !datos}
+              titulo="Descargar los movimientos"
             />
             <button className="btn btn-outline-secondary btn-sm" onClick={cargar} disabled={loading}>
               <i className="bi bi-arrow-clockwise me-1"></i>Actualizar
             </button>
-            <button
-              className="btn btn-warning"
-              onClick={() => setModal(true)}
-              disabled={loading || !stock?.total}
-            >
-              <i className="bi bi-box-arrow-up me-1"></i>Sacar del stock
-            </button>
           </div>
         </div>
 
-        {loading ? (
+        {loading && !datos ? (
           <div className="text-center py-5">
             <div className="spinner-border text-success"></div>
           </div>
-        ) : !stock ? null : (
+        ) : !datos ? null : (
           <>
-            {/* Total disponible */}
-            <div className="row g-2 mb-4">
-              <div className="col-12 col-lg-4">
-                <div className="card shadow-sm h-100">
-                  <div className="card-body text-center py-3">
-                    <div className="text-muted small">Huevos en stock</div>
-                    <div className="h3 fw-bold mb-0 text-success">
-                      {formatearNumero(stock.total)}
-                    </div>
-                    <div className="text-muted small">{textoDesglose(stock.total)}</div>
-                  </div>
-                </div>
-              </div>
-              <div className="col-6 col-lg-4">
-                <div className="card shadow-sm h-100">
-                  <div className="card-body text-center py-3">
-                    <div className="text-muted small">Maples</div>
-                    <div className="h3 fw-bold mb-0">
-                      {formatearNumero(stock.maplesDisponibles)}
-                    </div>
-                    <div className="text-muted small">
-                      de {stock.huevosPorMaple} huevos c/u
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="col-6 col-lg-4">
-                <div className="card shadow-sm h-100">
-                  <div className="card-body text-center py-3">
-                    <div className="text-muted small">Partidas</div>
-                    <div className="h3 fw-bold mb-0">{stock.partidas.length}</div>
-                    <div className="text-muted small">con saldo</div>
-                  </div>
-                </div>
-              </div>
+            <div className="row g-2 mb-3">
+              {CUENTAS.map((c) => (
+                <TarjetaTotal
+                  key={c.key}
+                  cuenta={c}
+                  total={datos.totales[c.key]}
+                  huevosPorMaple={datos.huevosPorMaple}
+                />
+              ))}
             </div>
 
-            {/* Qué es lo que hay: doble yema, consumo o descarte de inoculación */}
-            {(stock.porTipo || []).length > 0 && (
-              <div className="card shadow-sm mb-4">
-                <div className="card-header bg-white fw-bold">
-                  <i className="bi bi-tags me-1"></i>Por tipo de huevo
-                </div>
-                <div className="card-body">
-                  <div className="row g-2">
-                    {stock.porTipo.map((t) => (
-                      <div className="col-6 col-md-4 col-lg-3" key={t.tipo}>
-                        <div className="border rounded p-2 h-100">
-                          <div className="small text-muted">{t.etiqueta}</div>
-                          <div className="fw-bold h5 mb-0">{formatearNumero(t.cantidad)}</div>
-                          <div className="text-muted" style={{ fontSize: ".75rem" }}>
-                            {formatearNumero(t.maples)} maple{t.maples === 1 ? "" : "s"}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
+            <ul className="nav nav-tabs mb-3">
+              {CUENTAS.map((c) => (
+                <li className="nav-item" key={c.key}>
+                  <button
+                    className={`nav-link ${solapa === c.key ? `active fw-semibold text-${c.color}` : ""}`}
+                    onClick={() => setSolapa(c.key)}
+                  >
+                    <i className={`bi ${c.icono} me-1`}></i>
+                    Movimientos de {c.key === "api" ? "API" : "consumo"}
+                    <span className="badge bg-light text-dark border ms-1">
+                      {datos[c.key]?.movimientos?.length || 0}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
 
-            {/* Partidas: el orden es el orden en que van a salir */}
-            <h5 className="fw-bold text-secondary mb-3">
-              Partidas disponibles
-              <span className="text-muted fw-normal small ms-2">
-                en orden de salida (FIFO, las más viejas primero)
-              </span>
-            </h5>
-            {stock.partidas.length === 0 ? (
-              <div className="card shadow-sm mb-4">
-                <div className="card-body text-center py-4 text-muted">
-                  No hay huevos de descarte en stock.
-                </div>
-              </div>
-            ) : (
-              <div className="card shadow-sm mb-4">
-                <div className="table-responsive">
-                  <table className="table table-hover align-middle mb-0">
-                    <thead className="table-light">
-                      <tr>
-                        <th>Fecha</th>
-                        <th>Tipo</th>
-                        <th>Origen</th>
-                        <th className="text-center">Plantel</th>
-                        <th className="text-end">Ingresaron</th>
-                        <th className="text-end">Disponibles</th>
-                        <th>Equivale a</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {stock.partidas.map((p) => (
-                        <tr key={p._id}>
-                          <td>{formatearFechaLocal(p.fecha)}</td>
-                          <td>
-                            <span className={`badge ${p.tipo ? "bg-primary" : "bg-secondary"}`}>
-                              {p.etiquetaTipo}
-                            </span>
-                          </td>
-                          <td className="small">{ORIGEN_DESCARTE[p.origen] || p.etiqueta}</td>
-                          <td className="text-center">#{p.numeroLote ?? "?"}</td>
-                          <td className="text-end text-muted">{formatearNumero(p.cantidad)}</td>
-                          <td className="text-end fw-semibold text-success">
-                            {formatearNumero(p.disponible)}
-                          </td>
-                          <td className="small text-muted">{textoDesglose(p.disponible)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* Salidas */}
-            <h5 className="fw-bold text-secondary mb-3">Salidas de stock</h5>
-            {salidas.length === 0 ? (
-              <div className="card shadow-sm">
-                <div className="card-body text-center py-4 text-muted">
-                  <i className="bi bi-inbox fs-1 d-block mb-2"></i>
-                  Todavía no salió nada del stock.
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="card shadow-sm">
-                  <div className="table-responsive">
-                    <table className="table table-hover align-middle mb-0">
-                      <thead className="table-light">
-                        <tr>
-                          <th>Salida</th>
-                          <th>Fecha</th>
-                          <th>Motivo</th>
-                          <th className="text-end">Huevos</th>
-                          <th className="text-end">Maples</th>
-                          <th>Observaciones</th>
-                          <th></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {salidasPagina.map((s) => {
-                          const m = MOTIVOS[s.motivo] || {};
-                          return (
-                            <tr key={s._id} className={s.anulada ? "text-muted" : ""}>
-                              <td className="fw-bold">{s.numeroSalida}</td>
-                              <td>{formatearFechaLocal(s.fecha)}</td>
-                              <td>
-                                <span className={`badge ${m.clase}`}>{m.label}</span>
-                                {s.anulada && (
-                                  <span className="badge bg-secondary ms-1">Anulada</span>
-                                )}
-                              </td>
-                              <td className="text-end fw-semibold">
-                                {formatearNumero(s.huevosTotales)}
-                              </td>
-                              <td className="text-end">{formatearNumero(s.maples)}</td>
-                              <td className="small text-muted">{s.observaciones || "—"}</td>
-                              <td className="text-end">
-                                {!s.anulada && (
-                                  <button
-                                    className="btn btn-sm btn-outline-danger"
-                                    onClick={() => anular(s)}
-                                    title="Anular y devolver al stock"
-                                  >
-                                    <i className="bi bi-arrow-counterclockwise"></i>
-                                  </button>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                <Pagination
-                  currentPage={pagina}
-                  totalItems={salidas.length}
-                  itemsPerPage={ITEMS_POR_PAGINA}
-                  onPageChange={setPagina}
-                />
-              </>
-            )}
+            {/* `key` reinicia el paginador al cambiar de solapa. */}
+            <CuentaCorriente key={solapa} cuenta={cuentaActiva} datos={datos[solapa]} />
           </>
         )}
       </div>
-
-      {modal && stock && (
-        <SalidaModal
-          stock={stock}
-          onClose={() => setModal(false)}
-          onHecho={() => {
-            setModal(false);
-            cargar();
-          }}
-        />
-      )}
     </Layout>
   );
 };
