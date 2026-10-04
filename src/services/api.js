@@ -1154,6 +1154,15 @@ export const obtenerPlanPollitos = async (filtros = {}) => {
   return handleResponse(response);
 };
 
+// Mover una carga de lunes/jueves a otro día ("AAAA-MM-DD"), o volverla a su
+// día habitual con `fecha: null`. Se lleva sus reservas.
+export const moverCargaIncubadora = async (fechaHabitual, fecha) => {
+  const response = await fetch(`${API_URL}/reservas-pollitos/plan/cargas/${fechaHabitual}`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify({ fecha }),
+  });
+  return handleResponse(response);
+};
+
 // ── Reserva de pollitos por tanda ──
 // El reparto se arma antes de que nazcan: clientes + granjas propias contra los
 // pollitos estimados de cada tanda.
