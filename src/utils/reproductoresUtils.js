@@ -66,6 +66,15 @@ export const TIPOS_HUEVO_KEYS = TIPOS_HUEVO.map((t) => t.key);
 export const TIPOS_HUEVO_INCUBABLES = TIPOS_HUEVO.filter((t) => t.incubable).map((t) => t.key);
 export const TIPOS_HUEVO_VENTA = TIPOS_HUEVO.filter((t) => !t.incubable).map((t) => t.key);
 
+// Remitos separados (2026-10-04): el de API lleva solo los incubables y el de
+// consumo el resto (consumo + doble yema). Cada uno lo recibe otra persona.
+export const CLASES_REMITO = [
+  { key: "api",     label: "API",     tipos: TIPOS_HUEVO_INCUBABLES, clase: "success", icono: "bi-thermometer-half" },
+  { key: "consumo", label: "Consumo", tipos: TIPOS_HUEVO_VENTA,      clase: "primary", icono: "bi-egg" },
+];
+export const etiquetaClaseRemito = (clase) =>
+  CLASES_REMITO.find((c) => c.key === clase)?.label || "API + consumo (anterior)";
+
 /** Suma los incubables de un objeto { apiLimpioCinta: n, ... }. */
 export const sumarIncubables = (porTipo = {}) =>
   TIPOS_HUEVO_INCUBABLES.reduce((acc, k) => acc + (Number(porTipo[k]) || 0), 0);

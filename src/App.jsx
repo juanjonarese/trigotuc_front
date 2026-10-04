@@ -33,7 +33,7 @@ import ReproductorLoteNuevoPage from "./pages/ReproductorLoteNuevoPage";
 import ReproductoresDatosPage from "./pages/ReproductoresDatosPage";
 import RecoleccionHuevosPage from "./pages/RecoleccionHuevosPage";
 import RemitosHuevosPage from "./pages/RemitosHuevosPage";
-import RecepcionApiPage from "./pages/RecepcionApiPage";
+import RecepcionHuevosPage from "./pages/RecepcionHuevosPage";
 import IncubadoraPage from "./pages/IncubadoraPage";
 // Ventas de Reproductores: en pausa por pedido del cliente.
 // import VentaHuevosPage from "./pages/VentaHuevosPage";
@@ -92,7 +92,9 @@ function App() {
         <Route path="/reproductores/datos-semanales" element={<ProtectedRoute><ReproductoresDatosPage /></ProtectedRoute>} />
         <Route path="/reproductores/recoleccion" element={<ProtectedRoute><RecoleccionHuevosPage /></ProtectedRoute>} />
         <Route path="/reproductores/remitos" element={<ProtectedRoute><RemitosHuevosPage /></ProtectedRoute>} />
-        <Route path="/reproductores/recepcion-api" element={<ProtectedRoute><RecepcionApiPage /></ProtectedRoute>} />
+        <Route path="/reproductores/recepcion-huevos" element={<ProtectedRoute><RecepcionHuevosPage /></ProtectedRoute>} />
+        {/* Recepción de API pasó a ser Recepción de huevos (API y consumo) el 2026-10-04. */}
+        <Route path="/reproductores/recepcion-api" element={<Navigate to="/reproductores/recepcion-huevos" replace />} />
         <Route path="/reproductores/incubadora" element={<ProtectedRoute><IncubadoraPage /></ProtectedRoute>} />
         {/* Nacimientos se absorbió en Incubadora (tarjetas de nacedora + solapa). */}
         <Route path="/reproductores/nacimientos" element={<Navigate to="/reproductores/incubadora" replace />} />

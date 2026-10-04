@@ -998,9 +998,10 @@ export const obtenerRemitosPendientes = async () => {
   return handleResponse(response);
 };
 
-export const recibirRemitoHuevos = async (id) => {
+// `codigo`: el código de envío que figura en el remito de papel (2026-10-04).
+export const recibirRemitoHuevos = async (id, codigo) => {
   const response = await fetch(`${API_URL}/remitos-huevos/${id}/recibir`, {
-    method: "POST", headers: getAuthHeaders(), body: JSON.stringify({}),
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify({ codigo }),
   });
   return handleResponse(response);
 };
@@ -1221,6 +1222,12 @@ export const enviarApiAVenta = async (data) => {
   const response = await fetch(`${API_URL}/reproductores/api-a-venta`, {
     method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
   });
+  return handleResponse(response);
+};
+
+// Stock de Huevos (2026-10-04): totales + las dos cuentas corrientes, consumo y API.
+export const obtenerMovimientosHuevos = async () => {
+  const response = await fetch(`${API_URL}/reproductores/stock-huevos/movimientos`, { headers: getAuthHeaders() });
   return handleResponse(response);
 };
 

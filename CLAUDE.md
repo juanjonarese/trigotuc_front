@@ -127,7 +127,7 @@ Secciones colapsables, fondo oscuro, auto-expande según la ruta activa. Visibil
 - **Granja** (colapsable) — `superadmin` / `administracion_granja` / `granja`:
   - Ingreso de pollitos, Galpones, Datos Semanales (solo `superadmin`/`granja`), Órdenes de Carga (Venta) (solo `superadmin`/`administracion_granja`), Recepción de Órdenes.
 - **Reproductores** (colapsable) — solo `superadmin` por ahora (hasta definir los roles del módulo):
-  - Ingreso de Lote, Galpones, Datos Semanales, Recolección de Huevos, Remitos de Huevos, Recepción de API, Incubadora, **Plan de Pollitos**, **Órdenes de Carga (venta)** (pollitos), Stock de Huevos.
+  - Ingreso de Lote, Galpones, Datos Semanales, Recolección de Huevos, Remitos de Huevos, **Recepción de huevos** (`/reproductores/recepcion-huevos`, antes "Recepción de API"; solapas API / Consumo / Historial, se recibe escribiendo el código de envío del papel), Incubadora, **Plan de Pollitos**, **Órdenes de Carga (venta)** (pollitos), Stock de Huevos.
   - En **Remitos de Huevos** cada celda (galpón × tipo) tiene **dos** inputs
     siempre a la vista: "van" (lo que viaja) y "rotos" (los **rotos al cargar el
     camión**, `rotosCarga`). El de rotos estuvo un rato condicionado a que la

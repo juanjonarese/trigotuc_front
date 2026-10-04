@@ -19,11 +19,14 @@ import {
   etiquetaTipoHuevo,
   sumarTiposHuevo,
   nombreGalpon,
+  CLASES_REMITO,
+  etiquetaClaseRemito,
 } from "../utils/reproductoresUtils";
 import { exportarTablaExcel } from "../utils/exportarExcel";
+import { escapeHtml } from "../utils/escapeHtml";
 import Swal from "sweetalert2";
 
-const ITEMS_POR_PAGINA = 15;
+const ITEMS_POR_PAGINA = 10;
 
 const tiposVacios = () => TIPOS_HUEVO_KEYS.reduce((acc, k) => ({ ...acc, [k]: "" }), {});
 
@@ -38,6 +41,34 @@ const galponesDeRemito = (constantes, remito) =>
     .map((g) => textoGalpon(constantes, g))
     .join(", ");
 
+// De qué es el remito: API o consumo. Los remitos anteriores al 2026-10-04
+// llevaban todo junto. No se elige a quién va: el remito queda en su solapa de
+// Recepción de huevos y ahí lo acepta el responsable.
+const BadgeClase = ({ clase }) => {
+  const c = CLASES_REMITO.find((x) => x.key === clase);
+  return c ? (
+    <span className={`badge bg-${c.clase}`}>
+      <i className={`bi ${c.icono} me-1`}></i>
+      {c.label}
+    </span>
+  ) : (
+    <span className="badge bg-light text-muted border">{etiquetaClaseRemito(null)}</span>
+  );
+};
+
+// El código que la granja escribe en el papel, bien grande para copiarlo sin error.
+const mostrarCodigo = (remito) =>
+  Swal.fire({
+    icon: "info",
+    title: `Remito ${escapeHtml(remito.numeroRemito)}`,
+    html:
+      `<div class="mb-2">Escribí este <strong>código de envío</strong> en el remito de papel:</div>` +
+      `<div class="display-5 fw-bold font-monospace border rounded py-2 my-2" style="letter-spacing:.3em">${remito.codigoEnvio}</div>` +
+      `<div class="text-muted small">Sin este código no lo pueden recibir en Trigotuc.</div>`,
+    confirmButtonText: "Ya lo anoté",
+    allowOutsideClick: false,
+  });
+
 // ── Modal: carga de un remito ───────────────────────────────────────────────
 // El remito es el papel con el que los huevos salen de la granja y entran a
 // Trigotuc. Puede llevar varios galpones; de cada uno se dice cuánto va de cada
@@ -51,6 +82,15 @@ const galponesDeRemito = (constantes, remito) =>
 // disponible en la granja, y arranca precargado con sus propias cantidades.
 const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) => {
   const editando = !!remito;
+  // API o consumo (2026-10-04): van en remitos separados. Un remito anterior
+  // (sin clase) se sigue editando con todos los tipos.
+  const [claseRemito, setClaseRemito] = useState(remito?.clase || null);
+  const tiposVisibles = claseRemito
+    ? TIPOS_HUEVO.filter((t) => CLASES_REMITO.find((c) => c.key === claseRemito).tipos.includes(t.key))
+    : editando
+    ? TIPOS_HUEVO
+    : [];
+  const keysVisibles = tiposVisibles.map((t) => t.key);
   const lineasPrevias = remito?.lineas || [];
   const idLote = (l) => String(l.lote?._id || l.lote);
   // Los remitos viejos no guardaban el galpón en la línea: se toma el del plantel.
@@ -150,6 +190,7 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
     setCantidades((prev) => ({
       ...prev,
       [entrada.id]: TIPOS_HUEVO_KEYS.reduce((acc, k) => {
+        if (!keysVisibles.includes(k)) return { ...acc, [k]: prev[entrada.id]?.[k] ?? "" };
         const viajan = (entrada.porTipo[k] || 0) - cantidadRota(entrada.id, k);
         return { ...acc, [k]: viajan > 0 ? String(viajan) : "" };
       }, {}),
@@ -161,7 +202,7 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
   const lineas = [];
   const excedidos = [];
   for (const entrada of entradas) {
-    for (const tipo of TIPOS_HUEVO_KEYS) {
+    for (const tipo of keysVisibles) {
       const huevos = cantidad(entrada.id, tipo);
       const rotosCarga = cantidadRota(entrada.id, tipo);
       if (huevos <= 0 && rotosCarga <= 0) continue;
@@ -187,6 +228,10 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!claseRemito && !editando) {
+      Swal.fire("¿API o consumo?", "Elegí qué lleva el remito: van en remitos separados.", "warning");
+      return;
+    }
     if (!numeroRemito.trim()) {
       Swal.fire("Falta el número", "Cargá el número del remito de papel.", "warning");
       return;
@@ -216,6 +261,7 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
     try {
       const payload = {
         numeroRemito: numeroRemito.trim(),
+        ...(claseRemito ? { clase: claseRemito } : {}),
         fecha: ajustarFechaParaGuardar(fecha),
         lineas: lineas.map(({ lote, galpon, tipo, huevos, rotosCarga }) => ({
           lote,
@@ -230,13 +276,17 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
         ? await editarRemitoHuevos(remito._id, payload)
         : await crearRemitoHuevos(payload);
       await onGuardado();
-      Swal.fire({
-        icon: "success",
-        title: `Remito ${guardado.numeroRemito} ${editando ? "actualizado" : "cargado"}`,
-        text: `${formatearNumero(guardado.huevosTotales)} huevos en Trigotuc`,
-        timer: 2600,
-        showConfirmButton: false,
-      });
+      if (!editando && guardado.codigoEnvio) {
+        await mostrarCodigo(guardado);
+      } else {
+        Swal.fire({
+          icon: "success",
+          title: `Remito ${guardado.numeroRemito} actualizado`,
+          text: `${formatearNumero(guardado.huevosTotales)} huevos en viaje a Trigotuc`,
+          timer: 2600,
+          showConfirmButton: false,
+        });
+      }
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudo guardar el remito.", "error");
       setSaving(false);
@@ -262,6 +312,37 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
                   <i className="bi bi-info-circle me-1"></i>
                   Cargá cuántos huevos salen de cada galpón. De cada galpón sale primero el
                   huevo más viejo. Lo que no cargues sigue en la granja para el próximo remito.
+                </div>
+
+                {/* API o consumo: van en remitos separados porque los recibe
+                    gente distinta en Trigotuc. */}
+                <div className="row g-3 mb-3">
+                  <div className="col-md-8 col-lg-6">
+                    <label className="form-label fw-semibold">
+                      ¿Qué lleva el remito? <span className="text-danger">*</span>
+                    </label>
+                    <div className="btn-group w-100">
+                      {CLASES_REMITO.map((c) => (
+                        <button
+                          key={c.key}
+                          type="button"
+                          className={`btn ${claseRemito === c.key ? `btn-${c.clase}` : `btn-outline-${c.clase}`}`}
+                          onClick={() => setClaseRemito(c.key)}
+                        >
+                          <i className={`bi ${c.icono} me-1`}></i>
+                          {c.label}
+                          <span className="d-block small" style={{ fontSize: ".72rem" }}>
+                            {c.tipos.map((k) => etiquetaTipoHuevo(k)).join(" + ")}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                    {editando && !remito.clase && (
+                      <div className="form-text">
+                        Remito anterior a la separación: puede quedar con API y consumo juntos.
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="row g-3 mb-4">
@@ -316,7 +397,12 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
                   viaja ni entra a Trigotuc. Los dos descuentan stock del galpón.
                 </p>
 
-                {entradas.length === 0 ? (
+                {tiposVisibles.length === 0 ? (
+                  <div className="alert alert-info small">
+                    <i className="bi bi-hand-index me-1"></i>
+                    Elegí arriba si el remito es de API o de consumo.
+                  </div>
+                ) : entradas.length === 0 ? (
                   <div className="alert alert-warning small">
                     <i className="bi bi-exclamation-triangle me-1"></i>
                     No hay huevos en la granja sin remitir. Cargá primero la recolección.
@@ -327,7 +413,7 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
                       <thead className="table-light">
                         <tr>
                           <th>Galpón</th>
-                          {TIPOS_HUEVO.map((t) => (
+                          {tiposVisibles.map((t) => (
                             <th className="text-center" key={t.key} style={{ minWidth: 175 }}>
                               {t.label}
                             </th>
@@ -345,7 +431,7 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
                                 Plantel #{entrada.numeroLote}
                               </span>
                             </td>
-                            {TIPOS_HUEVO.map((t) => {
+                            {tiposVisibles.map((t) => {
                               const disponible = entrada.porTipo[t.key] || 0;
                               const cargado = cantidad(entrada.id, t.key);
                               const roto = cantidadRota(entrada.id, t.key);
@@ -506,6 +592,23 @@ const DetalleRemitoModal = ({ remito, constantes, onClose }) => (
                 <span className="text-muted">Total:</span>{" "}
                 <strong>{formatearNumero(remito.huevosTotales)}</strong> huevos
               </div>
+              <div className="col-md-4">
+                <BadgeClase clase={remito.clase} />
+              </div>
+              <div className="col-md-4">
+                <span className="text-muted">Código de envío:</span>{" "}
+                <strong className="font-monospace">{remito.codigoEnvio || "—"}</strong>
+              </div>
+              <div className="col-12">
+                <span className="text-muted">Recepción:</span>{" "}
+                {remito.recibido === false
+                  ? "en viaje, todavía no se recibió"
+                  : remito.recibidoPor
+                  ? `controló ${remito.recibidoPor.nombreUsuario}${
+                      remito.fechaRecepcion ? ` el ${formatearFechaLocal(remito.fechaRecepcion)}` : ""
+                    }`
+                  : "anterior a la recepción"}
+              </div>
               {remito.rotosCargaTotales > 0 && (
                 <div className="col-12">
                   <i className="bi bi-droplet-half text-danger me-1"></i>
@@ -652,6 +755,9 @@ const RemitosHuevosPage = () => {
       nombreArchivo: "Reproductoras_remitos_huevos",
       columnas: [
         { header: "Remito",   valor: (r) => r.numeroRemito },
+        { header: "Clase",    valor: (r) => etiquetaClaseRemito(r.clase) },
+        { header: "Código",   valor: (r) => r.codigoEnvio || "" },
+        { header: "Controló", valor: (r) => r.recibidoPor?.nombreUsuario || "" },
         { header: "Fecha",    valor: (r) => formatearFechaLocal(r.fecha) },
         { header: "Origen",   valor: (r) => r.origen || "" },
         { header: "Galpones",  valor: (r) => galponesDeRemito(constantes, r) },
@@ -739,6 +845,8 @@ const RemitosHuevosPage = () => {
                       <thead className="table-light">
                         <tr>
                           <th>Remito</th>
+                          <th>Clase</th>
+                          <th>Código</th>
                           <th>Fecha</th>
                           <th>Galpones</th>
                           {TIPOS_HUEVO.map((t) => (
@@ -755,6 +863,23 @@ const RemitosHuevosPage = () => {
                         {remitosPagina.map((r) => (
                           <tr key={r._id} className={r.anulado ? "text-muted" : ""}>
                             <td className="fw-bold">{r.numeroRemito}</td>
+                            <td className="small">
+                              <BadgeClase clase={r.clase} />
+                            </td>
+                            <td>
+                              {r.codigoEnvio ? (
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-light border font-monospace fw-bold"
+                                  onClick={() => mostrarCodigo(r)}
+                                  title="Ver el código para el remito de papel"
+                                >
+                                  {r.codigoEnvio}
+                                </button>
+                              ) : (
+                                <span className="text-muted small">—</span>
+                              )}
+                            </td>
                             <td>{formatearFechaLocal(r.fecha)}</td>
                             <td className="small">
                               {galponesDeRemito(constantes, r)}
@@ -775,8 +900,15 @@ const RemitosHuevosPage = () => {
                             <td className="text-center">
                               {r.anulado ? (
                                 <span className="badge bg-secondary">Anulado</span>
+                              ) : r.recibido === false ? (
+                                <span className="badge bg-warning text-dark">En viaje</span>
                               ) : (
-                                <span className="badge bg-success">Vigente</span>
+                                <span
+                                  className="badge bg-success"
+                                  title={r.recibidoPor ? `Controló ${r.recibidoPor.nombreUsuario}` : ""}
+                                >
+                                  Recibido
+                                </span>
                               )}
                             </td>
                             <td className="text-end">
@@ -821,13 +953,23 @@ const RemitosHuevosPage = () => {
                     <div className="card shadow-sm mb-2" key={r._id}>
                       <div className="card-body">
                         <div className="d-flex justify-content-between mb-2">
-                          <strong>{r.numeroRemito}</strong>
+                          <strong>
+                            {r.numeroRemito} <BadgeClase clase={r.clase} />
+                          </strong>
                           {r.anulado ? (
                             <span className="badge bg-secondary">Anulado</span>
+                          ) : r.recibido === false ? (
+                            <span className="badge bg-warning text-dark">En viaje</span>
                           ) : (
-                            <span className="badge bg-success">Vigente</span>
+                            <span className="badge bg-success">Recibido</span>
                           )}
                         </div>
+                        {r.codigoEnvio && (
+                          <div className="small mb-2">
+                            <span className="text-muted">Código:</span>{" "}
+                            <strong className="font-monospace">{r.codigoEnvio}</strong>
+                          </div>
+                        )}
                         <div className="row g-2 small">
                           <div className="col-6">
                             <span className="text-muted">Fecha:</span>{" "}
