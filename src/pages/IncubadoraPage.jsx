@@ -38,6 +38,11 @@ const ITEMS_POR_PAGINA = 15;
 // Solo las tandas NACIDAS entran en el porcentaje: las que siguen en incubadora
 // o en nacedora todavía no tienen nacimiento y meterlas hundiría el número. Se
 // cuentan aparte para que se vea que hay huevo en curso.
+//
+// La FERTILIDAD (2026-10-05) se mide en el miraje, así que entra toda tanda ya
+// transferida que tenga los infértiles separados (no hace falta que haya nacido):
+//     fertilidad = (huevos incubados − infértiles) ÷ huevos incubados
+// Las transferencias anteriores no separaban los infértiles y no cuentan.
 const rendimientoPorPlantel = (tandas) => {
   const mapa = new Map();
 
@@ -56,10 +61,29 @@ const rendimientoPorPlantel = (tandas) => {
         tandasNacidas: 0,
         enCurso: 0,
         huevosEnCurso: 0,
+        mirados: 0,
+        infertiles: 0,
+        embrionMuerto: 0,
         porTipo: new Map(),
       });
     }
     const p = mapa.get(id);
+    const tipoDe = t.tipo || "sinTipo";
+    const tipoAcc = () => {
+      if (!p.porTipo.has(tipoDe))
+        p.porTipo.set(tipoDe, { tipo: tipoDe, incubados: 0, nacidos: 0, tandas: 0, mirados: 0, infertiles: 0 });
+      return p.porTipo.get(tipoDe);
+    };
+
+    const inf = t.transferencia?.infertiles;
+    if (inf != null) {
+      p.mirados += t.huevosIncubando || 0;
+      p.infertiles += inf;
+      p.embrionMuerto += t.transferencia.embrionMuerto || 0;
+      const pt = tipoAcc();
+      pt.mirados += t.huevosIncubando || 0;
+      pt.infertiles += inf;
+    }
 
     if (t.estado === "nacida") {
       const incubados = t.huevosIncubando || 0;
@@ -70,9 +94,7 @@ const rendimientoPorPlantel = (tandas) => {
 
       // El tipo de API es el eje nuevo: sirve para ver si el huevo de piso nace
       // menos que el de cinta. Las tandas viejas no tienen tipo.
-      const tipo = t.tipo || "sinTipo";
-      if (!p.porTipo.has(tipo)) p.porTipo.set(tipo, { tipo, incubados: 0, nacidos: 0, tandas: 0 });
-      const pt = p.porTipo.get(tipo);
+      const pt = tipoAcc();
       pt.incubados += incubados;
       pt.nacidos += nacidos;
       pt.tandas += 1;
@@ -86,14 +108,44 @@ const rendimientoPorPlantel = (tandas) => {
     .map((p) => ({
       ...p,
       porcentaje: p.incubados > 0 ? (p.nacidos / p.incubados) * 100 : null,
+      fertilidad: p.mirados > 0 ? ((p.mirados - p.infertiles) / p.mirados) * 100 : null,
       porTipo: [...p.porTipo.values()]
         .map((pt) => ({
           ...pt,
           porcentaje: pt.incubados > 0 ? (pt.nacidos / pt.incubados) * 100 : null,
+          fertilidad: pt.mirados > 0 ? ((pt.mirados - pt.infertiles) / pt.mirados) * 100 : null,
         }))
         .sort((a, b) => String(a.tipo).localeCompare(String(b.tipo))),
     }))
     .sort((a, b) => a.numeroLote - b.numeroLote);
+};
+
+// ── Cuándo nace lo de cada máquina (2026-10-04) ─────────────────────────────
+// La fecha llega como clave "AAAA-MM-DD" y se lee como texto, sin pasar por
+// Date, para que la zona horaria no la corra un día.
+const DIAS_SEMANA_CORTO = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+const textoDiaClave = (k) => {
+  const [a, m, d] = k.split("-").map(Number);
+  return `${DIAS_SEMANA_CORTO[new Date(a, m - 1, d).getDay()]} ${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}`;
+};
+const diasHastaClave = (k) => {
+  const [a, m, d] = k.split("-").map(Number);
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  return Math.round((new Date(a, m - 1, d) - hoy) / 86400000);
+};
+
+// Las que están por nacer primero; las vacías al final, por número.
+const porProximoNacimiento = (a, b) => {
+  if (a.proximoNacimiento && b.proximoNacimiento)
+    return a.proximoNacimiento < b.proximoNacimiento
+      ? -1
+      : a.proximoNacimiento > b.proximoNacimiento
+      ? 1
+      : a.numero - b.numero;
+  if (a.proximoNacimiento) return -1;
+  if (b.proximoNacimiento) return 1;
+  return a.numero - b.numero;
 };
 
 // ── Tarjeta de una máquina en la solapa Ocupación ───────────────────────────
@@ -119,6 +171,28 @@ const TarjetaMaquina = ({ maquina, etiqueta, color, onVerTanda }) => {
           <div className="progress mb-3" style={{ height: "6px" }}>
             <div className={`progress-bar ${color}`} style={{ width: `${pct}%` }}></div>
           </div>
+          {/* Fecha aproximada de nacimiento. Si la máquina tiene cargas de
+              días distintos, se listan todas, la más próxima primero. */}
+          {maquina.nacimientos?.length > 0 && (
+            <div className="alert alert-light border py-1 px-2 small mb-2">
+              <i className="bi bi-sunrise me-1 text-warning"></i>
+              Nacimiento aprox.:{" "}
+              {maquina.nacimientos.map((n, i) => {
+                const faltan = diasHastaClave(n.clave);
+                return (
+                  <span key={n.clave}>
+                    {i > 0 && " · "}
+                    <strong>{textoDiaClave(n.clave)}</strong>
+                    <span className="text-muted">
+                      {" "}
+                      ({faltan > 1 ? `en ${faltan} días` : faltan === 1 ? "mañana" : faltan === 0 ? "hoy" : `hace ${-faltan} días`}
+                      {maquina.nacimientos.length > 1 ? `, ${formatearNumero(n.huevos)} huevos` : ""})
+                    </span>
+                  </span>
+                );
+              })}
+            </div>
+          )}
           <MapaCarros maquina={maquina} onVerTanda={onVerTanda} />
           <div className="text-muted small mt-2">
             {formatearNumero(maquina.huevos)} huevos adentro
@@ -1005,7 +1079,10 @@ const TarjetaApiRecibido = ({ entrada, constantes, onAsignar, onEnviarAVenta, on
 const TransferenciaModal = ({ tanda, nacedoras, onClose, onHecho }) => {
   const [fecha, setFecha] = useState(obtenerFechaHoy());
   const [transferidos, setTransferidos] = useState("");
-  const [perdida, setPerdida] = useState("");
+  // El descarte del miraje, partido (2026-10-05): los claros (el gallo no
+  // fertilizó) y los que se fertilizaron pero no siguieron.
+  const [infertiles, setInfertiles] = useState("");
+  const [embrionMuerto, setEmbrionMuerto] = useState("");
   // A qué nacedora y carro va. Arranca en la primera donde entra la tanda entera.
   const [maquina, setMaquina] = useState(
     () =>
@@ -1032,7 +1109,13 @@ const TransferenciaModal = ({ tanda, nacedoras, onClose, onHecho }) => {
   // Del miraje no sale nada vendible (usuario, 2026-08-12) — antes había un
   // tercer campo "descarte venta" que generaba stock y no existe en la planta.
   const trans      = Number(transferidos) || 0;
-  const descartado = Number(perdida) || 0;
+  const inf        = Number(infertiles) || 0;
+  const emb        = Number(embrionMuerto) || 0;
+  const descartado = inf + emb;
+  // Lo que se va viendo mientras se carga: cuántos estaban fertilizados.
+  const fertilidad = tanda.huevosIncubando
+    ? ((tanda.huevosIncubando - inf) / tanda.huevosIncubando) * 100
+    : null;
   const total      = trans + descartado;
   const diferencia = tanda.huevosIncubando - total;
   const cuadra = diferencia === 0;
@@ -1078,6 +1161,8 @@ const TransferenciaModal = ({ tanda, nacedoras, onClose, onHecho }) => {
         fecha: ajustarFechaParaGuardar(fecha),
         huevosTransferidos: trans,
         descarteMirajePerdida: descartado,
+        infertiles: inf,
+        embrionMuerto: emb,
         nacedora: Number(maquina),
         carro: carroSel,
         pesoHuevo: peso === "" ? undefined : Number(peso),
@@ -1155,23 +1240,52 @@ const TransferenciaModal = ({ tanda, nacedoras, onClose, onHecho }) => {
                   />
                 </div>
 
-                <div className="mb-3">
-                  <label className="form-label fw-semibold">
-                    <i className="bi bi-trash text-danger me-1"></i>Descarte
-                  </label>
-                  <input
-                    type="number"
-                    className="form-control"
-                    min="0"
-                    max={tanda.huevosIncubando}
-                    value={perdida}
-                    onChange={(e) => setPerdida(e.target.value)}
-                    placeholder="0"
-                  />
-                  <div className="form-text">
-                    Claros, infértiles, podridos y embrión muerto: se tiran. Del miraje no sale
-                    nada para vender.
+                {/* El descarte del miraje en dos: se tiran los dos igual, pero separar
+                    los infértiles mide la fertilidad del plantel (falla del gallo). */}
+                <div className="row g-2 mb-1">
+                  <div className="col-6">
+                    <label className="form-label fw-semibold small">
+                      <i className="bi bi-circle text-danger me-1"></i>Infértiles (claros)
+                    </label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      min="0"
+                      max={tanda.huevosIncubando}
+                      value={infertiles}
+                      onChange={(e) => setInfertiles(e.target.value)}
+                      placeholder="0"
+                    />
+                    <div className="form-text">No se fertilizaron: falla del macho.</div>
                   </div>
+                  <div className="col-6">
+                    <label className="form-label fw-semibold small">
+                      <i className="bi bi-x-circle text-danger me-1"></i>Embrión muerto / podridos
+                    </label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      min="0"
+                      max={tanda.huevosIncubando}
+                      value={embrionMuerto}
+                      onChange={(e) => setEmbrionMuerto(e.target.value)}
+                      placeholder="0"
+                    />
+                    <div className="form-text">Se fertilizaron pero no siguieron.</div>
+                  </div>
+                </div>
+                <div className="small text-muted mb-3">
+                  Descarte total: <strong>{formatearNumero(descartado)}</strong> · se tira, del miraje
+                  no sale nada para vender.
+                  {fertilidad != null && infertiles !== "" && (
+                    <>
+                      {" "}
+                      · Fertilidad de la tanda:{" "}
+                      <strong className={fertilidad >= 90 ? "text-success" : fertilidad >= 80 ? "text-warning" : "text-danger"}>
+                        {formatearPorcentaje(fertilidad)}
+                      </strong>
+                    </>
+                  )}
                 </div>
 
                 <div className="mb-3">
@@ -1607,6 +1721,9 @@ const IncubadoraPage = () => {
       { header: "Fecha miraje",       valor: (t) => (t.transferencia?.fecha ? formatearFechaLocal(t.transferencia.fecha) : "") },
       { header: "A nacedora",         valor: (t) => (t.transferencia ? t.transferencia.huevosTransferidos : "") },
       { header: "Desc. miraje",       valor: (t) => (t.transferencia ? (t.transferencia.descarteMirajePerdida || 0) : "") },
+      { header: "Infértiles",         valor: (t) => t.transferencia?.infertiles ?? "" },
+      { header: "Embrión muerto",     valor: (t) => t.transferencia?.embrionMuerto ?? "" },
+      { header: "Fertilidad (%)",     valor: (t) => (t.fertilidad != null ? Math.round(t.fertilidad * 10) / 10 : "") },
       { header: "Peso huevo transf. (g)", valor: (t) => t.transferencia?.pesoHuevo ?? "" },
       { header: "Pérdida de peso (%)", valor: (t) => t.perdidaPeso ?? "" },
       { header: "Nacimiento previsto", valor: (t) => (t.fechaNacimientoPrevista ? formatearFechaLocal(t.fechaNacimientoPrevista) : "") },
@@ -1797,11 +1914,11 @@ Ya está recibido en Trigotuc y listo para usar. De acá sale para tres lados: a
                 <i className="bi bi-grid-3x3 me-1"></i>Posiciones en las incubadoras
               </h5>
               <p className="text-muted small mb-3">
-Tocá un carro ocupado para ver la tanda y transferirla a nacedora.
+Primero las que están por nacer. Tocá un carro ocupado para ver la tanda y transferirla a nacedora.
                 El ventilador separa el carro 6 del 7.
               </p>
               <div className="row g-3 mb-4">
-                {ocupacion.incubadoras.map((m) => (
+                {[...ocupacion.incubadoras].sort(porProximoNacimiento).map((m) => (
                   <TarjetaMaquina
                     key={m.numero}
                     maquina={m}
@@ -1816,11 +1933,11 @@ Tocá un carro ocupado para ver la tanda y transferirla a nacedora.
                 <i className="bi bi-grid-3x3 me-1"></i>Posiciones en las nacedoras
               </h5>
               <p className="text-muted small mb-3">
-4 carros de 14.400 por nacedora, con el ventilador entre el 2 y el 3. Cada carro junta varias tandas: tocalo para verlas y
+Primero las que están por nacer. 4 carros de 14.400 por nacedora, con el ventilador entre el 2 y el 3. Cada carro junta varias tandas: tocalo para verlas y
                 registrar cada nacimiento.
               </p>
               <div className="row g-3 mb-4">
-                {ocupacion.nacedoras.map((m) => (
+                {[...ocupacion.nacedoras].sort(porProximoNacimiento).map((m) => (
                   <TarjetaMaquina
                     key={m.numero}
                     maquina={m}
@@ -1849,10 +1966,11 @@ Tocá un carro ocupado para ver la tanda y transferirla a nacedora.
               ) : (
                 <>
                   <p className="text-muted small mb-3">
-                    Cuánto nace de cada plantel de reproductoras. Solo entran las tandas ya
-                    nacidas: las que siguen en la máquina se muestran aparte para que no
-                    hundan el porcentaje. Dentro de cada plantel se abre por tipo de API,
-                    que es lo que permite comparar el huevo de cinta contra el de piso.
+                    Cuánto nace de cada plantel de reproductoras. <strong>Fértil</strong> es la
+                    fertilidad (huevos fertilizados sobre incubados, se mide en el miraje: si es
+                    baja, falla el macho). <strong>Nace</strong> es el nacimiento (pollitos vivos
+                    sobre incubados) y solo cuenta tandas ya nacidas. Dentro de cada plantel se
+                    abre por tipo de API.
                   </p>
                   <div className="row g-3">
                     {rendimientoPlanteles.map((p) => (
@@ -1867,8 +1985,24 @@ Tocá un carro ocupado para ver la tanda y transferirla a nacedora.
                                 </span>
                               )}
                             </span>
+                            <span className="d-flex gap-1">
+                            {p.fertilidad != null && (
+                              <span
+                                className={`badge fs-6 ${
+                                  p.fertilidad >= 90
+                                    ? "bg-success-subtle text-success-emphasis"
+                                    : p.fertilidad >= 80
+                                    ? "bg-warning-subtle text-warning-emphasis"
+                                    : "bg-danger-subtle text-danger-emphasis"
+                                }`}
+                                title="Fertilidad: huevos fertilizados sobre incubados (se mide en el miraje)"
+                              >
+                                Fértil {formatearPorcentaje(p.fertilidad)}
+                              </span>
+                            )}
                             {p.porcentaje != null && (
                               <span
+                                title="Nacimiento: pollitos vivos sobre huevos incubados"
                                 className={`badge fs-6 ${
                                   p.porcentaje >= 80
                                     ? "bg-success"
@@ -1877,9 +2011,10 @@ Tocá un carro ocupado para ver la tanda y transferirla a nacedora.
                                     : "bg-danger"
                                 }`}
                               >
-                                {formatearPorcentaje(p.porcentaje)}
+                                Nace {formatearPorcentaje(p.porcentaje)}
                               </span>
                             )}
+                            </span>
                           </div>
                           <div className="card-body">
                             <div className="row g-2 text-center mb-3">
@@ -1905,6 +2040,19 @@ Tocá un carro ocupado para ver la tanda y transferirla a nacedora.
                               </div>
                             </div>
 
+                            {/* Por qué no nace lo que no nace: el miraje lo separa. */}
+                            {p.mirados > 0 && (
+                              <div className="small mb-3">
+                                <span className="text-muted">En el miraje de </span>
+                                <strong>{formatearNumero(p.mirados)}</strong>
+                                <span className="text-muted"> huevos: </span>
+                                <strong className="text-danger">{formatearNumero(p.infertiles)}</strong>
+                                <span className="text-muted"> infértiles (falla del macho) · </span>
+                                <strong className="text-danger">{formatearNumero(p.embrionMuerto)}</strong>
+                                <span className="text-muted"> con embrión muerto o podridos</span>
+                              </div>
+                            )}
+
                             <div className="table-responsive">
                               <table className="table table-sm align-middle mb-0">
                                 <thead className="table-light">
@@ -1912,7 +2060,8 @@ Tocá un carro ocupado para ver la tanda y transferirla a nacedora.
                                     <th className="small">Tipo de API</th>
                                     <th className="small text-end">Incubados</th>
                                     <th className="small text-end">Nacidos</th>
-                                    <th className="small text-end">%</th>
+                                    <th className="small text-end" title="Fertilidad: se mide en el miraje">Fértil</th>
+                                    <th className="small text-end" title="Nacimiento">Nace</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -1928,6 +2077,9 @@ Tocá un carro ocupado para ver la tanda y transferirla a nacedora.
                                       </td>
                                       <td className="small text-end text-success">
                                         {formatearNumero(t.nacidos)}
+                                      </td>
+                                      <td className="small text-end">
+                                        {t.fertilidad != null ? formatearPorcentaje(t.fertilidad) : "—"}
                                       </td>
                                       <td className="small text-end fw-semibold">
                                         {t.porcentaje != null
@@ -1973,27 +2125,27 @@ Tocá un carro ocupado para ver la tanda y transferirla a nacedora.
                       <table className="table table-hover align-middle mb-0">
                         <thead className="table-light">
                           <tr>
-                            <th>Tanda</th>
-                            <th>Plantel</th>
-                            <th>Fecha</th>
-                            <th className="text-end">Ingreso</th>
-                            <th className="text-end" title="Descarte de inoculación: va a venta">
+                            <th className="text-center align-middle">Tanda</th>
+                            <th className="text-center align-middle">Plantel</th>
+                            <th className="text-center align-middle">Fecha</th>
+                            <th className="text-center align-middle">Ingreso</th>
+                            <th className="text-center align-middle" title="Descarte de inoculación: va a venta">
                               Desc. inoculación
                             </th>
-                            <th className="text-end">A nacedora</th>
-                            <th className="text-end" title="Descarte del miraje: se tira entero">
+                            <th className="text-center align-middle">A nacedora</th>
+                            <th className="text-center align-middle" title="Descarte del miraje: se tira entero">
                               Desc. miraje
                             </th>
-                            <th className="text-end" title="Peso del huevo: carga → transferencia">
+                            <th className="text-center align-middle" title="Peso del huevo: carga → transferencia">
                               Pérdida peso
                             </th>
-                            <th>Nacimiento</th>
-                            <th className="text-end">Vivos</th>
-                            <th className="text-end" title="Muertos o descartados al nacer: pérdida">
+                            <th className="text-center align-middle">Nacimiento</th>
+                            <th className="text-center align-middle">Vivos</th>
+                            <th className="text-center align-middle" title="Muertos o descartados al nacer: pérdida">
                               Desc. nacimiento
                             </th>
-                            <th className="text-end">Rendimiento</th>
-                            <th className="text-center">Estado</th>
+                            <th className="text-center align-middle">Rendimiento</th>
+                            <th className="text-center align-middle">Estado</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -2014,9 +2166,26 @@ Tocá un carro ocupado para ver la tanda y transferirla a nacedora.
                                     : "-"}
                                 </td>
                                 <td className="text-end text-danger">
-                                  {t.transferencia
-                                    ? formatearNumero(t.transferencia.descarteMirajePerdida || 0)
-                                    : "-"}
+                                  {t.transferencia ? (
+                                    <span
+                                      title={
+                                        t.transferencia.infertiles != null
+                                          ? `${formatearNumero(t.transferencia.infertiles)} infértiles · ${formatearNumero(
+                                              t.transferencia.embrionMuerto || 0
+                                            )} embrión muerto / podridos`
+                                          : "Transferencia anterior: el descarte no se separaba"
+                                      }
+                                    >
+                                      {formatearNumero(t.transferencia.descarteMirajePerdida || 0)}
+                                      {t.fertilidad != null && (
+                                        <span className="d-block text-muted" style={{ fontSize: ".7rem" }}>
+                                          fértil {formatearPorcentaje(t.fertilidad)}
+                                        </span>
+                                      )}
+                                    </span>
+                                  ) : (
+                                    "-"
+                                  )}
                                 </td>
                                 <td
                                   className="text-end"
