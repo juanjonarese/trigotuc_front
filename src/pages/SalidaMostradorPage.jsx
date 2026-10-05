@@ -57,6 +57,84 @@ const resumenLineas = (detalle = [], etiquetasHuevo = {}) => {
   return partes;
 };
 
+// ── Stock para la venta (2026-10-05) ────────────────────────────────────────
+// Todo lo que el mostrador puede vender, a la vista antes de cargar la salida:
+// el pollo de la cámara Trigotuc (entero por calibre y trozado) y el huevo de
+// venta (consumo, doble yema y el API que se mandó a venta). Antes el stock del
+// entero solo se veía adentro del desplegable de calibres.
+// Una columna del panel (pollo entero, trozado o huevo) y sus renglones.
+const Columna = ({ titulo, icono, total, unidad, vacio, children }) => (
+  <div className="col-12 col-md-4">
+    <div className="border rounded h-100 bg-white">
+      <div className="d-flex justify-content-between align-items-baseline px-2 py-1 border-bottom bg-light">
+        <span className="fw-semibold small">
+          <i className={`bi ${icono} me-1`}></i>
+          {titulo}
+        </span>
+        <span className="fw-bold">
+          {fmt(total)} <span className="text-muted small fw-normal">{unidad}</span>
+        </span>
+      </div>
+      <div className="px-2 py-1 small" style={{ maxHeight: 180, overflowY: "auto" }}>
+        {total === 0 ? <span className="text-muted">{vacio}</span> : children}
+      </div>
+    </div>
+  </div>
+);
+
+const Fila = ({ izq, der }) => (
+  <div className="d-flex justify-content-between border-bottom py-1">
+    <span>{izq}</span>
+    <span className="fw-semibold text-nowrap">{der}</span>
+  </div>
+);
+
+const StockVenta = ({ enteros, trozados, huevos, huevosPorMaple }) => {
+  const variasEspEnteros = hayVariasEspecies(enteros);
+  const variasEspTroz = hayVariasEspecies(trozados);
+  const totalCajones = enteros.reduce((a, e) => a + (e.cajones || 0), 0);
+  const totalCajas = trozados.reduce((a, t) => a + (t.cajas || 0), 0);
+  const totalMaples = huevos.reduce((a, h) => a + (h.maples || 0), 0);
+
+
+  return (
+    <div className="card border-0 shadow-sm mb-3">
+      <div className="card-body py-2">
+        <div className="fw-semibold mb-2">
+          <i className="bi bi-box-seam me-1 text-success"></i>Stock para la venta
+        </div>
+        <div className="row g-2">
+          <Columna titulo="Pollo entero" icono="bi-box" total={totalCajones} unidad="cajones" vacio="Sin stock en la cámara">
+            {[...enteros]
+              .filter((e) => e.cajones > 0)
+              .sort((a, b) => String(especieDe(a)).localeCompare(String(especieDe(b))) || a.calibre - b.calibre)
+              .map((e) => (
+                <Fila key={claveEntero(e)} izq={textoCalibre(e, variasEspEnteros)} der={`${fmt(e.cajones)} caj.`} />
+              ))}
+          </Columna>
+          <Columna titulo="Trozado" icono="bi-scissors" total={totalCajas} unidad="cajas" vacio="Sin trozado">
+            {trozados.map((t) => (
+              <Fila
+                key={claveTrozado(t)}
+                izq={`${variasEspTroz ? `${etiquetaEspecie(especieDe(t))} · ` : ""}${TIPOS_LABEL[t.tipo] || t.tipo} ${t.clase || "A"}`}
+                der={`${fmt(t.cajas)} cajas`}
+              />
+            ))}
+          </Columna>
+          <Columna titulo="Huevo" icono="bi-egg" total={totalMaples} unidad="maples" vacio="Sin huevo de venta">
+            {huevos.map((h) => (
+              <Fila key={h.tipo} izq={h.etiqueta} der={`${fmt(h.maples)} maples`} />
+            ))}
+            <div className="text-muted pt-1" style={{ fontSize: ".72rem" }}>
+              Maple de {huevosPorMaple} huevos.
+            </div>
+          </Columna>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const SalidaMostradorPage = () => {
   const navigate = useNavigate();
   const [tab, setTab] = useState("registrar");
@@ -331,13 +409,20 @@ const SalidaMostradorPage = () => {
           <>
             <div className="alert alert-info py-2 small">
               <i className="bi bi-info-circle me-1"></i>
-              Cargá lo que se vendió por mostrador. Descuenta el stock de la cámara <strong>Trigotuc</strong>.
+              Cargá lo que se vendió por mostrador. Descuenta el stock de la cámara <strong>Trigotuc</strong> y el huevo de venta.
               (Puente manual hasta que el POS descuente automático.)
             </div>
 
             {loading ? (
               <div className="text-center p-4"><div className="spinner-border text-primary" role="status"></div></div>
             ) : (
+              <>
+              <StockVenta
+                enteros={stockEnteros}
+                trozados={trozadosDisp}
+                huevos={huevosDisp}
+                huevosPorMaple={huevosPorMaple}
+              />
               <div className="card border-0 shadow-sm">
                 <div className="card-body">
                   <form onSubmit={handleSubmit}>
@@ -481,6 +566,7 @@ const SalidaMostradorPage = () => {
                   </form>
                 </div>
               </div>
+              </>
             )}
           </>
         )}
