@@ -6,8 +6,16 @@ import { Navigate, useLocation } from "react-router-dom";
 // siendo alcanzable desde una pestaña vieja, un favorito o el botón "atrás", y
 // ahí la pantalla se abre y el back contesta 403 con un cartel feo.
 // Los roles que no figuran acá no tienen restricción de ruta.
+//
+// Silos está en el sidebar de Reproductoras pero su ruta quedó en
+// /alimento/silos: sin ese prefijo, el rol reproductoras tocaba "Silos" y lo
+// devolvía a Galpones sin aviso (reclamo del cliente, 2026-10-07). Envío de
+// alimento (/alimento/envios) NO va: despachar es de administración.
 const MODULO_POR_ROL = {
-  reproductoras: { prefijo: "/reproductores", inicio: "/reproductores/galpones" },
+  reproductoras: {
+    prefijos: ["/reproductores", "/alimento/silos"],
+    inicio: "/reproductores/galpones",
+  },
 };
 
 const ProtectedRoute = ({ children, blockedEmails = [] }) => {
@@ -25,7 +33,7 @@ const ProtectedRoute = ({ children, blockedEmails = [] }) => {
   }
 
   const modulo = MODULO_POR_ROL[rolUsuario];
-  if (modulo && !location.pathname.startsWith(modulo.prefijo)) {
+  if (modulo && !modulo.prefijos.some((p) => location.pathname.startsWith(p))) {
     return <Navigate to={modulo.inicio} replace />;
   }
 
