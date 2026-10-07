@@ -169,12 +169,22 @@ export const imprimirRemitoAlimento = (envio, { detalleTipo, etiquetaDestino }) 
   <meta charset="utf-8"/>
   <title>Remito ${escapeHtml(envio.numeroRemito || envio.numero || "")}</title>
   <style>
-    @page { size: A4; margin: 12mm; }
+    /* El margen lo pone la HOJA (padding), no @page. Con el margen en @page el
+       remito dependía del diálogo de impresión: con "Márgenes: ninguno" (que
+       Chrome y Edge recuerdan de la última vez) el texto quedaba pegado al borde
+       del papel y la impresora le comía la primera letra (foto del cliente,
+       2026-10-07). Con margin: 0 además el navegador no imprime su
+       encabezado y pie (fecha, URL). */
+    @page { size: A4; margin: 0; }
     * { box-sizing: border-box; }
     body { font-family: Arial, Helvetica, sans-serif; color: #000; margin: 0; font-size: 11pt; }
 
-    /* Una copia por hoja. La última no fuerza salto, para no dejar una en blanco. */
-    .hoja { page-break-after: always; position: relative; padding-bottom: 6mm; }
+    /* Una copia por hoja. La última no fuerza salto, para no dejar una en blanco.
+       box-decoration-break: si una copia con muchas líneas pasa a una segunda
+       hoja, esa también lleva margen. */
+    .hoja { page-break-after: always; position: relative; padding: 14mm 15mm 16mm;
+            -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+    table.detalle tr { break-inside: avoid; }
     .hoja:last-child { page-break-after: auto; }
 
     /* La copia va en su propio renglón, arriba del encabezado. Estuvo flotando
