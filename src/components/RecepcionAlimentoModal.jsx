@@ -6,6 +6,8 @@ import Swal from "sweetalert2";
 const fmt = (n) =>
   n != null ? new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n) : "—";
 
+const redondear = (n) => Math.round(n * 100) / 100;
+
 /**
  * Recibir un envío de alimento en la granja, donde están los silos.
  *
@@ -16,16 +18,17 @@ const fmt = (n) =>
  * Arranca precargado con lo que salió, porque el caso normal es que venga
  * completo: así solo hay que tocar lo que no coincide.
  *
- * Lo que no se puede adivinar es a qué galpón va cada línea. Al elegirlo, los
- * kg se reparten solos entre SUS silos llenando el que tiene lugar (14.000 kg
- * cada uno) y el resto al siguiente; el reparto queda editable.
+ * El personal REPARTE lo pesado de cada línea entre los silos que quiera, de
+ * cualquier galpón (2026-10-10, pedido del usuario: "tiene que poder distribuir
+ * el total de alimento en diferentes silos"). Antes se elegía un galpón y se
+ * llenaban sus silos solos. Cada silo muestra su lugar libre (15.000 kg) y un
+ * botón para mandarle lo que falta repartir; no se confirma hasta que la suma
+ * cierre con lo pesado.
  */
 const RecepcionAlimentoModal = ({ envio, silos, grupos, stock, etiquetaTipo, onClose, onHecho }) => {
   // Si el envío ya está recibido, el modal CORRIGE esa recepción (2026-09-30):
   // arranca con lo que se cargó y al guardar el back la deshace y la rehace.
   const edicion = envio.estado === "aceptado";
-  const grupoDeReparto = (reparto = []) =>
-    reparto.length ? grupos.find((g) => g.silos.includes(reparto[0].silo))?.clave || "" : "";
 
   const [fecha, setFecha] = useState(
     edicion && envio.fechaAcepta ? String(envio.fechaAcepta).split("T")[0] : obtenerFechaHoy()
@@ -42,7 +45,6 @@ const RecepcionAlimentoModal = ({ envio, silos, grupos, stock, etiquetaTipo, onC
       kgEnviados: l.kg,
       // Nuevo: precargado con lo enviado. Corrección: con lo que se pesó.
       kgReales: String(edicion ? l.kgReales ?? 0 : l.kg ?? ""),
-      grupo: edicion ? grupoDeReparto(l.reparto) : "",
       reparto: edicion
         ? Object.fromEntries((l.reparto || []).map((t) => [t.silo, String(t.kg)]))
         : {}, // { [silo]: "kg" }
@@ -70,34 +72,8 @@ const RecepcionAlimentoModal = ({ envio, silos, grupos, stock, etiquetaTipo, onC
     libreEnStock(silo) -
     todas.reduce((acc, l, j) => (j === idx ? acc : acc + (Number(l.reparto[silo]) || 0)), 0);
 
-  // Llena los silos del grupo en orden: el primero hasta donde entra y el resto
-  // al siguiente. Lo que no entra en ninguno queda en el último, para que el
-  // aviso de "no entra" lo muestre en vez de perderse.
-  const autollenar = (todas, idx) => {
-    const l = todas[idx];
-    const g = grupos.find((x) => x.clave === l.grupo);
-    if (!g) return { ...l, reparto: {} };
-    let resta = kgRecibidosDe(l);
-    const reparto = {};
-    g.silos.forEach((silo, k) => {
-      const ultimo = k === g.silos.length - 1;
-      const entra = ultimo ? resta : Math.max(0, Math.min(resta, libreParaLinea(todas, idx, silo)));
-      reparto[silo] = entra > 0 ? String(Math.round(entra * 100) / 100) : "";
-      resta -= entra;
-    });
-    return { ...l, reparto };
-  };
-
   const setLinea = (i, campo, valor) =>
-    setLineas((prev) => {
-      const nuevas = prev.map((l, idx) => (idx === i ? { ...l, [campo]: valor } : l));
-      // Cambiar el galpón o lo pesado rehace el reparto; tocar un silo a mano no.
-      if (["grupo", "kgReales"].includes(campo)) {
-        nuevas[i] = { ...nuevas[i], reparto: {} };
-        nuevas[i] = autollenar(nuevas, i);
-      }
-      return nuevas;
-    });
+    setLineas((prev) => prev.map((l, idx) => (idx === i ? { ...l, [campo]: valor } : l)));
 
   const setRepartoSilo = (i, silo, valor) =>
     setLineas((prev) =>
@@ -106,6 +82,23 @@ const RecepcionAlimentoModal = ({ envio, silos, grupos, stock, etiquetaTipo, onC
 
   const sumaReparto = (l) =>
     Object.values(l.reparto).reduce((acc, v) => acc + (Number(v) || 0), 0);
+
+  const faltaRepartir = (l) => redondear(kgRecibidosDe(l) - sumaReparto(l));
+
+  // "El resto acá": le suma a ese silo lo que falta repartir de la línea, sin
+  // pasarse de su lugar libre (descontando lo que le dieron las otras líneas).
+  const lugarParaResto = (todas, i, silo) =>
+    libreParaLinea(todas, i, silo) - (Number(todas[i].reparto[silo]) || 0);
+
+  const restoAlSilo = (i, silo) =>
+    setLineas((prev) => {
+      const actual = Number(prev[i].reparto[silo]) || 0;
+      const entra = redondear(Math.max(0, Math.min(faltaRepartir(prev[i]), lugarParaResto(prev, i, silo))));
+      if (entra <= 0) return prev;
+      return prev.map((l, idx) =>
+        idx === i ? { ...l, reparto: { ...l.reparto, [silo]: String(redondear(actual + entra)) } } : l
+      );
+    });
 
   // Lo que entra a cada silo sumando todas las líneas, contra su lugar libre.
   const entraPorSilo = {};
@@ -117,16 +110,12 @@ const RecepcionAlimentoModal = ({ envio, silos, grupos, stock, etiquetaTipo, onC
     .map(([silo]) => Number(silo));
 
   const kgTotalReal = lineas.reduce((acc, l) => acc + kgRecibidosDe(l), 0);
-  const diferencia = Math.round((kgTotalReal - envio.kgTotales) * 100) / 100;
+  const diferencia = redondear(kgTotalReal - envio.kgTotales);
   const hayDiferencia = Math.abs(diferencia) > 0.01;
   const faltaMotivo = hayDiferencia && !motivo.trim();
-  const faltaGalpon = lineas.some((l) => kgRecibidosDe(l) > 0 && !l.grupo);
-  const repartoDescuadrado = lineas.some(
-    (l) => kgRecibidosDe(l) > 0 && l.grupo && Math.abs(sumaReparto(l) - kgRecibidosDe(l)) > 0.01
-  );
+  const repartoDescuadrado = lineas.some((l) => Math.abs(faltaRepartir(l)) > 0.01);
   const nadaRecibido = kgTotalReal <= 0;
-  const bloqueado =
-    nadaRecibido || faltaGalpon || repartoDescuadrado || silosPasados.length > 0 || faltaMotivo;
+  const bloqueado = nadaRecibido || repartoDescuadrado || silosPasados.length > 0 || faltaMotivo;
 
   const nombreSilo = (n) => silos.find((s) => s.numero === n)?.nombre || `Silo ${n}`;
 
@@ -194,8 +183,9 @@ const RecepcionAlimentoModal = ({ envio, silos, grupos, stock, etiquetaTipo, onC
                 )}
                 <p className="small text-muted">
                   Cargá los <strong>kg que marcó la balanza</strong> al pesar el camión: eso es lo
-                  que entra al silo. Viene precargado con lo que salió. Elegí a qué{" "}
-                  <strong>galpón</strong> va cada línea y se reparte sola en sus silos.
+                  que entra al silo. Viene precargado con lo que salió. Después{" "}
+                  <strong>repartí cada línea entre los silos</strong> donde se descargó: podés
+                  usar uno solo o varios, de cualquier galpón.
                 </p>
 
                 <label className="form-label fw-semibold small mb-1">Fecha de recepción</label>
@@ -208,14 +198,13 @@ const RecepcionAlimentoModal = ({ envio, silos, grupos, stock, etiquetaTipo, onC
                 {lineas.map((l, i) => {
                   const esBolsa = l.presentacion === "bolsa";
                   const kgRec = kgRecibidosDe(l);
-                  const dif = Math.round((kgRec - l.kgEnviados) * 100) / 100;
-                  const g = grupos.find((x) => x.clave === l.grupo);
-                  const suma = sumaReparto(l);
-                  const descuadre = g && kgRec > 0 && Math.abs(suma - kgRec) > 0.01;
+                  const dif = redondear(kgRec - l.kgEnviados);
+                  const falta = faltaRepartir(l);
+                  const cierra = Math.abs(falta) <= 0.01;
                   return (
                     <div key={l._id} className="border rounded p-2 mb-2">
                       <div className="row g-2 align-items-start">
-                        <div className="col-12 col-md-4">
+                        <div className="col-12 col-md-7">
                           <div className="small fw-semibold">{etiquetaTipo(l.tipo)}</div>
                           <div className="text-muted" style={{ fontSize: ".72rem" }}>
                             Salió: {esBolsa
@@ -223,7 +212,7 @@ const RecepcionAlimentoModal = ({ envio, silos, grupos, stock, etiquetaTipo, onC
                               : `${fmt(l.kgEnviados)} kg a granel`}
                           </div>
                         </div>
-                        <div className="col-6 col-md-3">
+                        <div className="col-12 col-md-5">
                           <label className="form-label small mb-0">Pesado (kg)</label>
                           <input
                             type="number" min="0" step="0.1"
@@ -239,56 +228,69 @@ const RecepcionAlimentoModal = ({ envio, silos, grupos, stock, etiquetaTipo, onC
                             </div>
                           )}
                         </div>
-                        <div className="col-6 col-md-5">
-                          <label className="form-label small mb-0">Va al</label>
-                          <select
-                            className={`form-select form-select-sm ${kgRec > 0 && !l.grupo ? "is-invalid" : ""}`}
-                            value={l.grupo}
-                            onChange={(ev) => setLinea(i, "grupo", ev.target.value)}
-                            disabled={saving || kgRec <= 0}
-                          >
-                            <option value="">— Elegí el galpón —</option>
-                            {grupos.map((gr) => (
-                              <option key={gr.clave} value={gr.clave}>
-                                {gr.nombre} ({gr.silos.length === 1 ? "1 silo" : `${gr.silos.length} silos`})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
                       </div>
 
-                      {g && kgRec > 0 && (
-                        <div className="d-flex flex-wrap gap-2 mt-2">
-                          {g.silos.map((silo) => {
-                            const pasado = silosPasados.includes(silo);
-                            return (
-                              <div key={silo} style={{ minWidth: 170, flex: "1 1 170px" }}>
-                                <div className="input-group input-group-sm">
-                                  <span className="input-group-text">{nombreSilo(silo)}</span>
-                                  <input
-                                    type="number" min="0" step="0.1"
-                                    className={`form-control text-end ${pasado ? "is-invalid" : ""}`}
-                                    value={l.reparto[silo] ?? ""}
-                                    onChange={(ev) => setRepartoSilo(i, silo, ev.target.value)}
-                                    disabled={saving}
-                                    placeholder="0"
-                                  />
-                                  <span className="input-group-text">kg</span>
+                      {kgRec > 0 && (
+                        <>
+                          <div className="d-flex flex-wrap gap-3 mt-2">
+                            {grupos.map((gr) => (
+                              <div key={gr.clave} style={{ flex: gr.silos.length > 1 ? "2 1 340px" : "1 1 170px" }}>
+                                <div className="text-muted fw-semibold mb-1" style={{ fontSize: ".72rem" }}>
+                                  {gr.nombre}
                                 </div>
-                                <div className={pasado ? "text-danger" : "text-muted"} style={{ fontSize: ".72rem" }}>
-                                  {pasado
-                                    ? `No entra: tiene lugar para ${fmt(libreEnStock(silo))} kg`
-                                    : `libre ${fmt(libreEnStock(silo))} de ${fmt(capacidadDe(silo))} kg`}
+                                <div className="d-flex flex-wrap gap-2">
+                                  {gr.silos.map((silo) => {
+                                    const pasado = silosPasados.includes(silo);
+                                    const puedeResto = falta > 0.01 && lugarParaResto(lineas, i, silo) > 0.01;
+                                    return (
+                                      <div key={silo} style={{ minWidth: 160, flex: "1 1 160px" }}>
+                                        <div className="input-group input-group-sm">
+                                          <span className="input-group-text">{nombreSilo(silo)}</span>
+                                          <input
+                                            type="number" min="0" step="0.1"
+                                            className={`form-control text-end ${pasado ? "is-invalid" : ""}`}
+                                            value={l.reparto[silo] ?? ""}
+                                            onChange={(ev) => setRepartoSilo(i, silo, ev.target.value)}
+                                            disabled={saving}
+                                            placeholder="0"
+                                          />
+                                          <span className="input-group-text">kg</span>
+                                        </div>
+                                        <div className="d-flex justify-content-between align-items-center">
+                                          <span className={pasado ? "text-danger" : "text-muted"} style={{ fontSize: ".72rem" }}>
+                                            {pasado
+                                              ? `No entra: lugar para ${fmt(libreEnStock(silo))} kg`
+                                              : `libre ${fmt(libreEnStock(silo))} de ${fmt(capacidadDe(silo))}`}
+                                          </span>
+                                          {puedeResto && (
+                                            <button
+                                              type="button"
+                                              className="btn btn-link btn-sm p-0"
+                                              style={{ fontSize: ".72rem" }}
+                                              onClick={() => restoAlSilo(i, silo)}
+                                              disabled={saving}
+                                            >
+                                              el resto acá
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                      {descuadre && (
-                        <div className="text-danger small mt-1">
-                          El reparto suma {fmt(suma)} kg y se pesaron {fmt(kgRec)} kg.
-                        </div>
+                            ))}
+                          </div>
+                          <div className={`small mt-2 ${cierra ? "text-success" : "text-danger"}`}>
+                            {cierra ? (
+                              <><i className="bi bi-check-circle me-1"></i>Repartido: {fmt(kgRec)} kg</>
+                            ) : falta > 0 ? (
+                              `Falta repartir ${fmt(falta)} de ${fmt(kgRec)} kg`
+                            ) : (
+                              `El reparto se pasa ${fmt(-falta)} kg de lo pesado (${fmt(kgRec)} kg)`
+                            )}
+                          </div>
+                        </>
                       )}
                     </div>
                   );
@@ -330,13 +332,11 @@ const RecepcionAlimentoModal = ({ envio, silos, grupos, stock, etiquetaTipo, onC
                   <div className="alert alert-secondary py-2 mt-2 mb-0 small">
                     {nadaRecibido
                       ? "Cargá cuánto pesó cada línea."
-                      : faltaGalpon
-                        ? "Falta decir a qué galpón va alguna de las líneas."
-                        : repartoDescuadrado
-                          ? "El reparto en los silos no coincide con lo pesado en alguna línea."
-                          : silosPasados.length > 0
-                            ? `No entra en ${silosPasados.map(nombreSilo).join(", ")}: pasá lo que sobra al otro silo del galpón.`
-                            : "Anotá el motivo de la diferencia."}
+                      : repartoDescuadrado
+                        ? "Repartí todo lo pesado de cada línea entre los silos."
+                        : silosPasados.length > 0
+                          ? `No entra en ${silosPasados.map(nombreSilo).join(", ")}: pasá lo que sobra a otro silo.`
+                          : "Anotá el motivo de la diferencia."}
                   </div>
                 )}
               </div>
