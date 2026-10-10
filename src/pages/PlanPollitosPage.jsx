@@ -479,6 +479,14 @@ const CargaModal = ({ fila, destinos, clientes, onCerrar, onEmitir, onBorrar, on
                   </div>
                 </div>
               </div>
+              {/* Lo enviado al mostrador (2026-10-10) ya salió de esta carga:
+                  no es una reserva, pero el libre ya lo tiene descontado. */}
+              {fila.aMostrador > 0 && (
+                <div className="small text-muted text-center mt-n2 mb-3">
+                  <i className="bi bi-shop me-1"></i>
+                  {formatearNumero(fila.aMostrador)} pollitos enviados al mostrador, ya descontados del libre.
+                </div>
+              )}
 
               {(esProy || noAlcanza) && <BloqueCarga fila={fila} onMover={onMover} />}
 
@@ -892,8 +900,16 @@ const ListaMes = ({ filas, feriados, prefijoMes, claveHoy, onAbrir }) => {
                     ) : null}
                   </td>
                   <td className="small">
+                    {f.aMostrador > 0 && (
+                      <div className="d-flex justify-content-between gap-2">
+                        <span className="text-truncate">
+                          <i className="bi bi-shop text-secondary me-1"></i>Mostrador
+                        </span>
+                        <span className="fw-semibold text-nowrap">{formatearNumero(f.aMostrador)}</span>
+                      </div>
+                    )}
                     {f.lineas.length === 0 ? (
-                      <div className="text-center text-muted fst-italic">sin asignar</div>
+                      f.aMostrador > 0 ? null : <div className="text-center text-muted fst-italic">sin asignar</div>
                     ) : (
                       f.lineas.map((l) => (
                         <div key={l._id} className="d-flex justify-content-between gap-2">
@@ -1069,7 +1085,7 @@ const PlanPollitosPage = () => {
   );
 
   const totalesMes = useMemo(() => {
-    const vacio = { aNacer: 0, aClientes: 0, aGranja: 0, libre: 0, cargas: 0 };
+    const vacio = { aNacer: 0, aClientes: 0, aGranja: 0, aMostrador: 0, libre: 0, cargas: 0 };
     if (!mesActual) return vacio;
     return filasMes
       .reduce(
@@ -1077,6 +1093,7 @@ const PlanPollitosPage = () => {
           aNacer: acc.aNacer + f.aNacer,
           aClientes: acc.aClientes + f.aClientes,
           aGranja: acc.aGranja + f.aGranja,
+          aMostrador: acc.aMostrador + (f.aMostrador || 0),
           libre: acc.libre + f.libre,
           cargas: acc.cargas + 1,
         }),
@@ -1210,6 +1227,7 @@ const PlanPollitosPage = () => {
         { header: "Estimado", valor: ({ f }) => (f.estimado ? "Sí" : "No") },
         { header: "A clientes", valor: ({ f }) => f.aClientes },
         { header: "A engorde", valor: ({ f }) => f.aGranja },
+        { header: "Al mostrador", valor: ({ f }) => f.aMostrador || 0 },
         { header: "Libre", valor: ({ f }) => f.libre },
         {
           header: "Destino",
@@ -1306,6 +1324,11 @@ const PlanPollitosPage = () => {
                     >
                       {formatearNumero(resumen?.libre || 0)}
                     </div>
+                    {resumen?.aMostrador > 0 && (
+                      <div className="text-muted" style={{ fontSize: "0.72rem" }}>
+                        ya descuenta {formatearNumero(resumen.aMostrador)} enviados al mostrador
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1448,6 +1471,12 @@ const PlanPollitosPage = () => {
                     <span className="text-muted">Engorde </span>
                     <strong className="text-success">{formatearNumero(totalesMes.aGranja)}</strong>
                   </span>
+                  {totalesMes.aMostrador > 0 && (
+                    <span>
+                      <span className="text-muted">Mostrador </span>
+                      <strong className="text-secondary">{formatearNumero(totalesMes.aMostrador)}</strong>
+                    </span>
+                  )}
                   <span>
                     <span className="text-muted">Libre </span>
                     <strong className={totalesMes.libre < 0 ? "text-danger" : "text-success"}>
