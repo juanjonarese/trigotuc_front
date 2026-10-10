@@ -185,6 +185,10 @@ const EditarLoteModal = ({ lote, onClose, onGuardado }) => {
 //                     "envío eliminado"). Guardan una FOTO de lo afectado, no un
 //                     delta con signo, así que no se puede saber para qué lado
 //                     van. Se listan igual, marcados, pero no mueven el saldo.
+// La salida de mostrador lleva también huevo y pollitos en el mismo movimiento:
+// no son stock de cámara y no se listan acá.
+const esLineaDeCamara = (d) => d.clase === "entero" || d.clase === "trozado";
+
 const movimientoEnUnidades = (m) => {
   let cajones = 0;
   let cajas = 0;
@@ -315,7 +319,9 @@ const GranjaDashboardPage = () => {
     const TIPOS = { filet: "Filet", pata: "Pata muslo", alita: "Alita", menudo: "Menudo", carcaza: "Carcaza", trocitos: "Trocitos" };
     const detalleTxt = (m) => {
       const nombrar = nombrarEspecie(m.detalle);
-      return (m.detalle || []).map((d) =>
+      // Solo lo de cámara: la salida de mostrador también lleva huevo y pollitos,
+      // que no son de este stock y no tienen cajones ni cajas.
+      return (m.detalle || []).filter(esLineaDeCamara).map((d) =>
         d.clase === "entero"
           ? textoCalibre(d, nombrar) + ": " + d.cajones + " caj"
           : conEspecie(d, TIPOS[d.tipo] || d.tipo, nombrar) + ": " + d.cajas + " cajas"
@@ -845,7 +851,7 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
                         const tipoBadge = {
                           ingreso: "success", salida: "danger", transferencia: "info", ajuste: "warning",
                         }[m.tipo] || "secondary";
-                        const detalleTxt = (m.detalle || []).map((d) =>
+                        const detalleTxt = (m.detalle || []).filter(esLineaDeCamara).map((d) =>
                           d.clase === "entero"
                             ? `Cal.${d.calibre}: ${formatNum(d.cajones)} caj`
                             : `${TIPOS_LABEL[d.tipo] || d.tipo}: ${formatNum(d.cajas)} cajas`

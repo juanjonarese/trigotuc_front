@@ -195,8 +195,17 @@ Desde el 2026-09-21 saca **dos stocks distintos** en una sola operación:
   `obtenerStockHuevosMostrador()`, su propio endpoint. Se carga en **maples** y
   la pantalla muestra a cuántos huevos equivale.
 
-Los dos se piden en paralelo, y el de huevos con `.catch(() => null)`: si falla,
-el mostrador tiene que poder vender pollo igual.
+- **Pollitos** (2026-10-10), por unidad, de un stock **propio** del mostrador
+  que viene de `obtenerStockPollitosMostrador()`. Ese stock lo arma
+  Reproductoras con envíos, desde **Órdenes de Carga (venta)** de pollitos
+  (`components/EnviosPollitosMostrador.jsx`).
+
+Los tres se piden en paralelo, y huevos y pollitos con `.catch(() => null)`: si
+fallan, el mostrador tiene que poder vender pollo igual.
+
+El historial de la cámara (`GranjaDashboardPage`) lista solo las líneas
+`entero` / `trozado` de cada movimiento (`esLineaDeCamara`): el huevo y los
+pollitos de una salida de mostrador no son stock de cámara.
 
 Solo aparecen los tipos **vendibles con stock**; el API incubable no se lista, y
 el backend lo rechaza aunque se lo mande a mano.

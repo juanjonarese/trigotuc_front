@@ -7,6 +7,7 @@ import { BADGE_ESPECIE, especieDe, etiquetaEspecie, mismoEntero, claveEntero, cl
 import {
   obtenerResumenStock,
   obtenerStockHuevosMostrador,
+  obtenerStockPollitosMostrador,
   registrarSalidaMostrador,
   obtenerSalidasMostrador,
   editarSalidaMostrador,
@@ -24,7 +25,12 @@ const detalleAEditable = (detalle = []) => {
   const enteros = [];
   const trozados = [];
   const huevos = [];
+  let pollitos = 0;
   for (const d of detalle) {
+    if (d.clase === "pollito") {
+      pollitos += Number(d.pollitos) || 0;
+      continue;
+    }
     if (d.clase === "huevo") {
       huevos.push({ tipo: d.tipo, maples: Number(d.maples) });
       continue;
@@ -37,7 +43,9 @@ const detalleAEditable = (detalle = []) => {
       trozados.push({ especie: especieDe(d), tipo: d.tipo, clase: d.claseTrozado || "A", cajas, kgCaja });
     }
   }
-  return { enteros, trozados, huevos };
+  // `tienePollitos`: la línea de pollitos aparece en el modal solo si la salida
+  // los llevaba (en 0 se quita, como el resto).
+  return { enteros, trozados, huevos, pollitos: String(pollitos || ""), tienePollitos: pollitos > 0 };
 };
 
 // Resumen legible de una salida para la tabla.
@@ -53,6 +61,8 @@ const resumenLineas = (detalle = [], etiquetasHuevo = {}) => {
       );
     else if (d.clase === "huevo")
       partes.push(`${etiquetasHuevo[d.tipo] || d.tipo}: ${fmt(d.maples)} maples`);
+    else if (d.clase === "pollito")
+      partes.push(`Pollitos: ${fmt(d.pollitos)}`);
   }
   return partes;
 };
@@ -62,9 +72,9 @@ const resumenLineas = (detalle = [], etiquetasHuevo = {}) => {
 // el pollo de la cámara Trigotuc (entero por calibre y trozado) y el huevo de
 // venta (consumo, doble yema y el API que se mandó a venta). Antes el stock del
 // entero solo se veía adentro del desplegable de calibres.
-// Una columna del panel (pollo entero, trozado o huevo) y sus renglones.
+// Una columna del panel (pollo entero, trozado, huevo o pollitos) y sus renglones.
 const Columna = ({ titulo, icono, total, unidad, vacio, children }) => (
-  <div className="col-12 col-md-4">
+  <div className="col-12 col-sm-6 col-lg-3">
     <div className="border rounded h-100 bg-white">
       <div className="d-flex justify-content-between align-items-baseline px-2 py-1 border-bottom bg-light">
         <span className="fw-semibold small">
@@ -89,7 +99,7 @@ const Fila = ({ izq, der }) => (
   </div>
 );
 
-const StockVenta = ({ enteros, trozados, huevos, huevosPorMaple }) => {
+const StockVenta = ({ enteros, trozados, huevos, huevosPorMaple, pollitos }) => {
   const variasEspEnteros = hayVariasEspecies(enteros);
   const variasEspTroz = hayVariasEspecies(trozados);
   const totalCajones = enteros.reduce((a, e) => a + (e.cajones || 0), 0);
@@ -129,6 +139,17 @@ const StockVenta = ({ enteros, trozados, huevos, huevosPorMaple }) => {
               Maple de {huevosPorMaple} huevos.
             </div>
           </Columna>
+          {/* Pollitos (2026-10-10): stock PROPIO del mostrador, lo que le envió
+              Reproductoras. Se ve por envío, el más viejo primero (sale primero). */}
+          <Columna titulo="Pollitos" icono="bi-feather" total={pollitos?.total || 0} unidad="pollitos" vacio="Sin pollitos: los envía Reproductoras">
+            {(pollitos?.envios || []).map((e) => (
+              <Fila
+                key={e._id}
+                izq={`${e.numero} · ${new Date(e.fecha).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" })}`}
+                der={`${fmt(e.disponibles)}`}
+              />
+            ))}
+          </Columna>
         </div>
       </div>
     </div>
@@ -148,6 +169,10 @@ const SalidaMostradorPage = () => {
   // maples, que es como se vende en el mostrador.
   const [stockHuevos, setStockHuevos] = useState(null);
   const [maplesPorTipo, setMaplesPorTipo] = useState({}); // { [tipo]: "3" }
+  // Pollitos (2026-10-10): el stock propio del mostrador, que le envía
+  // Reproductoras. Por unidad.
+  const [stockPollitos, setStockPollitos] = useState(null);
+  const [pollitosVenta, setPollitosVenta] = useState("");
 
   // ── Solapa "Salidas del día" ──
   const [fecha, setFecha] = useState(hoyISO());
@@ -184,6 +209,7 @@ const SalidaMostradorPage = () => {
             { header: "Hora",    valor: (f) => new Date(f.s.fecha).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }) },
             { header: "Producto", valor: (f) => {
                 if (f.d.clase === "huevo") return etiquetasHuevo[f.d.tipo] || f.d.tipo;
+                if (f.d.clase === "pollito") return "Pollitos";
                 const esp = etiquetaEspecie(especieDe(f.d));
                 if (f.d.clase === "entero") return esp + " entero Cal." + f.d.calibre;
                 return esp + " " + (TIPOS_LABEL[f.d.tipo] || f.d.tipo) + (f.d.claseTrozado ? " " + f.d.claseTrozado : "");
@@ -194,6 +220,7 @@ const SalidaMostradorPage = () => {
             { header: "Cajas",   valor: (f) => (f.d.clase === "trozado" ? f.d.cajas ?? 0 : "") },
             { header: "Maples",  valor: (f) => (f.d.clase === "huevo" ? f.d.maples ?? 0 : "") },
             { header: "Huevos",  valor: (f) => (f.d.clase === "huevo" ? f.d.huevos ?? 0 : "") },
+            { header: "Pollitos", valor: (f) => (f.d.clase === "pollito" ? f.d.pollitos ?? 0 : "") },
             { header: "Kg",      valor: (f) => (f.d.kg != null ? f.d.kg : "") },
             { header: "Registró", valor: (f) => f.s.registradoPor?.nombreUsuario },
           ],
@@ -205,15 +232,17 @@ const SalidaMostradorPage = () => {
 
   const cargar = async () => {
     try {
-      // Los dos stocks en paralelo: son independientes y la pantalla los muestra
-      // juntos. Si el de huevos falla no se cae la página — el mostrador tiene
-      // que poder vender pollo igual.
-      const [stock, huevos] = await Promise.all([
+      // Los tres stocks en paralelo: son independientes y la pantalla los muestra
+      // juntos. Si el de huevos o el de pollitos falla no se cae la página — el
+      // mostrador tiene que poder vender pollo igual.
+      const [stock, huevos, pollitos] = await Promise.all([
         obtenerResumenStock(),
         obtenerStockHuevosMostrador().catch(() => null),
+        obtenerStockPollitosMostrador().catch(() => null),
       ]);
       setResumen(stock);
       setStockHuevos(huevos);
+      setStockPollitos(pollitos);
     } catch {
       Swal.fire("Error", "No se pudo cargar el stock.", "error");
     } finally {
@@ -252,14 +281,27 @@ const SalidaMostradorPage = () => {
     .filter((h) => maples(h.tipo) > 0)
     .map((h) => ({ tipo: h.tipo, maples: maples(h.tipo) }));
   const totalMaples = huevosCargados.reduce((s, h) => s + h.maples, 0);
+  const pollitosDisp = stockPollitos?.total || 0;
+  const pollitosCargados = Number(pollitosVenta) || 0;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     const calibresValidos = lineas.filter((l) => Number(l.cajones) > 0);
     const trozadosValidos = trozadosLineas.filter((t) => Number(t.cajas) > 0);
 
-    if (calibresValidos.length === 0 && trozadosValidos.length === 0 && huevosCargados.length === 0) {
-      Swal.fire("Faltan datos", "Ingresá al menos un cajón, una caja o un maple vendido.", "warning");
+    if (calibresValidos.length === 0 && trozadosValidos.length === 0 && huevosCargados.length === 0 && pollitosCargados <= 0) {
+      Swal.fire("Faltan datos", "Ingresá al menos un cajón, una caja, un maple o un pollito vendido.", "warning");
+      return;
+    }
+
+    if (pollitosCargados > 0 && (!Number.isInteger(pollitosCargados) || pollitosCargados > pollitosDisp)) {
+      Swal.fire(
+        "Error",
+        Number.isInteger(pollitosCargados)
+          ? `Stock insuficiente de pollitos. Disponible: ${fmt(pollitosDisp)}.`
+          : "Los pollitos se cargan por unidad, sin decimales.",
+        "error"
+      );
       return;
     }
 
@@ -293,11 +335,13 @@ const SalidaMostradorPage = () => {
         calibres: calibresValidos.map((c) => ({ especie: especieDe(c), calibre: Number(c.calibre), cajones: Number(c.cajones) })),
         trozados: trozadosValidos.map((t) => ({ especie: especieDe(t), tipo: t.tipo, clase: t.clase, cajas: Number(t.cajas), kgCaja: Number(t.kgCaja) })),
         huevos: huevosCargados,
+        pollitos: pollitosCargados,
       });
       await Swal.fire({ icon: "success", title: "Salida registrada", text: "Se descontó el stock de Trigotuc.", timer: 1500, showConfirmButton: false });
       setLineas([]);
       setTrozadosLineas([]);
       setMaplesPorTipo({});
+      setPollitosVenta("");
       cargar();
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudo registrar la salida.", "error");
@@ -335,15 +379,16 @@ const SalidaMostradorPage = () => {
     const huevos = (editSalida.huevos || [])
       .filter((h) => Number(h.maples) > 0)
       .map((h) => ({ tipo: h.tipo, maples: Number(h.maples) }));
+    const pollitos = Number(editSalida.pollitos) || 0;
 
-    if (calibres.length === 0 && trozados.length === 0 && huevos.length === 0) {
+    if (calibres.length === 0 && trozados.length === 0 && huevos.length === 0 && pollitos <= 0) {
       Swal.fire("Sin cantidades", "Dejá al menos una línea con cantidad mayor a 0. Si querés eliminar toda la salida, usá Borrar.", "warning");
       return;
     }
 
     setEditSaving(true);
     try {
-      await editarSalidaMostrador(editSalida._id, { calibres, trozados, huevos });
+      await editarSalidaMostrador(editSalida._id, { calibres, trozados, huevos, pollitos });
       setEditSalida(null);
       await Swal.fire({ icon: "success", title: "Salida actualizada", text: "Se reajustó el stock de Trigotuc.", timer: 1400, showConfirmButton: false });
       cargar();
@@ -360,7 +405,7 @@ const SalidaMostradorPage = () => {
     const r = await Swal.fire({
       icon: "warning",
       title: "¿Borrar salida?",
-      html: `Se devolverá el stock a la cámara Trigotuc.<br><span class="text-muted small">${detalleTxt}</span>`,
+      html: `Se devolverá el stock (cámara, huevo y pollitos).<br><span class="text-muted small">${detalleTxt}</span>`,
       showCancelButton: true,
       confirmButtonText: "Sí, borrar",
       cancelButtonText: "Cancelar",
@@ -409,8 +454,8 @@ const SalidaMostradorPage = () => {
           <>
             <div className="alert alert-info py-2 small">
               <i className="bi bi-info-circle me-1"></i>
-              Cargá lo que se vendió por mostrador. Descuenta el stock de la cámara <strong>Trigotuc</strong> y el huevo de venta.
-              (Puente manual hasta que el POS descuente automático.)
+              Cargá lo que se vendió por mostrador. Descuenta el stock de la cámara <strong>Trigotuc</strong>,
+              el huevo de venta y los pollitos que envió Reproductoras.
             </div>
 
             {loading ? (
@@ -422,6 +467,7 @@ const SalidaMostradorPage = () => {
                 trozados={trozadosDisp}
                 huevos={huevosDisp}
                 huevosPorMaple={huevosPorMaple}
+                pollitos={stockPollitos}
               />
               <div className="card border-0 shadow-sm">
                 <div className="card-body">
@@ -551,12 +597,34 @@ const SalidaMostradorPage = () => {
                       </div>
                     )}
 
+                    {/* Pollitos (2026-10-10): stock propio del mostrador, por unidad.
+                        Sale del envío más viejo primero. */}
+                    {pollitosDisp > 0 && (
+                      <div className="mb-3">
+                        <label className="form-label fw-semibold">
+                          <i className="bi bi-feather me-1 text-warning"></i>
+                          Pollitos (por unidad)
+                        </label>
+                        <div className="d-flex align-items-center gap-2 flex-wrap">
+                          <input
+                            type="number" min="0" max={pollitosDisp} step="1"
+                            className={`form-control form-control-sm text-center ${pollitosCargados > pollitosDisp ? "is-invalid" : ""}`}
+                            style={{ maxWidth: "9rem" }}
+                            placeholder="0"
+                            value={pollitosVenta}
+                            onChange={(e) => setPollitosVenta(e.target.value)}
+                          />
+                          <span className="text-muted small">de {fmt(pollitosDisp)} disponibles</span>
+                        </div>
+                      </div>
+                    )}
+
                     <button
                       type="submit"
                       className="btn btn-primary"
                       disabled={
                         saving ||
-                        (stockEnteros.length === 0 && trozadosDisp.length === 0 && huevosDisp.length === 0)
+                        (stockEnteros.length === 0 && trozadosDisp.length === 0 && huevosDisp.length === 0 && pollitosDisp === 0)
                       }
                     >
                       {saving && <span className="spinner-border spinner-border-sm me-1"></span>}
@@ -732,6 +800,21 @@ const SalidaMostradorPage = () => {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                )}
+
+                {editSalida.tienePollitos && (
+                  <div className="mb-2">
+                    <label className="form-label fw-semibold mb-1">
+                      <i className="bi bi-feather me-1 text-warning"></i>Pollitos
+                    </label>
+                    <input
+                      type="number" min="0" step="1"
+                      className="form-control form-control-sm text-center"
+                      style={{ maxWidth: "9rem" }}
+                      value={editSalida.pollitos}
+                      onChange={(ev) => setEditSalida((prev) => ({ ...prev, pollitos: ev.target.value }))}
+                    />
                   </div>
                 )}
 

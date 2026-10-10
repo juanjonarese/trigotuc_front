@@ -172,6 +172,14 @@ export const obtenerStockHuevosMostrador = async () => {
   return handleResponse(response);
 };
 
+// Los pollitos que tiene el mostrador: lo que le envió Reproductoras − lo vendido.
+export const obtenerStockPollitosMostrador = async () => {
+  const response = await fetch(`${API_URL}/ventas-mostrador/stock-pollitos`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
 // Salida de mostrador: descuenta stock de Trigotuc.
 // data: { calibres, trozados, huevos } — `huevos` es [{ tipo, maples }].
 export const registrarSalidaMostrador = async (data) => {
@@ -1349,6 +1357,27 @@ export const entregarOrdenCargaPollitos = async (id, data = {}) => {
 
 export const anularOrdenCargaPollitos = async (id, motivo) => {
   const response = await fetch(`${API_URL}/ordenes-carga-pollitos/${id}/anular`, {
+    method: "PATCH", headers: getAuthHeaders(), body: JSON.stringify({ motivo }),
+  });
+  return handleResponse(response);
+};
+
+// Envíos de pollitos al mostrador (2026-10-10): salen de las tandas y entran
+// directo al stock del mostrador, que los vende por Salida de Mostrador.
+export const obtenerEnviosPollitosMostrador = async () => {
+  const response = await fetch(`${API_URL}/envios-pollitos-mostrador`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+export const crearEnvioPollitosMostrador = async (data) => {
+  const response = await fetch(`${API_URL}/envios-pollitos-mostrador`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const anularEnvioPollitosMostrador = async (id, motivo) => {
+  const response = await fetch(`${API_URL}/envios-pollitos-mostrador/${id}/anular`, {
     method: "PATCH", headers: getAuthHeaders(), body: JSON.stringify({ motivo }),
   });
   return handleResponse(response);

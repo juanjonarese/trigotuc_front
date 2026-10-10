@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
+import EnviosPollitosMostrador from "../components/EnviosPollitosMostrador";
 import {
   obtenerClientes,
   obtenerStockOrdenesPollitos,
@@ -303,6 +304,9 @@ const OrdenCargaPollitosPage = () => {
                 )}
               </div>
             </div>
+
+            {/* Envío al mostrador (2026-10-10): le arma su stock de pollitos. */}
+            <EnviosPollitosMostrador libre={stock?.libre ?? 0} onCambio={cargar} />
 
             {/* Alta / edición */}
             <div className="card shadow-sm mb-4">
