@@ -234,7 +234,7 @@ const OrdenCargaPollitosPage = () => {
                 <i className="bi bi-box-seam me-1"></i>Stock de pollitos
               </div>
               <div className="card-body">
-                <div className="row g-2 mb-3">
+                <div className="row g-2">
                   <div className="col-6 col-md-3">
                     <div className="border rounded p-2 text-center">
                       <div className="text-muted small">Nacidos en stock</div>
@@ -268,38 +268,11 @@ const OrdenCargaPollitosPage = () => {
                   </div>
                 </div>
 
-                {(stock?.total ?? 0) === 0 ? (
-                  <div className="alert alert-warning mb-0 small">
+                {(stock?.total ?? 0) === 0 && (
+                  <div className="alert alert-warning mb-0 mt-3 small">
                     <i className="bi bi-exclamation-triangle me-1"></i>
                     No hay pollitos en stock. Se generan al registrar el nacimiento de una tanda en{" "}
                     <strong>Incubadora</strong>.
-                  </div>
-                ) : (
-                  <div className="table-responsive">
-                    <table className="table table-sm table-hover align-middle mb-0">
-                      <thead className="table-light">
-                        <tr>
-                          <th>Tanda</th>
-                          <th>Plantel</th>
-                          <th>Nacimiento</th>
-                          <th className="text-end">Nacidos</th>
-                          <th className="text-end">Disponibles</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {stock.partidas.map((p) => (
-                          <tr key={p.tanda}>
-                            <td className="fw-semibold">#{p.numeroTanda}</td>
-                            <td>#{p.numeroLote ?? "?"}</td>
-                            <td>{formatearFechaLocal(p.fechaNacimiento)}</td>
-                            <td className="text-end">{formatearNumero(p.nacidos)}</td>
-                            <td className="text-end fw-semibold text-success">
-                              {formatearNumero(p.disponibles)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
                   </div>
                 )}
               </div>

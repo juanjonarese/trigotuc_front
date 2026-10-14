@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Layout from "../components/Layout";
 import BotonExcel from "../components/BotonExcel";
 import BuscadorCliente from "../components/BuscadorCliente";
+import PlanPorDestino from "../components/PlanPorDestino";
 import {
   obtenerPlanPollitos,
   moverCargaIncubadora,
@@ -21,6 +22,14 @@ import {
   textoDias,
 } from "../utils/reproductoresUtils";
 import { exportarTablaExcel } from "../utils/exportarExcel";
+import {
+  nombreCliente,
+  clave,
+  partesClave,
+  textoClave,
+  textoLotes,
+  nombreCorto,
+} from "../utils/planPollitos";
 import Swal from "sweetalert2";
 
 // Plan de Pollitos — la planilla del cliente hecha almanaque.
@@ -63,19 +72,7 @@ const MESES = [
 // El almanaque argentino arranca el lunes.
 const DIAS_SEMANA = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
-const nombreCliente = (c) => c?.razonSocial || c?.nombre || "Cliente";
-
 const FORM_VACIO = { destino: "cliente", cliente: "", granja: "cañete", galpon: "", cantidad: "" };
-
-// ── Claves de día ───────────────────────────────────────────────────────────
-// Se arman y se leen como texto. Nunca pasa por Date, así no hay zona horaria.
-const clave = (anio, mes, dia) =>
-  `${anio}-${String(mes + 1).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
-
-const partesClave = (k) => {
-  const [anio, mes, dia] = k.split("-").map(Number);
-  return { anio, mes: mes - 1, dia };
-};
 
 // Lunes = 0 … domingo = 6, que es como se dibuja la grilla.
 const columnaDe = (anio, mes, dia) => (new Date(anio, mes, dia).getDay() + 6) % 7;
@@ -89,20 +86,6 @@ const correrClave = (k, n) => {
   return clave(d.getFullYear(), d.getMonth(), d.getDate());
 };
 
-const NOMBRE_DIA = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
-
-// "lun 05/10", a partir de la clave.
-const textoClave = (k) => {
-  if (!k) return "-";
-  const { anio, mes, dia } = partesClave(k);
-  const nombre = NOMBRE_DIA[new Date(anio, mes, dia).getDay()];
-  return `${nombre} ${String(dia).padStart(2, "0")}/${String(mes + 1).padStart(2, "0")}`;
-};
-
-// Los planteles de una carga real: "#29 · #30".
-const textoLotes = (f) =>
-  f.lotes?.length ? f.lotes.map((l) => `#${l.numeroLote ?? "?"}`).join(" · ") : "";
-
 // ── El color de una carga ───────────────────────────────────────────────────
 // Es el semáforo de la pantalla: sobrevendida manda sobre todo lo demás.
 const tonoCarga = (f) => {
@@ -115,12 +98,6 @@ const tonoCarga = (f) => {
   if (f.libre === 0) return { clase: "border-primary bg-primary-subtle", texto: "text-primary-emphasis" };
   return { clase: "border-success bg-success-subtle", texto: "text-success-emphasis" };
 };
-
-// A quién va una línea, en lo más corto que se entienda dentro de una celda.
-const nombreCorto = (l) =>
-  l.destino === "granja"
-    ? `${labelGranja(l.granja)}${l.galpon ? ` ${prefijoGranja(l.granja)}${l.galpon}` : ""}`
-    : nombreCliente(l.cliente);
 
 // Cuántos destinos se listan en la celda antes de cortar con "+N más". Con más
 // que esto el día se estira y el almanaque deja de leerse de un vistazo; el
@@ -785,6 +762,7 @@ const CargaModal = ({ fila, destinos, clientes, onCerrar, onEmitir, onBorrar, on
 // derecha. Una fila por carga, más los feriados del mes, para ver de corrido
 // qué nace, a quién va y qué queda libre. El clic abre el mismo modal.
 const CLAVE_VISTA = "planPollitos.vista";
+const CLAVE_SOLAPA = "planPollitos.solapa";
 
 const ListaMes = ({ filas, feriados, prefijoMes, claveHoy, onAbrir }) => {
   // Los feriados del mes que no tienen carga también van, como fila suelta:
@@ -803,19 +781,16 @@ const ListaMes = ({ filas, feriados, prefijoMes, claveHoy, onAbrir }) => {
   return (
     <div className="card-body p-0">
       <div className="table-responsive">
-        <table className="table table-sm table-hover align-middle mb-0" style={{ minWidth: 900 }}>
+        <table className="table table-sm table-hover align-middle mb-0" style={{ minWidth: 700 }}>
           <thead className="table-light small">
             <tr>
-              <th>Nace</th>
-              <th>Entra</th>
-              <th>Gordo</th>
-              <th>Carga</th>
-              <th className="text-end">Huevos</th>
-              <th className="text-end">A nacer</th>
+              <th className="text-center">Nace</th>
+              <th className="text-center">Carga</th>
+              <th className="text-center">A nacer</th>
               <th className="text-center" style={{ minWidth: 240 }}>A quién va</th>
-              <th className="text-end">Clientes</th>
-              <th className="text-end">Engorde</th>
-              <th className="text-end">Libre</th>
+              <th className="text-center">Clientes</th>
+              <th className="text-center">Engorde</th>
+              <th className="text-center">Libre</th>
             </tr>
           </thead>
           <tbody>
@@ -823,9 +798,9 @@ const ListaMes = ({ filas, feriados, prefijoMes, claveHoy, onAbrir }) => {
               if (f.feriado)
                 return (
                   <tr key={f.clave} className="table-danger">
-                    <td className="fw-semibold text-nowrap">{textoClave(f.claveNacimiento)}</td>
-                    <td colSpan={9} className="small text-danger-emphasis">
-                      <i className="bi bi-flag-fill me-1"></i>Feriado: {f.nombre}
+                    <td className="text-center fw-semibold text-nowrap">{textoClave(f.claveNacimiento)}</td>
+                    <td colSpan={6} className="small text-danger-emphasis" title={f.nombre}>
+                      <i className="bi bi-flag-fill me-1"></i>Feriado
                     </td>
                   </tr>
                 );
@@ -841,7 +816,7 @@ const ListaMes = ({ filas, feriados, prefijoMes, claveHoy, onAbrir }) => {
                   style={{ cursor: "pointer" }}
                   onClick={() => onAbrir(f)}
                 >
-                  <td className="fw-semibold text-nowrap">
+                  <td className="text-center fw-semibold text-nowrap">
                     {textoClave(f.claveNacimiento)}
                     {esHoy && <span className="badge bg-warning text-dark ms-1">hoy</span>}
                     {feriado && (
@@ -850,19 +825,7 @@ const ListaMes = ({ filas, feriados, prefijoMes, claveHoy, onAbrir }) => {
                       </div>
                     )}
                   </td>
-                  <td className="text-nowrap small">
-                    {sinCarga ? "—" : textoClave(f.claveIngreso)}
-                    {f.carga?.motivo && (
-                      <i
-                        className="bi bi-arrow-left-right ms-1 text-muted"
-                        title={f.carga.motivo === "feriado" ? "Corrida por feriado" : "Movida a mano"}
-                      ></i>
-                    )}
-                  </td>
-                  <td className="text-nowrap small text-muted">
-                    {noAlcanza || sinCarga ? "—" : textoClave(f.claveGordo)}
-                  </td>
-                  <td className="small text-nowrap">
+                  <td className="text-center small text-nowrap">
                     {sinCarga ? (
                       <span className="text-danger fw-semibold">
                         <i className="bi bi-exclamation-octagon me-1"></i>sin carga
@@ -882,26 +845,15 @@ const ListaMes = ({ filas, feriados, prefijoMes, claveHoy, onAbrir }) => {
                       </span>
                     )}
                   </td>
-                  <td className="text-end small">
-                    {noAlcanza ? (
-                      <span className="text-danger" title="Huevos que había para cargar">
-                        hay {formatearNumero(f.carga?.huevosDisponibles || 0)}
-                      </span>
-                    ) : sinCarga ? (
-                      "—"
-                    ) : (
-                      formatearNumero(f.huevosIngresados)
-                    )}
-                  </td>
-                  <td className="text-end fw-bold text-nowrap">
+                  <td className="text-center fw-bold text-nowrap">
                     {formatearNumero(f.aNacer)}
                     {f.estimado && f.rendimiento ? (
                       <div className="small text-muted fw-normal">{Math.round(f.rendimiento)}% est.</div>
                     ) : null}
                   </td>
-                  <td className="small">
+                  <td className="text-center small">
                     {f.aMostrador > 0 && (
-                      <div className="d-flex justify-content-between gap-2">
+                      <div className="d-flex justify-content-center gap-2">
                         <span className="text-truncate">
                           <i className="bi bi-shop text-secondary me-1"></i>Mostrador
                         </span>
@@ -912,7 +864,7 @@ const ListaMes = ({ filas, feriados, prefijoMes, claveHoy, onAbrir }) => {
                       f.aMostrador > 0 ? null : <div className="text-center text-muted fst-italic">sin asignar</div>
                     ) : (
                       f.lineas.map((l) => (
-                        <div key={l._id} className="d-flex justify-content-between gap-2">
+                        <div key={l._id} className="d-flex justify-content-center gap-2">
                           <span className="text-truncate" title={nombreCorto(l)}>
                             <i
                               className={`bi ${
@@ -930,10 +882,10 @@ const ListaMes = ({ filas, feriados, prefijoMes, claveHoy, onAbrir }) => {
                       ))
                     )}
                   </td>
-                  <td className="text-end text-primary">{formatearNumero(f.aClientes)}</td>
-                  <td className="text-end text-success">{formatearNumero(f.aGranja)}</td>
+                  <td className="text-center text-primary">{formatearNumero(f.aClientes)}</td>
+                  <td className="text-center text-success">{formatearNumero(f.aGranja)}</td>
                   <td
-                    className={`text-end fw-bold ${
+                    className={`text-center fw-bold ${
                       f.libre < 0 ? "text-danger" : f.libre === 0 ? "text-primary" : "text-success"
                     }`}
                   >
@@ -972,10 +924,29 @@ const PlanPollitosPage = () => {
       // Sin almacenamiento la vista vuelve al almanaque al recargar; no importa.
     }
   };
+  // Calendario o Por destino. También se recuerda en el navegador.
+  const [solapa, setSolapa] = useState(() => {
+    try {
+      return localStorage.getItem(CLAVE_SOLAPA) === "destino" ? "destino" : "calendario";
+    } catch {
+      return "calendario";
+    }
+  });
+  const cambiarSolapa = (v) => {
+    setSolapa(v);
+    try {
+      localStorage.setItem(CLAVE_SOLAPA, v);
+    } catch {
+      // Sin almacenamiento vuelve al calendario al recargar; no importa.
+    }
+  };
   const [loading, setLoading] = useState(true);
 
-  const cargar = useCallback(async () => {
-    setLoading(true);
+  // `silencioso`: recarga después de una acción sin pasar por el spinner, que
+  // desmontaría la solapa abierta (y el modal o los filtros que tenga).
+  const cargar = useCallback(async (opciones) => {
+    const silencioso = opciones?.silencioso === true;
+    if (!silencioso) setLoading(true);
     try {
       const nuevo = await obtenerPlanPollitos({ dias });
       setPlan(nuevo);
@@ -983,7 +954,7 @@ const PlanPollitosPage = () => {
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudo cargar el plan.", "error");
     } finally {
-      setLoading(false);
+      if (!silencioso) setLoading(false);
     }
   }, [dias]);
 
@@ -1129,7 +1100,7 @@ const PlanPollitosPage = () => {
         cantidad: linea.cantidad,
         reserva: linea._id,
       });
-      await cargar();
+      await cargar({ silencioso: true });
       Swal.fire({
         icon: "success",
         title: `Orden ${orden.numero}`,
@@ -1155,7 +1126,7 @@ const PlanPollitosPage = () => {
     if (!isConfirmed) return;
     try {
       await eliminarReservaPollitos(linea._id);
-      await cargar();
+      await cargar({ silencioso: true });
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudo liberar.", "error");
     }
@@ -1166,7 +1137,7 @@ const PlanPollitosPage = () => {
   const pasarLinea = async (linea, destino) => {
     try {
       await pasarReservaPollitos(linea._id, destino);
-      await cargar();
+      await cargar({ silencioso: true });
       Swal.fire({ icon: "success", title: "Reserva pasada", timer: 1800, showConfirmButton: false });
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudo pasar la reserva.", "error");
@@ -1209,8 +1180,6 @@ const PlanPollitosPage = () => {
       nombreArchivo: "Reproductoras_plan_pollitos",
       columnas: [
         { header: "Nace", valor: ({ f }) => textoClave(f.claveNacimiento) },
-        { header: "Gordo", valor: ({ f }) => textoClave(f.claveGordo) },
-        { header: "Ingreso incubadora", valor: ({ f }) => textoClave(f.claveIngreso) },
         {
           header: "Planteles",
           valor: ({ f }) =>
@@ -1222,7 +1191,6 @@ const PlanPollitosPage = () => {
               ? "no alcanza el huevo"
               : "proyectada",
         },
-        { header: "Huevos", valor: ({ f }) => f.huevosIngresados },
         { header: "A nacer", valor: ({ f }) => f.aNacer },
         { header: "Estimado", valor: ({ f }) => (f.estimado ? "Sí" : "No") },
         { header: "A clientes", valor: ({ f }) => f.aClientes },
@@ -1262,7 +1230,7 @@ const PlanPollitosPage = () => {
             </h1>
             <p className="text-muted mb-0 small">
               Cuándo nace cada carga, cuánto está vendido, cuánto va a engorde y cuánto queda libre.
-              Clic en una carga para repartirla.
+              Repartí desde el calendario (clic en una carga) o por cliente y granja en "Por destino".
             </p>
           </div>
           <div className="d-flex gap-2 align-items-center">
@@ -1278,7 +1246,7 @@ const PlanPollitosPage = () => {
               ))}
             </select>
             <BotonExcel onClick={exportarExcel} disabled={filas.length === 0} titulo="Descargar el plan" />
-            <button className="btn btn-outline-secondary btn-sm" onClick={cargar} disabled={loading}>
+            <button className="btn btn-outline-secondary btn-sm" onClick={() => cargar()} disabled={loading}>
               <i className="bi bi-arrow-clockwise me-1"></i>Actualizar
             </button>
           </div>
@@ -1418,8 +1386,40 @@ const PlanPollitosPage = () => {
               </div>
             )}
 
-            {/* ── El almanaque ── */}
-            <div className="card shadow-sm">
+            {/* Dos entradas al mismo reparto (2026-10-14): por el DÍA (el
+                almanaque, se reparte una carga) o por el DESTINO (se elige el
+                cliente o la granja y se le suma de las cargas que vienen). */}
+            <ul className="nav nav-tabs mb-0">
+              {[
+                ["calendario", "bi-calendar3", "Calendario"],
+                ["destino", "bi-people", "Por destino"],
+              ].map(([v, icono, texto]) => (
+                <li className="nav-item" key={v}>
+                  <button
+                    type="button"
+                    className={`nav-link ${solapa === v ? "active fw-semibold" : ""}`}
+                    onClick={() => cambiarSolapa(v)}
+                  >
+                    <i className={`bi ${icono} me-1`}></i>
+                    {texto}
+                  </button>
+                </li>
+              ))}
+            </ul>
+
+            {solapa === "destino" ? (
+              <PlanPorDestino
+                filas={filas}
+                clientes={clientes}
+                claveHoy={claveHoy}
+                onAbrirCarga={(f) => setAbierta(f.clave)}
+                onEmitir={emitirOrden}
+                onBorrar={borrarLinea}
+                onRecargar={() => cargar({ silencioso: true })}
+              />
+            ) : (
+            /* ── El almanaque ── */
+            <div className="card shadow-sm border-top-0 rounded-top-0">
               <div className="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2 py-2">
                 <div className="d-flex align-items-center gap-2">
                   <button
@@ -1584,7 +1584,7 @@ const PlanPollitosPage = () => {
                                     title={`Feriado: ${feriado}`}
                                   >
                                     <i className="bi bi-flag-fill me-1"></i>
-                                    {feriado}
+                                    Feriado
                                   </div>
                                 )}
                                 {cargas.map((f) => (
@@ -1601,52 +1601,8 @@ const PlanPollitosPage = () => {
               </div>
               )}
 
-              <div className="card-footer bg-white small text-muted d-flex flex-wrap gap-3">
-                <span>
-                  <span className="badge border border-success bg-success-subtle me-1">&nbsp;</span>
-                  queda libre
-                </span>
-                <span>
-                  <span className="badge border border-primary bg-primary-subtle me-1">&nbsp;</span>
-                  todo vendido
-                </span>
-                <span>
-                  <span className="badge border border-danger bg-danger-subtle me-1">&nbsp;</span>
-                  sobrevendida
-                </span>
-                <span>
-                  <span className="badge border border-secondary-subtle bg-body-secondary me-1">
-                    &nbsp;
-                  </span>
-                  proyectada (todavía no se cargó la incubadora)
-                </span>
-                <span>
-                  <span
-                    className="badge border border-danger bg-body-tertiary me-1"
-                    style={{ borderStyle: "dashed" }}
-                  >
-                    &nbsp;
-                  </span>
-                  no nacen (no alcanza el huevo)
-                </span>
-                <span>
-                  <span className="badge bg-danger-subtle me-1">&nbsp;</span>
-                  feriado
-                </span>
-                <span>
-                  <span className="badge border border-danger border-2 bg-danger-subtle me-1">&nbsp;</span>
-                  sin carga (compromisos a pasar)
-                </span>
-                <span className="ms-auto">
-                  <span className="badge bg-dark-subtle text-dark-emphasis me-1">0.000</span>
-                  nacen ese día ·{" "}
-                  <i className="bi bi-person text-primary"></i> cliente ·{" "}
-                  <i className="bi bi-truck text-success"></i> con orden emitida ·{" "}
-                  <i className="bi bi-hourglass-split text-secondary"></i> a futuro ·{" "}
-                  <i className="bi bi-house-door text-success"></i> engorde propio
-                </span>
-              </div>
             </div>
+            )}
           </>
         )}
       </div>
@@ -1660,7 +1616,7 @@ const PlanPollitosPage = () => {
           onCerrar={() => setAbierta(null)}
           onEmitir={emitirOrden}
           onBorrar={borrarLinea}
-          onAgregada={cargar}
+          onAgregada={() => cargar({ silencioso: true })}
           onMover={moverCarga}
         />
       )}
