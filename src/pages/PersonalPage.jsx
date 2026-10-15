@@ -4,6 +4,7 @@ import { obtenerUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario, esta
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
 import Swal from "sweetalert2";
+import { escapeHtml } from "../utils/escapeHtml";
 import "../css/Tablas.css";
 
 const PersonalPage = () => {
@@ -169,7 +170,7 @@ const PersonalPage = () => {
   const handleDelete = async (id, nombreUsuario) => {
     const result = await Swal.fire({
       title: "¿Estás seguro?",
-      html: `Vas a eliminar al usuario:<br/><strong>${nombreUsuario}</strong>`,
+      html: `Vas a eliminar al usuario:<br/><strong>${escapeHtml(nombreUsuario)}</strong>`,
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#d33",

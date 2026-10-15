@@ -3,6 +3,7 @@ import { obtenerCamiones, crearCamion, actualizarCamion, eliminarCamion, obtener
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
 import Swal from "sweetalert2";
+import { escapeHtml } from "../utils/escapeHtml";
 import "../css/Tablas.css";
 
 const CAMION_INICIAL = { marca: "", patente: "" };
@@ -100,7 +101,7 @@ const CamionesPage = () => {
   const handleDeleteCamion = async (id, nombre) => {
     const result = await Swal.fire({
       title: "¿Estás seguro?",
-      html: `Vas a eliminar el camión:<br/><strong>${nombre}</strong>`,
+      html: `Vas a eliminar el camión:<br/><strong>${escapeHtml(nombre)}</strong>`,
       icon: "warning", showCancelButton: true, confirmButtonColor: "#d33", cancelButtonColor: "#6c757d",
       confirmButtonText: "Sí, eliminar", cancelButtonText: "Cancelar",
     });
@@ -147,7 +148,7 @@ const CamionesPage = () => {
   const handleEliminarChofer = async (chofer) => {
     const confirm = await Swal.fire({
       title: "¿Eliminar chofer?",
-      html: `Se eliminará a <strong>${chofer.nombreUsuario}</strong>. Esta acción no se puede deshacer.`,
+      html: `Se eliminará a <strong>${escapeHtml(chofer.nombreUsuario)}</strong>. Esta acción no se puede deshacer.`,
       icon: "warning", showCancelButton: true, confirmButtonColor: "#dc3545",
       confirmButtonText: "Sí, eliminar", cancelButtonText: "Cancelar",
     });

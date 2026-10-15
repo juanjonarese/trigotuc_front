@@ -14,6 +14,7 @@ import {
 import { formatearFechaLocal, ajustarFechaParaGuardar, obtenerFechaHoy } from "../utils/dateUtils";
 import { formatearNumero } from "../utils/reproductoresUtils";
 import Swal from "sweetalert2";
+import { escapeHtml } from "../utils/escapeHtml";
 
 const ITEMS_POR_PAGINA = 15;
 
@@ -138,7 +139,7 @@ const OrdenCargaPollitosPage = () => {
     const { isConfirmed, value } = await Swal.fire({
       icon: "question",
       title: `Entregar la orden ${orden.numero}`,
-      html: `Pedidos: <strong>${formatearNumero(orden.cantidad)}</strong> pollitos para ${nombreCliente(orden.cliente)}.<br><span class="text-muted small">Se descuentan del stock FIFO por fecha de nacimiento.</span>`,
+      html: `Pedidos: <strong>${formatearNumero(orden.cantidad)}</strong> pollitos para ${escapeHtml(nombreCliente(orden.cliente))}.<br><span class="text-muted small">Se descuentan del stock FIFO por fecha de nacimiento.</span>`,
       input: "number",
       inputLabel: "Pollitos entregados",
       inputValue: orden.cantidad,

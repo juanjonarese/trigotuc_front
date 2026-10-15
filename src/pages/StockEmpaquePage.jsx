@@ -15,6 +15,7 @@ import {
 } from "../services/api";
 import { obtenerFechaHoy, ajustarFechaParaGuardar } from "../utils/dateUtils";
 import Swal from "sweetalert2";
+import { escapeHtml } from "../utils/escapeHtml";
 
 const rolUsuario  = () => localStorage.getItem("rolUsuario");
 const esAdmin     = () => (rolUsuario() === "superadmin" || rolUsuario() === "admin");
@@ -752,7 +753,7 @@ const ProveedoresModal = ({ onClose }) => {
 
   const handleEliminar = async (p) => {
     const ok = await Swal.fire({
-      title: `¿Eliminar "${p.nombre}"?`,
+      title: `¿Eliminar "${escapeHtml(p.nombre)}"?`,
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#dc3545",
@@ -1352,7 +1353,7 @@ const StockEmpaquePage = () => {
 
   const handleEliminar = async (articulo) => {
     const ok = await Swal.fire({
-      title: `¿Eliminar "${articulo.nombre}"?`,
+      title: `¿Eliminar "${escapeHtml(articulo.nombre)}"?`,
       text: "El artículo quedará inactivo y no aparecerá en el listado.",
       icon: "warning",
       showCancelButton: true,

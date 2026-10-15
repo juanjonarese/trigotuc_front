@@ -14,6 +14,7 @@ import {
   eliminarSalidaMostrador,
 } from "../services/api";
 import Swal from "sweetalert2";
+import { escapeHtml } from "../utils/escapeHtml";
 import { exportarLibroExcel } from "../utils/exportarExcel";
 
 const TIPOS_LABEL = { filet: "Filet", pata: "Pata muslo", alita: "Alita", menudo: "Menudo", carcaza: "Carcaza", trocitos: "Trocitos" };
@@ -405,7 +406,7 @@ const SalidaMostradorPage = () => {
     const r = await Swal.fire({
       icon: "warning",
       title: "¿Borrar salida?",
-      html: `Se devolverá el stock (cámara, huevo y pollitos).<br><span class="text-muted small">${detalleTxt}</span>`,
+      html: `Se devolverá el stock (cámara, huevo y pollitos).<br><span class="text-muted small">${escapeHtml(detalleTxt)}</span>`,
       showCancelButton: true,
       confirmButtonText: "Sí, borrar",
       cancelButtonText: "Cancelar",

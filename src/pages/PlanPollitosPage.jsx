@@ -31,6 +31,7 @@ import {
   nombreCorto,
 } from "../utils/planPollitos";
 import Swal from "sweetalert2";
+import { escapeHtml } from "../utils/escapeHtml";
 
 // Plan de Pollitos — la planilla del cliente hecha almanaque.
 //
@@ -1085,7 +1086,7 @@ const PlanPollitosPage = () => {
       title: "¿Emitir la orden de carga?",
       html:
         `<strong>${formatearNumero(linea.cantidad)}</strong> pollitos para ` +
-        `${nombreCliente(linea.cliente)}.<br>` +
+        `${escapeHtml(nombreCliente(linea.cliente))}.<br>` +
         `<span class="text-muted small">Queda pendiente con su código de retiro. ` +
         `El stock se descuenta recién al entregarla.</span>`,
       showCancelButton: true,

@@ -115,7 +115,7 @@ const GranjaRemitosPage = () => {
       await cargar();
       const { isConfirmed } = await Swal.fire({
         icon: "success",
-        title: `Remito ${remito.numeroRemito} creado`,
+        title: `Remito ${escapeHtml(remito.numeroRemito)} creado`,
         text: "¿Querés imprimir el remito?",
         confirmButtonText: "Imprimir",
         cancelButtonText: "Aceptar",

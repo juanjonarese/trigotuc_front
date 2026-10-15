@@ -281,7 +281,7 @@ const RemitoModal = ({ stockGranja, constantes, remito, onClose, onGuardado }) =
       } else {
         Swal.fire({
           icon: "success",
-          title: `Remito ${guardado.numeroRemito} actualizado`,
+          title: `Remito ${escapeHtml(guardado.numeroRemito)} actualizado`,
           text: `${formatearNumero(guardado.huevosTotales)} huevos en viaje a Trigotuc`,
           timer: 2600,
           showConfirmButton: false,
@@ -720,7 +720,7 @@ const RemitosHuevosPage = () => {
   const handleAnular = async (remito) => {
     const { isConfirmed, value } = await Swal.fire({
       icon: "warning",
-      title: `¿Anular el remito ${remito.numeroRemito}?`,
+      title: `¿Anular el remito ${escapeHtml(remito.numeroRemito)}?`,
       text: "Los huevos vuelven al stock de la granja. Solo se puede si ninguno se incubó ni se vendió.",
       input: "text",
       inputPlaceholder: "Motivo (opcional)",

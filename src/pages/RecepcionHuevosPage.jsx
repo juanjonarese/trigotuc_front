@@ -137,7 +137,7 @@ const TarjetaRemito = ({ remito, constantes, onRecibido }) => {
     await onRecibido();
     Swal.fire({
       icon: "success",
-      title: `Remito ${remito.numeroRemito} recibido`,
+      title: `Remito ${escapeHtml(remito.numeroRemito)} recibido`,
       text: `${formatearNumero(remito.huevosTotales)} huevos disponibles en Trigotuc`,
       timer: 2600,
       showConfirmButton: false,

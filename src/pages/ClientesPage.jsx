@@ -4,6 +4,7 @@ import { obtenerClientes, crearCliente, actualizarCliente, eliminarCliente } fro
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
 import Swal from "sweetalert2";
+import { escapeHtml } from "../utils/escapeHtml";
 import "../css/Tablas.css";
 
 const ClientesPage = () => {
@@ -120,7 +121,7 @@ const ClientesPage = () => {
   const handleDelete = async (id, razonSocial) => {
     const result = await Swal.fire({
       title: "¿Estás seguro?",
-      html: `Vas a eliminar al cliente:<br/><strong>${razonSocial}</strong>`,
+      html: `Vas a eliminar al cliente:<br/><strong>${escapeHtml(razonSocial)}</strong>`,
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#d33",
