@@ -23,6 +23,11 @@ There are no automated tests.
 
 | Route | Page | Área |
 |-------|------|------|
+| `/inicio` | `InicioPage` — tarjetas para elegir empresa del grupo (con una sola, redirige) | Grupo |
+| `/forratuc` | `ForratucInicioPage` (en desarrollo, solo superadmin) | Forratuc |
+| `/forratuc/mostrador` | `ForratucPresupuestosPage` (2026-10-21: presupuesto con fecha, cliente, precios y condición de pago — contado con `components/PagosForratuc.jsx` o cuenta corriente; imprime con `utils/imprimirForratuc.js`) | Forratuc |
+| `/forratuc/cuentas-corrientes` | `ForratucCuentasCorrientesPage` (saldos por cliente, movimientos con saldo, registrar pago → recibo) | Forratuc |
+| `/forratuc/salidas` | `SalidaMostradorPage` (la salida suelta; las de un presupuesto salen con su número y sin editar/borrar) | Forratuc |
 | `/dashboard` | `DashboarPage` (typo intencional) | General |
 | `/clientes` | `ClientesPage` | Altas |
 | `/personal` | `PersonalPage` (gestión de usuarios) | Altas |
@@ -102,6 +107,15 @@ superadmin". Si ves un `esSuperAdmin` en el front, o es de antes o hay que mirar
 ### Sidebar (`src/components/Layout.jsx`)
 
 Secciones colapsables, fondo oscuro, auto-expande según la ruta activa. Visibilidad por rol.
+
+**Multiempresa (2026-10-16)**: el menú es el de la **empresa actual**
+(`utils/empresas.js`: `empresaActual(path)` — `/forratuc…` es Forratuc, las
+rutas del grupo `/inicio`, `/clientes`, `/personal`, `/camiones` mantienen la
+última empresa, el resto es avícola). Altas y Actividad salen en todas. Las
+empresas del usuario vienen del login (`localStorage.empresas`); con más de
+una aparece "Cambiar empresa" → `/inicio`. Una sesión sin `empresas` (abierta
+antes del cambio) se comporta como siempre. Salida Mostrador se ve en
+Forratuc para quien tiene Forratuc, y en la avícola para el resto.
 
 > En la lista de abajo, donde dice `superadmin` leé **`superadmin` + `admin`**
 > (`mandaTodo`). Las dos únicas excepciones están marcadas: **Usuarios** y

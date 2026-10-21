@@ -61,6 +61,14 @@ export const eliminarUsuario = async (id) => {
   return handleResponse(response);
 };
 
+// ============= EMPRESAS DEL GRUPO =============
+
+// Catálogo completo, para tildar empresas en Usuarios y Clientes (solo superadmin).
+export const obtenerEmpresas = async () => {
+  const response = await fetch(`${API_URL}/empresas`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
 // ============= CLIENTES =============
 
 export const obtenerClientes = async () => {
@@ -200,6 +208,63 @@ export const obtenerSalidasMostrador = async (fecha) => {
 export const editarSalidaMostrador = async (id, data) => {
   const response = await fetch(`${API_URL}/ventas-mostrador/${id}`, {
     method: "PATCH", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+// ============= PRESUPUESTOS FORRATUC (2026-10-21) =============
+// El mostrador de Forratuc emite presupuestos (no factura): fecha, cliente,
+// renglones con precio. Descuenta el stock al emitir; anular lo devuelve.
+
+export const obtenerConstantesPresupuesto = async () => {
+  const response = await fetch(`${API_URL}/presupuestos-forratuc/constantes`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+// filtros: { desde, hasta, estado } — fechas "YYYY-MM-DD"
+export const obtenerPresupuestosForratuc = async (filtros = {}) => {
+  const qs = new URLSearchParams(Object.entries(filtros).filter(([, v]) => v)).toString();
+  const response = await fetch(`${API_URL}/presupuestos-forratuc${qs ? `?${qs}` : ""}`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+export const crearPresupuestoForratuc = async (data) => {
+  const response = await fetch(`${API_URL}/presupuestos-forratuc`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const anularPresupuestoForratuc = async (id, motivo) => {
+  const response = await fetch(`${API_URL}/presupuestos-forratuc/${id}/anular`, {
+    method: "PATCH", headers: getAuthHeaders(), body: JSON.stringify({ motivo }),
+  });
+  return handleResponse(response);
+};
+
+// ── Cuenta corriente de Forratuc (2026-10-21): presupuestos al debe, cobros al haber.
+
+export const obtenerCuentasCorrientesForratuc = async () => {
+  const response = await fetch(`${API_URL}/cuentas-corrientes-forratuc`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+export const obtenerCuentaClienteForratuc = async (clienteId) => {
+  const response = await fetch(`${API_URL}/cuentas-corrientes-forratuc/${clienteId}`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+// data: { cliente, fecha, pagos: [{ medio, importe, ... }], observaciones }
+export const registrarCobroForratuc = async (data) => {
+  const response = await fetch(`${API_URL}/cuentas-corrientes-forratuc/cobros`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const anularCobroForratuc = async (id, motivo) => {
+  const response = await fetch(`${API_URL}/cuentas-corrientes-forratuc/cobros/${id}/anular`, {
+    method: "PATCH", headers: getAuthHeaders(), body: JSON.stringify({ motivo }),
   });
   return handleResponse(response);
 };

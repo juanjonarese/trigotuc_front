@@ -694,12 +694,22 @@ const SalidaMostradorPage = () => {
                           </td>
                           <td className="d-none d-md-table-cell text-muted small">{s.registradoPor?.nombreUsuario || "—"}</td>
                           <td className="text-center">
-                            <button className="btn btn-outline-primary btn-sm me-1" onClick={() => abrirEdicion(s)} title="Editar">
-                              <i className="bi bi-pencil"></i>
-                            </button>
-                            <button className="btn btn-outline-danger btn-sm" onClick={() => borrarSalida(s)} title="Borrar">
-                              <i className="bi bi-trash"></i>
-                            </button>
+                            {/* La salida de un presupuesto de Forratuc (2026-10-21) se
+                                anula desde el presupuesto, no desde acá. */}
+                            {s.referencia?.presupuesto || s.referencia?.presupuestoId ? (
+                              <span className="badge bg-secondary" title="Se anula desde Presupuestos de Forratuc">
+                                <i className="bi bi-receipt me-1"></i>{s.referencia.presupuesto || "Presupuesto"}
+                              </span>
+                            ) : (
+                              <>
+                                <button className="btn btn-outline-primary btn-sm me-1" onClick={() => abrirEdicion(s)} title="Editar">
+                                  <i className="bi bi-pencil"></i>
+                                </button>
+                                <button className="btn btn-outline-danger btn-sm" onClick={() => borrarSalida(s)} title="Borrar">
+                                  <i className="bi bi-trash"></i>
+                                </button>
+                              </>
+                            )}
                           </td>
                         </tr>
                       ))}

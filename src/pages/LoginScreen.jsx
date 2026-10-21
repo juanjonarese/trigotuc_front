@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "../css/Login.css";
 import Footer from "../components/Footer";
+import { inicioEmpresa } from "../utils/empresas";
 
 const LoginScreen = () => {
   const navigate = useNavigate();
@@ -59,16 +60,15 @@ const LoginScreen = () => {
         localStorage.setItem("rolUsuario", data.rolUsuario);
         localStorage.setItem("emailUsuario", formData.emailUsuario.trim());
         localStorage.setItem("nombreUsuario", data.nombreUsuario || "");
+        const empresas = Array.isArray(data.empresas) ? data.empresas : [];
+        localStorage.setItem("empresas", JSON.stringify(empresas));
 
-        // Redirigir según rol
-        if (data.rolUsuario === "frigorifico") {
-          navigate("/frigorifico/pedidos-granja");
-        } else if (data.rolUsuario === "granja") {
-          navigate("/granja/galpones");
-        } else if (data.rolUsuario === "reproductoras") {
-          navigate("/reproductores/galpones");
+        // Con más de una empresa, primero se elige en las tarjetas de inicio;
+        // con una sola, directo a su pantalla según el rol.
+        if (empresas.length > 1) {
+          navigate("/inicio");
         } else {
-          navigate("/dashboard");
+          navigate(inicioEmpresa(empresas[0]?.clave, data.rolUsuario));
         }
       } else {
         setError(data.msg || "Usuario o contraseña incorrectos");

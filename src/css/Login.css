@@ -85,3 +85,41 @@
     padding: 2rem !important;
   }
 }
+
+/* Selección de empresa (InicioPage, 2026-10-16): filas sobrias, sin íconos.
+   El amarillo de "INGRESAR" queda solo como acento al pasar el mouse. */
+.selector-empresas {
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.selector-empresa {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: #fff;
+  border: none;
+  border-left: 3px solid transparent;
+  padding: 0.9rem 1rem;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.selector-empresa + .selector-empresa {
+  border-top: 1px solid #dee2e6;
+}
+
+.selector-empresa:hover,
+.selector-empresa:focus-visible {
+  background: #f8f9fa;
+  border-left-color: #ffc107;
+  outline: none;
+}
+
+.selector-empresa-estado {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: #6c757d;
+  white-space: nowrap;
+}

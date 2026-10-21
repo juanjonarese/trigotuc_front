@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import "../css/DashboardPage.css";
 import usePushNotification from "../hooks/usePushNotification";
+import { empresaActual as calcularEmpresaActual, obtenerEmpresasUsuario } from "../utils/empresas";
 
 // Qué sección del sidebar le corresponde a una ruta (null = ninguna).
 const seccionDeRuta = (path) => {
@@ -48,6 +49,14 @@ const Layout = ({ children }) => {
   // backend corta el alta de usuarios y el reset de Reproductoras.
   const mandaTodo = rolUsuario === "superadmin" || rolUsuario === "admin";
 
+  // Multiempresa (2026-10-16): el menú es el de la empresa en la que estás.
+  // Altas y Actividad son del grupo y salen en todas. Quien tiene más de una
+  // empresa ve "Cambiar empresa", que vuelve a las tarjetas de inicio.
+  const empresas = obtenerEmpresasUsuario();
+  const claveEmpresa = calcularEmpresaActual(location.pathname);
+  const esAvicola = claveEmpresa !== "forratuc";
+  const esForratuc = claveEmpresa === "forratuc";
+
   // Auto-expand: al cambiar de ruta se abre la sección que le corresponde
   // (y se cierra la anterior). Ajuste de estado durante el render, no en un
   // efecto: https://react.dev/learn/you-might-not-need-an-effect
@@ -87,14 +96,74 @@ const Layout = ({ children }) => {
       >
         <div className="sidebar-header p-4 border-bottom border-secondary">
           <h2 className="h4 mb-0">
-            <span className="d-block fw-bold">
-              Trigotuc <span style={{ color: "#ffc107" }}>Avícola</span>
-            </span>
+            {esForratuc ? (
+              <span className="d-block fw-bold">Forratuc</span>
+            ) : (
+              <span className="d-block fw-bold">
+                Trigotuc <span style={{ color: "#ffc107" }}>Avícola</span>
+              </span>
+            )}
           </h2>
+          {empresas.length > 1 && (
+            <button
+              type="button"
+              className="btn btn-link btn-sm text-white-50 p-0 mt-2 text-decoration-none"
+              onClick={() => navigate("/inicio")}
+            >
+              Cambiar empresa
+            </button>
+          )}
         </div>
 
         <nav className="sidebar-nav flex-grow-1 p-3">
-          {rolUsuario !== "frigorifico" && rolUsuario !== "granja" && rolUsuario !== "chofer" && rolUsuario !== "reproductoras" && (
+          {/* Forratuc (en desarrollo, solo superadmin): su inicio y el mostrador,
+              que es de Forratuc. */}
+          {esForratuc && (
+            <>
+              <a
+                href="#"
+                className={`nav-link d-flex align-items-center gap-2 mb-2 rounded ${
+                  location.pathname === "/forratuc" ? "text-white" : "text-white-50"
+                }`}
+                onClick={(e) => { e.preventDefault(); navigate("/forratuc"); }}
+              >
+                <i className="bi bi-house-door fs-5"></i>
+                <span>Inicio</span>
+              </a>
+              <a
+                href="#"
+                className={`nav-link d-flex align-items-center gap-2 mb-2 rounded ${
+                  isActive("/forratuc/mostrador") ? "text-white" : "text-white-50"
+                }`}
+                onClick={(e) => { e.preventDefault(); navigate("/forratuc/mostrador"); }}
+              >
+                <i className="bi bi-receipt fs-5"></i>
+                <span>Mostrador · Presupuestos</span>
+              </a>
+              <a
+                href="#"
+                className={`nav-link d-flex align-items-center gap-2 mb-2 rounded ${
+                  isActive("/forratuc/cuentas-corrientes") ? "text-white" : "text-white-50"
+                }`}
+                onClick={(e) => { e.preventDefault(); navigate("/forratuc/cuentas-corrientes"); }}
+              >
+                <i className="bi bi-journal-text fs-5"></i>
+                <span>Cuentas corrientes</span>
+              </a>
+              <a
+                href="#"
+                className={`nav-link d-flex align-items-center gap-2 mb-2 rounded ${
+                  isActive("/forratuc/salidas") ? "text-white" : "text-white-50"
+                }`}
+                onClick={(e) => { e.preventDefault(); navigate("/forratuc/salidas"); }}
+              >
+                <i className="bi bi-shop fs-5"></i>
+                <span>Salidas de stock</span>
+              </a>
+            </>
+          )}
+
+          {esAvicola && rolUsuario !== "frigorifico" && rolUsuario !== "granja" && rolUsuario !== "chofer" && rolUsuario !== "reproductoras" && (
             <a
               href="#"
               className={`nav-link d-flex align-items-center gap-2 mb-2 rounded ${
@@ -112,7 +181,7 @@ const Layout = ({ children }) => {
 
           {/* Proyección: cruce de los nacimientos contra los galpones de
               engorde. Vive en la raíz porque toca Reproductores y Granja. */}
-          {(mandaTodo || rolUsuario === "administracion_frigorifico" || rolUsuario === "administracion_granja") && (
+          {esAvicola && (mandaTodo || rolUsuario === "administracion_frigorifico" || rolUsuario === "administracion_granja") && (
             <a
               href="#"
               className={`nav-link d-flex align-items-center gap-2 mb-2 rounded ${
@@ -234,8 +303,10 @@ const Layout = ({ children }) => {
 
           {/* Salida Mostrador — al primer nivel (2026-09-30): saca pollo de la
               cámara Trigotuc y huevo, así que no es del frigorífico. La ruta
-              sigue siendo /frigorifico/salida-mostrador para no romper enlaces. */}
-          {(mandaTodo || rolUsuario === "administracion_frigorifico" || rolUsuario === "administracion_granja") && (
+              sigue siendo /frigorifico/salida-mostrador para no romper enlaces.
+              El mostrador es de Forratuc (2026-10-16): el superadmin lo ve allá;
+              el resto lo sigue viendo acá hasta que Forratuc se libere. */}
+          {esAvicola && !empresas.some((e) => e.clave === "forratuc") && (mandaTodo || rolUsuario === "administracion_frigorifico" || rolUsuario === "administracion_granja") && (
             <a
               href="#"
               className={`nav-link d-flex align-items-center gap-2 mb-2 rounded ${
@@ -247,6 +318,9 @@ const Layout = ({ children }) => {
               <span>Salida Mostrador</span>
             </a>
           )}
+
+          {/* De acá para abajo, todo es de la avícola. */}
+          {esAvicola && (<>
 
           {/* Envío de alimento — Trigotuc despacha a las granjas. Solo despacha
               administración. Desde el 2026-09-30 es un botón suelto: la recepción
@@ -644,6 +718,7 @@ const Layout = ({ children }) => {
           </div>
           )}
 
+          </>)}
         </nav>
 
         <div className="border-top border-secondary p-3">

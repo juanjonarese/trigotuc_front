@@ -44,6 +44,10 @@ import AlimentoEnviosPage from "./pages/AlimentoEnviosPage";
 import AlimentoSilosPage from "./pages/AlimentoSilosPage";
 import PlanPollitosPage from "./pages/PlanPollitosPage";
 import StockHuevosPage from "./pages/StockHuevosPage";
+import InicioPage from "./pages/InicioPage";
+import ForratucInicioPage from "./pages/ForratucInicioPage";
+import ForratucPresupuestosPage from "./pages/ForratucPresupuestosPage";
+import ForratucCuentasCorrientesPage from "./pages/ForratucCuentasCorrientesPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
@@ -51,6 +55,20 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginScreen />} />
+
+        {/* Tarjetas de ingreso: elegir empresa del grupo (2026-10-16). */}
+        <Route path="/inicio" element={<ProtectedRoute><InicioPage /></ProtectedRoute>} />
+
+        {/* Forratuc — local de venta al público. En desarrollo: solo superadmin.
+            El mostrador es de Forratuc; la ruta vieja /frigorifico/salida-mostrador
+            sigue para los roles de la avícola que lo usan hoy. */}
+        <Route path="/forratuc" element={<ProtectedRoute><ForratucInicioPage /></ProtectedRoute>} />
+        {/* El mostrador de Forratuc emite presupuestos (2026-10-21). La salida
+            suelta de stock queda en /forratuc/salidas: ahí se ven también las
+            salidas que generan los presupuestos. */}
+        <Route path="/forratuc/mostrador" element={<ProtectedRoute><ForratucPresupuestosPage /></ProtectedRoute>} />
+        <Route path="/forratuc/salidas" element={<ProtectedRoute><SalidaMostradorPage /></ProtectedRoute>} />
+        <Route path="/forratuc/cuentas-corrientes" element={<ProtectedRoute><ForratucCuentasCorrientesPage /></ProtectedRoute>} />
 
         <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
         {/* Proyección vive en la raíz del menú (cruza Reproductores y Granja). */}

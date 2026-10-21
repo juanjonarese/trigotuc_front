@@ -1,11 +1,25 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { obtenerClientes, crearCliente, actualizarCliente, eliminarCliente } from "../services/api";
+import { obtenerClientes, crearCliente, actualizarCliente, eliminarCliente, obtenerEmpresas } from "../services/api";
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
 import Swal from "sweetalert2";
 import { escapeHtml } from "../utils/escapeHtml";
 import "../css/Tablas.css";
+
+// Una etiqueta por empresa del grupo a la que le compra el cliente.
+const BadgesEmpresas = ({ claves, catalogo }) => (
+  <div className="d-flex flex-wrap gap-1 mt-1">
+    {claves.map((clave) => {
+      const empresa = catalogo.find((e) => e.clave === clave);
+      return (
+        <span key={clave} className="badge bg-light text-dark border fw-normal">
+          {empresa?.nombre || clave}
+        </span>
+      );
+    })}
+  </div>
+);
 
 const ClientesPage = () => {
   const navigate = useNavigate();
@@ -27,9 +41,30 @@ const ClientesPage = () => {
     email: "",
   });
 
+  // A qué empresas del grupo le compra el cliente (2026-10-16). El padrón es
+  // uno solo para todo el grupo. Mientras el multiempresa esté en desarrollo lo
+  // ve y lo edita solo el superadmin; el back descarta lo que mande otro rol.
+  const esSuperadmin = localStorage.getItem("rolUsuario") === "superadmin";
+  const [catalogoEmpresas, setCatalogoEmpresas] = useState([]);
+  const [empresasCliente, setEmpresasCliente] = useState(["avicola"]);
+
   useEffect(() => {
     cargarClientes();
-  }, []);
+    if (esSuperadmin) {
+      obtenerEmpresas()
+        .then((data) => setCatalogoEmpresas(data.empresas || []))
+        .catch(() => setCatalogoEmpresas([]));
+    }
+  }, [esSuperadmin]);
+
+  // Los clientes anteriores no tienen la lista: eran de la avícola.
+  const empresasDe = (cliente) =>
+    cliente.empresas?.length ? cliente.empresas : ["avicola"];
+
+  const toggleEmpresa = (clave) =>
+    setEmpresasCliente((actual) =>
+      actual.includes(clave) ? actual.filter((c) => c !== clave) : [...actual, clave]
+    );
 
   const cargarClientes = async () => {
     try {
@@ -57,7 +92,9 @@ const ClientesPage = () => {
         telefono: cliente.telefono || "",
         email: cliente.email || "",
       });
+      setEmpresasCliente(empresasDe(cliente));
     } else {
+      setEmpresasCliente(["avicola"]);
       setEditingCliente(null);
       setFormData({
         razonSocial: "",
@@ -93,11 +130,20 @@ const ClientesPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (esSuperadmin && empresasCliente.length === 0) {
+      Swal.fire({
+        icon: "warning",
+        title: "Faltan las empresas",
+        text: "Tildá al menos una empresa del grupo a la que le compra.",
+      });
+      return;
+    }
+    const datos = esSuperadmin ? { ...formData, empresas: empresasCliente } : formData;
     try {
       if (editingCliente) {
-        await actualizarCliente(editingCliente._id, formData);
+        await actualizarCliente(editingCliente._id, datos);
       } else {
-        await crearCliente(formData);
+        await crearCliente(datos);
       }
       await cargarClientes();
       handleCloseModal();
@@ -261,6 +307,7 @@ const ClientesPage = () => {
                         {cliente.contacto && <small className="text-muted d-block">Contacto: {cliente.contacto}</small>}
                         {cliente.telefono && <small className="text-muted d-block">Tel: {cliente.telefono}</small>}
                         {cliente.email && <small className="text-muted d-block">Email: {cliente.email}</small>}
+                        {esSuperadmin && <BadgesEmpresas claves={empresasDe(cliente)} catalogo={catalogoEmpresas} />}
                       </div>
                     </div>
                   ))}
@@ -276,6 +323,7 @@ const ClientesPage = () => {
                         <th>Contacto</th>
                         <th>Teléfono</th>
                         <th>Email</th>
+                        {esSuperadmin && <th>Le compra a</th>}
                         <th>Acciones</th>
                       </tr>
                     </thead>
@@ -287,6 +335,9 @@ const ClientesPage = () => {
                           <td>{cliente.contacto || "-"}</td>
                           <td>{cliente.telefono || "-"}</td>
                           <td>{cliente.email || "-"}</td>
+                          {esSuperadmin && (
+                            <td><BadgesEmpresas claves={empresasDe(cliente)} catalogo={catalogoEmpresas} /></td>
+                          )}
                           <td>
                             <button
                               className="btn btn-sm btn-warning me-2"
@@ -446,6 +497,33 @@ const ClientesPage = () => {
                         />
                       </div>
                     </div>
+
+                    {esSuperadmin && catalogoEmpresas.length > 0 && (
+                      <div className="mb-1">
+                        <label className="form-label">
+                          Le compra a <span className="text-danger">*</span>
+                        </label>
+                        <div className="d-flex flex-wrap gap-3">
+                          {catalogoEmpresas.map((e) => (
+                            <div key={e.clave} className="form-check">
+                              <input
+                                className="form-check-input"
+                                type="checkbox"
+                                id={`cliente-empresa-${e.clave}`}
+                                checked={empresasCliente.includes(e.clave)}
+                                onChange={() => toggleEmpresa(e.clave)}
+                              />
+                              <label className="form-check-label" htmlFor={`cliente-empresa-${e.clave}`}>
+                                {e.nombre}
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="form-text">
+                          Un mismo cliente puede comprarle a varias empresas del grupo.
+                        </div>
+                      </div>
+                    )}
 
                   </div>
                   <div className="modal-footer">

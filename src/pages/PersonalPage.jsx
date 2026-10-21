@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { obtenerUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario, estadoPush, testPush } from "../services/api";
+import { obtenerUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario, estadoPush, testPush, obtenerEmpresas } from "../services/api";
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
 import Swal from "sweetalert2";
@@ -24,7 +24,11 @@ const PersonalPage = () => {
     telefonoUsuario: "",
     contraseniaUsuario: "",
     rolUsuario: "administracion_frigorifico",
+    empresas: ["avicola"],
   });
+  // Empresas del grupo (2026-10-16). Solo el rol `admin` las tilda: es el único
+  // multiempresa; el resto de los roles son de una empresa.
+  const [catalogoEmpresas, setCatalogoEmpresas] = useState([]);
   const [confirmarContrasenia, setConfirmarContrasenia] = useState("");
   const [showPass, setShowPass]         = useState(false);
   const [showConfirm, setShowConfirm]   = useState(false);
@@ -41,7 +45,26 @@ const PersonalPage = () => {
       return;
     }
     cargarUsuarios();
+    obtenerEmpresas()
+      .then((data) => setCatalogoEmpresas(data.empresas || []))
+      .catch(() => setCatalogoEmpresas([]));
   }, [rolUsuario, navigate]);
+
+  // Un admin anterior al multiempresa no tiene lista: era de la avícola.
+  const empresasDe = (usuario) =>
+    usuario.empresas?.length ? usuario.empresas : ["avicola"];
+
+  const nombreEmpresa = (clave) =>
+    catalogoEmpresas.find((e) => e.clave === clave)?.nombre || clave;
+
+  const toggleEmpresa = (clave) => {
+    setFormData((actual) => ({
+      ...actual,
+      empresas: actual.empresas.includes(clave)
+        ? actual.empresas.filter((c) => c !== clave)
+        : [...actual.empresas, clave],
+    }));
+  };
 
   const cargarUsuarios = async () => {
     try {
@@ -67,6 +90,7 @@ const PersonalPage = () => {
         telefonoUsuario: usuario.telefonoUsuario || "",
         contraseniaUsuario: "",
         rolUsuario: usuario.rolUsuario,
+        empresas: empresasDe(usuario),
       });
     } else {
       setEditingUsuario(null);
@@ -75,7 +99,10 @@ const PersonalPage = () => {
         emailUsuario: "",
         telefonoUsuario: "",
         contraseniaUsuario: "",
-        rolUsuario: "compras",
+        // Era "compras", un rol que ya no existe: el select mostraba otro y el
+        // alta rebotaba si no lo tocabas.
+        rolUsuario: "administracion_frigorifico",
+        empresas: ["avicola"],
       });
     }
     setConfirmarContrasenia("");
@@ -93,6 +120,7 @@ const PersonalPage = () => {
       telefonoUsuario: "",
       contraseniaUsuario: "",
       rolUsuario: "administracion_frigorifico",
+      empresas: ["avicola"],
     });
     setConfirmarContrasenia("");
     setShowPass(false);
@@ -137,16 +165,29 @@ const PersonalPage = () => {
       }
     }
 
+    const esAdmin = formData.rolUsuario === "admin";
+    if (esAdmin && formData.empresas.length === 0) {
+      Swal.fire({
+        icon: "warning",
+        title: "Faltan las empresas",
+        text: "Un admin tiene que tener tildada al menos una empresa.",
+      });
+      return;
+    }
+
     try {
+      // Las empresas solo viajan para el admin; el back las borra para el resto.
+      const base = { ...formData };
+      if (!esAdmin) delete base.empresas;
       if (editingUsuario) {
         // Al editar, solo enviar contraseña si se ingresó una nueva
-        const dataToSend = { ...formData };
+        const dataToSend = { ...base };
         if (!formData.contraseniaUsuario) {
           delete dataToSend.contraseniaUsuario;
         }
         await actualizarUsuario(editingUsuario._id, dataToSend);
       } else {
-        await crearUsuario(formData);
+        await crearUsuario(base);
       }
       await cargarUsuarios();
       handleCloseModal();
@@ -328,6 +369,11 @@ const PersonalPage = () => {
                           }`}>
                             {usuario.rolUsuario}
                           </span>
+                          {usuario.rolUsuario === "admin" && (
+                            <div className="small text-muted mt-1">
+                              {empresasDe(usuario).map(nombreEmpresa).join(" · ")}
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -363,6 +409,11 @@ const PersonalPage = () => {
                               }`}>
                                 {usuario.rolUsuario}
                               </span>
+                              {usuario.rolUsuario === "admin" && (
+                                <div className="small text-muted mt-1">
+                                  {empresasDe(usuario).map(nombreEmpresa).join(" · ")}
+                                </div>
+                              )}
                             </td>
                             <td>
                               <button
@@ -632,6 +683,38 @@ const PersonalPage = () => {
                           </div>
                         </div>
                       </div>
+
+                      {/* Empresas del grupo: solo el admin es multiempresa. */}
+                      {formData.rolUsuario === "admin" && (
+                        <div className="mb-3">
+                          <label className="form-label">
+                            Empresas a las que entra <span className="text-danger">*</span>
+                          </label>
+                          <div className="d-flex flex-wrap gap-3">
+                            {catalogoEmpresas.map((e) => (
+                              <div key={e.clave} className="form-check">
+                                <input
+                                  className="form-check-input"
+                                  type="checkbox"
+                                  id={`empresa-${e.clave}`}
+                                  checked={formData.empresas.includes(e.clave)}
+                                  onChange={() => toggleEmpresa(e.clave)}
+                                />
+                                <label className="form-check-label" htmlFor={`empresa-${e.clave}`}>
+                                  {e.nombre}
+                                  {e.enDesarrollo && (
+                                    <span className="badge bg-warning text-dark ms-1">En desarrollo</span>
+                                  )}
+                                </label>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="form-text">
+                            Las empresas en desarrollo quedan tildadas pero el admin no las ve
+                            hasta que se liberen; por ahora solo las ve el superadmin.
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="modal-footer">
                       <button
