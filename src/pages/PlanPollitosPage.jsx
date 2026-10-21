@@ -11,6 +11,7 @@ import {
   eliminarReservaPollitos,
   pasarReservaPollitos,
   crearOrdenCargaPollitos,
+  enviarReservaAGranja,
 } from "../services/api";
 import { formatearFechaLocal } from "../utils/dateUtils";
 import {
@@ -310,7 +311,7 @@ const BloqueCarga = ({ fila, onMover }) => {
   );
 };
 
-const CargaModal = ({ fila, destinos, clientes, onCerrar, onEmitir, onBorrar, onPasar, onAgregada, onMover }) => {
+const CargaModal = ({ fila, destinos, clientes, onCerrar, onEmitir, onEnviarGranja, onBorrar, onPasar, onAgregada, onMover }) => {
   const [form, setForm] = useState(FORM_VACIO);
   const [saving, setSaving] = useState(false);
   // La línea que se está pasando a otra carga, y a cuál.
@@ -509,6 +510,10 @@ const CargaModal = ({ fila, destinos, clientes, onCerrar, onEmitir, onBorrar, on
                         const esGranja = l.destino === "granja";
                         const puedeEmitir =
                           !esGranja && !l.orden && fila.nacio && l.estado !== "cancelada";
+                        // Lo "a engorde" de una carga nacida se manda a la granja
+                        // desde acá (2026-10-21), una sola vez.
+                        const puedeEnviarGranja =
+                          esGranja && !l.proyectada && !l.pedidoGranja && fila.nacio && l.estado !== "cancelada";
                         return (
                           <tr key={l._id}>
                             <td>
@@ -553,6 +558,18 @@ const CargaModal = ({ fila, destinos, clientes, onCerrar, onEmitir, onBorrar, on
                                 >
                                   {l.orden.numero} · {l.orden.estado}
                                 </span>
+                              ) : esGranja && l.pedidoGranja ? (
+                                <span
+                                  className={`badge ${
+                                    l.pedidoGranja.estado === "confirmado" ? "bg-success" : "bg-warning text-dark"
+                                  }`}
+                                  title={`${formatearNumero(l.pedidoGranja.cantidadEnviada)} pollitos al galpón ${prefijoGranja(l.granja)}${l.pedidoGranja.galpon}`}
+                                >
+                                  <i className="bi bi-truck me-1"></i>
+                                  {l.pedidoGranja.estado === "confirmado" ? "recibido" : "en camino"}
+                                  {" · "}
+                                  {formatearNumero(l.pedidoGranja.cantidadEnviada)}
+                                </span>
                               ) : esGranja ? (
                                 <span className="badge bg-success-subtle text-success-emphasis">
                                   a engorde
@@ -573,6 +590,16 @@ const CargaModal = ({ fila, destinos, clientes, onCerrar, onEmitir, onBorrar, on
                                   <i className="bi bi-truck"></i>
                                 </button>
                               )}
+                              {puedeEnviarGranja && (
+                                <button
+                                  className="btn btn-sm btn-outline-success me-1"
+                                  onClick={() => onEnviarGranja(fila, l)}
+                                  title="Enviar estos pollitos a la granja (crea el ingreso de pollitos)"
+                                >
+                                  <i className="bi bi-house-door"></i>
+                                  <i className="bi bi-arrow-right-short"></i>
+                                </button>
+                              )}
                               {l.proyectada && l.estado === "reservada" && (
                                 <button
                                   className="btn btn-sm btn-outline-primary me-1"
@@ -582,7 +609,7 @@ const CargaModal = ({ fila, destinos, clientes, onCerrar, onEmitir, onBorrar, on
                                   <i className="bi bi-arrow-right-square"></i>
                                 </button>
                               )}
-                              {!l.orden && (
+                              {!l.orden && !l.pedidoGranja && (
                                 <button
                                   className="btn btn-sm btn-outline-danger"
                                   onClick={() => onBorrar(l)}
@@ -1187,6 +1214,61 @@ const PlanPollitosPage = () => {
     }
   };
 
+  // Mandar a la granja lo "a engorde" de una carga nacida (2026-10-21): crea el
+  // pedido de Ingreso de pollitos de ese galpón y descuenta las tandas. La
+  // granja después lo confirma con sus bajas, como cualquier pedido.
+  const enviarAGranja = async (fila, linea) => {
+    const granja = GRANJAS.find((g) => g.key === linea.granja);
+    const opciones = Array.from({ length: granja?.galpones || 0 }, (_, i) => i + 1)
+      .map((n) => `<option value="${n}" ${n === linea.galpon ? "selected" : ""}>${escapeHtml(prefijoGranja(linea.granja))}${n}</option>`)
+      .join("");
+    const { value, isConfirmed } = await Swal.fire({
+      title: `Enviar a ${escapeHtml(labelGranja(linea.granja))}`,
+      html: `
+        <div class="text-start small">
+          <p class="mb-3">Carga que nació el <strong>${escapeHtml(textoClave(fila.claveNacimiento))}</strong>.
+          Los pollitos salen de la incubadora y quedan <strong>en camino</strong> hasta que la granja los recibe
+          en <em>Ingreso de pollitos</em>.</p>
+          <label class="form-label mb-1">Galpón</label>
+          <select id="eg-galpon" class="form-select mb-2">
+            ${linea.galpon ? "" : `<option value="">Elegí el galpón…</option>`}${opciones}
+          </select>
+          <label class="form-label mb-1">Pollitos</label>
+          <input id="eg-cantidad" type="number" min="1" step="1" class="form-control mb-2" value="${Number(linea.cantidad)}">
+          <label class="form-label mb-1">Fecha de ingreso</label>
+          <input id="eg-fecha" type="date" class="form-control" value="${new Date().toLocaleDateString("en-CA")}">
+        </div>`,
+      showCancelButton: true,
+      confirmButtonText: "Enviar",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#198754",
+      preConfirm: () => {
+        const galpon = Number(document.getElementById("eg-galpon").value);
+        const cantidad = Number(document.getElementById("eg-cantidad").value);
+        const fecha = document.getElementById("eg-fecha").value;
+        if (!galpon) return Swal.showValidationMessage("Elegí el galpón");
+        if (!Number.isInteger(cantidad) || cantidad <= 0)
+          return Swal.showValidationMessage("Los pollitos van sin decimales y mayor a cero");
+        return { galpon, cantidad, fechaIngreso: fecha ? `${fecha}T12:00:00.000Z` : undefined };
+      },
+    });
+    if (!isConfirmed) return;
+    try {
+      await enviarReservaAGranja(linea._id, value);
+      await cargar({ silencioso: true });
+      Swal.fire({
+        icon: "success",
+        title: "Enviado a la granja",
+        html: `${formatearNumero(value.cantidad)} pollitos al galpón ${escapeHtml(prefijoGranja(linea.granja))}${value.galpon}.<br/>` +
+          `<span class="text-muted">La granja lo confirma en Ingreso de pollitos.</span>`,
+        timer: 3000,
+        showConfirmButton: false,
+      });
+    } catch (err) {
+      Swal.fire("No se pudo enviar", err.message || "Error al enviar a la granja.", "error");
+    }
+  };
+
   // Pasar una reserva a otra carga: lo comprometido sobre una proyectada, a la
   // carga real cuando se hace (o a otro día si la proyección se corrió).
   const pasarLinea = async (linea, destino) => {
@@ -1670,6 +1752,7 @@ const PlanPollitosPage = () => {
           onPasar={pasarLinea}
           onCerrar={() => setAbierta(null)}
           onEmitir={emitirOrden}
+          onEnviarGranja={enviarAGranja}
           onBorrar={borrarLinea}
           onAgregada={() => cargar({ silencioso: true })}
           onMover={moverCarga}

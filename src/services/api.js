@@ -1283,6 +1283,16 @@ export const pasarReservaPollitos = async (id, data) => {
   return handleResponse(response);
 };
 
+// Manda a la granja un compromiso "a engorde" de una carga nacida (2026-10-21):
+// crea el pedido de Ingreso de pollitos y descuenta las tandas.
+// data: { galpon, cantidad, fechaIngreso }
+export const enviarReservaAGranja = async (id, data) => {
+  const response = await fetch(`${API_URL}/reservas-pollitos/${id}/enviar-granja`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
 // ── Ventas del módulo (huevos de descarte y pollitos) ──
 export const descartarApiHuevos = async (data) => {
   const response = await fetch(`${API_URL}/reproductores/descarte-api`, {

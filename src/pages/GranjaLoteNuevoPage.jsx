@@ -267,7 +267,12 @@ const TarjetaPedidoPendiente = ({ pedido, onConfirmado, onCancelado }) => {
   const handleCancelar = async () => {
     const ok = await Swal.fire({
       title: "¿Cancelar pedido?",
-      text: "No se creará ningún lote en el galpón.",
+      // Los de la incubadora propia (2026-10-21) ya descontaron pollitos de las
+      // tandas: cancelar los devuelve y reabre el compromiso del Plan.
+      text:
+        pedido.origen === "incubacion"
+          ? "No se creará ningún lote. Los pollitos vuelven a la incubadora y el compromiso del Plan de Pollitos queda abierto para reenviarlo."
+          : "No se creará ningún lote en el galpón.",
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#dc3545",
@@ -293,6 +298,11 @@ const TarjetaPedidoPendiente = ({ pedido, onConfirmado, onCancelado }) => {
         <div className="d-flex justify-content-between align-items-start mb-3">
           <div>
             <span className="badge bg-warning text-dark me-2 fs-6">Pendiente</span>
+            {pedido.origen === "incubacion" && (
+              <span className="badge bg-success-subtle text-success-emphasis border border-success-subtle me-2" title="Sale del Plan de Pollitos">
+                <i className="bi bi-egg me-1"></i>Incubadora propia
+              </span>
+            )}
             <span className="fw-bold fs-5">
               {GRANJAS_LABEL[pedido.granja]} — Galpón {GRANJAS_PREFIX[pedido.granja]}{pedido.galpon}
             </span>
