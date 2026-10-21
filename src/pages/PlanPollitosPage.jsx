@@ -779,29 +779,68 @@ const ListaMes = ({ filas, feriados, prefijoMes, claveHoy, onAbrir }) => {
   if (!renglones.length)
     return <p className="text-muted small m-3">No nace ninguna carga este mes.</p>;
 
+  // Totales del mes al pie, como el total de la planilla.
+  const tot = filas.reduce(
+    (a, f) => ({
+      aNacer: a.aNacer + (f.aNacer || 0),
+      aClientes: a.aClientes + (f.aClientes || 0),
+      aGranja: a.aGranja + (f.aGranja || 0),
+      libre: a.libre + (f.libre || 0),
+    }),
+    { aNacer: 0, aClientes: 0, aGranja: 0, libre: 0 }
+  );
+
+  // Las semanas se separan con una raya más gruesa: el lunes de cada fecha.
+  const semanaDe = (k) => {
+    const { anio, mes, dia } = partesClave(k);
+    return correrClave(k, -columnaDe(anio, mes, dia));
+  };
+
+  // Números alineados a la derecha y con dígitos del mismo ancho, para que las
+  // columnas se lean como en la planilla.
+  const NUM = { fontVariantNumeric: "tabular-nums" };
+  const tonoLibre = (libre) =>
+    libre < 0 ? "bg-danger-subtle text-danger-emphasis" : libre === 0 ? "bg-primary-subtle text-primary-emphasis" : "bg-success-subtle text-success-emphasis";
+
   return (
     <div className="card-body p-0">
       <div className="table-responsive">
-        <table className="table table-sm table-hover align-middle mb-0" style={{ minWidth: 700 }}>
-          <thead className="table-light small">
-            <tr>
-              <th className="text-center">Nace</th>
-              <th className="text-center">Carga</th>
-              <th className="text-center">A nacer</th>
-              <th className="text-center" style={{ minWidth: 240 }}>A quién va</th>
-              <th className="text-center">Clientes</th>
-              <th className="text-center">Engorde</th>
-              <th className="text-center">Libre</th>
+        <table className="table table-sm table-bordered table-hover align-middle mb-0 small" style={{ minWidth: 820 }}>
+          <colgroup>
+            <col style={{ width: 92 }} />
+            <col style={{ width: 150 }} />
+            <col style={{ width: 100 }} />
+            <col />
+            <col style={{ width: 100 }} />
+            <col style={{ width: 100 }} />
+            <col style={{ width: 100 }} />
+          </colgroup>
+          <thead className="table-light">
+            <tr className="text-uppercase" style={{ fontSize: "0.72rem", letterSpacing: ".03em" }}>
+              <th>Nace</th>
+              <th>Carga</th>
+              <th className="text-end">A nacer</th>
+              <th>A quién va</th>
+              <th className="text-end">Clientes</th>
+              <th className="text-end">Engorde</th>
+              <th className="text-end">Libre</th>
             </tr>
           </thead>
           <tbody>
-            {renglones.map((f) => {
+            {renglones.map((f, i) => {
+              const nuevaSemana = i > 0 && semanaDe(f.claveNacimiento) !== semanaDe(renglones[i - 1].claveNacimiento);
+              const raya = nuevaSemana ? { borderTop: "3px solid var(--bs-secondary-border-subtle)" } : undefined;
+              const [diaSemana, fecha] = textoClave(f.claveNacimiento).split(" ");
+
               if (f.feriado)
                 return (
-                  <tr key={f.clave} className="table-danger">
-                    <td className="text-center fw-semibold text-nowrap">{textoClave(f.claveNacimiento)}</td>
-                    <td colSpan={6} className="small text-danger-emphasis" title={f.nombre}>
-                      <i className="bi bi-flag-fill me-1"></i>Feriado
+                  <tr key={f.clave} className="table-danger" style={raya}>
+                    <td className="text-nowrap">
+                      <span className="text-muted text-capitalize me-1">{diaSemana}</span>
+                      <span className="fw-semibold">{fecha}</span>
+                    </td>
+                    <td colSpan={6} className="text-danger-emphasis" title={f.nombre}>
+                      <i className="bi bi-flag-fill me-1"></i>Feriado{f.nombre ? ` · ${f.nombre}` : ""}
                     </td>
                   </tr>
                 );
@@ -814,19 +853,20 @@ const ListaMes = ({ filas, feriados, prefijoMes, claveHoy, onAbrir }) => {
                 <tr
                   key={f.clave}
                   className={noAlcanza || sinCarga ? "table-danger" : esHoy ? "table-warning" : ""}
-                  style={{ cursor: "pointer" }}
+                  style={{ cursor: "pointer", ...raya }}
                   onClick={() => onAbrir(f)}
                 >
-                  <td className="text-center fw-semibold text-nowrap">
-                    {textoClave(f.claveNacimiento)}
+                  <td className="text-nowrap">
+                    <span className="text-muted text-capitalize me-1">{diaSemana}</span>
+                    <span className="fw-semibold">{fecha}</span>
                     {esHoy && <span className="badge bg-warning text-dark ms-1">hoy</span>}
                     {feriado && (
-                      <div className="small text-danger-emphasis fw-normal" title={feriado}>
+                      <div className="text-danger-emphasis" style={{ fontSize: "0.7rem" }} title={feriado}>
                         <i className="bi bi-flag-fill me-1"></i>feriado
                       </div>
                     )}
                   </td>
-                  <td className="text-center small text-nowrap">
+                  <td className="text-nowrap">
                     {sinCarga ? (
                       <span className="text-danger fw-semibold">
                         <i className="bi bi-exclamation-octagon me-1"></i>sin carga
@@ -846,26 +886,32 @@ const ListaMes = ({ filas, feriados, prefijoMes, claveHoy, onAbrir }) => {
                       </span>
                     )}
                   </td>
-                  <td className="text-center fw-bold text-nowrap">
+                  <td className="text-end fw-bold text-nowrap" style={NUM}>
                     {formatearNumero(f.aNacer)}
                     {f.estimado && f.rendimiento ? (
-                      <div className="small text-muted fw-normal">{Math.round(f.rendimiento)}% est.</div>
+                      <div className="text-muted fw-normal" style={{ fontSize: "0.7rem" }}>{Math.round(f.rendimiento)}% est.</div>
                     ) : null}
                   </td>
-                  <td className="text-center small">
+                  <td className="py-1">
+                    {/* Una sublista: el nombre a la izquierda, la cantidad a la
+                        derecha y una línea punteada entre destinos. */}
                     {f.aMostrador > 0 && (
-                      <div className="d-flex justify-content-center gap-2">
+                      <div className="d-flex justify-content-between gap-2 border-bottom border-light-subtle py-1" style={{ borderBottomStyle: "dotted" }}>
                         <span className="text-truncate">
                           <i className="bi bi-shop text-secondary me-1"></i>Mostrador
                         </span>
-                        <span className="fw-semibold text-nowrap">{formatearNumero(f.aMostrador)}</span>
+                        <span className="fw-semibold text-nowrap" style={NUM}>{formatearNumero(f.aMostrador)}</span>
                       </div>
                     )}
                     {f.lineas.length === 0 ? (
-                      f.aMostrador > 0 ? null : <div className="text-center text-muted fst-italic">sin asignar</div>
+                      f.aMostrador > 0 ? null : <div className="text-muted fst-italic">sin asignar</div>
                     ) : (
-                      f.lineas.map((l) => (
-                        <div key={l._id} className="d-flex justify-content-center gap-2">
+                      f.lineas.map((l, j) => (
+                        <div
+                          key={l._id}
+                          className={`d-flex justify-content-between gap-2 py-1 ${j < f.lineas.length - 1 ? "border-bottom" : ""}`}
+                          style={{ borderBottomStyle: "dotted" }}
+                        >
                           <span className="text-truncate" title={nombreCorto(l)}>
                             <i
                               className={`bi ${
@@ -878,24 +924,32 @@ const ListaMes = ({ filas, feriados, prefijoMes, claveHoy, onAbrir }) => {
                             ></i>
                             {nombreCorto(l)}
                           </span>
-                          <span className="fw-semibold text-nowrap">{formatearNumero(l.cantidad)}</span>
+                          <span className="fw-semibold text-nowrap" style={NUM}>{formatearNumero(l.cantidad)}</span>
                         </div>
                       ))
                     )}
                   </td>
-                  <td className="text-center text-primary">{formatearNumero(f.aClientes)}</td>
-                  <td className="text-center text-success">{formatearNumero(f.aGranja)}</td>
-                  <td
-                    className={`text-center fw-bold ${
-                      f.libre < 0 ? "text-danger" : f.libre === 0 ? "text-primary" : "text-success"
-                    }`}
-                  >
+                  <td className="text-end text-primary" style={NUM}>{formatearNumero(f.aClientes)}</td>
+                  <td className="text-end text-success" style={NUM}>{formatearNumero(f.aGranja)}</td>
+                  <td className={`text-end fw-bold ${noAlcanza || sinCarga ? "" : tonoLibre(f.libre)}`} style={NUM}>
                     {formatearNumero(f.libre)}
                   </td>
                 </tr>
               );
             })}
           </tbody>
+          <tfoot className="table-light fw-bold">
+            <tr style={{ borderTop: "2px solid var(--bs-border-color)" }}>
+              <td colSpan={2}>Total del mes</td>
+              <td className="text-end" style={NUM}>{formatearNumero(tot.aNacer)}</td>
+              <td></td>
+              <td className="text-end text-primary" style={NUM}>{formatearNumero(tot.aClientes)}</td>
+              <td className="text-end text-success" style={NUM}>{formatearNumero(tot.aGranja)}</td>
+              <td className={`text-end ${tot.libre < 0 ? "text-danger" : "text-success"}`} style={NUM}>
+                {formatearNumero(tot.libre)}
+              </td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>
