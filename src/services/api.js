@@ -242,6 +242,15 @@ export const anularPresupuestoForratuc = async (id, motivo) => {
   return handleResponse(response);
 };
 
+// ── Asistente de IA (2026-10-22), solo superadmin ──
+// conversacion: [{ rol: "usuario" | "asistente", texto }] — el server no la guarda.
+export const preguntarAsistente = async (pregunta, conversacion = []) => {
+  const response = await fetch(`${API_URL}/asistente/preguntar`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify({ pregunta, conversacion }),
+  });
+  return handleResponse(response);
+};
+
 // ── Cuenta corriente de Forratuc (2026-10-21): presupuestos al debe, cobros al haber.
 
 export const obtenerCuentasCorrientesForratuc = async () => {

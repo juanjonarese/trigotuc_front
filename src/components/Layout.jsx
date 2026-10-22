@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import "../css/DashboardPage.css";
 import usePushNotification from "../hooks/usePushNotification";
+import AsistenteFlotante from "./AsistenteFlotante";
 import { empresaActual as calcularEmpresaActual, obtenerEmpresasUsuario } from "../utils/empresas";
 
 // Qué sección del sidebar le corresponde a una ruta (null = ninguna).
@@ -85,6 +86,9 @@ const Layout = ({ children }) => {
 
   const handleLogout = () => {
     localStorage.clear();
+    // La conversación del asistente vive en sessionStorage: no tiene que verla
+    // el próximo que entre en esta pestaña.
+    try { sessionStorage.clear(); } catch { /* sin storage */ }
     navigate("/login");
   };
 
@@ -791,6 +795,9 @@ const Layout = ({ children }) => {
         {/* Page Content */}
         <div className="page-content p-2 p-md-4">{children}</div>
       </div>
+
+      {/* Asistente de IA (2026-10-22): solo el superadmin, en todas las pantallas. */}
+      {rolUsuario === "superadmin" && <AsistenteFlotante />}
     </div>
   );
 };
