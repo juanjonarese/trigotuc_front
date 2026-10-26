@@ -1,5 +1,6 @@
 import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
+import { puedeEntrarARuta, inicioUsuario } from "../utils/empresas";
 
 // Roles acotados a un solo módulo: si la URL cae fuera de su prefijo, vuelven a
 // su pantalla de inicio. Ocultar el ítem del sidebar no alcanza — la URL sigue
@@ -35,6 +36,13 @@ const ProtectedRoute = ({ children, blockedEmails = [] }) => {
   const modulo = MODULO_POR_ROL[rolUsuario];
   if (modulo && !modulo.prefijos.some((p) => location.pathname.startsWith(p))) {
     return <Navigate to={modulo.inicio} replace />;
+  }
+
+  // Multiempresa (2026-10-26): una ruta de una empresa que el usuario no tiene
+  // lo devuelve a su inicio. Mismo motivo que arriba: la URL se alcanza igual
+  // desde un favorito o el "atrás". El back corta con `requiereEmpresa`.
+  if (!puedeEntrarARuta(location.pathname)) {
+    return <Navigate to={inicioUsuario(rolUsuario)} replace />;
   }
 
   return children;

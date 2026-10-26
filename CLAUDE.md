@@ -25,7 +25,7 @@ There are no automated tests.
 |-------|------|------|
 | `/inicio` | `InicioPage` — tarjetas para elegir empresa del grupo (con una sola, redirige) | Grupo |
 | `/forratuc` | `ForratucInicioPage` (en desarrollo, solo superadmin) | Forratuc |
-| `/forratuc/mostrador` | `ForratucPresupuestosPage` (2026-10-21: presupuesto con fecha, cliente, precios y condición de pago — contado con `components/PagosForratuc.jsx` o cuenta corriente; imprime con `utils/imprimirForratuc.js`) | Forratuc |
+| `/forratuc/mostrador` | `ForratucPresupuestosPage` (2026-10-21: presupuesto con fecha, cliente, precios y condición de pago — contado con `components/forratuc/PagosForratuc.jsx` o cuenta corriente; imprime con `utils/forratuc/imprimirForratuc.js`) | Forratuc |
 | `/forratuc/cuentas-corrientes` | `ForratucCuentasCorrientesPage` (saldos por cliente, movimientos con saldo, registrar pago → recibo) | Forratuc |
 | `/forratuc/salidas` | `SalidaMostradorPage` (la salida suelta; las de un presupuesto salen con su número y sin editar/borrar) | Forratuc |
 | `/dashboard` | `DashboarPage` (typo intencional) | General |
@@ -110,12 +110,22 @@ Secciones colapsables, fondo oscuro, auto-expande según la ruta activa. Visibil
 
 **Multiempresa (2026-10-16)**: el menú es el de la **empresa actual**
 (`utils/empresas.js`: `empresaActual(path)` — `/forratuc…` es Forratuc, las
-rutas del grupo `/inicio`, `/clientes`, `/personal`, `/camiones` mantienen la
-última empresa, el resto es avícola). Altas y Actividad salen en todas. Las
+rutas del grupo `/inicio`, `/clientes`, `/personal`, `/camiones` y Actividad
+mantienen la última empresa; la avícola tiene sus prefijos explícitos en
+`PREFIJOS_EMPRESA`). Altas y Actividad salen en todas. Las
 empresas del usuario vienen del login (`localStorage.empresas`); con más de
 una aparece "Cambiar empresa" → `/inicio`. Una sesión sin `empresas` (abierta
 antes del cambio) se comporta como siempre. Salida Mostrador se ve en
 Forratuc para quien tiene Forratuc, y en la avícola para el resto.
+
+Desde el 2026-10-26 cada empresa tiene **su componente de menú**:
+`components/MenuAvicola.jsx` y `components/forratuc/MenuForratuc.jsx`, elegidos
+por la tabla `MENUS` de `Layout.jsx` (título + menú). El Layout arma los ítems
+del grupo (Altas, Actividad) y se los pasa como `grupo`; cada menú decide dónde
+van. `ProtectedRoute` además saca a quien abre una ruta de una empresa que no
+tiene (`puedeEntrarARuta` / `inicioUsuario`), así que las páginas ya **no**
+chequean la empresa por su cuenta. Lo de Forratuc vive en
+`pages|components|utils/forratuc/`.
 
 > En la lista de abajo, donde dice `superadmin` leé **`superadmin` + `admin`**
 > (`mandaTodo`). Las dos únicas excepciones están marcadas: **Usuarios** y
@@ -204,7 +214,7 @@ Secciones: `USUARIOS`, `CLIENTES`, `LOTES (FAENA)`, `ENVÍOS CÁMARA`, `DESPACHO
 Desde el 2026-09-21 saca **dos stocks distintos** en una sola operación:
 
 - **Pollo** (entero por calibre + trozado) de la cámara Trigotuc, que viene de
-  `obtenerResumenStock()`.
+  `obtenerStockCamaraMostrador()` (`/ventas-mostrador/stock-camara`, el mismo resumen que `/lotes/resumen`, que es solo de la avícola).
 - **Huevo** de `stockHuevo` —el que ya llegó a Trigotuc por remito—, que viene de
   `obtenerStockHuevosMostrador()`, su propio endpoint. Se carga en **maples** y
   la pantalla muestra a cuántos huevos equivale.

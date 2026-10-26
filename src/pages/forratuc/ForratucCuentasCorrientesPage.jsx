@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
-import Layout from "../components/Layout";
-import BuscadorCliente from "../components/BuscadorCliente";
-import PagosForratuc from "../components/PagosForratuc";
-import { pagoVacio, pagosParaEnviar, sumaPagos } from "../utils/pagosForratuc";
-import { obtenerEmpresasUsuario } from "../utils/empresas";
-import { obtenerFechaHoy, formatearFechaLocal } from "../utils/dateUtils";
-import { escapeHtml } from "../utils/escapeHtml";
-import { imprimirPresupuestoForratuc, imprimirReciboForratuc } from "../utils/imprimirForratuc";
+import Layout from "../../components/Layout";
+import BuscadorCliente from "../../components/BuscadorCliente";
+import PagosForratuc from "../../components/forratuc/PagosForratuc";
+import { pagoVacio, pagosParaEnviar, sumaPagos } from "../../utils/forratuc/pagosForratuc";
+import { obtenerFechaHoy, formatearFechaLocal } from "../../utils/dateUtils";
+import { escapeHtml } from "../../utils/escapeHtml";
+import { imprimirPresupuestoForratuc, imprimirReciboForratuc } from "../../utils/forratuc/imprimirForratuc";
 import {
   obtenerClientes,
   obtenerConstantesPresupuesto,
@@ -16,7 +15,7 @@ import {
   obtenerCuentaClienteForratuc,
   registrarCobroForratuc,
   anularCobroForratuc,
-} from "../services/api";
+} from "../../services/api";
 
 /**
  * Cuentas corrientes de Forratuc (2026-10-21).
@@ -32,7 +31,6 @@ const pesos = (n) =>
 
 const ForratucCuentasCorrientesPage = () => {
   const navigate = useNavigate();
-  const habilitada = obtenerEmpresasUsuario().some((e) => e.clave === "forratuc");
 
   const [saldos, setSaldos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -167,8 +165,6 @@ const ForratucCuentasCorrientesPage = () => {
       : saldos;
   }, [saldos, filtro]);
   const totalACobrar = saldos.reduce((a, s) => a + (s.saldo > 0 ? s.saldo : 0), 0);
-
-  if (!habilitada) return <Navigate to="/inicio" replace />;
 
   return (
     <Layout>

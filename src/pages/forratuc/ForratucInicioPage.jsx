@@ -1,7 +1,6 @@
 import React from "react";
-import { Navigate, useNavigate } from "react-router-dom";
-import Layout from "../components/Layout";
-import { obtenerEmpresasUsuario } from "../utils/empresas";
+import { useNavigate } from "react-router-dom";
+import Layout from "../../components/Layout";
 
 // Forratuc (2026-10-16): local de venta al público del grupo. Vende lo propio
 // (alimento balanceado que fabrica, aceites, etc.) y lo de la avícola (pollo,
@@ -14,8 +13,6 @@ const PROXIMAMENTE = [
 
 const ForratucInicioPage = () => {
   const navigate = useNavigate();
-  const habilitada = obtenerEmpresasUsuario().some((e) => e.clave === "forratuc");
-  if (!habilitada) return <Navigate to="/inicio" replace />;
 
   return (
     <Layout>

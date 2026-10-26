@@ -5,7 +5,7 @@ import BotonExcel from "../components/BotonExcel";
 import CalibreTable from "../components/CalibreTable";
 import { BADGE_ESPECIE, especieDe, etiquetaEspecie, mismoEntero, claveEntero, claveTrozado, hayVariasEspecies, nombrarEspecie, textoCalibre } from "../utils/especies";
 import {
-  obtenerResumenStock,
+  obtenerStockCamaraMostrador,
   obtenerStockHuevosMostrador,
   obtenerStockPollitosMostrador,
   registrarSalidaMostrador,
@@ -237,7 +237,7 @@ const SalidaMostradorPage = () => {
       // juntos. Si el de huevos o el de pollitos falla no se cae la página — el
       // mostrador tiene que poder vender pollo igual.
       const [stock, huevos, pollitos] = await Promise.all([
-        obtenerResumenStock(),
+        obtenerStockCamaraMostrador(),
         obtenerStockHuevosMostrador().catch(() => null),
         obtenerStockPollitosMostrador().catch(() => null),
       ]);

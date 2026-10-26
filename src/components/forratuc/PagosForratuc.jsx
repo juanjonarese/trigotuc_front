@@ -1,5 +1,5 @@
 import React from "react";
-import { pagoVacio, sumaPagos } from "../utils/pagosForratuc";
+import { pagoVacio, sumaPagos } from "../../utils/forratuc/pagosForratuc";
 
 /**
  * Editor de pagos de Forratuc (2026-10-21): uno o varios medios, cada uno con su

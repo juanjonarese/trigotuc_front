@@ -1,6 +1,6 @@
-import { escapeHtml } from "./escapeHtml";
-import { formatearFechaLocal } from "./dateUtils";
-import { imprimirHtml } from "./imprimirHtml";
+import { escapeHtml } from "../escapeHtml";
+import { formatearFechaLocal } from "../dateUtils";
+import { imprimirHtml } from "../imprimirHtml";
 
 /**
  * Papeles de Forratuc (2026-10-21), en A4 y POR DUPLICADO (original para el

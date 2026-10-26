@@ -1,18 +1,17 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
-import Layout from "../components/Layout";
-import BuscadorCliente from "../components/BuscadorCliente";
-import { especieDe, etiquetaEspecie } from "../utils/especies";
-import { obtenerEmpresasUsuario } from "../utils/empresas";
-import { obtenerFechaHoy, formatearFechaLocal } from "../utils/dateUtils";
-import { escapeHtml } from "../utils/escapeHtml";
-import { imprimirPresupuestoForratuc } from "../utils/imprimirForratuc";
-import PagosForratuc from "../components/PagosForratuc";
-import { pagoVacio, pagosParaEnviar, sumaPagos } from "../utils/pagosForratuc";
+import Layout from "../../components/Layout";
+import BuscadorCliente from "../../components/BuscadorCliente";
+import { especieDe, etiquetaEspecie } from "../../utils/especies";
+import { obtenerFechaHoy, formatearFechaLocal } from "../../utils/dateUtils";
+import { escapeHtml } from "../../utils/escapeHtml";
+import { imprimirPresupuestoForratuc } from "../../utils/forratuc/imprimirForratuc";
+import PagosForratuc from "../../components/forratuc/PagosForratuc";
+import { pagoVacio, pagosParaEnviar, sumaPagos } from "../../utils/forratuc/pagosForratuc";
 import {
   obtenerCuentaClienteForratuc,
-  obtenerResumenStock,
+  obtenerStockCamaraMostrador,
   obtenerStockHuevosMostrador,
   obtenerStockPollitosMostrador,
   obtenerClientes,
@@ -20,7 +19,7 @@ import {
   obtenerPresupuestosForratuc,
   crearPresupuestoForratuc,
   anularPresupuestoForratuc,
-} from "../services/api";
+} from "../../services/api";
 
 /**
  * Mostrador de Forratuc (2026-10-21): el presupuesto, que es su "factura".
@@ -47,7 +46,6 @@ const renglonVacio = () => ({ id: siguienteId++, producto: "", cantidad: "", kg:
 
 const ForratucPresupuestosPage = () => {
   const navigate = useNavigate();
-  const habilitada = obtenerEmpresasUsuario().some((e) => e.clave === "forratuc");
 
   const [tab, setTab] = useState("nuevo");
   const [loading, setLoading] = useState(true);
@@ -84,7 +82,7 @@ const ForratucPresupuestosPage = () => {
     try {
       // Huevo y pollitos con catch: si fallan, se tiene que poder vender lo demás.
       const [stock, huevos, pollitos, cls, ctes] = await Promise.all([
-        obtenerResumenStock(),
+        obtenerStockCamaraMostrador(),
         obtenerStockHuevosMostrador().catch(() => null),
         obtenerStockPollitosMostrador().catch(() => null),
         obtenerClientes().catch(() => []),
@@ -340,8 +338,6 @@ const ForratucPresupuestosPage = () => {
       Swal.fire("Error", err.message || "No se pudo anular.", "error");
     }
   };
-
-  if (!habilitada) return <Navigate to="/inicio" replace />;
 
   const emitidos = presupuestos.filter((p) => p.estado === "emitido");
   const totalEmitidos = emitidos.reduce((a, p) => a + p.total, 0);

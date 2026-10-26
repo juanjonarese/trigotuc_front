@@ -45,9 +45,9 @@ import AlimentoSilosPage from "./pages/AlimentoSilosPage";
 import PlanPollitosPage from "./pages/PlanPollitosPage";
 import StockHuevosPage from "./pages/StockHuevosPage";
 import InicioPage from "./pages/InicioPage";
-import ForratucInicioPage from "./pages/ForratucInicioPage";
-import ForratucPresupuestosPage from "./pages/ForratucPresupuestosPage";
-import ForratucCuentasCorrientesPage from "./pages/ForratucCuentasCorrientesPage";
+import ForratucInicioPage from "./pages/forratuc/ForratucInicioPage";
+import ForratucPresupuestosPage from "./pages/forratuc/ForratucPresupuestosPage";
+import ForratucCuentasCorrientesPage from "./pages/forratuc/ForratucCuentasCorrientesPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {

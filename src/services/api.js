@@ -171,6 +171,16 @@ export const crearEnvioCamara = async (data) => {
   return handleResponse(response);
 };
 
+// El pollo de la cámara Trigotuc para el mostrador: el mismo resumen que
+// `obtenerResumenStock()`, pero por la ruta del mostrador, que la usan las dos
+// empresas (/lotes es solo de la avícola).
+export const obtenerStockCamaraMostrador = async () => {
+  const response = await fetch(`${API_URL}/ventas-mostrador/stock-camara`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
 // El stock de huevo que el mostrador puede vender: el que ya llegó a Trigotuc
 // por remito y no es incubable. Viene por tipo, en huevos y en maples.
 export const obtenerStockHuevosMostrador = async () => {
