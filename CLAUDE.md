@@ -27,7 +27,7 @@ There are no automated tests.
 | `/forratuc` | `ForratucInicioPage` (en desarrollo, solo superadmin) | Forratuc |
 | `/forratuc/mostrador` | `ForratucPresupuestosPage` (2026-10-21: presupuesto con fecha, cliente, precios y condición de pago — contado con `components/forratuc/PagosForratuc.jsx` o cuenta corriente; imprime con `utils/forratuc/imprimirForratuc.js`) | Forratuc |
 | `/forratuc/cuentas-corrientes` | `ForratucCuentasCorrientesPage` (saldos por cliente, movimientos con saldo, registrar pago → recibo) | Forratuc |
-| `/forratuc/stock` | `ForratucStockPage` (2026-10-26: pollo de la cámara Trigotuc, huevo, pollitos y alimento balanceado en bolsas, todo de `GET /stock-forratuc`) | Forratuc |
+| `/forratuc/stock` | `ForratucStockPage` (2026-10-26: pollo de la cámara Trigotuc, huevo, pollitos y alimento balanceado en bolsas, todo de `GET /stock-forratuc`; una **tarjeta por lugar** — cámara Trigotuc, huevos, pollitos, cada depósito de alimento — con el **diseño de Frigorífico → Stock** (total arriba, cuadritos con badge, historial abajo); al tocarla, el historial de ese lugar como cuenta corriente, de `GET /stock-forratuc/movimientos/:lugar`) | Forratuc |
 | `/forratuc/salidas` | `SalidaMostradorPage` (la salida suelta; las de un presupuesto salen con su número y sin editar/borrar) | Forratuc |
 | `/dashboard` | `DashboarPage` (typo intencional) | General |
 | `/clientes` | `ClientesPage` | Altas |

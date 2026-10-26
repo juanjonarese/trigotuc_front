@@ -351,7 +351,7 @@ const ForratucPresupuestosPage = () => {
           </button>
           <h1 className="h3 mb-0">
             <i className="bi bi-receipt me-2 text-secondary"></i>
-            Mostrador — Presupuestos
+            Ventas
           </h1>
         </div>
 

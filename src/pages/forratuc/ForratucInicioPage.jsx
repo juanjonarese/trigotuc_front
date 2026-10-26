@@ -25,7 +25,7 @@ const ForratucInicioPage = () => {
         <div className="card border-0 shadow-sm mb-3">
           <div className="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
             <div>
-              <div className="fw-semibold">Mostrador · Presupuestos</div>
+              <div className="fw-semibold">Ventas</div>
               <div className="text-muted small">Fecha, cliente y precios: pollo, huevo, pollitos y alimento. Contado o cuenta corriente. Se imprime y el cliente retira con él.</div>
             </div>
             <button type="button" className="btn btn-dark btn-sm" onClick={() => navigate("/forratuc/mostrador")}>

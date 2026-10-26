@@ -26,7 +26,7 @@ const MenuForratuc = ({ ctx, grupo }) => {
             onClick={(e) => { e.preventDefault(); navigate("/forratuc/mostrador"); }}
           >
             <i className="bi bi-receipt fs-5"></i>
-            <span>Mostrador · Presupuestos</span>
+            <span>Ventas</span>
           </a>
           <a
             href="#"

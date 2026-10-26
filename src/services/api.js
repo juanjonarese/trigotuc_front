@@ -295,6 +295,13 @@ export const obtenerStockForratuc = async () => {
   return handleResponse(response);
 };
 
+// Movimientos de un lugar del stock de Forratuc, como cuenta corriente:
+// camara | huevos | pollitos | trigotuc | forrajeria (los depósitos de alimento).
+export const obtenerMovimientosStockForratuc = async (lugar) => {
+  const response = await fetch(`${API_URL}/stock-forratuc/movimientos/${lugar}`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
 // Borra una salida de mostrador (devuelve el stock a la cámara).
 export const eliminarSalidaMostrador = async (id) => {
   const response = await fetch(`${API_URL}/ventas-mostrador/${id}`, {
