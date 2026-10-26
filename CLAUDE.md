@@ -27,6 +27,7 @@ There are no automated tests.
 | `/forratuc` | `ForratucInicioPage` (en desarrollo, solo superadmin) | Forratuc |
 | `/forratuc/mostrador` | `ForratucPresupuestosPage` (2026-10-21: presupuesto con fecha, cliente, precios y condición de pago — contado con `components/forratuc/PagosForratuc.jsx` o cuenta corriente; imprime con `utils/forratuc/imprimirForratuc.js`) | Forratuc |
 | `/forratuc/cuentas-corrientes` | `ForratucCuentasCorrientesPage` (saldos por cliente, movimientos con saldo, registrar pago → recibo) | Forratuc |
+| `/forratuc/stock` | `ForratucStockPage` (2026-10-26: pollo de la cámara Trigotuc, huevo, pollitos y alimento balanceado en bolsas, todo de `GET /stock-forratuc`) | Forratuc |
 | `/forratuc/salidas` | `SalidaMostradorPage` (la salida suelta; las de un presupuesto salen con su número y sin editar/borrar) | Forratuc |
 | `/dashboard` | `DashboarPage` (typo intencional) | General |
 | `/clientes` | `ClientesPage` | Altas |
@@ -114,7 +115,7 @@ rutas del grupo `/inicio`, `/clientes`, `/personal`, `/camiones` y Actividad
 mantienen la última empresa; la avícola tiene sus prefijos explícitos en
 `PREFIJOS_EMPRESA`). Altas y Actividad salen en todas. Las
 empresas del usuario vienen del login (`localStorage.empresas`); con más de
-una aparece "Cambiar empresa" → `/inicio`. Una sesión sin `empresas` (abierta
+una, el nombre de la empresa arriba del menú es un **selector**: se toca y se pasa a otra de un clic, directo a su pantalla de entrada (2026-10-26; antes "Cambiar empresa" iba a las tarjetas de `/inicio`). Una sesión sin `empresas` (abierta
 antes del cambio) se comporta como siempre. Salida Mostrador se ve en
 Forratuc para quien tiene Forratuc, y en la avícola para el resto.
 

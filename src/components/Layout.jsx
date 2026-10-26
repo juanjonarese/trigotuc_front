@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import "../css/DashboardPage.css";
 import usePushNotification from "../hooks/usePushNotification";
 import AsistenteFlotante from "./AsistenteFlotante";
-import { empresaActual as calcularEmpresaActual, obtenerEmpresasUsuario } from "../utils/empresas";
+import { empresaActual as calcularEmpresaActual, inicioEmpresa, obtenerEmpresasUsuario } from "../utils/empresas";
 import MenuAvicola from "./MenuAvicola";
 import MenuForratuc from "./forratuc/MenuForratuc";
 
@@ -71,10 +71,22 @@ const Layout = ({ children }) => {
   const mandaTodo = rolUsuario === "superadmin" || rolUsuario === "admin";
 
   // Multiempresa (2026-10-16): el menú es el de la empresa en la que estás.
-  // Altas y Actividad son del grupo y salen en todas. Quien tiene más de una
-  // empresa ve "Cambiar empresa", que vuelve a las tarjetas de inicio.
+  // Altas y Actividad son del grupo y salen en todas.
   const empresas = obtenerEmpresasUsuario();
-  const { titulo, Menu } = MENUS[calcularEmpresaActual(location.pathname)] || MENUS.avicola;
+  const claveEmpresa = calcularEmpresaActual(location.pathname);
+  const { titulo, Menu } = MENUS[claveEmpresa] || MENUS.avicola;
+
+  // Selector de empresa (2026-10-26): quien tiene más de una toca el nombre de
+  // la empresa y pasa a la otra de un clic, directo a su pantalla de entrada.
+  // Antes "Cambiar empresa" lo mandaba a las tarjetas de inicio: un paso de
+  // más para quien trabaja en las dos el mismo día (vende pollo por orden de
+  // carga en la avícola y alimento en Forratuc).
+  const [selectorAbierto, setSelectorAbierto] = useState(false);
+  const irAEmpresa = (clave) => {
+    setSelectorAbierto(false);
+    try { localStorage.setItem("empresaActual", clave); } catch { /* sin storage */ }
+    navigate(inicioEmpresa(clave, rolUsuario));
+  };
 
   // Auto-expand: al cambiar de ruta se abre la sección que le corresponde
   // (y se cierra la anterior). Ajuste de estado durante el render, no en un
@@ -82,6 +94,7 @@ const Layout = ({ children }) => {
   const [rutaPrevia, setRutaPrevia] = useState(location.pathname);
   if (rutaPrevia !== location.pathname) {
     setRutaPrevia(location.pathname);
+    setSelectorAbierto(false);
     const seccion = seccionDeRuta(location.pathname);
     if (seccion) setSeccionAbierta(seccion);
   }
@@ -117,15 +130,42 @@ const Layout = ({ children }) => {
         className={`sidebar bg-dark text-white ${sidebarOpen ? "show" : ""}`}
       >
         <div className="sidebar-header p-4 border-bottom border-secondary">
-          <h2 className="h4 mb-0">{titulo}</h2>
-          {empresas.length > 1 && (
-            <button
-              type="button"
-              className="btn btn-link btn-sm text-white-50 p-0 mt-2 text-decoration-none"
-              onClick={() => navigate("/inicio")}
-            >
-              Cambiar empresa
-            </button>
+          {empresas.length > 1 ? (
+            <>
+              <button
+                type="button"
+                className="btn p-0 border-0 text-white text-start w-100 d-flex align-items-center justify-content-between gap-2"
+                onClick={() => setSelectorAbierto((abierto) => !abierto)}
+                aria-expanded={selectorAbierto}
+                title="Cambiar de empresa"
+              >
+                <h2 className="h4 mb-0">{titulo}</h2>
+                <i className={`bi bi-chevron-${selectorAbierto ? "up" : "down"} text-white-50`}></i>
+              </button>
+              {selectorAbierto && (
+                <div className="mt-3">
+                  <div className="small text-white-50 mb-1">Cambiar a</div>
+                  {empresas
+                    .filter((e) => e.clave !== claveEmpresa)
+                    .map((e) => (
+                      <button
+                        key={e.clave}
+                        type="button"
+                        className="nav-link btn border-0 bg-transparent text-white-50 w-100 text-start d-flex align-items-center gap-2 rounded px-2 py-2"
+                        onClick={() => irAEmpresa(e.clave)}
+                      >
+                        <i className="bi bi-arrow-left-right"></i>
+                        <span>{e.nombre}</span>
+                        {e.enDesarrollo && (
+                          <span className="badge bg-warning text-dark ms-auto">en desarrollo</span>
+                        )}
+                      </button>
+                    ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <h2 className="h4 mb-0">{titulo}</h2>
           )}
         </div>
 

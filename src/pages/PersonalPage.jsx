@@ -26,8 +26,8 @@ const PersonalPage = () => {
     rolUsuario: "administracion_frigorifico",
     empresas: ["avicola"],
   });
-  // Empresas del grupo (2026-10-16). Solo el rol `admin` las tilda: es el único
-  // multiempresa; el resto de los roles son de una empresa.
+  // Empresas del grupo (2026-10-16). Desde el 2026-10-26 se tildan en CUALQUIER
+  // usuario, del rol que sea, menos el superadmin (que ve todas).
   const [catalogoEmpresas, setCatalogoEmpresas] = useState([]);
   const [confirmarContrasenia, setConfirmarContrasenia] = useState("");
   const [showPass, setShowPass]         = useState(false);
@@ -50,7 +50,8 @@ const PersonalPage = () => {
       .catch(() => setCatalogoEmpresas([]));
   }, [rolUsuario, navigate]);
 
-  // Un admin anterior al multiempresa no tiene lista: era de la avícola.
+  // Un usuario sin lista (anterior al 2026-10-26) entra a la empresa de su rol,
+  // que para todos los roles de hoy es la avícola.
   const empresasDe = (usuario) =>
     usuario.empresas?.length ? usuario.empresas : ["avicola"];
 
@@ -165,20 +166,20 @@ const PersonalPage = () => {
       }
     }
 
-    const esAdmin = formData.rolUsuario === "admin";
-    if (esAdmin && formData.empresas.length === 0) {
+    const llevaEmpresas = formData.rolUsuario !== "superadmin";
+    if (llevaEmpresas && formData.empresas.length === 0) {
       Swal.fire({
         icon: "warning",
         title: "Faltan las empresas",
-        text: "Un admin tiene que tener tildada al menos una empresa.",
+        text: "El usuario tiene que tener tildada al menos una empresa.",
       });
       return;
     }
 
     try {
-      // Las empresas solo viajan para el admin; el back las borra para el resto.
+      // El superadmin no lleva empresas: ve todas.
       const base = { ...formData };
-      if (!esAdmin) delete base.empresas;
+      if (!llevaEmpresas) delete base.empresas;
       if (editingUsuario) {
         // Al editar, solo enviar contraseña si se ingresó una nueva
         const dataToSend = { ...base };
@@ -369,7 +370,7 @@ const PersonalPage = () => {
                           }`}>
                             {usuario.rolUsuario}
                           </span>
-                          {usuario.rolUsuario === "admin" && (
+                          {usuario.rolUsuario !== "superadmin" && (
                             <div className="small text-muted mt-1">
                               {empresasDe(usuario).map(nombreEmpresa).join(" · ")}
                             </div>
@@ -409,7 +410,7 @@ const PersonalPage = () => {
                               }`}>
                                 {usuario.rolUsuario}
                               </span>
-                              {usuario.rolUsuario === "admin" && (
+                              {usuario.rolUsuario !== "superadmin" && (
                                 <div className="small text-muted mt-1">
                                   {empresasDe(usuario).map(nombreEmpresa).join(" · ")}
                                 </div>
@@ -684,8 +685,9 @@ const PersonalPage = () => {
                         </div>
                       </div>
 
-                      {/* Empresas del grupo: solo el admin es multiempresa. */}
-                      {formData.rolUsuario === "admin" && (
+                      {/* Empresas del grupo: se tildan en cualquier rol menos el
+                          superadmin, que ve todas (2026-10-26). */}
+                      {formData.rolUsuario !== "superadmin" && (
                         <div className="mb-3">
                           <label className="form-label">
                             Empresas a las que entra <span className="text-danger">*</span>
@@ -710,8 +712,10 @@ const PersonalPage = () => {
                             ))}
                           </div>
                           <div className="form-text">
-                            Las empresas en desarrollo quedan tildadas pero el admin no las ve
-                            hasta que se liberen; por ahora solo las ve el superadmin.
+                            Tildar una empresa le da la entrada; lo que puede hacer adentro
+                            lo sigue diciendo el rol. Las empresas en desarrollo quedan
+                            tildadas pero no las ve hasta que se liberen; por ahora solo las
+                            ve el superadmin.
                           </div>
                         </div>
                       )}
