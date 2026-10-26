@@ -48,6 +48,7 @@ import InicioPage from "./pages/InicioPage";
 import ForratucInicioPage from "./pages/forratuc/ForratucInicioPage";
 import ForratucPresupuestosPage from "./pages/forratuc/ForratucPresupuestosPage";
 import ForratucCuentasCorrientesPage from "./pages/forratuc/ForratucCuentasCorrientesPage";
+import ForratucStockPage from "./pages/forratuc/ForratucStockPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
@@ -69,6 +70,8 @@ function App() {
         <Route path="/forratuc/mostrador" element={<ProtectedRoute><ForratucPresupuestosPage /></ProtectedRoute>} />
         <Route path="/forratuc/salidas" element={<ProtectedRoute><SalidaMostradorPage /></ProtectedRoute>} />
         <Route path="/forratuc/cuentas-corrientes" element={<ProtectedRoute><ForratucCuentasCorrientesPage /></ProtectedRoute>} />
+        {/* Stock del local (2026-10-26): pollo, huevo, pollitos y alimento balanceado. */}
+        <Route path="/forratuc/stock" element={<ProtectedRoute><ForratucStockPage /></ProtectedRoute>} />
 
         <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
         {/* Proyección vive en la raíz del menú (cruza Reproductores y Granja). */}

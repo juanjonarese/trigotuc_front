@@ -288,6 +288,13 @@ export const anularCobroForratuc = async (id, motivo) => {
   return handleResponse(response);
 };
 
+// ── Stock de Forratuc (2026-10-26): pollo, huevo y pollitos de la avícola +
+// el alimento balanceado propio, en bolsas.
+export const obtenerStockForratuc = async () => {
+  const response = await fetch(`${API_URL}/stock-forratuc`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
 // Borra una salida de mostrador (devuelve el stock a la cámara).
 export const eliminarSalidaMostrador = async (id) => {
   const response = await fetch(`${API_URL}/ventas-mostrador/${id}`, {
