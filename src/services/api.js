@@ -961,6 +961,21 @@ export const eliminarMortandadReproductor = async (id, mortandadId) => {
   return handleResponse(response);
 };
 
+// Traslado de aves entre planteles (2026-10-27): no es mortandad.
+export const trasladarAvesReproductor = async (data) => {
+  const response = await fetch(`${API_URL}/lotes-reproductores/traslados`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const eliminarTrasladoReproductor = async (id, trasladoId) => {
+  const response = await fetch(`${API_URL}/lotes-reproductores/${id}/traslado/${trasladoId}`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
 export const registrarPesajeReproductor = async (id, data) => {
   const response = await fetch(`${API_URL}/lotes-reproductores/${id}/pesaje`, {
     method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),

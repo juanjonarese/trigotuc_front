@@ -3,6 +3,7 @@ import Layout from "../components/Layout";
 import HistorialReproductor from "../components/HistorialReproductor";
 import SanidadGalpon from "../components/SanidadGalpon";
 import MudanzaPosturaModal from "../components/MudanzaPosturaModal";
+import TrasladoAvesModal from "../components/TrasladoAvesModal";
 import {
   obtenerConstantesReproductores,
   obtenerLotesReproductores,
@@ -671,6 +672,7 @@ const ReproductoresDatosPage = () => {
   const [editPesaje, setEditPesaje] = useState(null);
   const [editControl, setEditControl] = useState(null);
   const [showMudanza, setShowMudanza] = useState(false);
+  const [showTraslado, setShowTraslado] = useState(false);
 
   const cargar = useCallback(async () => {
     try {
@@ -1062,6 +1064,17 @@ const ReproductoresDatosPage = () => {
                         </button>
                       )}
                       <button
+                        className="btn btn-outline-secondary px-4 py-3"
+                        style={{ minWidth: "150px" }}
+                        onClick={() => setShowTraslado(true)}
+                      >
+                        <i className="bi bi-arrow-left-right fs-4 d-block mb-1"></i>
+                        Trasladar aves
+                        {(lote.traslados?.length || 0) > 0 && (
+                          <span className="badge bg-secondary ms-1">{lote.traslados.length}</span>
+                        )}
+                      </button>
+                      <button
                         className="btn btn-outline-info px-4 py-3"
                         style={{ minWidth: "150px" }}
                         onClick={() => setModo("sanidad")}
@@ -1429,6 +1442,19 @@ const ReproductoresDatosPage = () => {
           onHecho={() => {
             setShowMudanza(false);
             setModo(null);
+            cargar();
+          }}
+        />
+      )}
+
+      {showTraslado && lote && (
+        <TrasladoAvesModal
+          lote={lote}
+          constantes={constantes}
+          lotes={lotes}
+          onClose={() => setShowTraslado(false)}
+          onHecho={() => {
+            setShowTraslado(false);
             cargar();
           }}
         />
