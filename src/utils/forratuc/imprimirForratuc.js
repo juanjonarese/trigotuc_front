@@ -3,12 +3,23 @@ import { formatearFechaLocal } from "../dateUtils";
 import { imprimirHtml } from "../imprimirHtml";
 
 /**
- * Papeles de Forratuc (2026-10-21), en A4 y POR DUPLICADO (original para el
- * cliente, duplicado para el local):
+ * Papeles de Forratuc (2026-10-21):
  *   · el PRESUPUESTO, con el que el cliente retira la mercadería;
- *   · el RECIBO del cobro de cuenta corriente.
+ *   · el RECIBO del cobro de cuenta corriente;
+ *   · la RENDICIÓN Y CIERRE DE CAJA (2026-10-29), que se entrega con la plata.
  *
- * ⚠️ Forratuc NO factura (decisión del usuario, 2026-10-16): por eso cada hoja
+ * Presupuesto y recibo van POR DUPLICADO y, desde el 2026-10-29 (observaciones
+ * del cliente), las DOS COPIAS EN UNA SOLA HOJA A4: media hoja cada una, con
+ * una línea de corte. Si los renglones no entran en media hoja, cada copia va
+ * en su hoja (mejor eso que cortar el detalle).
+ *
+ * Observaciones del cliente sobre el presupuesto (2026-10-29): sin "Orden de
+ * retiro", sin "Original — Cliente" y sin "Presentar presupuesto para retirar
+ * mercadería"; sin recuadro de condición de pago, en su lugar la línea
+ * "Condiciones de pago: …" y la leyenda de validez; con el OPERADOR y el
+ * DEPÓSITO del que sale el alimento.
+ *
+ * ⚠️ Forratuc NO factura (decisión del usuario, 2026-10-16): por eso cada copia
  * dice "Documento no válido como factura" y no lleva CAI, ni código de barras,
  * ni tipo de comprobante. Generar esos datos acá sería fabricar un comprobante
  * fiscal.
@@ -25,7 +36,8 @@ const EMISOR = {
   cuit:        "",
 };
 
-const COPIAS = ["ORIGINAL — CLIENTE", "DUPLICADO — LOCAL"];
+// Hasta cuántos renglones entran en media hoja.
+const RENGLONES_MEDIA_HOJA = 8;
 
 const fmt = (n) =>
   new Intl.NumberFormat("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(Number(n || 0));
@@ -33,9 +45,9 @@ const pesos = (n) =>
   new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(Number(n || 0));
 
 const UNIDAD_PRECIO = { kg: "kg", maple: "maple", pollito: "u.", bolsa: "bolsa" };
-const CONDICION = { contado: "Contado", cuenta_corriente: "Cuenta corriente" };
+const DEPOSITOS = { forrajeria: "Depósito Forrajería", trigotuc: "Depósito Trigotuc" };
 
-// "Cheque Macro N° 000123, cobro 15/11/2026, librador Don Pepe SRL"
+// "Mercado Pago — op. 123"
 const detallePago = (p, medios) => {
   const nombre = medios.find((m) => m.key === p.medio)?.etiqueta || p.medio;
   const partes = [];
@@ -53,11 +65,14 @@ const tablaPagos = (pagos, medios) => `
     ${pagos.map((p) => `<tr><td>${detallePago(p, medios)}</td><td class="num">${pesos(p.importe)}</td></tr>`).join("")}
   </table>`;
 
-const encabezado = (titulo, subtitulo, numero, fecha) => {
+const operadorDe = (d) => d.registradoPor?.nombreUsuario || "";
+
+const encabezado = (titulo, subtitulo, d) => {
   const datosEmisor = [EMISOR.direccion, EMISOR.localidad, EMISOR.telefono && `Tel. ${EMISOR.telefono}`]
     .filter(Boolean)
     .map(escapeHtml)
-    .join("<br/>");
+    .join(" · ");
+  const operador = operadorDe(d);
   return `
     <header>
       <div class="emisor">
@@ -69,86 +84,96 @@ const encabezado = (titulo, subtitulo, numero, fecha) => {
       <div class="doc">
         <div class="titulo">${titulo}</div>
         <div class="noval">Documento no válido como factura</div>
-        <div class="interno">${subtitulo}</div>
-        <div class="numero">N° ${escapeHtml(numero)}</div>
-        <div class="fecha"><span>Fecha</span> ${escapeHtml(formatearFechaLocal(fecha))}</div>
+        ${subtitulo ? `<div class="interno">${subtitulo}</div>` : ""}
+        <div class="numero">N° ${escapeHtml(d.numero)}</div>
+        <div class="fecha"><span>Fecha</span> ${escapeHtml(formatearFechaLocal(d.fecha))}</div>
+        ${operador ? `<div class="fecha"><span>Operador</span> ${escapeHtml(operador)}</div>` : ""}
       </div>
     </header>`;
 };
 
 const bloqueCliente = (d) => {
   const extra = [
-    d.clienteCuit && `<div><strong>CUIT:</strong> ${escapeHtml(d.clienteCuit)}</div>`,
-    d.clienteDomicilio && `<div><strong>Domicilio:</strong> ${escapeHtml(d.clienteDomicilio)}</div>`,
-    d.clienteTelefono && `<div><strong>Teléfono:</strong> ${escapeHtml(d.clienteTelefono)}</div>`,
+    d.clienteCuit && `<span><strong>CUIT:</strong> ${escapeHtml(d.clienteCuit)}</span>`,
+    d.clienteDomicilio && `<span><strong>Domicilio:</strong> ${escapeHtml(d.clienteDomicilio)}</span>`,
+    d.clienteTelefono && `<span><strong>Tel.:</strong> ${escapeHtml(d.clienteTelefono)}</span>`,
   ].filter(Boolean).join("");
-  return `<section class="cliente"><div><strong>Cliente:</strong> ${escapeHtml(d.clienteNombre)}</div>${extra}</section>`;
+  return `<section class="cliente"><div><strong>Cliente:</strong> ${escapeHtml(d.clienteNombre)}</div>${extra ? `<div class="extra">${extra}</div>` : ""}</section>`;
 };
 
 const ESTILOS = `
   /* Margen en la hoja, no en @page: ver imprimirRemitoAlimento.js. */
   @page { size: A4; margin: 0; }
   * { box-sizing: border-box; }
-  body { font-family: Arial, Helvetica, sans-serif; color: #000; margin: 0; font-size: 11pt; }
-  .hoja { page-break-after: always; position: relative; padding: 14mm 15mm 16mm;
-          -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #000; margin: 0; font-size: 10pt; }
+  .hoja { page-break-after: always; }
   .hoja:last-child { page-break-after: auto; }
   table tr { break-inside: avoid; }
 
-  .copia-fila { display: flex; justify-content: flex-end; margin-bottom: 2mm; }
-  .copia { font-size: 9pt; letter-spacing: 2px; font-weight: bold; border: 1px solid #000; padding: 2px 8px; }
+  /* Una copia: media hoja A4 (297 / 2), o la hoja entera si no entra. */
+  .copia { position: relative; padding: 9mm 13mm 7mm; overflow: hidden; }
+  .media .copia { height: 148.5mm; }
+  .media .copia + .copia { border-top: 1px dashed #777; }
 
-  header { display: flex; justify-content: space-between; gap: 10mm;
-           border-bottom: 2px solid #000; padding-bottom: 4mm; margin-bottom: 4mm; }
-  .marca { font-size: 22pt; font-weight: bold; letter-spacing: 1px; }
-  .sub { font-size: 10pt; margin-bottom: 2mm; }
-  .dir { font-size: 9pt; line-height: 1.35; }
+  header { display: flex; justify-content: space-between; gap: 8mm;
+           border-bottom: 2px solid #000; padding-bottom: 2.5mm; margin-bottom: 2.5mm; }
+  .marca { font-size: 17pt; font-weight: bold; letter-spacing: 1px; }
+  .sub { font-size: 8.5pt; margin-bottom: 1mm; }
+  .dir { font-size: 8pt; line-height: 1.3; }
   .doc { text-align: right; }
-  .titulo { font-size: 18pt; font-weight: bold; letter-spacing: 2px; }
-  .noval { font-size: 8.5pt; font-style: italic; }
-  .interno { font-size: 9pt; font-weight: bold; margin-top: 1mm; }
-  .numero { font-size: 14pt; font-weight: bold; margin: 2mm 0; }
-  .fecha span { font-size: 9pt; margin-right: 2mm; }
+  .titulo { font-size: 14pt; font-weight: bold; letter-spacing: 2px; }
+  .noval { font-size: 7.5pt; font-style: italic; }
+  .interno { font-size: 8pt; font-weight: bold; margin-top: .5mm; }
+  .numero { font-size: 12pt; font-weight: bold; margin: 1mm 0; }
+  .fecha { font-size: 9.5pt; }
+  .fecha span { font-size: 8pt; margin-right: 2mm; }
 
-  .cliente { border: 1px solid #000; padding: 3mm; margin-bottom: 4mm; line-height: 1.5; }
+  .cliente { border: 1px solid #000; padding: 1.8mm 2.5mm; margin-bottom: 2.5mm; line-height: 1.4; }
+  .cliente .extra { font-size: 8.5pt; display: flex; flex-wrap: wrap; gap: 0 5mm; }
 
   table.detalle { width: 100%; border-collapse: collapse; }
-  table.detalle th { border-bottom: 1.5px solid #000; font-size: 9pt; padding: 2mm 1.5mm; text-align: left; }
-  table.detalle td { border-bottom: 1px solid #bbb; padding: 2mm 1.5mm; vertical-align: top; }
-  .cant { width: 26mm; }
-  .num { text-align: right !important; white-space: nowrap; width: 32mm; }
-  .gris { color: #555; font-size: 9pt; }
+  table.detalle th { border-bottom: 1.5px solid #000; font-size: 8pt; padding: 1.2mm 1.5mm; text-align: left; }
+  table.detalle td { border-bottom: 1px solid #bbb; padding: 1.2mm 1.5mm; vertical-align: top; }
+  .cant { width: 24mm; }
+  .num { text-align: right !important; white-space: nowrap; width: 30mm; }
+  .gris { color: #555; font-size: 8pt; }
 
-  .total { text-align: right; font-size: 14pt; margin-top: 4mm; padding-top: 2mm; border-top: 2px solid #000; }
-  .total span { font-size: 10pt; margin-right: 4mm; letter-spacing: 1px; }
+  .total { text-align: right; font-size: 12pt; margin-top: 2mm; padding-top: 1.5mm; border-top: 2px solid #000; }
+  .total span { font-size: 9pt; margin-right: 4mm; letter-spacing: 1px; }
 
-  .pago { margin-top: 4mm; border: 1px solid #000; padding: 2.5mm 3mm; font-size: 10pt; }
-  .pago .cond { font-weight: bold; margin-bottom: 1.5mm; }
+  .condicion { margin-top: 2mm; font-size: 10pt; }
+  .pago { margin-top: 2.5mm; border: 1px solid #000; padding: 2mm 2.5mm; font-size: 9.5pt; }
   table.pagos { width: 100%; border-collapse: collapse; }
-  table.pagos td { padding: 1mm 0; border-bottom: 1px dotted #999; }
+  table.pagos td { padding: .8mm 0; border-bottom: 1px dotted #999; }
   table.pagos tr:last-child td { border-bottom: 0; }
 
-  .obs { margin-top: 4mm; font-size: 10pt; }
-  footer { margin-top: 14mm; }
-  .leyenda { font-size: 9pt; font-style: italic; margin-bottom: 14mm; }
+  .obs { margin-top: 2mm; font-size: 9pt; }
+  footer { margin-top: 5mm; }
+  .leyenda { font-size: 8.5pt; font-style: italic; margin-bottom: 9mm; }
   .firmas { display: flex; justify-content: space-between; gap: 15mm; }
-  .firma { flex: 1; border-top: 1px solid #000; padding-top: 1.5mm; text-align: center; font-size: 9pt; }
+  .firma { flex: 1; border-top: 1px solid #000; padding-top: 1mm; text-align: center; font-size: 8pt; }
 
-  .sello { position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%) rotate(-25deg);
-           font-size: 70pt; font-weight: bold; color: rgba(200, 0, 0, .25);
-           border: 6px solid rgba(200, 0, 0, .25); padding: 2mm 8mm; pointer-events: none; }
+  .sello { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-20deg);
+           font-size: 48pt; font-weight: bold; color: rgba(200, 0, 0, .25);
+           border: 5px solid rgba(200, 0, 0, .25); padding: 1mm 6mm; pointer-events: none; }
 `;
 
-const documento = (titulo, hojas) => `
+const documento = (titulo, cuerpo, estilos = ESTILOS) => `
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="utf-8"/>
   <title>${escapeHtml(titulo)}</title>
-  <style>${ESTILOS}</style>
+  <style>${estilos}</style>
 </head>
-<body>${hojas}</body>
+<body>${cuerpo}</body>
 </html>`;
+
+// Las dos copias: en una sola hoja si entran, si no una por hoja.
+const duplicado = (copia, entraEnMedia) =>
+  entraEnMedia
+    ? `<div class="hoja media">${copia}${copia}</div>`
+    : `<div class="hoja">${copia}</div><div class="hoja">${copia}</div>`;
 
 // ── Presupuesto ─────────────────────────────────────────────────────────────
 
@@ -158,22 +183,29 @@ const cantidadDeLinea = (l) =>
     ? `${fmt(l.cantidad)} ${escapeHtml(l.unidad)}<br/><span class="gris">${fmt(l.kg)} kg</span>`
     : `${fmt(l.cantidad)} ${escapeHtml(l.unidad)}`;
 
-const bloquePagoPresupuesto = (p, medios) => {
+// "Condiciones de pago: Contado" (o "Contado — Mercado Pago", o "Cuenta corriente").
+const condicionPresupuesto = (p, medios) => {
   if (!p.condicionPago) return "";
   if (p.condicionPago === "cuenta_corriente")
-    return `<div class="pago"><div class="cond">Condición de pago: Cuenta corriente</div>
-      <div class="gris">El importe se carga en la cuenta corriente del cliente.</div></div>`;
-  return `<div class="pago"><div class="cond">Condición de pago: ${CONDICION[p.condicionPago]}</div>
-    ${tablaPagos(p.pagos || [], medios)}</div>`;
+    return `<div class="condicion"><strong>Condiciones de pago:</strong> Cuenta corriente</div>`;
+  const pagos = p.pagos || [];
+  // Lo de siempre (un solo pago en efectivo) es "Contado" a secas.
+  if (pagos.length === 1 && pagos[0].medio === "efectivo")
+    return `<div class="condicion"><strong>Condiciones de pago:</strong> Contado</div>`;
+  if (pagos.length === 1)
+    return `<div class="condicion"><strong>Condiciones de pago:</strong> Contado — ${detallePago(pagos[0], medios)}</div>`;
+  return `<div class="condicion"><strong>Condiciones de pago:</strong> Contado</div>${tablaPagos(pagos, medios)}`;
 };
 
-const hojaPresupuesto = (p, copia, medios) => {
+const copiaPresupuesto = (p, { medios, validezDias, depositos }) => {
   const filas = (p.lineas || [])
     .map(
       (l) => `
       <tr>
         <td class="cant">${cantidadDeLinea(l)}</td>
-        <td class="det">${escapeHtml(l.descripcion)}</td>
+        <td class="det">${escapeHtml(l.descripcion)}${
+          l.deposito ? `<br/><span class="gris">Sale de: ${escapeHtml(depositos[l.deposito] || l.deposito)}</span>` : ""
+        }</td>
         <td class="num">${pesos(l.precioUnitario)} <span class="gris">/ ${UNIDAD_PRECIO[l.unidadPrecio] || escapeHtml(l.unidadPrecio)}</span></td>
         <td class="num">${pesos(l.importe)}</td>
       </tr>`
@@ -181,10 +213,9 @@ const hojaPresupuesto = (p, copia, medios) => {
     .join("");
 
   return `
-  <div class="hoja">
+  <div class="copia">
     ${p.estado === "anulado" ? `<div class="sello">ANULADO</div>` : ""}
-    <div class="copia-fila"><div class="copia">${copia}</div></div>
-    ${encabezado("PRESUPUESTO", "ORDEN DE RETIRO", p.numero, p.fecha)}
+    ${encabezado("PRESUPUESTO", "", p)}
     ${bloqueCliente(p)}
 
     <table class="detalle">
@@ -200,11 +231,11 @@ const hojaPresupuesto = (p, copia, medios) => {
     </table>
 
     <div class="total"><span>TOTAL</span> <strong>${pesos(p.total)}</strong></div>
-    ${bloquePagoPresupuesto(p, medios)}
+    ${condicionPresupuesto(p, medios)}
     ${p.observaciones ? `<div class="obs"><strong>Observaciones:</strong> ${escapeHtml(p.observaciones)}</div>` : ""}
 
     <footer>
-      <div class="leyenda">Presentar este presupuesto para retirar la mercadería.</div>
+      <div class="leyenda">El presupuesto tiene una validez de ${validezDias} días.</div>
       <div class="firmas">
         <div class="firma">Retiró conforme</div>
         <div class="firma">Aclaración y DNI</div>
@@ -213,19 +244,23 @@ const hojaPresupuesto = (p, copia, medios) => {
   </div>`;
 };
 
-// `medios` = constantes.mediosPago, para nombrar cada medio en el papel.
-export const imprimirPresupuestoForratuc = (presupuesto, { medios = [] } = {}) => {
-  const hojas = COPIAS.map((c) => hojaPresupuesto(presupuesto, c, medios)).join("");
-  imprimirHtml(documento(`Presupuesto ${presupuesto.numero || ""}`, hojas));
+// `medios` = constantes.mediosPago; `validezDias` y `depositosAlimento` también
+// vienen de las constantes del back (con estos valores por si faltan).
+export const imprimirPresupuestoForratuc = (presupuesto, { medios = [], validezDias = 5, depositosAlimento } = {}) => {
+  const depositos = depositosAlimento
+    ? Object.fromEntries(depositosAlimento.map((d) => [d.key, d.etiqueta]))
+    : DEPOSITOS;
+  const copia = copiaPresupuesto(presupuesto, { medios, validezDias, depositos });
+  const entra = (presupuesto.lineas || []).length <= RENGLONES_MEDIA_HOJA;
+  imprimirHtml(documento(`Presupuesto ${presupuesto.numero || ""}`, duplicado(copia, entra)));
 };
 
 // ── Recibo de cuenta corriente ──────────────────────────────────────────────
 
-const hojaRecibo = (r, copia, medios, cliente) => `
-  <div class="hoja">
+const copiaRecibo = (r, medios, cliente) => `
+  <div class="copia">
     ${r.estado === "anulado" ? `<div class="sello">ANULADO</div>` : ""}
-    <div class="copia-fila"><div class="copia">${copia}</div></div>
-    ${encabezado("RECIBO", "COBRO DE CUENTA CORRIENTE", r.numero, r.fecha)}
+    ${encabezado("RECIBO", "COBRO DE CUENTA CORRIENTE", r)}
     ${bloqueCliente({
       clienteNombre: r.clienteNombre,
       clienteCuit: cliente?.cuit,
@@ -233,14 +268,13 @@ const hojaRecibo = (r, copia, medios, cliente) => `
       clienteTelefono: cliente?.telefono,
     })}
 
-    <p>Recibimos la suma de <strong>${pesos(r.total)}</strong> a cuenta del saldo de su cuenta corriente, en:</p>
+    <div>Recibimos la suma de <strong>${pesos(r.total)}</strong> a cuenta del saldo de su cuenta corriente, en:</div>
     <div class="pago">${tablaPagos(r.pagos || [], medios)}</div>
 
     <div class="total"><span>TOTAL RECIBIDO</span> <strong>${pesos(r.total)}</strong></div>
     ${r.observaciones ? `<div class="obs"><strong>Observaciones:</strong> ${escapeHtml(r.observaciones)}</div>` : ""}
 
     <footer>
-      <div class="leyenda">Los cheques se reciben salvo buen cobro.</div>
       <div class="firmas">
         <div class="firma">Firma Forratuc</div>
         <div class="firma">Aclaración</div>
@@ -250,6 +284,142 @@ const hojaRecibo = (r, copia, medios, cliente) => `
 
 // `cliente` (opcional) completa CUIT, domicilio y teléfono en el papel.
 export const imprimirReciboForratuc = (recibo, { medios = [], cliente = null } = {}) => {
-  const hojas = COPIAS.map((c) => hojaRecibo(recibo, c, medios, cliente)).join("");
-  imprimirHtml(documento(`Recibo ${recibo.numero || ""}`, hojas));
+  const copia = copiaRecibo(recibo, medios, cliente);
+  imprimirHtml(documento(`Recibo ${recibo.numero || ""}`, duplicado(copia, (recibo.pagos || []).length <= 4)));
+};
+
+// ── Rendición y cierre de caja (2026-10-29) ─────────────────────────────────
+// El formato de la planilla del cliente (Forratuc Ssitema.xlsx, punto 9): los
+// tres conteos de billetes lado a lado, ventas por rubro, cobranza, efectivo,
+// Mercado Pago, cuenta corriente, el detalle de comprobantes y el control.
+
+const ESTILOS_CAJA = `
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #000; margin: 0; font-size: 9.5pt; }
+  .hoja { padding: 11mm 13mm; }
+  header { display: flex; justify-content: space-between; align-items: flex-end;
+           border-bottom: 2px solid #000; padding-bottom: 2mm; margin-bottom: 4mm; }
+  .marca { font-size: 16pt; font-weight: bold; letter-spacing: 1px; }
+  .titulo { font-size: 13pt; font-weight: bold; letter-spacing: 1px; }
+  .datos { text-align: right; font-size: 9.5pt; line-height: 1.4; }
+  h2 { font-size: 10pt; margin: 4mm 0 1.5mm; letter-spacing: 1px; }
+  .conteos { display: flex; gap: 4mm; }
+  .conteos > div { flex: 1; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #000; padding: 1mm 1.5mm; }
+  th { font-size: 8pt; background: #eee; }
+  .num { text-align: right; white-space: nowrap; }
+  .sub th { text-align: center; }
+  tfoot td { font-weight: bold; }
+  .resumen td:first-child { width: 60%; }
+  .formula { font-size: 8pt; color: #444; }
+  .control-ok { font-weight: bold; }
+  .control-mal { font-weight: bold; color: #b00; }
+  .anulado td { color: #888; text-decoration: line-through; }
+  .firmas { display: flex; gap: 15mm; margin-top: 16mm; }
+  .firma { flex: 1; border-top: 1px solid #000; padding-top: 1mm; text-align: center; font-size: 8.5pt; }
+`;
+
+const tablaConteo = (titulo, conteo, contado) => `
+  <div>
+    <table class="sub">
+      <thead>
+        <tr><th colspan="3">${escapeHtml(titulo)}</th></tr>
+        <tr><th>Billetes</th><th>Cantidades</th><th>Subtotal</th></tr>
+      </thead>
+      <tbody>
+        ${conteo.filas
+          .map(
+            (f) => `<tr><td class="num">${fmt(f.billete)}</td><td class="num">${contado ? fmt(f.cantidad) : ""}</td><td class="num">${
+              contado ? pesos(f.subtotal) : ""
+            }</td></tr>`
+          )
+          .join("")}
+      </tbody>
+      <tfoot><tr><td colspan="2">Total</td><td class="num">${contado ? pesos(conteo.total) : ""}</td></tr></tfoot>
+    </table>
+  </div>`;
+
+// `caja` = respuesta de GET /caja-forratuc/:fecha
+export const imprimirCierreCajaForratuc = (caja, { operador = "" } = {}) => {
+  const contado = caja.guardado;
+  const fila = (texto, importe, extra = "") =>
+    `<tr><td>${texto}${extra ? ` <span class="formula">${extra}</span>` : ""}</td><td class="num">${importe == null ? "" : pesos(importe)}</td></tr>`;
+  const control =
+    caja.control == null
+      ? ""
+      : caja.control === 0
+      ? `<span class="control-ok">Cierra: ${pesos(0)}</span>`
+      : `<span class="control-mal">${caja.control > 0 ? "Sobran" : "Faltan"} ${pesos(Math.abs(caja.control))}</span>`;
+
+  const cuerpo = `
+  <div class="hoja">
+    <header>
+      <div>
+        <div class="marca">${escapeHtml(EMISOR.razonSocial)}</div>
+        <div class="titulo">RENDICIÓN Y CIERRE DE CAJA</div>
+      </div>
+      <div class="datos">
+        <div><strong>Fecha:</strong> ${escapeHtml(formatearFechaLocal(`${caja.fecha}T12:00:00.000Z`))}</div>
+        <div><strong>Operador:</strong> ${escapeHtml(caja.cerradoPor || operador || "")}</div>
+      </div>
+    </header>
+
+    <div class="conteos">
+      ${caja.tiposConteo.map((t) => tablaConteo(t.etiqueta, caja.conteos[t.key], contado)).join("")}
+    </div>
+
+    <h2>VENTAS</h2>
+    <table class="resumen">
+      ${caja.ventas.map((v) => fila(escapeHtml(v.etiqueta), v.importe)).join("")}
+      <tfoot>${fila("Total ventas", caja.totalVentas)}</tfoot>
+    </table>
+
+    <h2>COBRANZA</h2>
+    <table class="resumen">
+      ${fila("Cobros de cuenta corriente", caja.totalCobranza)}
+    </table>
+
+    <h2>RENDICIÓN</h2>
+    <table class="resumen">
+      ${fila("Efectivo", contado ? caja.efectivoPlanilla : null, "(Caja inicio + Bolsa − Caja cierre)")}
+      ${fila("Efectivo según comprobantes", caja.medios.efectivo.total, `(ventas ${pesos(caja.medios.efectivo.ventas)} + cobranza ${pesos(caja.medios.efectivo.cobranza)})`)}
+      ${fila("Mercado Pago", caja.medios.mercadoPago.total, `(ventas ${pesos(caja.medios.mercadoPago.ventas)} + cobranza ${pesos(caja.medios.mercadoPago.cobranza)})`)}
+      ${caja.otros ? fila("Otros medios (anteriores)", caja.otros) : ""}
+      ${fila("Cuenta corriente", caja.cuentaCorriente)}
+      <tr><td><strong>Control</strong> <span class="formula">(efectivo contado − efectivo según comprobantes)</span></td><td class="num">${control}</td></tr>
+    </table>
+
+    <h2>DETALLE DE COMPROBANTES</h2>
+    <table>
+      <thead><tr><th>Comprobante</th><th>Cliente</th><th>Forma de pago</th><th>Operador</th><th>Importe</th></tr></thead>
+      <tbody>
+        ${
+          caja.detalle.length
+            ? caja.detalle
+                .map(
+                  (d) => `<tr class="${d.anulado ? "anulado" : ""}">
+                    <td>${d.tipo === "cobro" ? "Recibo" : "Presupuesto"} ${escapeHtml(d.numero)}${d.anulado ? " (anulado)" : ""}</td>
+                    <td>${escapeHtml(d.cliente)}</td>
+                    <td>${escapeHtml(d.forma)}</td>
+                    <td>${escapeHtml(d.operador || "")}</td>
+                    <td class="num">${pesos(d.importe)}</td>
+                  </tr>`
+                )
+                .join("")
+            : `<tr><td colspan="5">Sin comprobantes en el día.</td></tr>`
+        }
+      </tbody>
+    </table>
+
+    ${caja.observaciones ? `<p><strong>Observaciones:</strong> ${escapeHtml(caja.observaciones)}</p>` : ""}
+
+    <div class="firmas">
+      <div class="firma">Entregó</div>
+      <div class="firma">Recibió</div>
+    </div>
+  </div>`;
+
+  imprimirHtml(documento(`Cierre de caja ${caja.fecha}`, cuerpo, ESTILOS_CAJA));
 };

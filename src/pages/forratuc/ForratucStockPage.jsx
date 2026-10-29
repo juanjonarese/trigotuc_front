@@ -4,8 +4,14 @@ import Swal from "sweetalert2";
 import Layout from "../../components/Layout";
 import Pagination from "../../components/Pagination";
 import { BADGE_ESPECIE, especieDe, etiquetaEspecie, claveEntero, claveTrozado } from "../../utils/especies";
-import { formatearFechaLocal } from "../../utils/dateUtils";
-import { obtenerStockForratuc, obtenerMovimientosStockForratuc } from "../../services/api";
+import { formatearFechaLocal, obtenerFechaHoy } from "../../utils/dateUtils";
+import { escapeHtml } from "../../utils/escapeHtml";
+import {
+  obtenerStockForratuc,
+  obtenerMovimientosStockForratuc,
+  registrarIngresoAlimentoForratuc,
+  anularIngresoAlimentoForratuc,
+} from "../../services/api";
 
 /**
  * Stock de Forratuc (2026-10-26): todo lo que el local tiene para vender.
@@ -106,6 +112,73 @@ const ForratucStockPage = () => {
     if (lugar) verMovimientos(lugar);
   };
 
+  // Ingreso de alimento a un depósito (2026-10-29): lo que Forratuc fabrica o
+  // recibe. Es lo que después vende el presupuesto desde la forrajería.
+  const ingresarAlimento = async () => {
+    const productos = stock?.alimento?.productos || [];
+    const depositos = stock?.alimento?.depositos || [];
+    const opciones = (lista, valor, texto) =>
+      lista.map((x) => `<option value="${escapeHtml(x[valor])}">${escapeHtml(x[texto])}</option>`).join("");
+    const { value, isConfirmed } = await Swal.fire({
+      title: "Ingreso de alimento",
+      html: `
+        <div class="text-start">
+          <label class="form-label small fw-semibold mb-1">Fecha</label>
+          <input id="ing-fecha" type="date" class="form-control mb-2" value="${obtenerFechaHoy()}"/>
+          <label class="form-label small fw-semibold mb-1">Alimento</label>
+          <select id="ing-alimento" class="form-select mb-2"><option value="">Elegí…</option>${opciones(productos, "alimento", "etiqueta")}</select>
+          <label class="form-label small fw-semibold mb-1">Depósito</label>
+          <select id="ing-deposito" class="form-select mb-2">${opciones(depositos, "key", "etiqueta")}</select>
+          <label class="form-label small fw-semibold mb-1">Bolsas</label>
+          <input id="ing-bolsas" type="number" min="1" step="1" class="form-control mb-2"/>
+          <label class="form-label small fw-semibold mb-1">Observaciones</label>
+          <input id="ing-obs" class="form-control" placeholder="Ej.: producción del día"/>
+        </div>`,
+      showCancelButton: true,
+      confirmButtonText: "Ingresar",
+      cancelButtonText: "Cancelar",
+      focusConfirm: false,
+      preConfirm: () => {
+        const v = (id) => document.getElementById(id).value;
+        const data = {
+          fecha: v("ing-fecha"), alimento: v("ing-alimento"), deposito: v("ing-deposito"),
+          bolsas: Number(v("ing-bolsas")), observaciones: v("ing-obs").trim(),
+        };
+        if (!data.alimento) return Swal.showValidationMessage("Elegí el alimento.");
+        if (!Number.isInteger(data.bolsas) || data.bolsas < 1) return Swal.showValidationMessage("Las bolsas van de 1 en adelante, sin decimales.");
+        return data;
+      },
+    });
+    if (!isConfirmed) return;
+    try {
+      await registrarIngresoAlimentoForratuc(value);
+      Swal.fire({ icon: "success", title: "Ingresado", timer: 1400, showConfirmButton: false });
+      cargar();
+      verMovimientos(value.deposito);
+    } catch (err) {
+      Swal.fire("Error", err.message || "No se pudo registrar el ingreso.", "error");
+    }
+  };
+
+  const anularIngreso = async (m) => {
+    const { isConfirmed } = await Swal.fire({
+      title: "¿Anular este ingreso?",
+      text: m.detalle,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Sí, anular",
+      confirmButtonColor: "#dc3545",
+      cancelButtonText: "Cancelar",
+    });
+    if (!isConfirmed) return;
+    try {
+      await anularIngresoAlimentoForratuc(m.id);
+      actualizar();
+    } catch (err) {
+      Swal.fire("Error", err.message || "No se pudo anular.", "error");
+    }
+  };
+
   const pollo = stock?.pollo;
   const huevos = stock?.huevos;
   const pollitos = stock?.pollitos;
@@ -150,9 +223,14 @@ const ForratucStockPage = () => {
             <i className="bi bi-boxes me-2 text-warning"></i>
             Forratuc — Stock
           </h1>
-          <button className="btn btn-outline-secondary btn-sm" onClick={actualizar} title="Refrescar" disabled={loading}>
-            <i className="bi bi-arrow-clockwise"></i>
-          </button>
+          <div className="d-flex gap-2">
+            <button className="btn btn-success btn-sm" onClick={ingresarAlimento} disabled={!stock}>
+              <i className="bi bi-box-arrow-in-down me-1"></i>Ingresar alimento
+            </button>
+            <button className="btn btn-outline-secondary btn-sm" onClick={actualizar} title="Refrescar" disabled={loading}>
+              <i className="bi bi-arrow-clockwise"></i>
+            </button>
+          </div>
         </div>
 
         {loading && !stock ? (
@@ -270,7 +348,8 @@ const ForratucStockPage = () => {
             {alimento.totalBolsas === 0 && (
               <p className="text-muted small mb-1">
                 <i className="bi bi-info-circle me-1"></i>
-                Todavía no se cargó ningún ingreso de alimento: el stock arranca cuando se registre la producción.
+                Todavía no se cargó ningún ingreso de alimento: con "Ingresar alimento" se carga lo que entra a cada
+                depósito. El presupuesto vende lo que hay en la forrajería.
               </p>
             )}
             {sinPesoBolsa && (
@@ -352,6 +431,11 @@ const ForratucStockPage = () => {
                                   <td className="small">
                                     {m.detalle || "—"}
                                     {m.usuario && <span className="text-muted"> · {m.usuario}</span>}
+                                    {m.id && (
+                                      <button className="btn btn-link btn-sm text-danger p-0 ms-2 align-baseline" onClick={() => anularIngreso(m)}>
+                                        anular
+                                      </button>
+                                    )}
                                   </td>
                                   <td className="text-end small text-success fw-semibold">{entra}</td>
                                   <td className="text-end small text-danger fw-semibold">

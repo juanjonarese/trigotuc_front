@@ -25,9 +25,11 @@ There are no automated tests.
 |-------|------|------|
 | `/inicio` | `InicioPage` — tarjetas para elegir empresa del grupo (con una sola, redirige) | Grupo |
 | `/forratuc` | `ForratucInicioPage` (en desarrollo, solo superadmin) | Forratuc |
-| `/forratuc/mostrador` | `ForratucPresupuestosPage` (2026-10-21: presupuesto con fecha, cliente, precios y condición de pago — contado con `components/forratuc/PagosForratuc.jsx` o cuenta corriente; imprime con `utils/forratuc/imprimirForratuc.js`) | Forratuc |
+| `/forratuc/mostrador` | `ForratucPresupuestosPage` (2026-10-21: presupuesto con fecha, cliente, precios y forma de pago; desde el 2026-10-29 **tres botones fijos** — Efectivo, Mercado Pago, Cuenta corriente —, el precio lo **propone la lista de precios** del cliente y el alimento sale de la forrajería, por bolsa; imprime con `utils/forratuc/imprimirForratuc.js`, las dos copias en una hoja) | Forratuc |
+| `/forratuc/listas-precios` | `ForratucListasPreciosPage` (2026-10-29: listas de precios o de % de descuento sobre otra, con sus clientes; una por defecto) | Forratuc |
+| `/forratuc/caja` | `ForratucCajaPage` (2026-10-29: rendición y cierre de caja del día — billetes de caja inicio / bolsa / caja cierre a mano, el resto calculado; imprime la planilla) | Forratuc |
 | `/forratuc/cuentas-corrientes` | `ForratucCuentasCorrientesPage` (saldos por cliente, movimientos con saldo, registrar pago → recibo) | Forratuc |
-| `/forratuc/stock` | `ForratucStockPage` (2026-10-26: pollo de la cámara Trigotuc, huevo, pollitos y alimento balanceado en bolsas, todo de `GET /stock-forratuc`; una **tarjeta por lugar** — cámara Trigotuc, huevos, pollitos, cada depósito de alimento — con el **diseño de Frigorífico → Stock** (total arriba, cuadritos con badge, historial abajo); al tocarla, el historial de ese lugar como cuenta corriente, de `GET /stock-forratuc/movimientos/:lugar`) | Forratuc |
+| `/forratuc/stock` | `ForratucStockPage` (2026-10-26: pollo de la cámara Trigotuc, huevo, pollitos y alimento balanceado en bolsas, todo de `GET /stock-forratuc`; una **tarjeta por lugar** — cámara Trigotuc, huevos, pollitos, cada depósito de alimento — con el **diseño de Frigorífico → Stock** (total arriba, cuadritos con badge, historial abajo); al tocarla, el historial de ese lugar como cuenta corriente, de `GET /stock-forratuc/movimientos/:lugar`; desde el 2026-10-29, botón **Ingresar alimento** y "anular" en los ingresos del historial) | Forratuc |
 | `/forratuc/salidas` | `SalidaMostradorPage` (la salida suelta; las de un presupuesto salen con su número y sin editar/borrar) | Forratuc |
 | `/dashboard` | `DashboarPage` (typo intencional) | General |
 | `/clientes` | `ClientesPage` | Altas |

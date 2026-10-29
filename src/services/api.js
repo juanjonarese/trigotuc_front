@@ -302,6 +302,63 @@ export const obtenerMovimientosStockForratuc = async (lugar) => {
   return handleResponse(response);
 };
 
+// Ingreso de alimento a un depósito (2026-10-29).
+// data: { fecha, alimento, deposito, bolsas, observaciones }
+export const registrarIngresoAlimentoForratuc = async (data) => {
+  const response = await fetch(`${API_URL}/stock-forratuc/alimento/ingresos`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const anularIngresoAlimentoForratuc = async (id) => {
+  const response = await fetch(`${API_URL}/stock-forratuc/alimento/ingresos/${id}/anular`, {
+    method: "PATCH", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+// ── Listas de precios de Forratuc (2026-10-29): de precios o % de descuento sobre otra.
+export const obtenerCatalogoPreciosForratuc = async () => {
+  const response = await fetch(`${API_URL}/listas-precios-forratuc/catalogo`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+// Cada lista trae `preciosResueltos` ({ item: precio }), ya con el descuento aplicado.
+export const obtenerListasPreciosForratuc = async () => {
+  const response = await fetch(`${API_URL}/listas-precios-forratuc`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+// data: { nombre, tipo: "precios"|"descuento", precios: [{ item, precio }], base, porcentaje, porDefecto, clientes }
+export const guardarListaPreciosForratuc = async (id, data) => {
+  const response = await fetch(`${API_URL}/listas-precios-forratuc${id ? `/${id}` : ""}`, {
+    method: id ? "PUT" : "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const eliminarListaPreciosForratuc = async (id) => {
+  const response = await fetch(`${API_URL}/listas-precios-forratuc/${id}`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+// ── Rendición y cierre de caja de Forratuc (2026-10-29). fecha = "YYYY-MM-DD".
+export const obtenerCajaForratuc = async (fecha) => {
+  const response = await fetch(`${API_URL}/caja-forratuc/${fecha}`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+// data: { conteos: { inicio|bolsa|cierre: [{ billete, cantidad }] }, observaciones }
+export const guardarCierreCajaForratuc = async (fecha, data) => {
+  const response = await fetch(`${API_URL}/caja-forratuc/${fecha}`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
 // Borra una salida de mostrador (devuelve el stock a la cámara).
 export const eliminarSalidaMostrador = async (id) => {
   const response = await fetch(`${API_URL}/ventas-mostrador/${id}`, {

@@ -7,7 +7,6 @@ import Layout from "../../components/Layout";
 // huevo y pollitos), que entre empresas no se vende: se usa el stock.
 // En desarrollo: solo lo ve el superadmin hasta que se libere.
 const PROXIMAMENTE = [
-  { titulo: "Ingreso de alimento balanceado", texto: "Cargar lo que se produce, para que entre al stock en bolsas." },
   { titulo: "Otros artículos", texto: "Catálogo propio de Forratuc más allá del alimento: aceites y demás." },
 ];
 
@@ -38,9 +37,33 @@ const ForratucInicioPage = () => {
           <div className="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
             <div>
               <div className="fw-semibold">Stock</div>
-              <div className="text-muted small">Lo que hay para vender: pollo, huevo y pollitos de la avícola, y el alimento balanceado que produce Forratuc, en bolsas.</div>
+              <div className="text-muted small">Lo que hay para vender: pollo, huevo y pollitos de la avícola, y el alimento balanceado que produce Forratuc, en bolsas y por depósito. Ahí se ingresa el alimento.</div>
             </div>
             <button type="button" className="btn btn-dark btn-sm" onClick={() => navigate("/forratuc/stock")}>
+              Abrir
+            </button>
+          </div>
+        </div>
+
+        <div className="card border-0 shadow-sm mb-3">
+          <div className="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
+            <div>
+              <div className="fw-semibold">Listas de precios</div>
+              <div className="text-muted small">Venta al público y listas con % de descuento por cliente. El presupuesto propone el precio de la lista del cliente.</div>
+            </div>
+            <button type="button" className="btn btn-dark btn-sm" onClick={() => navigate("/forratuc/listas-precios")}>
+              Abrir
+            </button>
+          </div>
+        </div>
+
+        <div className="card border-0 shadow-sm mb-3">
+          <div className="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
+            <div>
+              <div className="fw-semibold">Cierre de caja</div>
+              <div className="text-muted small">La planilla de rendición del día: billetes, ventas por rubro, cobranza y control. Se imprime y se entrega con la plata.</div>
+            </div>
+            <button type="button" className="btn btn-dark btn-sm" onClick={() => navigate("/forratuc/caja")}>
               Abrir
             </button>
           </div>

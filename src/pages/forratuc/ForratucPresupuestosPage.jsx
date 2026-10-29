@@ -7,8 +7,6 @@ import { especieDe, etiquetaEspecie } from "../../utils/especies";
 import { obtenerFechaHoy, formatearFechaLocal } from "../../utils/dateUtils";
 import { escapeHtml } from "../../utils/escapeHtml";
 import { imprimirPresupuestoForratuc } from "../../utils/forratuc/imprimirForratuc";
-import PagosForratuc from "../../components/forratuc/PagosForratuc";
-import { pagoVacio, pagosParaEnviar, sumaPagos } from "../../utils/forratuc/pagosForratuc";
 import {
   obtenerCuentaClienteForratuc,
   obtenerStockCamaraMostrador,
@@ -16,6 +14,8 @@ import {
   obtenerStockPollitosMostrador,
   obtenerClientes,
   obtenerConstantesPresupuesto,
+  obtenerStockForratuc,
+  obtenerListasPreciosForratuc,
   obtenerPresupuestosForratuc,
   crearPresupuestoForratuc,
   anularPresupuestoForratuc,
@@ -28,11 +28,30 @@ import {
  * precio y total, que se imprime por duplicado y con el que el cliente retira.
  * El stock de la avícola (pollo de la cámara Trigotuc, huevo de venta y
  * pollitos del mostrador) sale AL EMITIR, con la misma mecánica que la Salida de
- * Mostrador; anular lo devuelve. El alimento balanceado va sin stock por ahora.
+ * Mostrador; anular lo devuelve. El alimento balanceado (2026-10-29) sale del
+ * stock de Forratuc, del Depósito Forrajería, por bolsa; el "otro" escrito a
+ * mano, sin stock.
  *
  * Precios: pollo entero y trozado por KG, huevo por maple, pollitos por unidad,
- * alimento por bolsa o por kg.
+ * alimento por bolsa (el "otro", por bolsa o kg). Los PROPONE la lista de
+ * precios del cliente (o la por defecto) y se pueden corregir.
+ *
+ * Forma de pago (2026-10-29, pedido del cliente): tres botones fijos —
+ * Efectivo (por defecto), Mercado Pago o Cuenta corriente — para que no haya
+ * equivocaciones.
  */
+
+// La clave del artículo en la lista de precios. ⚠️ Tiene que coincidir con el
+// catálogo del back (services/forratuc/listaPrecioForratuc.services.js).
+const itemDeOpcion = (op) => {
+  if (!op) return null;
+  if (op.clase === "entero") return `entero:${op.especie}`;
+  if (op.clase === "trozado") return `trozado:${op.tipo}:${op.claseTrozado}`;
+  if (op.clase === "huevo") return `huevo:${op.tipo}`;
+  if (op.clase === "pollito") return "pollito";
+  if (op.clase === "alimento" && op.producto !== "otro") return `alimento:${op.producto}`;
+  return null;
+};
 
 const fmt = (n) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(Number(n || 0));
 const pesos = (n) =>
@@ -42,7 +61,7 @@ const redondear = (n) => Math.round(n * 100) / 100;
 const UNIDAD_PRECIO = { kg: "kg", maple: "maple", pollito: "pollito", bolsa: "bolsa" };
 
 let siguienteId = 1;
-const renglonVacio = () => ({ id: siguienteId++, producto: "", cantidad: "", kg: "", kgTocado: false, precio: "", descripcion: "", unidad: "bolsa" });
+const renglonVacio = () => ({ id: siguienteId++, producto: "", cantidad: "", kg: "", kgTocado: false, precio: "", precioTocado: false, descripcion: "", unidad: "bolsa" });
 
 const ForratucPresupuestosPage = () => {
   const navigate = useNavigate();
@@ -56,6 +75,8 @@ const ForratucPresupuestosPage = () => {
   const [stockPollitos, setStockPollitos] = useState(null);
   const [clientes, setClientes] = useState([]);
   const [constantes, setConstantes] = useState(null);
+  const [stockAlimento, setStockAlimento] = useState(null);
+  const [listas, setListas] = useState([]);
 
   // ── Formulario ──
   const [fecha, setFecha] = useState(obtenerFechaHoy());
@@ -64,13 +85,14 @@ const ForratucPresupuestosPage = () => {
   const [clienteNombre, setClienteNombre] = useState("");
   const [renglones, setRenglones] = useState([renglonVacio()]);
   const [observaciones, setObservaciones] = useState("");
-  // Condición de pago (2026-10-21): contado con uno o varios medios, o cuenta
-  // corriente (solo clientes del padrón). Mientras no se toquen los pagos, el
-  // único pago sigue al total solo (`pagoAuto`).
-  const [condicion, setCondicion] = useState("contado");
-  const [pagos, setPagos] = useState([pagoVacio()]);
-  const [pagoAuto, setPagoAuto] = useState(true);
+  // Forma de pago (2026-10-29): uno de los tres botones. Cuenta corriente,
+  // solo clientes del padrón.
+  const [formaPago, setFormaPago] = useState("efectivo");
+  const [operacionMP, setOperacionMP] = useState("");
   const [saldoCliente, setSaldoCliente] = useState(null);
+  // Lista de precios: la del cliente o la por defecto, hasta que se elija otra.
+  const [listaId, setListaId] = useState("");
+  const [listaTocada, setListaTocada] = useState(false);
 
   // ── Emitidos ──
   const [desde, setDesde] = useState(obtenerFechaHoy());
@@ -81,13 +103,17 @@ const ForratucPresupuestosPage = () => {
   const cargar = async () => {
     try {
       // Huevo y pollitos con catch: si fallan, se tiene que poder vender lo demás.
-      const [stock, huevos, pollitos, cls, ctes] = await Promise.all([
+      const [stock, huevos, pollitos, cls, ctes, stockForratuc, lts] = await Promise.all([
         obtenerStockCamaraMostrador(),
         obtenerStockHuevosMostrador().catch(() => null),
         obtenerStockPollitosMostrador().catch(() => null),
         obtenerClientes().catch(() => []),
         obtenerConstantesPresupuesto(),
+        obtenerStockForratuc().catch(() => null),
+        obtenerListasPreciosForratuc().catch(() => []),
       ]);
+      setStockAlimento(stockForratuc?.alimento || null);
+      setListas(Array.isArray(lts) ? lts : []);
       setResumen(stock);
       setStockHuevos(huevos);
       setStockPollitos(pollitos);
@@ -154,18 +180,30 @@ const ForratucPresupuestosPage = () => {
     const pollitos = (stockPollitos?.total || 0) > 0
       ? [{ key: "pollito", clase: "pollito", texto: "Pollitos BB", disponible: stockPollitos.total, unidad: "pollitos", unidadPrecio: "pollito" }]
       : [];
-    const alimento = (constantes?.productosAlimento || []).map((p) => ({
-      key: `alimento|${p.key}`, clase: "alimento", producto: p.key,
-      texto: p.etiqueta, disponible: null, unidad: null, unidadPrecio: null,
-    }));
+    // Alimento: lo que hay en el depósito del que vende el presupuesto (la
+    // forrajería), por bolsa. El "otro" no tiene stock y va siempre.
+    const deposito = constantes?.depositoVentaAlimento || "forrajeria";
+    const bolsasDe = (key) =>
+      stockAlimento?.productos?.find((p) => p.alimento === key)?.porDeposito?.[deposito] || 0;
+    const alimento = (constantes?.productosAlimento || [])
+      .map((p) =>
+        p.key === "otro"
+          ? { key: "alimento|otro", clase: "alimento", producto: "otro", texto: p.etiqueta, disponible: null, unidad: null, unidadPrecio: null }
+          : {
+              key: `alimento|${p.key}`, clase: "alimento", producto: p.key, texto: p.etiqueta,
+              disponible: bolsasDe(p.key), unidad: "bolsas", unidadPrecio: "bolsa",
+            }
+      )
+      .filter((o) => o.disponible == null || o.disponible > 0);
+    const etiquetaDeposito = (constantes?.depositosAlimento || []).find((d) => d.key === deposito)?.etiqueta || deposito;
     return [
       { titulo: "Pollo entero (precio por kg)", opciones: enteros },
       { titulo: "Trozado (precio por kg)", opciones: trozados },
       { titulo: `Huevo (maple de ${huevosPorMaple})`, opciones: huevos },
       { titulo: "Pollitos", opciones: pollitos },
-      { titulo: "Alimento balanceado (sin stock)", opciones: alimento },
+      { titulo: `Alimento balanceado (${etiquetaDeposito}, por bolsa)`, opciones: alimento },
     ];
-  }, [resumen, stockHuevos, stockPollitos, constantes, huevosPorMaple]);
+  }, [resumen, stockHuevos, stockPollitos, constantes, huevosPorMaple, stockAlimento]);
 
   const opcionPorKey = useMemo(
     () => Object.fromEntries(grupos.flatMap((g) => g.opciones).map((o) => [o.key, o])),
@@ -191,32 +229,65 @@ const ForratucPresupuestosPage = () => {
   const total = redondear(renglones.reduce((a, r) => a + importeDe(r), 0));
 
   const mediosPago = constantes?.mediosPago || [];
-  const pagosVista =
-    pagoAuto && pagos.length === 1 ? [{ ...pagos[0], importe: total ? String(total) : "" }] : pagos;
-  const cambiarPagos = (nuevos) => {
-    setPagos(nuevos);
-    setPagoAuto(false);
+  const formasPago = constantes?.formasPago || [];
+  const opcionesImpresion = {
+    medios: mediosPago,
+    validezDias: constantes?.validezDias,
+    depositosAlimento: constantes?.depositosAlimento,
   };
 
   // En cuenta corriente se muestra cuánto debe ya el cliente.
   useEffect(() => {
     setSaldoCliente(null);
-    if (condicion !== "cuenta_corriente" || modoCliente !== "padron" || !clienteId) return;
+    if (formaPago !== "cuenta_corriente" || modoCliente !== "padron" || !clienteId) return;
     let vigente = true;
     obtenerCuentaClienteForratuc(clienteId)
       .then((c) => vigente && setSaldoCliente(c.saldo))
       .catch(() => {});
     return () => { vigente = false; };
-  }, [condicion, modoCliente, clienteId]);
+  }, [formaPago, modoCliente, clienteId]);
 
-  const elegirCondicion = (c) => {
-    setCondicion(c);
+  const elegirFormaPago = (f) => {
+    setFormaPago(f);
     // Al consumidor final no se le fía.
-    if (c === "cuenta_corriente") setModoCliente("padron");
+    if (f === "cuenta_corriente") setModoCliente("padron");
   };
+
+  // La lista que le toca: la que tiene al cliente, si no la por defecto.
+  const listaDelCliente = useMemo(() => {
+    const delCliente = modoCliente === "padron" && clienteId
+      ? listas.find((l) => (l.clientes || []).some((c) => String(c._id || c) === String(clienteId)))
+      : null;
+    return delCliente || listas.find((l) => l.porDefecto) || null;
+  }, [listas, modoCliente, clienteId]);
+  useEffect(() => {
+    if (!listaTocada) setListaId(listaDelCliente?._id || "");
+  }, [listaDelCliente, listaTocada]);
+  const lista = listas.find((l) => l._id === listaId) || null;
+  const precioDeLista = (op) => {
+    const item = itemDeOpcion(op);
+    const p = item ? lista?.preciosResueltos?.[item] : undefined;
+    return p == null ? "" : String(p);
+  };
+  // Al cambiar de lista se re-proponen los precios que no se tocaron a mano.
+  useEffect(() => {
+    setRenglones((prev) =>
+      prev.map((r) => (r.producto && !r.precioTocado ? { ...r, precio: precioDeLista(opcionPorKey[r.producto]) } : r))
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listaId, listas]);
 
   const setRenglon = (id, cambios) =>
     setRenglones((prev) => prev.map((r) => (r.id === id ? { ...r, ...cambios } : r)));
+  const elegirProducto = (id, key) => {
+    const op = opcionPorKey[key];
+    setRenglon(id, {
+      producto: key, kg: "", kgTocado: false, descripcion: "",
+      precio: precioDeLista(op), precioTocado: false,
+      // El alimento con stock va por bolsa; el "otro" arranca en bolsa.
+      unidad: "bolsa",
+    });
+  };
   const quitarRenglon = (id) =>
     setRenglones((prev) => (prev.length === 1 ? [renglonVacio()] : prev.filter((r) => r.id !== id)));
 
@@ -236,9 +307,9 @@ const ForratucPresupuestosPage = () => {
     setClienteNombre("");
     setRenglones([renglonVacio()]);
     setObservaciones("");
-    setCondicion("contado");
-    setPagos([pagoVacio()]);
-    setPagoAuto(true);
+    setFormaPago("efectivo");
+    setOperacionMP("");
+    setListaTocada(false);
   };
 
   const emitir = async (e) => {
@@ -263,14 +334,8 @@ const ForratucPresupuestosPage = () => {
         return Swal.fire("Stock insuficiente", `${op.texto}: hay ${fmt(op.disponible)} ${op.unidad}.`, "error");
     }
 
-    if (condicion === "cuenta_corriente" && modoCliente !== "padron")
+    if (formaPago === "cuenta_corriente" && modoCliente !== "padron")
       return Swal.fire("Cuenta corriente", "La cuenta corriente es solo para clientes del padrón.", "warning");
-    if (condicion === "contado" && Math.abs(sumaPagos(pagosVista) - total) > 0.005)
-      return Swal.fire(
-        "Los pagos no cierran",
-        `Los pagos suman ${pesos(sumaPagos(pagosVista))} y el total es ${pesos(total)}.`,
-        "warning"
-      );
 
     const lineas = usados.map((r) => {
       const op = opcionPorKey[r.producto];
@@ -290,14 +355,15 @@ const ForratucPresupuestosPage = () => {
         fecha,
         ...(modoCliente === "padron" ? { cliente: clienteId } : { clienteNombre: clienteNombre.trim() }),
         lineas,
-        condicionPago: condicion,
-        pagos: condicion === "contado" ? pagosParaEnviar(pagosVista, mediosPago) : [],
+        formaPago,
+        operacion: formaPago === "mercado_pago" ? operacionMP.trim() || undefined : undefined,
+        listaPrecio: listaId || undefined,
         observaciones: observaciones.trim() || undefined,
       });
       limpiar();
       cargar();
       // Se imprime apenas se emite: es el papel con el que el cliente retira.
-      imprimirPresupuestoForratuc(presupuesto, { medios: mediosPago });
+      imprimirPresupuestoForratuc(presupuesto, opcionesImpresion);
       Swal.fire({
         icon: "success",
         title: `Presupuesto ${presupuesto.numero}`,
@@ -317,7 +383,7 @@ const ForratucPresupuestosPage = () => {
       title: `¿Anular el presupuesto ${escapeHtml(p.numero)}?`,
       html:
         (p.movimiento
-          ? "Se <strong>devuelve el stock</strong> de lo que salió (pollo, huevo, pollitos)."
+          ? "Se <strong>devuelve el stock</strong> de lo que salió (pollo, huevo, pollitos, alimento)."
           : "No tocó stock: solo queda anulado.") +
         (p.condicionPago === "cuenta_corriente" ? "<br/>Sale de la <strong>cuenta corriente</strong> del cliente." : ""),
       input: "text",
@@ -388,7 +454,7 @@ const ForratucPresupuestosPage = () => {
                           Del padrón
                         </button>
                         <button type="button" className={`btn ${modoCliente === "final" ? "btn-dark" : "btn-outline-secondary"}`} onClick={() => setModoCliente("final")}
-                          disabled={condicion === "cuenta_corriente"} title={condicion === "cuenta_corriente" ? "Al consumidor final no se le fía" : undefined}>
+                          disabled={formaPago === "cuenta_corriente"} title={formaPago === "cuenta_corriente" ? "Al consumidor final no se le fía" : undefined}>
                           Consumidor final
                         </button>
                       </div>
@@ -397,6 +463,21 @@ const ForratucPresupuestosPage = () => {
                       <BuscadorCliente clientes={clientes} value={clienteId} onChange={setClienteId} placeholder="Buscá por nombre, CUIT o teléfono..." />
                     ) : (
                       <input className="form-control" placeholder="Nombre de quien compra" value={clienteNombre} onChange={(e) => setClienteNombre(e.target.value)} />
+                    )}
+                  </div>
+                  <div className="col-12 col-lg-4">
+                    <label className="form-label fw-semibold small mb-1">Lista de precios</label>
+                    <select className="form-select" value={listaId}
+                      onChange={(e) => { setListaId(e.target.value); setListaTocada(true); }}>
+                      <option value="">Sin lista (precios a mano)</option>
+                      {listas.map((l) => (
+                        <option key={l._id} value={l._id}>
+                          {l.nombre}{l.tipo === "descuento" ? ` (${fmt(l.porcentaje)}% menos)` : ""}{l.porDefecto ? " — por defecto" : ""}
+                        </option>
+                      ))}
+                    </select>
+                    {listas.length === 0 && (
+                      <div className="form-text">Todavía no hay listas: se arman en <em>Listas de precios</em>.</div>
                     )}
                   </div>
                 </div>
@@ -421,6 +502,7 @@ const ForratucPresupuestosPage = () => {
                       {renglones.map((r) => {
                         const op = opcionPorKey[r.producto];
                         const esAlimento = op?.clase === "alimento";
+                        const esOtro = esAlimento && op.producto === "otro";
                         const unidadCant = esAlimento ? (r.unidad === "kg" ? "kg" : "bolsas") : op?.unidad;
                         const unidadPrecio = esAlimento ? r.unidad : op?.unidadPrecio;
                         return (
@@ -429,7 +511,7 @@ const ForratucPresupuestosPage = () => {
                               <select
                                 className="form-select form-select-sm"
                                 value={r.producto}
-                                onChange={(e) => setRenglon(r.id, { producto: e.target.value, kg: "", kgTocado: false, descripcion: "" })}
+                                onChange={(e) => elegirProducto(r.id, e.target.value)}
                               >
                                 <option value="">Elegí un producto…</option>
                                 {grupos.filter((g) => g.opciones.length > 0).map((g) => (
@@ -453,7 +535,7 @@ const ForratucPresupuestosPage = () => {
                                   className={`form-control ${r.producto && excedido(r.producto) ? "is-invalid" : ""}`}
                                   value={r.cantidad} disabled={!op}
                                   onChange={(e) => setRenglon(r.id, { cantidad: e.target.value })} />
-                                {esAlimento ? (
+                                {esOtro ? (
                                   <select className="form-select" style={{ maxWidth: 80 }} value={r.unidad}
                                     onChange={(e) => setRenglon(r.id, { unidad: e.target.value })}>
                                     {(constantes?.unidadesAlimento || []).map((u) => (
@@ -481,7 +563,8 @@ const ForratucPresupuestosPage = () => {
                               <div className="input-group input-group-sm">
                                 <span className="input-group-text">$</span>
                                 <input type="number" min="0" step="0.01" className="form-control" value={r.precio} disabled={!op}
-                                  onChange={(e) => setRenglon(r.id, { precio: e.target.value })} />
+                                  title={lista && itemDeOpcion(op) ? `Lista: ${lista.nombre}` : undefined}
+                                  onChange={(e) => setRenglon(r.id, { precio: e.target.value, precioTocado: true })} />
                                 {op && <span className="input-group-text">/ {UNIDAD_PRECIO[unidadPrecio] || unidadPrecio}</span>}
                               </div>
                             </td>
@@ -512,22 +595,32 @@ const ForratucPresupuestosPage = () => {
                   </table>
                 </div>
 
-                {/* ── Condición de pago ── */}
+                {/* ── Forma de pago: tres botones fijos (pedido del cliente, 2026-10-29) ── */}
                 <div className="border-top pt-3 mb-3">
-                  <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
-                    <span className="fw-semibold small">Condición de pago</span>
-                    <div className="btn-group btn-group-sm">
-                      {(constantes?.condicionesPago || []).map((c) => (
-                        <button key={c.key} type="button"
-                          className={`btn ${condicion === c.key ? "btn-dark" : "btn-outline-secondary"}`}
-                          onClick={() => elegirCondicion(c.key)}>
-                          {c.etiqueta}
+                  <div className="fw-semibold small mb-2">Forma de pago</div>
+                  <div className="d-flex flex-wrap gap-2 mb-2">
+                    {formasPago.map((f) => {
+                      const elegida = formaPago === f.key;
+                      const icono = { efectivo: "bi-cash-coin", mercado_pago: "bi-phone", cuenta_corriente: "bi-journal-text" }[f.key];
+                      return (
+                        <button key={f.key} type="button"
+                          className={`btn btn-lg px-4 ${elegida ? "btn-primary" : "btn-outline-secondary"}`}
+                          onClick={() => elegirFormaPago(f.key)}>
+                          <i className={`bi ${icono || "bi-wallet2"} me-2`}></i>
+                          {f.etiqueta}
+                          {elegida && <i className="bi bi-check-circle-fill ms-2"></i>}
                         </button>
-                      ))}
-                    </div>
+                      );
+                    })}
                   </div>
-                  {condicion === "contado" ? (
-                    <PagosForratuc medios={mediosPago} pagos={pagosVista} onChange={cambiarPagos} total={total} />
+                  {formaPago === "efectivo" ? (
+                    <div className="small text-muted">Contado en efectivo: {pesos(total)}.</div>
+                  ) : formaPago === "mercado_pago" ? (
+                    <div className="d-flex flex-wrap align-items-center gap-2 small">
+                      <span className="text-muted">Contado por Mercado Pago: {pesos(total)}.</span>
+                      <input className="form-control form-control-sm" style={{ maxWidth: 220 }}
+                        placeholder="N° de operación (opcional)" value={operacionMP} onChange={(e) => setOperacionMP(e.target.value)} />
+                    </div>
                   ) : (
                     <div className="alert alert-warning py-2 small mb-0">
                       <i className="bi bi-journal-text me-1"></i>
@@ -546,7 +639,7 @@ const ForratucPresupuestosPage = () => {
                 <div className="d-flex flex-wrap justify-content-between align-items-center gap-2">
                   <span className="text-muted small">
                     <i className="bi bi-info-circle me-1"></i>
-                    Al emitir se descuenta el stock de la avícola (pollo, huevo y pollitos). El alimento todavía no lleva stock.
+                    Al emitir se descuenta el stock: pollo, huevo y pollitos de la avícola, y el alimento de la forrajería.
                   </span>
                   <button type="submit" className="btn btn-success" disabled={saving}>
                     {saving ? <span className="spinner-border spinner-border-sm me-1"></span> : <i className="bi bi-printer me-1"></i>}
@@ -626,7 +719,7 @@ const ForratucPresupuestosPage = () => {
                             </td>
                             <td className="small">{p.registradoPor?.nombreUsuario || "—"}</td>
                             <td className="text-nowrap text-end">
-                              <button className="btn btn-sm btn-outline-secondary me-1" title="Reimprimir" onClick={() => imprimirPresupuestoForratuc(p, { medios: mediosPago })}>
+                              <button className="btn btn-sm btn-outline-secondary me-1" title="Reimprimir" onClick={() => imprimirPresupuestoForratuc(p, opcionesImpresion)}>
                                 <i className="bi bi-printer"></i>
                               </button>
                               {!anulado && (

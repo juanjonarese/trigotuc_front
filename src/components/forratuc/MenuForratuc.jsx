@@ -1,7 +1,8 @@
 import React from "react";
 
 // Menú de Forratuc (local de venta al público, en desarrollo): su inicio, el
-// mostrador (presupuestos), el stock, las cuentas corrientes y las salidas sueltas. Lo
+// mostrador (presupuestos), el stock, las cuentas corrientes, las listas de
+// precios, el cierre de caja y las salidas sueltas. Lo
 // elige `Layout` según la empresa actual; `grupo` son los ítems del grupo
 // (Altas, Actividad), que salen en todas las empresas.
 const MenuForratuc = ({ ctx, grupo }) => {
@@ -47,6 +48,26 @@ const MenuForratuc = ({ ctx, grupo }) => {
           >
             <i className="bi bi-journal-text fs-5"></i>
             <span>Cuentas corrientes</span>
+          </a>
+          <a
+            href="#"
+            className={`nav-link d-flex align-items-center gap-2 mb-2 rounded ${
+              isActive("/forratuc/listas-precios") ? "text-white" : "text-white-50"
+            }`}
+            onClick={(e) => { e.preventDefault(); navigate("/forratuc/listas-precios"); }}
+          >
+            <i className="bi bi-tags fs-5"></i>
+            <span>Listas de precios</span>
+          </a>
+          <a
+            href="#"
+            className={`nav-link d-flex align-items-center gap-2 mb-2 rounded ${
+              isActive("/forratuc/caja") ? "text-white" : "text-white-50"
+            }`}
+            onClick={(e) => { e.preventDefault(); navigate("/forratuc/caja"); }}
+          >
+            <i className="bi bi-cash-stack fs-5"></i>
+            <span>Cierre de caja</span>
           </a>
           <a
             href="#"
