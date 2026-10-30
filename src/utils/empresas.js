@@ -25,6 +25,11 @@ const clavesUsuario = () => {
   return claves.length ? claves : ["avicola"];
 };
 
+// Si el cliente le compra a esa empresa (`clientes.empresas`). Sin lista es un
+// cliente anterior al multiempresa: de la avícola, como el default del back.
+export const clienteDeEmpresa = (cliente, clave) =>
+  (cliente?.empresas?.length ? cliente.empresas : ["avicola"]).includes(clave);
+
 // Pantalla de entrada de la avícola según el rol (lo que hacía el login).
 export const inicioAvicola = (rolUsuario) => {
   if (rolUsuario === "frigorifico") return "/frigorifico/pedidos-granja";

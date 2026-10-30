@@ -281,6 +281,13 @@ export const registrarCobroForratuc = async (data) => {
   return handleResponse(response);
 };
 
+// Página Pagos: los recibos entre dos fechas ("AAAA-MM-DD"), anulados incluidos.
+export const obtenerCobrosForratuc = async (desde, hasta) => {
+  const q = new URLSearchParams({ ...(desde && { desde }), ...(hasta && { hasta }) });
+  const response = await fetch(`${API_URL}/cuentas-corrientes-forratuc/cobros?${q}`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
 export const anularCobroForratuc = async (id, motivo) => {
   const response = await fetch(`${API_URL}/cuentas-corrientes-forratuc/cobros/${id}/anular`, {
     method: "PATCH", headers: getAuthHeaders(), body: JSON.stringify({ motivo }),
@@ -330,7 +337,7 @@ export const obtenerListasPreciosForratuc = async () => {
   return handleResponse(response);
 };
 
-// data: { nombre, tipo: "precios"|"descuento", precios: [{ item, precio }], base, porcentaje, porDefecto, clientes }
+// data: { nombre, tipo: "precios"|"descuento", precios: [{ item, precio }], porcentaje, clientes } (el % va siempre sobre "Precio de lista")
 export const guardarListaPreciosForratuc = async (id, data) => {
   const response = await fetch(`${API_URL}/listas-precios-forratuc${id ? `/${id}` : ""}`, {
     method: id ? "PUT" : "POST", headers: getAuthHeaders(), body: JSON.stringify(data),

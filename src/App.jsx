@@ -48,6 +48,7 @@ import InicioPage from "./pages/InicioPage";
 import ForratucInicioPage from "./pages/forratuc/ForratucInicioPage";
 import ForratucPresupuestosPage from "./pages/forratuc/ForratucPresupuestosPage";
 import ForratucCuentasCorrientesPage from "./pages/forratuc/ForratucCuentasCorrientesPage";
+import ForratucPagosPage from "./pages/forratuc/ForratucPagosPage";
 import ForratucStockPage from "./pages/forratuc/ForratucStockPage";
 import ForratucListasPreciosPage from "./pages/forratuc/ForratucListasPreciosPage";
 import ForratucCajaPage from "./pages/forratuc/ForratucCajaPage";
@@ -72,6 +73,7 @@ function App() {
         <Route path="/forratuc/mostrador" element={<ProtectedRoute><ForratucPresupuestosPage /></ProtectedRoute>} />
         <Route path="/forratuc/salidas" element={<ProtectedRoute><SalidaMostradorPage /></ProtectedRoute>} />
         <Route path="/forratuc/cuentas-corrientes" element={<ProtectedRoute><ForratucCuentasCorrientesPage /></ProtectedRoute>} />
+        <Route path="/forratuc/pagos" element={<ProtectedRoute><ForratucPagosPage /></ProtectedRoute>} />
         {/* Stock del local (2026-10-26): pollo, huevo, pollitos y alimento balanceado. */}
         <Route path="/forratuc/stock" element={<ProtectedRoute><ForratucStockPage /></ProtectedRoute>} />
         {/* Observaciones del cliente (2026-10-29) */}

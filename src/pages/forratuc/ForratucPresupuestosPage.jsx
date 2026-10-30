@@ -6,6 +6,7 @@ import BuscadorCliente from "../../components/BuscadorCliente";
 import { especieDe, etiquetaEspecie } from "../../utils/especies";
 import { obtenerFechaHoy, formatearFechaLocal } from "../../utils/dateUtils";
 import { escapeHtml } from "../../utils/escapeHtml";
+import { clienteDeEmpresa } from "../../utils/empresas";
 import { imprimirPresupuestoForratuc } from "../../utils/forratuc/imprimirForratuc";
 import {
   obtenerCuentaClienteForratuc,
@@ -34,7 +35,7 @@ import {
  *
  * Precios: pollo entero y trozado por KG, huevo por maple, pollitos por unidad,
  * alimento por bolsa (el "otro", por bolsa o kg). Los PROPONE la lista de
- * precios del cliente (o la por defecto) y se pueden corregir.
+ * precios elegida en la venta (arranca en "Precio de lista") y se pueden corregir.
  *
  * Forma de pago (2026-10-29, pedido del cliente): tres botones fijos —
  * Efectivo (por defecto), Mercado Pago o Cuenta corriente — para que no haya
@@ -90,7 +91,7 @@ const ForratucPresupuestosPage = () => {
   const [formaPago, setFormaPago] = useState("efectivo");
   const [operacionMP, setOperacionMP] = useState("");
   const [saldoCliente, setSaldoCliente] = useState(null);
-  // Lista de precios: la del cliente o la por defecto, hasta que se elija otra.
+  // Lista de precios: la por defecto, hasta que se elija otra.
   const [listaId, setListaId] = useState("");
   const [listaTocada, setListaTocada] = useState(false);
 
@@ -118,7 +119,7 @@ const ForratucPresupuestosPage = () => {
       setStockHuevos(huevos);
       setStockPollitos(pollitos);
       setClientes(
-        [...(Array.isArray(cls) ? cls : [])].sort((a, b) =>
+        (Array.isArray(cls) ? cls : cls?.clientes || []).filter((c) => clienteDeEmpresa(c, "forratuc")).sort((a, b) =>
           String(a.razonSocial || "").localeCompare(String(b.razonSocial || ""))
         )
       );
@@ -253,16 +254,12 @@ const ForratucPresupuestosPage = () => {
     if (f === "cuenta_corriente") setModoCliente("padron");
   };
 
-  // La lista que le toca: la que tiene al cliente, si no la por defecto.
-  const listaDelCliente = useMemo(() => {
-    const delCliente = modoCliente === "padron" && clienteId
-      ? listas.find((l) => (l.clientes || []).some((c) => String(c._id || c) === String(clienteId)))
-      : null;
-    return delCliente || listas.find((l) => l.porDefecto) || null;
-  }, [listas, modoCliente, clienteId]);
+  // Arranca en el "Precio de lista" (la por defecto); la lista se elige a mano en
+  // cada venta, no va atada al cliente (pedido del usuario, 2026-10-30).
+  const listaPorDefecto = listas.find((l) => l.porDefecto) || null;
   useEffect(() => {
-    if (!listaTocada) setListaId(listaDelCliente?._id || "");
-  }, [listaDelCliente, listaTocada]);
+    if (!listaTocada) setListaId(listaPorDefecto?._id || "");
+  }, [listaPorDefecto, listaTocada]);
   const lista = listas.find((l) => l._id === listaId) || null;
   const precioDeLista = (op) => {
     const item = itemDeOpcion(op);
@@ -604,7 +601,7 @@ const ForratucPresupuestosPage = () => {
                       const icono = { efectivo: "bi-cash-coin", mercado_pago: "bi-phone", cuenta_corriente: "bi-journal-text" }[f.key];
                       return (
                         <button key={f.key} type="button"
-                          className={`btn btn-lg px-4 ${elegida ? "btn-primary" : "btn-outline-secondary"}`}
+                          className={`btn btn-sm px-3 ${elegida ? "btn-primary" : "btn-outline-secondary"}`}
                           onClick={() => elegirFormaPago(f.key)}>
                           <i className={`bi ${icono || "bi-wallet2"} me-2`}></i>
                           {f.etiqueta}

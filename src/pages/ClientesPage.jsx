@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { obtenerClientes, crearCliente, actualizarCliente, eliminarCliente, obtenerEmpresas } from "../services/api";
 import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
 import Swal from "sweetalert2";
 import { escapeHtml } from "../utils/escapeHtml";
+import { empresaActual, clienteDeEmpresa } from "../utils/empresas";
 import "../css/Tablas.css";
 
 // Una etiqueta por empresa del grupo a la que le compra el cliente.
@@ -45,6 +46,7 @@ const ClientesPage = () => {
   // uno solo para todo el grupo. Mientras el multiempresa esté en desarrollo lo
   // ve y lo edita solo el superadmin; el back descarta lo que mande otro rol.
   const esSuperadmin = localStorage.getItem("rolUsuario") === "superadmin";
+  const location = useLocation();
   const [catalogoEmpresas, setCatalogoEmpresas] = useState([]);
   const [empresasCliente, setEmpresasCliente] = useState(["avicola"]);
 
@@ -94,7 +96,8 @@ const ClientesPage = () => {
       });
       setEmpresasCliente(empresasDe(cliente));
     } else {
-      setEmpresasCliente(["avicola"]);
+      // Un alta arranca en la empresa desde la que se entró a Clientes.
+      setEmpresasCliente([empresaActual(location.pathname)]);
       setEditingCliente(null);
       setFormData({
         razonSocial: "",
@@ -138,7 +141,11 @@ const ClientesPage = () => {
       });
       return;
     }
-    const datos = esSuperadmin ? { ...formData, empresas: empresasCliente } : formData;
+    // El resto no elige empresas: en el alta se manda la actual (el back la
+    // acepta solo si la ve); al editar no se manda, para no tocarle la lista.
+    const datos = esSuperadmin
+      ? { ...formData, empresas: empresasCliente }
+      : editingCliente ? formData : { ...formData, empresas: [empresaActual(location.pathname)] };
     try {
       if (editingCliente) {
         await actualizarCliente(editingCliente._id, datos);
@@ -198,7 +205,11 @@ const ClientesPage = () => {
     }
   };
 
+  // Solo los clientes de la empresa en la que se está (2026-10-30): el padrón es
+  // uno, pero cada empresa ve los suyos; uno que le compra a varias sale en cada una.
+  const empresa = empresaActual(location.pathname);
   const clientesFiltrados = clientes.filter((cliente) =>
+    clienteDeEmpresa(cliente, empresa) &&
     cliente.razonSocial?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 

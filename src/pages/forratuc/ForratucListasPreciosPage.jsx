@@ -2,10 +2,8 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import Layout from "../../components/Layout";
-import BuscadorCliente from "../../components/BuscadorCliente";
 import { escapeHtml } from "../../utils/escapeHtml";
 import {
-  obtenerClientes,
   obtenerCatalogoPreciosForratuc,
   obtenerListasPreciosForratuc,
   guardarListaPreciosForratuc,
@@ -13,26 +11,27 @@ import {
 } from "../../services/api";
 
 /**
- * Listas de precios de Forratuc (2026-10-29, observaciones del cliente): se
- * arman varias, para la venta al público o con % de descuento según el cliente.
+ * Listas de precios de Forratuc (2026-10-29, observaciones del cliente).
  *
+ * "Precio de lista" (2026-10-30) es la principal: la crea el back, es la por
+ * defecto y no se borra. Las demás son de uno de dos tipos:
  *   · De PRECIOS: un precio por artículo del catálogo (el que manda el back, con
  *     la unidad con la que se cobra cada cosa). Vacío = sin precio.
- *   · De DESCUENTO: un % menos sobre una lista de precios. No guarda precios:
- *     cambiar la base cambia esta sola.
+ *   · De DESCUENTO: un % menos sobre el Precio de lista. No guarda precios:
+ *     cambiar el Precio de lista cambia esta sola.
  *
- * Cada cliente va en una sola lista; a quien no está en ninguna se le propone la
- * marcada "por defecto". En el presupuesto el precio se propone y se corrige.
+ * Las listas no llevan clientes (2026-10-30): la lista se elige en cada venta,
+ * en el presupuesto, que arranca en el Precio de lista. El precio se propone y
+ * se corrige.
  */
 
 const pesos = (n) =>
   new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(Number(n || 0));
-const fmt = (n) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(Number(n || 0));
 
 const UNIDAD = { kg: "kg", maple: "maple", pollito: "pollito", bolsa: "bolsa" };
 
 const listaVacia = () => ({
-  _id: null, nombre: "", tipo: "precios", porDefecto: false, precios: {}, base: "", porcentaje: "", clientes: [],
+  _id: null, nombre: "", tipo: "precios", precios: {}, porcentaje: "",
 });
 
 const ForratucListasPreciosPage = () => {
@@ -41,23 +40,16 @@ const ForratucListasPreciosPage = () => {
   const [saving, setSaving] = useState(false);
   const [catalogo, setCatalogo] = useState([]);
   const [listas, setListas] = useState([]);
-  const [clientes, setClientes] = useState([]);
   const [form, setForm] = useState(null); // la lista que se edita (null = ninguna)
 
   const cargar = async () => {
     try {
-      const [cat, lts, cls] = await Promise.all([
+      const [cat, lts] = await Promise.all([
         obtenerCatalogoPreciosForratuc(),
         obtenerListasPreciosForratuc(),
-        obtenerClientes().catch(() => []),
       ]);
       setCatalogo(cat);
       setListas(lts);
-      setClientes(
-        [...(Array.isArray(cls) ? cls : [])].sort((a, b) =>
-          String(a.razonSocial || "").localeCompare(String(b.razonSocial || ""))
-        )
-      );
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudieron cargar las listas.", "error");
     } finally {
@@ -77,26 +69,35 @@ const ForratucListasPreciosPage = () => {
       _id: l._id,
       nombre: l.nombre,
       tipo: l.tipo,
-      porDefecto: l.porDefecto,
       precios: Object.fromEntries((l.precios || []).map((p) => [p.item, String(p.precio)])),
-      base: l.base ? String(l.base) : "",
       porcentaje: l.porcentaje != null ? String(l.porcentaje) : "",
-      clientes: (l.clientes || []).map((c) => ({ _id: c._id, razonSocial: c.razonSocial })),
     });
 
   const set = (cambios) => setForm((f) => ({ ...f, ...cambios }));
-  const bases = listas.filter((l) => l.tipo === "precios" && l._id !== form?._id);
-  const base = listas.find((l) => l._id === form?.base);
 
-  // Un cliente en una sola lista: se avisa acá, el back igual lo rebota.
-  const listaDeCliente = (id) => listas.find((l) => l._id !== form?._id && (l.clientes || []).some((c) => c._id === id));
-  const agregarCliente = (id) => {
-    if (!id || form.clientes.some((c) => c._id === id)) return;
-    const otra = listaDeCliente(id);
-    const c = clientes.find((x) => x._id === id);
-    if (otra) return Swal.fire("Ya tiene lista", `${c?.razonSocial || "Ese cliente"} está en "${otra.nombre}". Sacalo de ahí primero.`, "warning");
-    set({ clientes: [...form.clientes, { _id: id, razonSocial: c?.razonSocial || "" }] });
+  // Solo en el Precio de lista: sube (o baja, con negativo) todos los precios
+  // cargados un %. Los vacíos siguen vacíos; se guarda recién con Guardar.
+  const [ajuste, setAjuste] = useState("");
+  const ajustarTodos = () => {
+    const pct = Number(ajuste);
+    if (!ajuste || !Number.isFinite(pct) || pct <= -100) {
+      return Swal.fire("Porcentaje inválido", "Poné un % (ej.: 10 para subir, -5 para bajar).", "warning");
+    }
+    set({
+      precios: Object.fromEntries(
+        Object.entries(form.precios).map(([item, v]) =>
+          [item, v === "" ? "" : String(Math.round(Number(v) * (1 + pct / 100) * 100) / 100)]
+        )
+      ),
+    });
+    setAjuste("");
   };
+
+  // "Precio de lista": la principal (la por defecto). La crea el back, no se borra
+  // y es la base de todos los %; de ella solo se editan los precios.
+  const principal = listas.find((l) => l.porDefecto);
+  const base = principal;
+  const esPrincipal = Boolean(form?._id) && form._id === principal?._id;
 
   const guardar = async (e) => {
     e.preventDefault();
@@ -106,13 +107,10 @@ const ForratucListasPreciosPage = () => {
       await guardarListaPreciosForratuc(form._id, {
         nombre: form.nombre.trim(),
         tipo: form.tipo,
-        porDefecto: form.porDefecto,
         precios: Object.entries(form.precios)
           .filter(([, v]) => v !== "")
           .map(([item, precio]) => ({ item, precio: Number(precio) })),
-        base: form.tipo === "descuento" ? form.base : undefined,
         porcentaje: form.tipo === "descuento" ? Number(form.porcentaje) : undefined,
-        clientes: form.clientes.map((c) => c._id),
       });
       Swal.fire({ icon: "success", title: "Lista guardada", timer: 1300, showConfirmButton: false });
       setForm(null);
@@ -168,7 +166,7 @@ const ForratucListasPreciosPage = () => {
             <div className="col-12 col-lg-4">
               {listas.length === 0 ? (
                 <div className="text-muted text-center py-4 border rounded bg-white">
-                  Todavía no hay listas. Empezá por la de venta al público.
+                  Todavía no hay listas.
                 </div>
               ) : (
                 listas.map((l) => (
@@ -177,25 +175,23 @@ const ForratucListasPreciosPage = () => {
                     style={{ cursor: "pointer" }} onClick={() => editar(l)}>
                     <div className="card-body py-2">
                       <div className="d-flex justify-content-between align-items-start gap-2">
-                        <div>
-                          <div className="fw-semibold">
-                            {l.nombre}
-                            {l.porDefecto && <span className="badge bg-primary ms-2">Por defecto</span>}
-                          </div>
-                          <div className="small text-muted">
-                            {l.tipo === "descuento"
-                              ? `${fmt(l.porcentaje)}% menos sobre "${l.baseNombre || "—"}"`
-                              : `${(l.precios || []).length} artículos con precio`}
-                            {" · "}
-                            {(l.clientes || []).length
-                              ? `${l.clientes.length} ${l.clientes.length === 1 ? "cliente" : "clientes"}`
-                              : "sin clientes"}
-                          </div>
+                        <div className="fw-semibold">
+                          {l.nombre}
+                          {l.porDefecto && <span className="badge bg-primary ms-2">Por defecto</span>}
+                          {l.tipo === "descuento" && <span className="badge bg-light text-dark border ms-2">−{l.porcentaje}%</span>}
                         </div>
-                        <button className="btn btn-sm btn-outline-danger border-0" title="Borrar"
-                          onClick={(e) => { e.stopPropagation(); borrar(l); }}>
-                          <i className="bi bi-trash"></i>
-                        </button>
+                        <div className="d-flex">
+                          <button className="btn btn-sm btn-outline-primary border-0" title="Editar"
+                            onClick={(e) => { e.stopPropagation(); editar(l); }}>
+                            <i className="bi bi-pencil"></i>
+                          </button>
+                          {!l.porDefecto && (
+                            <button className="btn btn-sm btn-outline-danger border-0" title="Borrar"
+                              onClick={(e) => { e.stopPropagation(); borrar(l); }}>
+                              <i className="bi bi-trash"></i>
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -212,50 +208,49 @@ const ForratucListasPreciosPage = () => {
               ) : (
                 <form className="card border-0 shadow-sm" onSubmit={guardar}>
                   <div className="card-body">
-                    <div className="row g-3 mb-3">
-                      <div className="col-12 col-md-6">
-                        <label className="form-label fw-semibold small mb-1">Nombre</label>
-                        <input className="form-control" value={form.nombre} placeholder="Ej.: Público, Mayorista 10%"
-                          onChange={(e) => set({ nombre: e.target.value })} />
-                      </div>
-                      <div className="col-12 col-md-6">
-                        <label className="form-label fw-semibold small mb-1">Tipo</label>
-                        <div className="btn-group w-100">
-                          <button type="button" className={`btn ${form.tipo === "precios" ? "btn-dark" : "btn-outline-secondary"}`}
-                            onClick={() => set({ tipo: "precios" })}>
-                            Con precios
-                          </button>
-                          <button type="button" className={`btn ${form.tipo === "descuento" ? "btn-dark" : "btn-outline-secondary"}`}
-                            onClick={() => set({ tipo: "descuento" })} disabled={bases.length === 0}
-                            title={bases.length === 0 ? "Primero armá una lista con precios" : undefined}>
-                            % de descuento sobre otra
-                          </button>
+                    {esPrincipal ? (
+                      <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                        <h2 className="h5 mb-0">
+                          {form.nombre}
+                          <span className="badge bg-primary ms-2 align-middle fs-6">Por defecto</span>
+                        </h2>
+                        <div className="input-group input-group-sm" style={{ width: "auto" }}>
+                          <span className="input-group-text">Subir / bajar todos</span>
+                          <input type="number" step="0.01" className="form-control text-end sin-flechas" style={{ width: "5.5rem" }}
+                            placeholder="10 / -5" value={ajuste} onChange={(e) => setAjuste(e.target.value)} />
+                          <span className="input-group-text">%</span>
+                          <button type="button" className="btn btn-outline-primary" onClick={ajustarTodos}>Aplicar</button>
                         </div>
                       </div>
-                      <div className="col-12">
-                        <div className="form-check">
-                          <input id="porDefecto" type="checkbox" className="form-check-input" checked={form.porDefecto}
-                            onChange={(e) => set({ porDefecto: e.target.checked })} />
-                          <label htmlFor="porDefecto" className="form-check-label small">
-                            Por defecto: la que se propone a quien no está en ninguna lista (venta al público)
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-
-                    {form.tipo === "descuento" ? (
+                    ) : (
                       <div className="row g-3 mb-3">
-                        <div className="col-12 col-md-7">
-                          <label className="form-label fw-semibold small mb-1">Sobre la lista</label>
-                          <select className="form-select" value={form.base} onChange={(e) => set({ base: e.target.value })}>
-                            <option value="">Elegí…</option>
-                            {bases.map((b) => <option key={b._id} value={b._id}>{b.nombre}</option>)}
-                          </select>
+                        <div className="col-12 col-md-6">
+                          <label className="form-label fw-semibold small mb-1">Nombre</label>
+                          <input className="form-control" value={form.nombre} placeholder="Ej.: Mayorista, Revendedor"
+                            onChange={(e) => set({ nombre: e.target.value })} />
                         </div>
+                        <div className="col-12 col-md-6">
+                          <label className="form-label fw-semibold small mb-1">Tipo</label>
+                          <div className="btn-group w-100">
+                            <button type="button" className={`btn ${form.tipo === "precios" ? "btn-dark" : "btn-outline-secondary"}`}
+                              onClick={() => set({ tipo: "precios" })}>
+                              Precio por producto
+                            </button>
+                            <button type="button" className={`btn ${form.tipo === "descuento" ? "btn-dark" : "btn-outline-secondary"}`}
+                              onClick={() => set({ tipo: "descuento" })}>
+                              % sobre {principal?.nombre || "Precio de lista"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {form.tipo === "descuento" && !esPrincipal ? (
+                      <div className="row g-3 mb-3">
                         <div className="col-12 col-md-5">
                           <label className="form-label fw-semibold small mb-1">Descuento</label>
                           <div className="input-group">
-                            <input type="number" min="0" max="100" step="0.01" className="form-control" value={form.porcentaje}
+                            <input type="number" min="0" max="100" step="0.01" className="form-control sin-flechas" value={form.porcentaje}
                               onChange={(e) => set({ porcentaje: e.target.value })} />
                             <span className="input-group-text">%</span>
                           </div>
@@ -282,48 +277,34 @@ const ForratucListasPreciosPage = () => {
                       </div>
                     ) : (
                       <div className="mb-3">
-                        <div className="small text-muted mb-2">Vacío = sin precio en esta lista (en el presupuesto se escribe a mano).</div>
+                        {/* Mismo formato que la vista del %: el artículo a la izquierda, el precio a la derecha. */}
                         {grupos.map(([grupo, items]) => (
                           <div key={grupo} className="mb-3">
-                            <div className="fw-semibold small text-uppercase text-secondary mb-1">{grupo}</div>
-                            <div className="row g-2">
-                              {items.map((c) => (
-                                <div key={c.item} className="col-12 col-md-6 col-xl-4">
-                                  <div className="input-group input-group-sm">
-                                    <span className="input-group-text flex-grow-1 text-truncate" style={{ maxWidth: "55%" }} title={c.etiqueta}>
-                                      {c.etiqueta}
-                                    </span>
-                                    <span className="input-group-text">$</span>
-                                    <input type="number" min="0" step="0.01" className="form-control"
-                                      value={form.precios[c.item] ?? ""}
-                                      onChange={(e) => set({ precios: { ...form.precios, [c.item]: e.target.value } })} />
-                                    <span className="input-group-text">/ {UNIDAD[c.unidad] || c.unidad}</span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
+                            <div className="fw-semibold small text-uppercase text-primary mb-1">{grupo}</div>
+                            <table className="table table-sm align-middle mb-0">
+                              <tbody>
+                                {items.map((c) => (
+                                  <tr key={c.item}>
+                                    <td className="small">{c.etiqueta}</td>
+                                    <td className="text-end" style={{ width: "13rem" }}>
+                                      <div className="input-group input-group-sm">
+                                        <span className="input-group-text">$</span>
+                                        <input type="number" min="0" step="0.01" className="form-control text-end sin-flechas"
+                                          value={form.precios[c.item] ?? ""}
+                                          onChange={(e) => set({ precios: { ...form.precios, [c.item]: e.target.value } })} />
+                                      </div>
+                                    </td>
+                                    <td className="small text-muted" style={{ width: "4.5rem" }}>/ {UNIDAD[c.unidad] || c.unidad}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
                           </div>
                         ))}
                       </div>
                     )}
 
-                    <div className="border-top pt-3 mb-3">
-                      <label className="form-label fw-semibold small mb-1">Clientes con esta lista</label>
-                      <BuscadorCliente clientes={clientes} value="" onChange={agregarCliente}
-                        placeholder="Agregar un cliente: buscá por nombre, CUIT o teléfono..." />
-                      <div className="d-flex flex-wrap gap-2 mt-2">
-                        {form.clientes.length === 0 && <span className="small text-muted">Ninguno.</span>}
-                        {form.clientes.map((c) => (
-                          <span key={c._id} className="badge bg-light text-dark border d-flex align-items-center gap-1 py-2">
-                            {c.razonSocial}
-                            <button type="button" className="btn-close btn-close-sm ms-1" style={{ fontSize: "0.6rem" }}
-                              aria-label="Quitar" onClick={() => set({ clientes: form.clientes.filter((x) => x._id !== c._id) })} />
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="d-flex justify-content-end gap-2">
+                    <div className="d-flex justify-content-end gap-2 border-top pt-3">
                       <button type="button" className="btn btn-outline-secondary" onClick={() => setForm(null)}>Cancelar</button>
                       <button type="submit" className="btn btn-success" disabled={saving}>
                         {saving ? <span className="spinner-border spinner-border-sm me-1"></span> : <i className="bi bi-check-lg me-1"></i>}

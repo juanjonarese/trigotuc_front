@@ -5,7 +5,7 @@ import React from "react";
 // `Layout` según la empresa actual; `grupo` son los ítems del grupo (Altas,
 // Actividad), que van entre Proyección y Salida Mostrador.
 const MenuAvicola = ({ ctx, grupo }) => {
-  const { navigate, location, isActive, rolUsuario, mandaTodo, empresas, seccionAbierta, toggleSeccion } = ctx;
+  const { navigate, location, isActive, rolUsuario, mandaTodo, seccionAbierta, toggleSeccion } = ctx;
   return (
     <>
       {rolUsuario !== "frigorifico" && rolUsuario !== "granja" && rolUsuario !== "chofer" && rolUsuario !== "reproductoras" && (
@@ -47,9 +47,9 @@ const MenuAvicola = ({ ctx, grupo }) => {
       {/* Salida Mostrador — al primer nivel (2026-09-30): saca pollo de la
           cámara Trigotuc y huevo, así que no es del frigorífico. La ruta
           sigue siendo /frigorifico/salida-mostrador para no romper enlaces.
-          El mostrador es de Forratuc (2026-10-16): el superadmin lo ve allá;
-          el resto lo sigue viendo acá hasta que Forratuc se libere. */}
-      {!empresas.some((e) => e.clave === "forratuc") && (mandaTodo || rolUsuario === "administracion_frigorifico" || rolUsuario === "administracion_granja") && (
+          Desde el 2026-10-30 (pedido del usuario) vive solo acá, también para
+          quien tiene Forratuc: Forratuc vende con presupuestos. */}
+      {(mandaTodo || rolUsuario === "administracion_frigorifico" || rolUsuario === "administracion_granja") && (
         <a
           href="#"
           className={`nav-link d-flex align-items-center gap-2 mb-2 rounded ${

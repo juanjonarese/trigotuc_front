@@ -32,3 +32,14 @@ body:has(.modal.show) {
   overflow: hidden;
   padding-right: 0 !important;
 }
+
+/* Input numérico sin las flechitas de subir/bajar (ej.: precios de Forratuc). */
+.sin-flechas::-webkit-outer-spin-button,
+.sin-flechas::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.sin-flechas {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}

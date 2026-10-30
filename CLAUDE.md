@@ -25,10 +25,11 @@ There are no automated tests.
 |-------|------|------|
 | `/inicio` | `InicioPage` — tarjetas para elegir empresa del grupo (con una sola, redirige) | Grupo |
 | `/forratuc` | `ForratucInicioPage` (en desarrollo, solo superadmin) | Forratuc |
-| `/forratuc/mostrador` | `ForratucPresupuestosPage` (2026-10-21: presupuesto con fecha, cliente, precios y forma de pago; desde el 2026-10-29 **tres botones fijos** — Efectivo, Mercado Pago, Cuenta corriente —, el precio lo **propone la lista de precios** del cliente y el alimento sale de la forrajería, por bolsa; imprime con `utils/forratuc/imprimirForratuc.js`, las dos copias en una hoja) | Forratuc |
-| `/forratuc/listas-precios` | `ForratucListasPreciosPage` (2026-10-29: listas de precios o de % de descuento sobre otra, con sus clientes; una por defecto) | Forratuc |
+| `/forratuc/mostrador` | `ForratucPresupuestosPage` (2026-10-21: presupuesto con fecha, cliente, precios y forma de pago; desde el 2026-10-29 **tres botones fijos** — Efectivo, Mercado Pago, Cuenta corriente —, el precio lo **propone la lista de precios** elegida (arranca en "Precio de lista") y el alimento sale de la forrajería, por bolsa; imprime con `utils/forratuc/imprimirForratuc.js`, las dos copias en una hoja) | Forratuc |
+| `/forratuc/listas-precios` | `ForratucListasPreciosPage` (2026-10-29: "Precio de lista" fija —la por defecto, con subir/bajar todos por %— y las demás de precio por producto o % sobre ella; desde el 30/10 sin clientes: la lista se elige en la venta) | Forratuc |
 | `/forratuc/caja` | `ForratucCajaPage` (2026-10-29: rendición y cierre de caja del día — billetes de caja inicio / bolsa / caja cierre a mano, el resto calculado; imprime la planilla) | Forratuc |
 | `/forratuc/cuentas-corrientes` | `ForratucCuentasCorrientesPage` (saldos por cliente, movimientos con saldo, registrar pago → recibo) | Forratuc |
+| `/forratuc/pagos` | `ForratucPagosPage` (2026-10-30: los pagos de cuenta corriente por fecha — registrar, reimprimir el recibo, anular; mismo modal que Cuentas corrientes, `components/forratuc/RegistrarPagoModal.jsx`) | Forratuc |
 | `/forratuc/stock` | `ForratucStockPage` (2026-10-26: pollo de la cámara Trigotuc, huevo, pollitos y alimento balanceado en bolsas, todo de `GET /stock-forratuc`; una **tarjeta por lugar** — cámara Trigotuc, huevos, pollitos, cada depósito de alimento — con el **diseño de Frigorífico → Stock** (total arriba, cuadritos con badge, historial abajo); al tocarla, el historial de ese lugar como cuenta corriente, de `GET /stock-forratuc/movimientos/:lugar`; desde el 2026-10-29, botón **Ingresar alimento** y "anular" en los ingresos del historial) | Forratuc |
 | `/forratuc/salidas` | `SalidaMostradorPage` (la salida suelta; las de un presupuesto salen con su número y sin editar/borrar) | Forratuc |
 | `/dashboard` | `DashboarPage` (typo intencional) | General |
@@ -118,8 +119,8 @@ mantienen la última empresa; la avícola tiene sus prefijos explícitos en
 `PREFIJOS_EMPRESA`). Altas y Actividad salen en todas. Las
 empresas del usuario vienen del login (`localStorage.empresas`); con más de
 una, el nombre de la empresa arriba del menú es un **selector**: se toca y se pasa a otra de un clic, directo a su pantalla de entrada (2026-10-26; antes "Cambiar empresa" iba a las tarjetas de `/inicio`). Una sesión sin `empresas` (abierta
-antes del cambio) se comporta como siempre. Salida Mostrador se ve en
-Forratuc para quien tiene Forratuc, y en la avícola para el resto.
+antes del cambio) se comporta como siempre. Salida Mostrador se ve **solo en
+la avícola** (2026-10-30); el menú de Forratuc es Inicio, Stock, Ventas, Cierre de caja, Cuentas corrientes, Pagos y Listas de precios.
 
 Desde el 2026-10-26 cada empresa tiene **su componente de menú**:
 `components/MenuAvicola.jsx` y `components/forratuc/MenuForratuc.jsx`, elegidos

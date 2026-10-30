@@ -2,18 +2,16 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import Layout from "../../components/Layout";
-import BuscadorCliente from "../../components/BuscadorCliente";
-import PagosForratuc from "../../components/forratuc/PagosForratuc";
-import { pagoVacio, pagosParaEnviar, sumaPagos } from "../../utils/forratuc/pagosForratuc";
-import { obtenerFechaHoy, formatearFechaLocal } from "../../utils/dateUtils";
+import RegistrarPagoModal from "../../components/forratuc/RegistrarPagoModal";
+import { formatearFechaLocal } from "../../utils/dateUtils";
 import { escapeHtml } from "../../utils/escapeHtml";
+import { clienteDeEmpresa } from "../../utils/empresas";
 import { imprimirPresupuestoForratuc, imprimirReciboForratuc } from "../../utils/forratuc/imprimirForratuc";
 import {
   obtenerClientes,
   obtenerConstantesPresupuesto,
   obtenerCuentasCorrientesForratuc,
   obtenerCuentaClienteForratuc,
-  registrarCobroForratuc,
   anularCobroForratuc,
 } from "../../services/api";
 
@@ -44,10 +42,8 @@ const ForratucCuentasCorrientesPage = () => {
   const [loadingCuenta, setLoadingCuenta] = useState(false);
   const [verAnulados, setVerAnulados] = useState(false);
 
-  // Modal de cobro
-  const [cobro, setCobro] = useState(null); // { cliente, fecha, pagos, observaciones }
-  const [saldoCobro, setSaldoCobro] = useState(null);
-  const [saving, setSaving] = useState(false);
+  // Modal de cobro: null = cerrado; si no, el cliente con el que abre ("" = a elegir).
+  const [cobroPara, setCobroPara] = useState(null);
 
   const mediosPago = constantes?.mediosPago || [];
 
@@ -66,7 +62,7 @@ const ForratucCuentasCorrientesPage = () => {
     obtenerConstantesPresupuesto().then(setConstantes).catch(() => {});
     obtenerClientes()
       .then((cls) =>
-        setClientes([...(Array.isArray(cls) ? cls : [])].sort((a, b) =>
+        setClientes((Array.isArray(cls) ? cls : cls?.clientes || []).filter((c) => clienteDeEmpresa(c, "forratuc")).sort((a, b) =>
           String(a.razonSocial || "").localeCompare(String(b.razonSocial || ""))))
       )
       .catch(() => {});
@@ -88,42 +84,10 @@ const ForratucCuentasCorrientesPage = () => {
     setVerAnulados(false);
   }, [clienteSel]);
 
-  // Saldo del cliente elegido en el modal de cobro.
-  useEffect(() => {
-    setSaldoCobro(null);
-    if (!cobro?.cliente) return;
-    let vigente = true;
-    obtenerCuentaClienteForratuc(cobro.cliente)
-      .then((c) => vigente && setSaldoCobro(c.saldo))
-      .catch(() => {});
-    return () => { vigente = false; };
-  }, [cobro?.cliente]);
-
-  const abrirCobro = (clienteId = "") =>
-    setCobro({ cliente: clienteId, fecha: obtenerFechaHoy(), pagos: [pagoVacio()], observaciones: "" });
-
-  const guardarCobro = async () => {
-    if (!cobro.cliente) return Swal.fire("Falta el cliente", "Elegí a quién se le cobra.", "warning");
-    if (!(sumaPagos(cobro.pagos) > 0)) return Swal.fire("Falta el importe", "Cargá cuánto pagó.", "warning");
-    setSaving(true);
-    try {
-      const recibo = await registrarCobroForratuc({
-        cliente: cobro.cliente,
-        fecha: cobro.fecha,
-        pagos: pagosParaEnviar(cobro.pagos, mediosPago),
-        observaciones: cobro.observaciones.trim() || undefined,
-      });
-      const cli = clientes.find((c) => c._id === cobro.cliente);
-      setCobro(null);
-      imprimirReciboForratuc(recibo, { medios: mediosPago, cliente: cli });
-      Swal.fire({ icon: "success", title: `Recibo ${recibo.numero}`, html: `${pesos(recibo.total)} a cuenta.<br/><span class="text-muted">Se abrió la impresión del recibo.</span>`, timer: 3000, showConfirmButton: false });
-      cargarSaldos();
-      if (clienteSel) cargarCuenta(clienteSel);
-    } catch (err) {
-      Swal.fire("Error", err.message || "No se pudo registrar el pago.", "error");
-    } finally {
-      setSaving(false);
-    }
+  const pagoRegistrado = () => {
+    setCobroPara(null);
+    cargarSaldos();
+    if (clienteSel) cargarCuenta(clienteSel);
   };
 
   const anularCobro = async (rec) => {
@@ -178,7 +142,7 @@ const ForratucCuentasCorrientesPage = () => {
             <i className="bi bi-journal-text me-2 text-secondary"></i>
             {clienteSel && cuenta ? cuenta.cliente.razonSocial : "Cuentas corrientes"}
           </h1>
-          <button className="btn btn-success btn-sm ms-auto" onClick={() => abrirCobro(clienteSel || "")}>
+          <button className="btn btn-success btn-sm ms-auto" onClick={() => setCobroPara(clienteSel || "")}>
             <i className="bi bi-cash-coin me-1"></i>Registrar pago
           </button>
         </div>
@@ -332,55 +296,9 @@ const ForratucCuentasCorrientesPage = () => {
         ))}
 
         {/* ══════════ MODAL: REGISTRAR PAGO ══════════ */}
-        {cobro && (
-          <>
-            <div className="modal d-block" tabIndex="-1" role="dialog">
-              <div className="modal-dialog modal-xl" role="document">
-                <div className="modal-content">
-                  <div className="modal-header">
-                    <h5 className="modal-title"><i className="bi bi-cash-coin me-2"></i>Registrar pago a cuenta</h5>
-                    <button type="button" className="btn-close" onClick={() => setCobro(null)} disabled={saving}></button>
-                  </div>
-                  <div className="modal-body">
-                    <div className="row g-3 mb-3">
-                      <div className="col-12 col-md-7">
-                        <label className="form-label fw-semibold small mb-1">Cliente</label>
-                        <BuscadorCliente clientes={clientes} value={cobro.cliente}
-                          onChange={(id) => setCobro((c) => ({ ...c, cliente: id }))} />
-                        {saldoCobro != null && (
-                          <div className="small mt-1">
-                            Saldo actual: <strong className={saldoCobro > 0 ? "text-danger" : ""}>{pesos(saldoCobro)}</strong>
-                            {sumaPagos(cobro.pagos) > 0 && <> · queda en <strong>{pesos(saldoCobro - sumaPagos(cobro.pagos))}</strong></>}
-                          </div>
-                        )}
-                      </div>
-                      <div className="col-6 col-md-3">
-                        <label className="form-label fw-semibold small mb-1">Fecha</label>
-                        <input type="date" className="form-control" value={cobro.fecha}
-                          onChange={(e) => setCobro((c) => ({ ...c, fecha: e.target.value }))} />
-                      </div>
-                    </div>
-
-                    <label className="form-label fw-semibold small mb-1">Cómo pagó</label>
-                    <PagosForratuc medios={mediosPago} pagos={cobro.pagos}
-                      onChange={(pagos) => setCobro((c) => ({ ...c, pagos }))} />
-
-                    <label className="form-label fw-semibold small mt-3 mb-1">Observaciones</label>
-                    <textarea className="form-control" rows={2} value={cobro.observaciones}
-                      onChange={(e) => setCobro((c) => ({ ...c, observaciones: e.target.value }))} />
-                  </div>
-                  <div className="modal-footer">
-                    <button className="btn btn-outline-secondary" onClick={() => setCobro(null)} disabled={saving}>Cancelar</button>
-                    <button className="btn btn-success" onClick={guardarCobro} disabled={saving}>
-                      {saving ? <span className="spinner-border spinner-border-sm me-1"></span> : <i className="bi bi-printer me-1"></i>}
-                      Registrar e imprimir recibo
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="modal-backdrop show"></div>
-          </>
+        {cobroPara != null && (
+          <RegistrarPagoModal clientes={clientes} mediosPago={mediosPago} clienteInicial={cobroPara}
+            onClose={() => setCobroPara(null)} onRegistrado={pagoRegistrado} />
         )}
       </div>
     </Layout>
