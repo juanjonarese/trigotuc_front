@@ -1,65 +1,75 @@
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import LoginScreen from "./pages/LoginScreen";
-import DashboardPage from "./pages/DashboarPage";
-import ClientesPage from "./pages/ClientesPage";
-import PersonalPage from "./pages/PersonalPage";
-import GranjaDashboardPage from "./pages/GranjaDashboardPage";
-import LoteCreatePage from "./pages/LoteCreatePage";
-import LoteFaenaCrearPage from "./pages/LoteFaenaCrearPage";
-import PedidosGranjaPage from "./pages/PedidosGranjaPage";
-import EnvioCamaraPage from "./pages/EnvioCamaraPage";
-import SalidaMostradorPage from "./pages/SalidaMostradorPage";
-import RecepcionCamaraPage from "./pages/RecepcionCamaraPage";
-import CamionesPage from "./pages/CamionesPage";
-import DecomisadosPage from "./pages/DecomisadosPage";
-import GranjaLotesPage from "./pages/GranjaLotesPage";
-import GranjaLoteNuevoPage from "./pages/GranjaLoteNuevoPage";
-import GranjaCargaDatosPage from "./pages/GranjaCargaDatosPage";
-import VentasGranjaPage from "./pages/VentasGranjaPage";
-import GranjaRemitosPage from "./pages/GranjaRemitosPage";
-import GranjaHistorialPage from "./pages/GranjaHistorialPage";
-import GranjaMovimientosPage from "./pages/GranjaMovimientosPage";
-import OrdenCargaListPage from "./pages/OrdenCargaListPage";
-import OrdenCargaDetallePage from "./pages/OrdenCargaDetallePage";
-import RecepcionOrdenCargaPage from "./pages/RecepcionOrdenCargaPage";
-import RecepcionRemitosPage from "./pages/RecepcionRemitosPage";
-import HistorialAccesosPage from "./pages/HistorialAccesosPage";
-import StockEmpaquePage from "./pages/StockEmpaquePage";
-import DespachoFrigorificoPage from "./pages/DespachoFrigorificoPage";
-import RecepcionFrigorificoPage from "./pages/RecepcionFrigorificoPage";
-import ReproductoresLotesPage from "./pages/ReproductoresLotesPage";
-import ReproductorLoteNuevoPage from "./pages/ReproductorLoteNuevoPage";
-import ReproductoresDatosPage from "./pages/ReproductoresDatosPage";
-import RecoleccionHuevosPage from "./pages/RecoleccionHuevosPage";
-import RemitosHuevosPage from "./pages/RemitosHuevosPage";
-import RecepcionHuevosPage from "./pages/RecepcionHuevosPage";
-import IncubadoraPage from "./pages/IncubadoraPage";
+const DashboardPage = lazy(() => import("./pages/DashboarPage"));
+const ClientesPage = lazy(() => import("./pages/ClientesPage"));
+const PersonalPage = lazy(() => import("./pages/PersonalPage"));
+const GranjaDashboardPage = lazy(() => import("./pages/GranjaDashboardPage"));
+const LoteCreatePage = lazy(() => import("./pages/LoteCreatePage"));
+const LoteFaenaCrearPage = lazy(() => import("./pages/LoteFaenaCrearPage"));
+const PedidosGranjaPage = lazy(() => import("./pages/PedidosGranjaPage"));
+const EnvioCamaraPage = lazy(() => import("./pages/EnvioCamaraPage"));
+const SalidaMostradorPage = lazy(() => import("./pages/SalidaMostradorPage"));
+const RecepcionCamaraPage = lazy(() => import("./pages/RecepcionCamaraPage"));
+const CamionesPage = lazy(() => import("./pages/CamionesPage"));
+const DecomisadosPage = lazy(() => import("./pages/DecomisadosPage"));
+const GranjaLotesPage = lazy(() => import("./pages/GranjaLotesPage"));
+const GranjaLoteNuevoPage = lazy(() => import("./pages/GranjaLoteNuevoPage"));
+const GranjaCargaDatosPage = lazy(() => import("./pages/GranjaCargaDatosPage"));
+const VentasGranjaPage = lazy(() => import("./pages/VentasGranjaPage"));
+const GranjaRemitosPage = lazy(() => import("./pages/GranjaRemitosPage"));
+const GranjaHistorialPage = lazy(() => import("./pages/GranjaHistorialPage"));
+const GranjaMovimientosPage = lazy(() => import("./pages/GranjaMovimientosPage"));
+const OrdenCargaListPage = lazy(() => import("./pages/OrdenCargaListPage"));
+const OrdenCargaDetallePage = lazy(() => import("./pages/OrdenCargaDetallePage"));
+const RecepcionOrdenCargaPage = lazy(() => import("./pages/RecepcionOrdenCargaPage"));
+const RecepcionRemitosPage = lazy(() => import("./pages/RecepcionRemitosPage"));
+const HistorialAccesosPage = lazy(() => import("./pages/HistorialAccesosPage"));
+const StockEmpaquePage = lazy(() => import("./pages/StockEmpaquePage"));
+const DespachoFrigorificoPage = lazy(() => import("./pages/DespachoFrigorificoPage"));
+const RecepcionFrigorificoPage = lazy(() => import("./pages/RecepcionFrigorificoPage"));
+const ReproductoresLotesPage = lazy(() => import("./pages/ReproductoresLotesPage"));
+const ReproductorLoteNuevoPage = lazy(() => import("./pages/ReproductorLoteNuevoPage"));
+const ReproductoresDatosPage = lazy(() => import("./pages/ReproductoresDatosPage"));
+const RecoleccionHuevosPage = lazy(() => import("./pages/RecoleccionHuevosPage"));
+const RemitosHuevosPage = lazy(() => import("./pages/RemitosHuevosPage"));
+const RecepcionHuevosPage = lazy(() => import("./pages/RecepcionHuevosPage"));
+const IncubadoraPage = lazy(() => import("./pages/IncubadoraPage"));
 // Ventas de Reproductores: en pausa por pedido del cliente.
 // import VentaHuevosPage from "./pages/VentaHuevosPage";
 // import VentaPollitosPage from "./pages/VentaPollitosPage";
-import ProyeccionPage from "./pages/ProyeccionPage";
-import OrdenCargaPollitosPage from "./pages/OrdenCargaPollitosPage";
-import AlimentoEnviosPage from "./pages/AlimentoEnviosPage";
-import AlimentoSilosPage from "./pages/AlimentoSilosPage";
-import PlanPollitosPage from "./pages/PlanPollitosPage";
-import StockHuevosPage from "./pages/StockHuevosPage";
-import InicioPage from "./pages/InicioPage";
-import ForratucInicioPage from "./pages/forratuc/ForratucInicioPage";
-import ForratucPresupuestosPage from "./pages/forratuc/ForratucPresupuestosPage";
-import ForratucCuentasCorrientesPage from "./pages/forratuc/ForratucCuentasCorrientesPage";
-import ForratucPagosPage from "./pages/forratuc/ForratucPagosPage";
-import ForratucProductosPage from "./pages/forratuc/ForratucProductosPage";
-import ForratucPlantaPage from "./pages/forratuc/ForratucPlantaPage";
-import ForratucStockPage from "./pages/forratuc/ForratucStockPage";
-import ForratucListasPreciosPage from "./pages/forratuc/ForratucListasPreciosPage";
-import ForratucCajaPage from "./pages/forratuc/ForratucCajaPage";
-import AvicolaProductosPage from "./pages/AvicolaProductosPage";
+const ProyeccionPage = lazy(() => import("./pages/ProyeccionPage"));
+const OrdenCargaPollitosPage = lazy(() => import("./pages/OrdenCargaPollitosPage"));
+const AlimentoEnviosPage = lazy(() => import("./pages/AlimentoEnviosPage"));
+const AlimentoSilosPage = lazy(() => import("./pages/AlimentoSilosPage"));
+const PlanPollitosPage = lazy(() => import("./pages/PlanPollitosPage"));
+const StockHuevosPage = lazy(() => import("./pages/StockHuevosPage"));
+const InicioPage = lazy(() => import("./pages/InicioPage"));
+const ForratucInicioPage = lazy(() => import("./pages/forratuc/ForratucInicioPage"));
+const ForratucPresupuestosPage = lazy(() => import("./pages/forratuc/ForratucPresupuestosPage"));
+const ForratucCuentasCorrientesPage = lazy(() => import("./pages/forratuc/ForratucCuentasCorrientesPage"));
+const ForratucPagosPage = lazy(() => import("./pages/forratuc/ForratucPagosPage"));
+const ForratucProductosPage = lazy(() => import("./pages/forratuc/ForratucProductosPage"));
+const ForratucPlantaPage = lazy(() => import("./pages/forratuc/ForratucPlantaPage"));
+const ForratucStockPage = lazy(() => import("./pages/forratuc/ForratucStockPage"));
+const ForratucListasPreciosPage = lazy(() => import("./pages/forratuc/ForratucListasPreciosPage"));
+const ForratucCajaPage = lazy(() => import("./pages/forratuc/ForratucCajaPage"));
+const AvicolaProductosPage = lazy(() => import("./pages/AvicolaProductosPage"));
 import ProtectedRoute from "./components/ProtectedRoute";
+
+// Cada pantalla se descarga recién cuando se abre (2026-11-06): el bundle único
+// pesaba 2,7 MB y se bajaba entero en el primer ingreso y después de cada deploy.
+// El login va directo, para que la primera pantalla no espere nada.
+const Cargando = () => (
+  <div className="d-flex justify-content-center align-items-center" style={{ minHeight: "60vh" }}>
+    <div className="spinner-border text-primary" role="status"></div>
+  </div>
+);
 
 function App() {
   return (
     <BrowserRouter>
+      <Suspense fallback={<Cargando />}>
       <Routes>
         <Route path="/login" element={<LoginScreen />} />
 
@@ -165,6 +175,7 @@ function App() {
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }
