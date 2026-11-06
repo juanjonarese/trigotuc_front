@@ -36,7 +36,8 @@ const ForratucPagosPage = () => {
   const [hasta, setHasta] = useState(obtenerFechaHoy());
   const [registrando, setRegistrando] = useState(false);
 
-  const mediosPago = constantes?.mediosPago || [];
+  // Los del cobro (2026-11-06: + transferencia, cheque y e-cheq); también nombran los de los presupuestos.
+  const mediosPago = constantes?.mediosCobro || constantes?.mediosPago || [];
   const etiquetaMedio = (k) => mediosPago.find((m) => m.key === k)?.etiqueta || k;
 
   const cargar = async () => {

@@ -45,7 +45,8 @@ const ForratucCuentasCorrientesPage = () => {
   // Modal de cobro: null = cerrado; si no, el cliente con el que abre ("" = a elegir).
   const [cobroPara, setCobroPara] = useState(null);
 
-  const mediosPago = constantes?.mediosPago || [];
+  // Los del cobro (2026-11-06: + transferencia, cheque y e-cheq); también nombran los de los presupuestos.
+  const mediosPago = constantes?.mediosCobro || constantes?.mediosPago || [];
 
   const cargarSaldos = async () => {
     try {
@@ -117,10 +118,32 @@ const ForratucCuentasCorrientesPage = () => {
     else imprimirReciboForratuc(m.documento, { medios: mediosPago, cliente: cuenta?.cliente });
   };
 
-  const detalleMovimiento = (m) =>
-    m.tipo === "presupuesto"
-      ? (m.documento.lineas || []).map((l) => l.descripcion).join(" · ")
-      : (m.documento.pagos || []).map((p) => mediosPago.find((x) => x.key === p.medio)?.etiqueta || p.medio).join(" + ");
+  // Lo pendiente de cada presupuesto (2026-11-06), para marcarlo en su renglón.
+  const estadoComprobante = new Map((cuenta?.comprobantes || []).map((c) => [String(c._id), c]));
+
+  const detalleMovimiento = (m) => {
+    if (m.tipo === "presupuesto") {
+      const e = estadoComprobante.get(String(m._id));
+      return (
+        <>
+          {(m.documento.lineas || []).map((l) => l.descripcion).join(" · ")}
+          {e && (e.pendiente <= 0
+            ? <span className="badge bg-success-subtle text-success-emphasis border ms-2">pagado</span>
+            : e.pagado > 0
+            ? <span className="badge bg-warning text-dark ms-2">debe {pesos(e.pendiente)}</span>
+            : null)}
+        </>
+      );
+    }
+    const medios = (m.documento.pagos || []).map((p) => mediosPago.find((x) => x.key === p.medio)?.etiqueta || p.medio).join(" + ");
+    const imp = m.documento.imputaciones || [];
+    return (
+      <>
+        {medios}
+        {imp.length > 0 && <div className="text-muted">Cancela {imp.map((i) => `${i.numero} (${pesos(i.importe)})`).join(", ")}</div>}
+      </>
+    );
+  };
 
   const saldosFiltrados = useMemo(() => {
     const q = filtro.trim().toLowerCase();

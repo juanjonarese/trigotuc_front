@@ -273,6 +273,19 @@ export const imprimirPresupuestoForratuc = (presupuesto, { medios = [], validezD
 
 // ── Recibo de cuenta corriente ──────────────────────────────────────────────
 
+// Qué comprobantes cancela el cobro (2026-11-06) y lo que queda a cuenta.
+const imputacionesRecibo = (r) => {
+  const lista = r.imputaciones || [];
+  if (!lista.length) return "";
+  const imputado = lista.reduce((a, i) => a + i.importe, 0);
+  const aCuenta = Math.round((r.total - imputado) * 100) / 100;
+  return `<div class="pago"><table>
+      <thead><tr><th>Cancela el presupuesto</th><th class="num">Importe</th></tr></thead>
+      <tbody>${lista.map((i) => `<tr><td>${escapeHtml(i.numero)}</td><td class="num">${pesos(i.importe)}</td></tr>`).join("")}
+      ${aCuenta > 0 ? `<tr><td>A cuenta (saldo a favor)</td><td class="num">${pesos(aCuenta)}</td></tr>` : ""}</tbody>
+    </table></div>`;
+};
+
 const copiaRecibo = (r, medios, cliente) => `
   <div class="copia">
     ${r.estado === "anulado" ? `<div class="sello">ANULADO</div>` : ""}
@@ -284,8 +297,9 @@ const copiaRecibo = (r, medios, cliente) => `
       clienteTelefono: cliente?.telefono,
     })}
 
-    <div>Recibimos la suma de <strong>${pesos(r.total)}</strong> a cuenta del saldo de su cuenta corriente, en:</div>
+    <div>Recibimos la suma de <strong>${pesos(r.total)}</strong>${(r.imputaciones || []).length ? "" : " a cuenta del saldo de su cuenta corriente"}, en:</div>
     <div class="pago">${tablaPagos(r.pagos || [], medios)}</div>
+    ${imputacionesRecibo(r)}
 
     <div class="total"><span>TOTAL RECIBIDO</span> <strong>${pesos(r.total)}</strong></div>
     ${r.observaciones ? `<div class="obs"><strong>Observaciones:</strong> ${escapeHtml(r.observaciones)}</div>` : ""}
@@ -301,7 +315,7 @@ const copiaRecibo = (r, medios, cliente) => `
 // `cliente` (opcional) completa CUIT, domicilio y teléfono en el papel.
 export const imprimirReciboForratuc = (recibo, { medios = [], cliente = null } = {}) => {
   const copia = copiaRecibo(recibo, medios, cliente);
-  imprimirHtml(documento(`Recibo ${recibo.numero || ""}`, duplicado(copia, (recibo.pagos || []).length <= 4)));
+  imprimirHtml(documento(`Recibo ${recibo.numero || ""}`, duplicado(copia, (recibo.pagos || []).length + (recibo.imputaciones || []).length <= 6)));
 };
 
 // ── Rendición y cierre de caja (2026-10-29) ─────────────────────────────────
@@ -436,7 +450,18 @@ export const imprimirCierreCajaForratuc = (caja, { operador = "" } = {}) => {
             .join("")}</tbody>
         </table>`
       : ""}
-    ${caja.otros ? `<table class="resumen" style="margin-top:1.5mm">${fila("Otros medios (anteriores)", caja.otros)}</table>` : ""}
+    ${(caja.otrosPorMedio || []).length
+      ? `<h2>TRANSFERENCIAS Y CHEQUES</h2>
+        <table class="resumen">${caja.otrosPorMedio.map((m) => fila(`Cobrado con ${escapeHtml(m.etiqueta.toLowerCase())}`, m.importe)).join("")}</table>`
+      : caja.otros ? `<table class="resumen" style="margin-top:1.5mm">${fila("Otros medios", caja.otros)}</table>` : ""}
+    ${(caja.cheques || []).length
+      ? `<table style="margin-top:1.5mm">
+          <thead><tr><th>Recibo</th><th>Cliente</th><th>Cheque</th><th>Cobro</th><th>Importe</th></tr></thead>
+          <tbody>${caja.cheques
+            .map((c) => `<tr><td>${escapeHtml(c.numero)}</td><td>${escapeHtml(c.cliente || "")}</td><td>${escapeHtml(`${c.medio} ${c.banco || ""} ${c.numeroCheque ? `n° ${c.numeroCheque}` : ""}`)}</td><td>${c.fechaCobro ? escapeHtml(formatearFechaLocal(c.fechaCobro)) : ""}</td><td class="num">${pesos(c.importe)}</td></tr>`)
+            .join("")}</tbody>
+        </table>`
+      : ""}
     <table class="resumen" style="margin-top:1.5mm">${fila("Cuenta corriente (no entra plata)", caja.cuentaCorriente)}</table>
 
     <h2>DETALLE DE COMPROBANTES</h2>

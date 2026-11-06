@@ -300,10 +300,34 @@ const ForratucCajaPage = () => {
                       {caja.medios.mercadoPago.cobranza > 0 && <Fila texto="Cobranza por Mercado Pago" importe={caja.medios.mercadoPago.cobranza} />}
                       <Fila texto="Total Mercado Pago" importe={caja.medios.mercadoPago.total}
                         nota={`${caja.ticketsMP.length} ${caja.ticketsMP.length === 1 ? "ticket" : "tickets"} para rendir`} fuerte />
-                      {caja.otros > 0 && <Fila texto="Otros medios (anteriores)" importe={caja.otros} />}
+                      {/* Transferencia, cheque y e-cheq (2026-11-06), cada uno en su renglón. */}
+                      {(caja.otrosPorMedio || []).map((m) => (
+                        <Fila key={m.medio} texto={`Cobrado con ${m.etiqueta.toLowerCase()}`} importe={m.importe}
+                          nota={["cheque", "echeq"].includes(m.medio) ? "se rinde el cheque, no la plata" : undefined} />
+                      ))}
+                      {!caja.otrosPorMedio && caja.otros > 0 && <Fila texto="Otros medios" importe={caja.otros} />}
                       <Fila texto="Cuenta corriente (no entra plata)" importe={caja.cuentaCorriente} />
                     </tbody>
                   </table>
+                  {(caja.cheques || []).length > 0 && (
+                    <div className="card-body pt-2">
+                      <div className="small fw-semibold mb-1">Cheques para rendir</div>
+                      <table className="table table-sm small mb-0">
+                        <thead><tr><th>Recibo</th><th>Cliente</th><th>Banco y n°</th><th>Cobro</th><th className="text-end">Importe</th></tr></thead>
+                        <tbody>
+                          {caja.cheques.map((c, i) => (
+                            <tr key={i}>
+                              <td>{c.numero}</td>
+                              <td>{c.cliente}</td>
+                              <td>{c.medio} {c.banco} {c.numeroCheque ? `n° ${c.numeroCheque}` : ""}</td>
+                              <td className="text-nowrap">{c.fechaCobro ? String(c.fechaCobro).slice(0, 10).split("-").reverse().join("/") : "—"}</td>
+                              <td className="text-end">{pesos(c.importe)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
 
                 <label className="form-label fw-semibold small mt-3 mb-1">Observaciones</label>
