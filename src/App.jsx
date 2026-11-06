@@ -49,9 +49,12 @@ import ForratucInicioPage from "./pages/forratuc/ForratucInicioPage";
 import ForratucPresupuestosPage from "./pages/forratuc/ForratucPresupuestosPage";
 import ForratucCuentasCorrientesPage from "./pages/forratuc/ForratucCuentasCorrientesPage";
 import ForratucPagosPage from "./pages/forratuc/ForratucPagosPage";
+import ForratucProductosPage from "./pages/forratuc/ForratucProductosPage";
+import ForratucPlantaPage from "./pages/forratuc/ForratucPlantaPage";
 import ForratucStockPage from "./pages/forratuc/ForratucStockPage";
 import ForratucListasPreciosPage from "./pages/forratuc/ForratucListasPreciosPage";
 import ForratucCajaPage from "./pages/forratuc/ForratucCajaPage";
+import AvicolaProductosPage from "./pages/AvicolaProductosPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
@@ -74,6 +77,9 @@ function App() {
         <Route path="/forratuc/salidas" element={<ProtectedRoute><SalidaMostradorPage /></ProtectedRoute>} />
         <Route path="/forratuc/cuentas-corrientes" element={<ProtectedRoute><ForratucCuentasCorrientesPage /></ProtectedRoute>} />
         <Route path="/forratuc/pagos" element={<ProtectedRoute><ForratucPagosPage /></ProtectedRoute>} />
+        <Route path="/forratuc/productos" element={<ProtectedRoute><ForratucProductosPage /></ProtectedRoute>} />
+        {/* Planta de alimento (2026-11-04): fórmula → elaboración → envío. */}
+        <Route path="/forratuc/planta" element={<ProtectedRoute><ForratucPlantaPage /></ProtectedRoute>} />
         {/* Stock del local (2026-10-26): pollo, huevo, pollitos y alimento balanceado. */}
         <Route path="/forratuc/stock" element={<ProtectedRoute><ForratucStockPage /></ProtectedRoute>} />
         {/* Observaciones del cliente (2026-10-29) */}
@@ -81,6 +87,8 @@ function App() {
         <Route path="/forratuc/caja" element={<ProtectedRoute><ForratucCajaPage /></ProtectedRoute>} />
 
         <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+        {/* Productos de la avícola (2026-11-04): los administra ella; los vende Forratuc. */}
+        <Route path="/avicola/productos" element={<ProtectedRoute><AvicolaProductosPage /></ProtectedRoute>} />
         {/* Proyección vive en la raíz del menú (cruza Reproductores y Granja). */}
         <Route path="/proyeccion" element={<ProtectedRoute><ProyeccionPage /></ProtectedRoute>} />
         <Route path="/clientes" element={<ProtectedRoute><ClientesPage /></ProtectedRoute>} />

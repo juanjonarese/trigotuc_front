@@ -4,13 +4,14 @@ import Swal from "sweetalert2";
 import Layout from "../../components/Layout";
 import Pagination from "../../components/Pagination";
 import { BADGE_ESPECIE, especieDe, etiquetaEspecie, claveEntero, claveTrozado } from "../../utils/especies";
-import { formatearFechaLocal, obtenerFechaHoy } from "../../utils/dateUtils";
-import { escapeHtml } from "../../utils/escapeHtml";
+import { formatearFechaLocal } from "../../utils/dateUtils";
+import { imprimirConteoDepositos } from "../../utils/forratuc/imprimirForratuc";
+import { exportarConteoExcel } from "../../utils/forratuc/conteoStock";
 import {
   obtenerStockForratuc,
   obtenerMovimientosStockForratuc,
-  registrarIngresoAlimentoForratuc,
   anularIngresoAlimentoForratuc,
+  obtenerProductosForratuc,
 } from "../../services/api";
 
 /**
@@ -29,6 +30,8 @@ import {
  */
 const fmt = (n) => Number(n || 0).toLocaleString("es-AR", { maximumFractionDigits: 1 });
 const MOVIMIENTOS_POR_PAGINA = 100;
+
+const UNIDADES = { bolsa: "bolsas", unidad: "unidades", caja: "cajas", maple: "maples" };
 
 // El cuadrito del Frigorífico: etiqueta arriba, cantidad y una segunda línea.
 const Cuadro = ({ badge, badgeClase = "bg-secondary-subtle text-secondary-emphasis", valor, sub }) => (
@@ -112,52 +115,69 @@ const ForratucStockPage = () => {
     if (lugar) verMovimientos(lugar);
   };
 
-  // Ingreso de alimento a un depósito (2026-10-29): lo que Forratuc fabrica o
-  // recibe. Es lo que después vende el presupuesto desde la forrajería.
-  const ingresarAlimento = async () => {
-    const productos = stock?.alimento?.productos || [];
+  // "Ingresar mercadería" se sacó el 2026-11-06 (pedido del usuario): el alimento
+  // entra a los depósitos desde la Planta (orden de envío). Los ingresos viejos se
+  // siguen viendo y se pueden anular desde el historial.
+  // Planilla de conteo (2026-11-06): una hoja por depósito con lo del sistema y
+  // columnas para lo contado y la diferencia (+/−), para el conteo a mano.
+  const imprimirConteo = async () => {
     const depositos = stock?.alimento?.depositos || [];
-    const opciones = (lista, valor, texto) =>
-      lista.map((x) => `<option value="${escapeHtml(x[valor])}">${escapeHtml(x[texto])}</option>`).join("");
-    const { value, isConfirmed } = await Swal.fire({
-      title: "Ingreso de alimento",
-      html: `
-        <div class="text-start">
-          <label class="form-label small fw-semibold mb-1">Fecha</label>
-          <input id="ing-fecha" type="date" class="form-control mb-2" value="${obtenerFechaHoy()}"/>
-          <label class="form-label small fw-semibold mb-1">Alimento</label>
-          <select id="ing-alimento" class="form-select mb-2"><option value="">Elegí…</option>${opciones(productos, "alimento", "etiqueta")}</select>
-          <label class="form-label small fw-semibold mb-1">Depósito</label>
-          <select id="ing-deposito" class="form-select mb-2">${opciones(depositos, "key", "etiqueta")}</select>
-          <label class="form-label small fw-semibold mb-1">Bolsas</label>
-          <input id="ing-bolsas" type="number" min="1" step="1" class="form-control mb-2"/>
-          <label class="form-label small fw-semibold mb-1">Observaciones</label>
-          <input id="ing-obs" class="form-control" placeholder="Ej.: producción del día"/>
-        </div>`,
+    const { value, isConfirmed, isDenied } = await Swal.fire({
+      title: "Planilla de conteo",
+      input: "select",
+      inputOptions: { todos: "Todos los depósitos (uno por hoja)", ...Object.fromEntries(depositos.map((d) => [d.key, d.etiqueta])) },
+      inputValue: "forrajeria",
       showCancelButton: true,
-      confirmButtonText: "Ingresar",
+      showDenyButton: true,
+      returnInputValueOnDeny: true,
+      confirmButtonText: '<i class="bi bi-printer me-1"></i>Imprimir',
+      denyButtonText: '<i class="bi bi-file-earmark-excel me-1"></i>Excel',
+      denyButtonColor: "#198754",
       cancelButtonText: "Cancelar",
-      focusConfirm: false,
-      preConfirm: () => {
-        const v = (id) => document.getElementById(id).value;
-        const data = {
-          fecha: v("ing-fecha"), alimento: v("ing-alimento"), deposito: v("ing-deposito"),
-          bolsas: Number(v("ing-bolsas")), observaciones: v("ing-obs").trim(),
-        };
-        if (!data.alimento) return Swal.showValidationMessage("Elegí el alimento.");
-        if (!Number.isInteger(data.bolsas) || data.bolsas < 1) return Swal.showValidationMessage("Las bolsas van de 1 en adelante, sin decimales.");
-        return data;
-      },
     });
-    if (!isConfirmed) return;
-    try {
-      await registrarIngresoAlimentoForratuc(value);
-      Swal.fire({ icon: "success", title: "Ingresado", timer: 1400, showConfirmButton: false });
-      cargar();
-      verMovimientos(value.deposito);
-    } catch (err) {
-      Swal.fire("Error", err.message || "No se pudo registrar el ingreso.", "error");
+    if (!isConfirmed && !isDenied) return;
+    const elegidos = value === "todos" ? depositos : depositos.filter((d) => d.key === value);
+    // En la Forrajería también se cuenta lo de la cámara, los huevos y los pollitos.
+    let extras = {};
+    if (elegidos.some((d) => d.key === "forrajeria")) {
+      let productos = [];
+      try {
+        productos = await obtenerProductosForratuc();
+      } catch {
+        // Sin productos sale igual, sin códigos.
+      }
+      extras = { forrajeria: seccionesForrajeria(productos) };
     }
+    const opciones = { operador: localStorage.getItem("nombreUsuario") || "", extras };
+    if (isDenied) exportarConteoExcel(elegidos, stock.alimento.productos || [], opciones);
+    else imprimirConteoDepositos(stock.alimento, elegidos, opciones);
+  };
+
+  // Pollo (cámara Forrajería), huevos y pollitos, con el código y el nombre del producto.
+  const seccionesForrajeria = (productos) => {
+    const porClave = new Map(productos.map((p) => [p.clave, p]));
+    const prod = (clave, nombre) => ({ codigo: porClave.get(clave)?.codigo || "", etiqueta: porClave.get(clave)?.nombre || nombre });
+    const enteros = (stock.pollo?.enteros || []).map((e) => {
+      const esp = especieDe(e);
+      return { ...prod(`entero:${esp}:${e.calibre}`, `${etiquetaEspecie(esp)} entero calibre ${e.calibre}`), unidad: "cajones", sistema: e.cajones };
+    });
+    const trozados = (stock.pollo?.trozados || []).map((t) => {
+      const esp = especieDe(t);
+      const clase = t.clase || "A";
+      const clave = esp === "pollo" ? `trozado:${t.tipo}:${clase}` : `trozado:${esp}:${t.tipo}:${clase}`;
+      return { ...prod(clave, `${etiquetaEspecie(esp)} ${t.etiqueta}${t.clase ? ` ${t.clase}` : ""}`), unidad: "cajas", sistema: t.cajas };
+    });
+    const huevos = (stock.huevos?.porTipo || []).map((h) => {
+      const p = prod(h.producto, h.etiqueta);
+      return { ...p, etiqueta: `${p.etiqueta} (${fmt(h.huevos)} huevos)`, unidad: "maples", sistema: h.maples };
+    });
+    const pollitos = stock.pollitos?.total ? [{ ...prod("pollito", "Pollitos BB"), unidad: "pollitos", sistema: stock.pollitos.total }] : [];
+    return [
+      { titulo: "Pollo entero — Cámara Forrajería", filas: enteros },
+      { titulo: "Trozado — Cámara Forrajería", filas: trozados },
+      { titulo: "Huevos", filas: huevos },
+      { titulo: "Pollitos", filas: pollitos },
+    ];
   };
 
   const anularIngreso = async (m) => {
@@ -190,7 +210,7 @@ const ForratucStockPage = () => {
 
   const LUGARES = stock
     ? [
-        { key: "camara", titulo: "Cámara Trigotuc" },
+        { key: "camara", titulo: "Cámara Forrajería" },
         { key: "huevos", titulo: "Huevos" },
         { key: "pollitos", titulo: "Pollitos del mostrador" },
         ...alimento.depositos.map((d) => ({ key: d.key, titulo: d.etiqueta })),
@@ -204,7 +224,8 @@ const ForratucStockPage = () => {
     paginaMov * MOVIMIENTOS_POR_PAGINA
   );
   const ultimaPagina = paginaMov * MOVIMIENTOS_POR_PAGINA >= movimientos.length;
-  const unidadCorta = { cajones: "caj", cajas: "cajas", huevos: "huevos", pollitos: "pollitos", bolsas: "bolsas" };
+  // En los depósitos "bolsas" es la cantidad, cada producto en su unidad.
+  const unidadCorta = { cajones: "caj", cajas: "cajas", huevos: "huevos", pollitos: "pollitos", bolsas: "unid." };
   const textoDelta = (m, signo) =>
     (historial?.unidades || [])
       .filter((u) => signo * (m.delta[u.key] || 0) > 0)
@@ -224,8 +245,8 @@ const ForratucStockPage = () => {
             Forratuc — Stock
           </h1>
           <div className="d-flex gap-2">
-            <button className="btn btn-success btn-sm" onClick={ingresarAlimento} disabled={!stock}>
-              <i className="bi bi-box-arrow-in-down me-1"></i>Ingresar alimento
+            <button className="btn btn-outline-primary btn-sm" onClick={imprimirConteo} disabled={!stock}>
+              <i className="bi bi-printer me-1"></i>Planilla de conteo
             </button>
             <button className="btn btn-outline-secondary btn-sm" onClick={actualizar} title="Refrescar" disabled={loading}>
               <i className="bi bi-arrow-clockwise"></i>
@@ -255,8 +276,8 @@ const ForratucStockPage = () => {
                     valor={`${fmt(huevos.maples)} maples`} sub={`${fmt(huevos.total)} huevos`} />
                   <Cuadro badge="Pollitos" badgeClase="bg-info-subtle text-info-emphasis"
                     valor={`${fmt(pollitos.total)}`} sub="unidades" />
-                  <Cuadro badge="Alimento balanceado" badgeClase="bg-success-subtle text-success-emphasis"
-                    valor={`${fmt(alimento.totalBolsas)} bolsas`}
+                  <Cuadro badge="Depósitos" badgeClase="bg-success-subtle text-success-emphasis"
+                    valor={`${fmt(alimento.totalBolsas)} unid.`}
                     sub={alimento.depositos.map((d) => `${d.etiqueta.replace(/^Depósito /, "")} ${fmt(d.bolsas)}`).join(" · ")} />
                 </div>
               </div>
@@ -275,29 +296,36 @@ const ForratucStockPage = () => {
 
             {/* ── Una tarjeta por lugar ── */}
             <div className="row g-3 mb-4">
-              <TarjetaLugar icono="bi-snow2" colorIcono="text-primary" titulo="Cámara Trigotuc"
-                vacio={!pollo.enteros.length && !pollo.trozados.length}
-                total={`${fmt(kgEntero + kgTrozado)} kg`}
-                activa={lugar === "camara"} onClick={() => verMovimientos("camara")}>
-                {pollo.enteros.length > 0 && (
-                  <Grupo titulo="Faenado (entero)">
-                    {pollo.enteros.map((e) => (
-                      <Cuadro key={claveEntero(e)} badgeClase={BADGE_ESPECIE[especieDe(e)]}
-                        badge={`${etiquetaEspecie(especieDe(e))} · Cal. ${e.calibre}`}
-                        valor={`${fmt(e.cajones)} caj`} sub={`${fmt(e.cajones * 20)} kg`} />
-                    ))}
-                  </Grupo>
-                )}
-                {pollo.trozados.length > 0 && (
-                  <Grupo titulo="Trozados">
-                    {pollo.trozados.map((t) => (
-                      <Cuadro key={claveTrozado(t)} badgeClase={BADGE_ESPECIE[especieDe(t)]}
-                        badge={`${etiquetaEspecie(especieDe(t))} · ${t.etiqueta}${t.clase ? ` · ${t.clase}` : ""}`}
-                        valor={`${fmt(t.cajas)} caj`} sub={`${fmt(t.kgTotal)} kg`} />
-                    ))}
-                  </Grupo>
-                )}
-              </TarjetaLugar>
+              {/* La cámara que la avícola llama "Trigotuc" está en la forrajería (2026-11-02). */}
+              {[{ key: "camara", titulo: "Cámara Forrajería", stock: pollo }].map((c) => {
+                const kgE = c.stock.enteros.reduce((a, e) => a + e.cajones * 20, 0);
+                const kgT = c.stock.trozados.reduce((a, t) => a + (t.kgTotal || 0), 0);
+                return (
+                  <TarjetaLugar key={c.key} icono="bi-snow2" colorIcono="text-primary" titulo={c.titulo}
+                    vacio={!c.stock.enteros.length && !c.stock.trozados.length}
+                    total={`${fmt(kgE + kgT)} kg`}
+                    activa={lugar === c.key} onClick={() => verMovimientos(c.key)}>
+                    {c.stock.enteros.length > 0 && (
+                      <Grupo titulo="Faenado (entero)">
+                        {c.stock.enteros.map((e) => (
+                          <Cuadro key={claveEntero(e)} badgeClase={BADGE_ESPECIE[especieDe(e)]}
+                            badge={`${etiquetaEspecie(especieDe(e))} · Cal. ${e.calibre}`}
+                            valor={`${fmt(e.cajones)} caj`} sub={`${fmt(e.cajones * 20)} kg`} />
+                        ))}
+                      </Grupo>
+                    )}
+                    {c.stock.trozados.length > 0 && (
+                      <Grupo titulo="Trozados">
+                        {c.stock.trozados.map((t) => (
+                          <Cuadro key={claveTrozado(t)} badgeClase={BADGE_ESPECIE[especieDe(t)]}
+                            badge={`${etiquetaEspecie(especieDe(t))} · ${t.etiqueta}${t.clase ? ` · ${t.clase}` : ""}`}
+                            valor={`${fmt(t.cajas)} caj`} sub={`${fmt(t.kgTotal)} kg`} />
+                        ))}
+                      </Grupo>
+                    )}
+                  </TarjetaLugar>
+                );
+              })}
 
               <TarjetaLugar icono="bi-egg" colorIcono="text-warning" titulo="Huevos"
                 vacio={!huevos.porTipo.length}
@@ -328,18 +356,24 @@ const ForratucStockPage = () => {
                   así un depósito nuevo aparece solo. Adentro, lo que tiene stock. */}
               {alimento.depositos.map((d) => {
                 const conStock = alimento.productos.filter((p) => p.porDeposito[d.key]);
+                const rubros = [
+                  { titulo: "Alimento balanceado", items: conStock.filter((p) => p.rubro !== "otros") },
+                  { titulo: "Otros", items: conStock.filter((p) => p.rubro === "otros") },
+                ].filter((g) => g.items.length > 0);
                 return (
                   <TarjetaLugar key={d.key} icono="bi-bag" colorIcono="text-success" titulo={d.etiqueta}
                     vacio={!conStock.length}
-                    total={`${fmt(d.bolsas)} bolsas`}
+                    total={`${fmt(d.bolsas)} unid.`}
                     activa={lugar === d.key} onClick={() => verMovimientos(d.key)}>
-                    <Grupo titulo="Alimento balanceado">
-                      {conStock.map((p) => (
-                        <Cuadro key={p.alimento} badge={p.etiqueta} badgeClase="bg-success-subtle text-success-emphasis"
-                          valor={`${fmt(p.porDeposito[d.key])} bolsas`}
-                          sub={p.kgPorBolsa != null ? `${fmt(p.porDeposito[d.key] * p.kgPorBolsa)} kg` : null} />
-                      ))}
-                    </Grupo>
+                    {rubros.map((g) => (
+                      <Grupo key={g.titulo} titulo={g.titulo}>
+                        {g.items.map((p) => (
+                          <Cuadro key={p.alimento} badge={`${p.codigo} · ${p.etiqueta}`} badgeClase="bg-success-subtle text-success-emphasis"
+                            valor={`${fmt(p.porDeposito[d.key])} ${UNIDADES[p.unidad] || p.unidad}`}
+                            sub={p.kgPorBolsa != null ? `${fmt(p.porDeposito[d.key] * p.kgPorBolsa)} kg` : null} />
+                        ))}
+                      </Grupo>
+                    ))}
                   </TarjetaLugar>
                 );
               })}
@@ -348,8 +382,8 @@ const ForratucStockPage = () => {
             {alimento.totalBolsas === 0 && (
               <p className="text-muted small mb-1">
                 <i className="bi bi-info-circle me-1"></i>
-                Todavía no se cargó ningún ingreso de alimento: con "Ingresar alimento" se carga lo que entra a cada
-                depósito. El presupuesto vende lo que hay en la forrajería.
+                Los depósitos todavía están vacíos: el alimento entra desde la Planta de alimento (orden
+                de envío). El presupuesto vende lo que hay en la forrajería.
               </p>
             )}
             {sinPesoBolsa && (

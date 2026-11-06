@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import Layout from "../../components/Layout";
 import BuscadorCliente from "../../components/BuscadorCliente";
-import { especieDe, etiquetaEspecie } from "../../utils/especies";
+import { especieDe } from "../../utils/especies";
 import { obtenerFechaHoy, formatearFechaLocal } from "../../utils/dateUtils";
 import { escapeHtml } from "../../utils/escapeHtml";
 import { clienteDeEmpresa } from "../../utils/empresas";
@@ -17,6 +17,7 @@ import {
   obtenerConstantesPresupuesto,
   obtenerStockForratuc,
   obtenerListasPreciosForratuc,
+  obtenerProductosForratuc,
   obtenerPresupuestosForratuc,
   crearPresupuestoForratuc,
   anularPresupuestoForratuc,
@@ -24,6 +25,13 @@ import {
 
 /**
  * Mostrador de Forratuc (2026-10-21): el presupuesto, que es su "factura".
+ *
+ * Desde el 2026-11-02 cada renglón es un PRODUCTO del alta (se elige por código
+ * o por nombre) y la venta entera sale de UN DEPÓSITO, que se elige antes de
+ * cargar los renglones (pedido del usuario): si se lleva de los dos, son dos
+ * presupuestos. Forrajería = pollo (la cámara "trigotuc" está en la forrajería),
+ * huevo, pollitos y su depósito; Trigotuc = solo su depósito. Cambiar el depósito deja los renglones y
+ * muestra lo que hay en el nuevo.
  *
  * Forratuc no factura: emite un presupuesto con fecha, cliente, renglones con
  * precio y total, que se imprime por duplicado y con el que el cliente retira.
@@ -42,32 +50,27 @@ import {
  * equivocaciones.
  */
 
-// La clave del artículo en la lista de precios. ⚠️ Tiene que coincidir con el
-// catálogo del back (services/forratuc/listaPrecioForratuc.services.js).
-const itemDeOpcion = (op) => {
-  if (!op) return null;
-  if (op.clase === "entero") return `entero:${op.especie}`;
-  if (op.clase === "trozado") return `trozado:${op.tipo}:${op.claseTrozado}`;
-  if (op.clase === "huevo") return `huevo:${op.tipo}`;
-  if (op.clase === "pollito") return "pollito";
-  if (op.clase === "alimento" && op.producto !== "otro") return `alimento:${op.producto}`;
-  return null;
-};
-
 const fmt = (n) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(Number(n || 0));
 const pesos = (n) =>
   new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(Number(n || 0));
 const redondear = (n) => Math.round(n * 100) / 100;
 
-const UNIDAD_PRECIO = { kg: "kg", maple: "maple", pollito: "pollito", bolsa: "bolsa" };
+// Cómo se cuenta cada producto en el renglón (la cantidad) según su rubro / unidad.
+const UNIDAD_CANTIDAD = { pollo: "cajones", trozado: "cajas" };
+const UNIDAD_PLURAL = { maple: "maples", pollito: "pollitos", bolsa: "bolsas", unidad: "unidades", caja: "cajas" };
+const unidadCantidad = (p) => UNIDAD_CANTIDAD[p?.rubro] || UNIDAD_PLURAL[p?.unidadVenta] || p?.unidadVenta || "";
 
 let siguienteId = 1;
-const renglonVacio = () => ({ id: siguienteId++, producto: "", cantidad: "", kg: "", kgTocado: false, precio: "", precioTocado: false, descripcion: "", unidad: "bolsa" });
+// producto = clave del producto (el entero ya es por calibre y el trozado por
+// especie, corte y clase: no hay nada más que elegir).
+const renglonVacio = () => ({ id: siguienteId++, codigo: "", producto: "", cantidad: "", kg: "", kgTocado: false, precio: "", precioTocado: false });
 
 const ForratucPresupuestosPage = () => {
   const navigate = useNavigate();
 
-  const [tab, setTab] = useState("nuevo");
+  // 2026-11-06 (pedido del usuario): la pantalla es el listado de emitidos y
+  // el presupuesto nuevo se arma en un modal.
+  const [nuevoAbierto, setNuevoAbierto] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -78,9 +81,12 @@ const ForratucPresupuestosPage = () => {
   const [constantes, setConstantes] = useState(null);
   const [stockAlimento, setStockAlimento] = useState(null);
   const [listas, setListas] = useState([]);
+  const [productos, setProductos] = useState([]);
 
   // ── Formulario ──
   const [fecha, setFecha] = useState(obtenerFechaHoy());
+  // De qué depósito sale TODA la venta: se elige antes de cargar renglones.
+  const [deposito, setDeposito] = useState("");
   const [modoCliente, setModoCliente] = useState("padron"); // padron | final
   const [clienteId, setClienteId] = useState("");
   const [clienteNombre, setClienteNombre] = useState("");
@@ -88,7 +94,11 @@ const ForratucPresupuestosPage = () => {
   const [observaciones, setObservaciones] = useState("");
   // Forma de pago (2026-10-29): uno de los tres botones. Cuenta corriente,
   // solo clientes del padrón.
+  // "combinado" (2026-11-02): parte en efectivo y parte por Mercado Pago, con
+  // los dos botones prendidos y el importe de cada uno.
   const [formaPago, setFormaPago] = useState("efectivo");
+  const [importeEfectivo, setImporteEfectivo] = useState("");
+  const [importeMP, setImporteMP] = useState("");
   const [operacionMP, setOperacionMP] = useState("");
   const [saldoCliente, setSaldoCliente] = useState(null);
   // Lista de precios: la por defecto, hasta que se elija otra.
@@ -104,7 +114,7 @@ const ForratucPresupuestosPage = () => {
   const cargar = async () => {
     try {
       // Huevo y pollitos con catch: si fallan, se tiene que poder vender lo demás.
-      const [stock, huevos, pollitos, cls, ctes, stockForratuc, lts] = await Promise.all([
+      const [stock, huevos, pollitos, cls, ctes, stockForratuc, lts, prods] = await Promise.all([
         obtenerStockCamaraMostrador(),
         obtenerStockHuevosMostrador().catch(() => null),
         obtenerStockPollitosMostrador().catch(() => null),
@@ -112,7 +122,9 @@ const ForratucPresupuestosPage = () => {
         obtenerConstantesPresupuesto(),
         obtenerStockForratuc().catch(() => null),
         obtenerListasPreciosForratuc().catch(() => []),
+        obtenerProductosForratuc({ soloActivos: true }),
       ]);
+      setProductos(Array.isArray(prods) ? prods : []);
       setStockAlimento(stockForratuc?.alimento || null);
       setListas(Array.isArray(lts) ? lts : []);
       setResumen(stock);
@@ -143,89 +155,85 @@ const ForratucPresupuestosPage = () => {
     }
   };
   useEffect(() => {
-    if (tab === "emitidos") cargarLista();
+    cargarLista();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, desde, hasta]);
+  }, [desde, hasta]);
+
+  // Al abrir el modal se relee el stock: entre una venta y otra pudo cambiar.
+  const abrirNuevo = () => {
+    setNuevoAbierto(true);
+    cargar();
+  };
 
   const kgPorCajon = constantes?.kgPorCajon ?? 20;
   const huevosPorMaple = constantes?.huevosPorMaple ?? stockHuevos?.huevosPorMaple ?? 30;
 
-  // Todo lo que se puede poner en un renglón, agrupado como en el desplegable.
-  // `disponible` = lo que hay en stock (null = sin control de stock: alimento).
-  const grupos = useMemo(() => {
-    const etTroz = constantes?.etiquetaTrozado || {};
-    const enteros = (resumen?.stockTrigotuc || [])
-      .filter((e) => e.cajones > 0)
-      .sort((a, b) => String(especieDe(a)).localeCompare(String(especieDe(b))) || a.calibre - b.calibre)
-      .map((e) => ({
-        key: `entero|${especieDe(e)}|${e.calibre}`,
-        clase: "entero", especie: especieDe(e), calibre: e.calibre,
-        texto: `${etiquetaEspecie(especieDe(e))} entero cal. ${e.calibre}`,
-        disponible: e.cajones, unidad: "cajones", unidadPrecio: "kg",
-      }));
-    const trozados = (resumen?.trozadosTrigotucDetalle || [])
-      .filter((t) => t.cajas > 0)
-      .map((t) => ({
-        key: `trozado|${especieDe(t)}|${t.tipo}|${t.clase || "A"}|${t.kgCaja}`,
-        clase: "trozado", especie: especieDe(t), tipo: t.tipo, claseTrozado: t.clase || "A", kgCaja: Number(t.kgCaja),
-        texto: `${etiquetaEspecie(especieDe(t))} ${(etTroz[t.tipo] || t.tipo).toLowerCase()} ${t.clase || "A"} (caja ${fmt(t.kgCaja)} kg)`,
-        disponible: t.cajas, unidad: "cajas", unidadPrecio: "kg",
-      }));
-    const huevos = (stockHuevos?.porTipo || [])
-      .filter((h) => h.maples > 0)
-      .map((h) => ({
-        key: `huevo|${h.tipo}`, clase: "huevo", tipo: h.tipo,
-        texto: `Huevo ${h.etiqueta.toLowerCase()}`,
-        disponible: h.maples, unidad: "maples", unidadPrecio: "maple",
-      }));
-    const pollitos = (stockPollitos?.total || 0) > 0
-      ? [{ key: "pollito", clase: "pollito", texto: "Pollitos BB", disponible: stockPollitos.total, unidad: "pollitos", unidadPrecio: "pollito" }]
-      : [];
-    // Alimento: lo que hay en el depósito del que vende el presupuesto (la
-    // forrajería), por bolsa. El "otro" no tiene stock y va siempre.
-    const deposito = constantes?.depositoVentaAlimento || "forrajeria";
-    const bolsasDe = (key) =>
-      stockAlimento?.productos?.find((p) => p.alimento === key)?.porDeposito?.[deposito] || 0;
-    const alimento = (constantes?.productosAlimento || [])
-      .map((p) =>
-        p.key === "otro"
-          ? { key: "alimento|otro", clase: "alimento", producto: "otro", texto: p.etiqueta, disponible: null, unidad: null, unidadPrecio: null }
-          : {
-              key: `alimento|${p.key}`, clase: "alimento", producto: p.key, texto: p.etiqueta,
-              disponible: bolsasDe(p.key), unidad: "bolsas", unidadPrecio: "bolsa",
-            }
-      )
-      .filter((o) => o.disponible == null || o.disponible > 0);
-    const etiquetaDeposito = (constantes?.depositosAlimento || []).find((d) => d.key === deposito)?.etiqueta || deposito;
-    return [
-      { titulo: "Pollo entero (precio por kg)", opciones: enteros },
-      { titulo: "Trozado (precio por kg)", opciones: trozados },
-      { titulo: `Huevo (maple de ${huevosPorMaple})`, opciones: huevos },
-      { titulo: "Pollitos", opciones: pollitos },
-      { titulo: `Alimento balanceado (${etiquetaDeposito}, por bolsa)`, opciones: alimento },
-    ];
-  }, [resumen, stockHuevos, stockPollitos, constantes, huevosPorMaple, stockAlimento]);
-
-  const opcionPorKey = useMemo(
-    () => Object.fromEntries(grupos.flatMap((g) => g.opciones).map((o) => [o.key, o])),
-    [grupos]
+  // Los productos activos del alta, por clave y por código, y agrupados por rubro.
+  const productoPorClave = useMemo(() => Object.fromEntries(productos.map((p) => [p.clave, p])), [productos]);
+  const productoPorCodigo = useMemo(
+    () => Object.fromEntries(productos.map((p) => [String(p.codigo).trim().toLowerCase(), p])),
+    [productos]
   );
+  const gruposProductos = useMemo(() => {
+    const titulo = {
+      pollo: "Pollo entero (precio por kg)", trozado: "Trozado (precio por kg)",
+      huevo: `Huevo (maple de ${huevosPorMaple})`, pollito: "Pollitos", alimento: "Alimento balanceado", otros: "Otros",
+    };
+    const porRubro = new Map();
+    for (const p of productos) porRubro.set(p.rubro, [...(porRubro.get(p.rubro) || []), p]);
+    return [...porRubro].map(([rubro, items]) => ({ titulo: titulo[rubro] || rubro, items }));
+  }, [productos, huevosPorMaple]);
+
+  // Qué hay en cada depósito de la venta (por origen del producto: ver el back).
+  const depositos = constantes?.depositosAlimento || [];
+  const etiquetaDeposito = depositos.find((d) => d.key === deposito)?.etiqueta || "";
+  const hayEnDeposito = (prod) => Boolean(prod && (constantes?.origenesPorDeposito?.[deposito] || []).includes(prod.origen));
+
+  // Cada producto de cámara es UN stock (2026-11-02): el entero por especie y
+  // calibre, el trozado por especie, corte y clase. Las cajas de trozado son de
+  // 15 kg; si conviven tamaños, el kg de la caja es el de la primera con stock.
+  const trozadoDe = (prod) =>
+    (resumen?.trozadosTrigotucDetalle || []).filter(
+      (t) => especieDe(t) === prod?.especie && t.tipo === prod?.tipo && (t.clase || "A") === prod?.claseTrozado && t.cajas > 0
+    );
+  const kgCajaDe = (prod) => Number(trozadoDe(prod)[0]?.kgCaja) || 0;
+
+  // Lo que hay de lo que pide el renglón en el depósito de la venta. null = el
+  // producto no está en ese depósito.
+  const disponibleDe = (r) => {
+    const prod = productoPorClave[r.producto];
+    if (!prod || !hayEnDeposito(prod)) return null;
+    if (prod.rubro === "pollo")
+      return (resumen?.stockTrigotuc || []).find((e) => especieDe(e) === prod.especie && e.calibre === prod.calibre)?.cajones || 0;
+    if (prod.rubro === "trozado") return trozadoDe(prod).reduce((a, t) => a + t.cajas, 0);
+    if (prod.origen === "huevo") {
+      // El común junta varios tipos del stock (consumo, API pasado a venta,
+      // descarte de inoculación): se suman en huevos y recién ahí se pasa a maples.
+      const tipos = prod.tiposStock || [prod.tipo];
+      const huevos = (stockHuevos?.porTipo || []).filter((h) => tipos.includes(h.tipo)).reduce((a, h) => a + h.huevos, 0);
+      return Math.floor(huevos / huevosPorMaple);
+    }
+    if (prod.origen === "pollito") return stockPollitos?.total || 0;
+    return stockAlimento?.productos?.find((x) => x.alimento === prod.stockKey)?.porDeposito?.[deposito] || 0;
+  };
+  // Los renglones que salen del mismo stock se suman entre sí.
+  const claveStock = (r) => r.producto;
 
   // Kg que se cobran en un renglón de pollo. Entero: 20 por cajón hasta que se
   // tipee el peso real. Trozado: cajas × kg de la caja.
-  const kgDe = (r, op) => {
-    if (!op) return 0;
+  const kgDe = (r) => {
+    const p = productoPorClave[r.producto];
     const cant = Number(r.cantidad) || 0;
-    if (op.clase === "entero") return r.kgTocado ? Number(r.kg) || 0 : cant * kgPorCajon;
-    if (op.clase === "trozado") return redondear(cant * op.kgCaja);
+    if (p?.rubro === "pollo") return r.kgTocado ? Number(r.kg) || 0 : cant * kgPorCajon;
+    if (p?.rubro === "trozado") return redondear(cant * kgCajaDe(p));
     return 0;
   };
+  const porKg = (p) => p?.rubro === "pollo" || p?.rubro === "trozado";
   const importeDe = (r) => {
-    const op = opcionPorKey[r.producto];
-    if (!op) return 0;
+    const p = productoPorClave[r.producto];
+    if (!p) return 0;
     const precio = Number(r.precio) || 0;
-    const base = op.clase === "entero" || op.clase === "trozado" ? kgDe(r, op) : Number(r.cantidad) || 0;
-    return redondear(base * precio);
+    return redondear((porKg(p) ? kgDe(r) : Number(r.cantidad) || 0) * precio);
   };
   const total = redondear(renglones.reduce((a, r) => a + importeDe(r), 0));
 
@@ -249,6 +257,17 @@ const ForratucPresupuestosPage = () => {
   }, [formaPago, modoCliente, clienteId]);
 
   const elegirFormaPago = (f) => {
+    const contado = ["efectivo", "mercado_pago"];
+    if (contado.includes(f) && contado.includes(formaPago) && f !== formaPago) {
+      setFormaPago("combinado");
+      setImporteEfectivo("");
+      setImporteMP("");
+      return;
+    }
+    if (formaPago === "combinado" && contado.includes(f)) {
+      setFormaPago(contado.find((x) => x !== f));
+      return;
+    }
     setFormaPago(f);
     // Al consumidor final no se le fía.
     if (f === "cuenta_corriente") setModoCliente("padron");
@@ -261,42 +280,45 @@ const ForratucPresupuestosPage = () => {
     if (!listaTocada) setListaId(listaPorDefecto?._id || "");
   }, [listaPorDefecto, listaTocada]);
   const lista = listas.find((l) => l._id === listaId) || null;
-  const precioDeLista = (op) => {
-    const item = itemDeOpcion(op);
-    const p = item ? lista?.preciosResueltos?.[item] : undefined;
+  const precioDeLista = (clave) => {
+    const p = clave ? lista?.preciosResueltos?.[clave] : undefined;
     return p == null ? "" : String(p);
   };
   // Al cambiar de lista se re-proponen los precios que no se tocaron a mano.
   useEffect(() => {
     setRenglones((prev) =>
-      prev.map((r) => (r.producto && !r.precioTocado ? { ...r, precio: precioDeLista(opcionPorKey[r.producto]) } : r))
+      prev.map((r) => (r.producto && !r.precioTocado ? { ...r, precio: precioDeLista(r.producto) } : r))
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listaId, listas]);
 
   const setRenglon = (id, cambios) =>
     setRenglones((prev) => prev.map((r) => (r.id === id ? { ...r, ...cambios } : r)));
-  const elegirProducto = (id, key) => {
-    const op = opcionPorKey[key];
+  // Elegir el producto (por nombre o por código): arranca en su lugar por
+  // defecto.
+  const elegirProducto = (id, clave, codigoTipeado) => {
+    const prod = productoPorClave[clave];
     setRenglon(id, {
-      producto: key, kg: "", kgTocado: false, descripcion: "",
-      precio: precioDeLista(op), precioTocado: false,
-      // El alimento con stock va por bolsa; el "otro" arranca en bolsa.
-      unidad: "bolsa",
+      producto: clave,
+      codigo: codigoTipeado ?? prod?.codigo ?? "",
+      kg: "", kgTocado: false,
+      precio: precioDeLista(clave), precioTocado: false,
     });
+  };
+  const tipearCodigo = (id, texto) => {
+    const prod = productoPorCodigo[texto.trim().toLowerCase()];
+    if (prod) elegirProducto(id, prod.clave, texto);
+    else setRenglon(id, { codigo: texto, producto: "" });
   };
   const quitarRenglon = (id) =>
     setRenglones((prev) => (prev.length === 1 ? [renglonVacio()] : prev.filter((r) => r.id !== id)));
 
-  // Lo pedido de un mismo producto entre todos los renglones, contra su stock.
-  const pedidoPorKey = renglones.reduce((acc, r) => {
-    if (r.producto) acc[r.producto] = (acc[r.producto] || 0) + (Number(r.cantidad) || 0);
+  // Lo pedido de un mismo stock entre todos los renglones, contra lo que hay.
+  const pedidoPorStock = renglones.reduce((acc, r) => {
+    if (r.producto) acc[claveStock(r)] = (acc[claveStock(r)] || 0) + (Number(r.cantidad) || 0);
     return acc;
   }, {});
-  const excedido = (key) => {
-    const op = opcionPorKey[key];
-    return op?.disponible != null && (pedidoPorKey[key] || 0) > op.disponible;
-  };
+  const excedido = (r) => r.producto && (pedidoPorStock[claveStock(r)] || 0) > (disponibleDe(r) ?? 0);
 
   const limpiar = () => {
     setFecha(obtenerFechaHoy());
@@ -305,45 +327,54 @@ const ForratucPresupuestosPage = () => {
     setRenglones([renglonVacio()]);
     setObservaciones("");
     setFormaPago("efectivo");
+    setImporteEfectivo("");
+    setImporteMP("");
     setOperacionMP("");
     setListaTocada(false);
   };
 
   const emitir = async (e) => {
     e.preventDefault();
+    if (fecha < obtenerFechaHoy())
+      return Swal.fire("Fecha anterior a hoy", "El presupuesto no puede llevar una fecha anterior a hoy.", "warning");
     if (modoCliente === "padron" && !clienteId)
       return Swal.fire("Falta el cliente", "Elegí un cliente del padrón, o pasá a consumidor final.", "warning");
     if (modoCliente === "final" && !clienteNombre.trim())
       return Swal.fire("Falta el cliente", "Escribí el nombre de quien compra.", "warning");
 
-    const usados = renglones.filter((r) => r.producto);
+    if (!deposito) return Swal.fire("Falta el depósito", "Elegí de qué depósito sale la venta.", "warning");
+    const usados = renglones.filter((r) => r.producto || r.codigo.trim());
     if (usados.length === 0) return Swal.fire("Sin renglones", "Agregá al menos un producto.", "warning");
 
     for (const [i, r] of usados.entries()) {
-      const op = opcionPorKey[r.producto];
+      const p = productoPorClave[r.producto];
       const n = `Renglón ${i + 1}`;
-      if (!op) return Swal.fire("Producto sin stock", `${n}: ese producto ya no tiene stock. Elegí otro.`, "warning");
-      if (!(Number(r.cantidad) > 0)) return Swal.fire("Falta la cantidad", `${n}: ${op.texto}.`, "warning");
-      if (r.precio === "" || Number(r.precio) < 0) return Swal.fire("Falta el precio", `${n}: ${op.texto}.`, "warning");
-      if (op.clase === "alimento" && op.producto === "otro" && !r.descripcion.trim())
-        return Swal.fire("Falta el detalle", `${n}: escribí qué alimento es.`, "warning");
-      if (excedido(r.producto))
-        return Swal.fire("Stock insuficiente", `${op.texto}: hay ${fmt(op.disponible)} ${op.unidad}.`, "error");
+      if (!p) return Swal.fire("Producto", `${n}: no hay un producto con el código "${r.codigo}".`, "warning");
+      if (!hayEnDeposito(p))
+        return Swal.fire("No está en este depósito", `${n}: ${p.nombre} no está en el ${etiquetaDeposito}. Si se lleva de los dos depósitos, hacé dos presupuestos.`, "warning");
+      if (p.rubro === "trozado" && !kgCajaDe(p))
+        return Swal.fire("Sin stock", `${n}: no hay ${p.nombre} en la cámara.`, "warning");
+      if (!(Number(r.cantidad) > 0)) return Swal.fire("Falta la cantidad", `${n}: ${p.nombre}.`, "warning");
+      if (r.precio === "" || Number(r.precio) < 0) return Swal.fire("Falta el precio", `${n}: ${p.nombre}.`, "warning");
+      if (excedido(r))
+        return Swal.fire("Stock insuficiente", `${p.nombre}: hay ${fmt(disponibleDe(r))} ${unidadCantidad(p)}.`, "error");
     }
 
     if (formaPago === "cuenta_corriente" && modoCliente !== "padron")
       return Swal.fire("Cuenta corriente", "La cuenta corriente es solo para clientes del padrón.", "warning");
+    if (formaPago === "combinado") {
+      if (!(Number(importeEfectivo) > 0) || !(Number(importeMP) > 0))
+        return Swal.fire("Pago combinado", "Poné cuánto paga en efectivo y cuánto por Mercado Pago.", "warning");
+      if (redondear(Number(importeEfectivo) + Number(importeMP)) !== total)
+        return Swal.fire("Pago combinado", `Efectivo + Mercado Pago tienen que sumar ${pesos(total)}.`, "warning");
+    }
 
     const lineas = usados.map((r) => {
-      const op = opcionPorKey[r.producto];
-      const base = { clase: op.clase, cantidad: Number(r.cantidad), precioUnitario: Number(r.precio) };
-      if (op.clase === "entero") return { ...base, especie: op.especie, calibre: op.calibre, kg: kgDe(r, op) };
-      if (op.clase === "trozado")
-        return { ...base, especie: op.especie, tipo: op.tipo, claseTrozado: op.claseTrozado, kgCaja: op.kgCaja };
-      if (op.clase === "huevo") return { ...base, tipo: op.tipo };
-      if (op.clase === "alimento")
-        return { ...base, producto: op.producto, unidad: r.unidad, descripcion: r.descripcion.trim() || undefined };
-      return base;
+      const p = productoPorClave[r.producto];
+      const linea = { producto: p.clave, cantidad: Number(r.cantidad), precioUnitario: Number(r.precio) };
+      if (p.rubro === "pollo") linea.kg = kgDe(r);
+      if (p.rubro === "trozado") linea.kgCaja = kgCajaDe(p);
+      return linea;
     });
 
     setSaving(true);
@@ -351,14 +382,27 @@ const ForratucPresupuestosPage = () => {
       const presupuesto = await crearPresupuestoForratuc({
         fecha,
         ...(modoCliente === "padron" ? { cliente: clienteId } : { clienteNombre: clienteNombre.trim() }),
+        deposito,
         lineas,
-        formaPago,
-        operacion: formaPago === "mercado_pago" ? operacionMP.trim() || undefined : undefined,
+        ...(formaPago === "combinado"
+          ? {
+              condicionPago: "contado",
+              pagos: [
+                { medio: "efectivo", importe: Number(importeEfectivo) },
+                { medio: "mercado_pago", importe: Number(importeMP), operacion: operacionMP.trim() || undefined },
+              ],
+            }
+          : {
+              formaPago,
+              operacion: formaPago === "mercado_pago" ? operacionMP.trim() || undefined : undefined,
+            }),
         listaPrecio: listaId || undefined,
         observaciones: observaciones.trim() || undefined,
       });
       limpiar();
+      setNuevoAbierto(false);
       cargar();
+      cargarLista();
       // Se imprime apenas se emite: es el papel con el que el cliente retira.
       imprimirPresupuestoForratuc(presupuesto, opcionesImpresion);
       Swal.fire({
@@ -408,42 +452,54 @@ const ForratucPresupuestosPage = () => {
   return (
     <Layout>
       <div className="container-fluid">
-        <div className="d-flex align-items-center gap-2 mb-4">
+        <div className="d-flex flex-wrap align-items-center gap-2 mb-4">
           <button className="btn btn-outline-secondary btn-sm" onClick={() => navigate("/forratuc")}>
             <i className="bi bi-arrow-left"></i>
           </button>
           <h1 className="h3 mb-0">
             <i className="bi bi-receipt me-2 text-secondary"></i>
-            Ventas
+            Presupuestos
           </h1>
+          <button className="btn btn-primary ms-auto" onClick={abrirNuevo}>
+            <i className="bi bi-plus-lg me-1"></i>Nuevo presupuesto
+          </button>
         </div>
 
-        <ul className="nav nav-tabs mb-3">
-          <li className="nav-item">
-            <button className={`nav-link ${tab === "nuevo" ? "active" : ""}`} onClick={() => setTab("nuevo")}>
-              <i className="bi bi-plus-circle me-1"></i> Nuevo presupuesto
-            </button>
-          </li>
-          <li className="nav-item">
-            <button className={`nav-link ${tab === "emitidos" ? "active" : ""}`} onClick={() => setTab("emitidos")}>
-              <i className="bi bi-list-ul me-1"></i> Emitidos
-            </button>
-          </li>
-        </ul>
-
-        {/* ══════════ NUEVO ══════════ */}
-        {tab === "nuevo" && (loading ? (
+        {/* ══════════ NUEVO (modal) ══════════ */}
+        {/* Sin modal-dialog-scrollable: le cortaría el desplegable al BuscadorCliente;
+            el que scrollea es el .modal entero. */}
+        {nuevoAbierto && (
+          <>
+          <div className="modal d-block" tabIndex="-1" role="dialog">
+            <div className="modal-dialog modal-xl" role="document">
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title"><i className="bi bi-plus-circle me-2"></i>Nuevo presupuesto</h5>
+                  <button type="button" className="btn-close" onClick={() => setNuevoAbierto(false)} disabled={saving}
+                    title="Cerrar (lo cargado queda para cuando lo vuelvas a abrir)"></button>
+                </div>
+                <div className="modal-body bg-light">
+          {loading ? (
           <div className="text-center p-4"><div className="spinner-border text-primary" role="status"></div></div>
         ) : (
           <form onSubmit={emitir}>
             <div className="card border-0 shadow-sm mb-3">
               <div className="card-body">
                 <div className="row g-3">
-                  <div className="col-12 col-sm-4 col-lg-2">
-                    <label className="form-label fw-semibold small mb-1">Fecha</label>
-                    <input type="date" className="form-control" value={fecha} onChange={(e) => setFecha(e.target.value)} required />
+                  <div className="col-12 col-sm-6 col-lg-3">
+                    <label className="form-label fw-semibold small mb-1">Depósito</label>
+                    <select className={`form-select ${deposito ? "" : "border-primary"}`} value={deposito}
+                      onChange={(e) => setDeposito(e.target.value)}>
+                      <option value="">Elegí de dónde sale…</option>
+                      {depositos.map((d) => <option key={d.key} value={d.key}>{d.etiqueta}</option>)}
+                    </select>
                   </div>
-                  <div className="col-12 col-sm-8 col-lg-6">
+                  <div className="col-12 col-sm-6 col-lg-2">
+                    <label className="form-label fw-semibold small mb-1">Fecha</label>
+                    {/* No se emite con fecha anterior a hoy (2026-11-02); el back lo controla igual. */}
+                    <input type="date" className="form-control" value={fecha} min={obtenerFechaHoy()} onChange={(e) => setFecha(e.target.value)} required />
+                  </div>
+                  <div className="col-12 col-sm-8 col-lg-4">
                     <div className="d-flex justify-content-between align-items-end mb-1">
                       <label className="form-label fw-semibold small mb-0">Cliente</label>
                       <div className="btn-group btn-group-sm">
@@ -462,7 +518,7 @@ const ForratucPresupuestosPage = () => {
                       <input className="form-control" placeholder="Nombre de quien compra" value={clienteNombre} onChange={(e) => setClienteNombre(e.target.value)} />
                     )}
                   </div>
-                  <div className="col-12 col-lg-4">
+                  <div className="col-12 col-sm-4 col-lg-3">
                     <label className="form-label fw-semibold small mb-1">Lista de precios</label>
                     <select className="form-select" value={listaId}
                       onChange={(e) => { setListaId(e.target.value); setListaTocada(true); }}>
@@ -487,71 +543,76 @@ const ForratucPresupuestosPage = () => {
                   <table className="table table-sm align-middle mb-2">
                     <thead className="table-light">
                       <tr>
+                        <th style={{ width: 100 }}>Código</th>
                         <th style={{ minWidth: 260 }}>Producto</th>
+                        <th style={{ width: 140 }}>Stock</th>
                         <th style={{ width: 150 }}>Cantidad</th>
-                        <th style={{ width: 120 }}>Kg</th>
+                        <th style={{ width: 110 }}>Kg</th>
                         <th style={{ width: 170 }}>Precio unitario</th>
-                        <th className="text-end" style={{ width: 140 }}>Importe</th>
+                        <th className="text-end" style={{ width: 130 }}>Importe</th>
                         <th style={{ width: 40 }}></th>
                       </tr>
                     </thead>
                     <tbody>
                       {renglones.map((r) => {
-                        const op = opcionPorKey[r.producto];
-                        const esAlimento = op?.clase === "alimento";
-                        const esOtro = esAlimento && op.producto === "otro";
-                        const unidadCant = esAlimento ? (r.unidad === "kg" ? "kg" : "bolsas") : op?.unidad;
-                        const unidadPrecio = esAlimento ? r.unidad : op?.unidadPrecio;
+                        const p = productoPorClave[r.producto];
+                        const hay = disponibleDe(r);
+                        // El producto elegido sigue en la lista aunque no esté en este depósito.
+                        const enOtroDeposito = p && !hayEnDeposito(p);
+                        const codigoMal = r.codigo.trim() && !p;
                         return (
                           <tr key={r.id}>
                             <td>
-                              <select
-                                className="form-select form-select-sm"
-                                value={r.producto}
-                                onChange={(e) => elegirProducto(r.id, e.target.value)}
-                              >
-                                <option value="">Elegí un producto…</option>
-                                {grupos.filter((g) => g.opciones.length > 0).map((g) => (
-                                  <optgroup key={g.titulo} label={g.titulo}>
-                                    {g.opciones.map((o) => (
-                                      <option key={o.key} value={o.key}>
-                                        {o.texto}{o.disponible != null ? ` — hay ${fmt(o.disponible)} ${o.unidad}` : ""}
-                                      </option>
-                                    ))}
-                                  </optgroup>
-                                ))}
+                              <input className={`form-control form-control-sm ${codigoMal ? "is-invalid" : ""}`}
+                                placeholder="Código" value={r.codigo} disabled={!deposito} title={codigoMal ? "No hay un producto con ese código" : undefined}
+                                onChange={(e) => tipearCodigo(r.id, e.target.value)} />
+                            </td>
+                            <td>
+                              <select className="form-select form-select-sm" value={r.producto} disabled={!deposito}
+                                onChange={(e) => elegirProducto(r.id, e.target.value)}>
+                                <option value="">{deposito ? "Elegí un producto…" : "Primero elegí el depósito"}</option>
+                                {enOtroDeposito && <option value={p.clave}>{p.codigo} · {p.nombre}</option>}
+                                {gruposProductos.map((g) => {
+                                  const items = g.items.filter(hayEnDeposito);
+                                  return items.length === 0 ? null : (
+                                    <optgroup key={g.titulo} label={g.titulo}>
+                                      {items.map((it) => (
+                                        <option key={it.clave} value={it.clave}>{it.codigo} · {it.nombre}</option>
+                                      ))}
+                                    </optgroup>
+                                  );
+                                })}
                               </select>
-                              {esAlimento && op.producto === "otro" && (
-                                <input className="form-control form-control-sm mt-1" placeholder="Qué alimento (ej. maíz partido 25 kg)"
-                                  value={r.descripcion} onChange={(e) => setRenglon(r.id, { descripcion: e.target.value })} />
+                              {p && enOtroDeposito && (
+                                <div className="small text-danger mt-1">No está en el {etiquetaDeposito}: va en otro presupuesto.</div>
+                              )}
+                            </td>
+                            <td>
+                              {/* Lo que hay en el depósito de la venta: solo para ver, no se edita. */}
+                              {p && !enOtroDeposito && (
+                                <input readOnly tabIndex={-1}
+                                  className={`form-control form-control-sm bg-light ${hay > 0 ? "" : "text-danger"}`}
+                                  title={`En el ${etiquetaDeposito}`}
+                                  value={`${fmt(hay)} ${unidadCantidad(p)}`} />
                               )}
                             </td>
                             <td>
                               <div className="input-group input-group-sm">
-                                <input type="number" min="0" step={esAlimento && r.unidad === "kg" ? "0.01" : "1"}
-                                  className={`form-control ${r.producto && excedido(r.producto) ? "is-invalid" : ""}`}
-                                  value={r.cantidad} disabled={!op}
+                                <input type="number" min="0" step="1"
+                                  className={`form-control ${excedido(r) ? "is-invalid" : ""}`}
+                                  value={r.cantidad} disabled={!p || enOtroDeposito}
                                   onChange={(e) => setRenglon(r.id, { cantidad: e.target.value })} />
-                                {esOtro ? (
-                                  <select className="form-select" style={{ maxWidth: 80 }} value={r.unidad}
-                                    onChange={(e) => setRenglon(r.id, { unidad: e.target.value })}>
-                                    {(constantes?.unidadesAlimento || []).map((u) => (
-                                      <option key={u.key} value={u.key}>{u.etiqueta}</option>
-                                    ))}
-                                  </select>
-                                ) : op ? (
-                                  <span className="input-group-text">{unidadCant}</span>
-                                ) : null}
+                                {p && <span className="input-group-text">{unidadCantidad(p)}</span>}
                               </div>
                             </td>
                             <td>
-                              {op?.clase === "entero" ? (
+                              {p?.rubro === "pollo" ? (
                                 <input type="number" min="0" step="0.01" className="form-control form-control-sm"
                                   title={`Se propone ${kgPorCajon} kg por cajón; poné el peso real si lo pesaste.`}
-                                  value={r.kgTocado ? r.kg : kgDe(r, op) || ""}
+                                  value={r.kgTocado ? r.kg : kgDe(r) || ""}
                                   onChange={(e) => setRenglon(r.id, { kg: e.target.value, kgTocado: true })} />
-                              ) : op?.clase === "trozado" ? (
-                                <span className="small">{fmt(kgDe(r, op))} kg</span>
+                              ) : p?.rubro === "trozado" ? (
+                                <span className="small">{fmt(kgDe(r))} kg</span>
                               ) : (
                                 <span className="text-muted small">—</span>
                               )}
@@ -559,13 +620,13 @@ const ForratucPresupuestosPage = () => {
                             <td>
                               <div className="input-group input-group-sm">
                                 <span className="input-group-text">$</span>
-                                <input type="number" min="0" step="0.01" className="form-control" value={r.precio} disabled={!op}
-                                  title={lista && itemDeOpcion(op) ? `Lista: ${lista.nombre}` : undefined}
+                                <input type="number" min="0" step="0.01" className="form-control" value={r.precio} disabled={!p}
+                                  title={lista && p ? `Lista: ${lista.nombre}` : undefined}
                                   onChange={(e) => setRenglon(r.id, { precio: e.target.value, precioTocado: true })} />
-                                {op && <span className="input-group-text">/ {UNIDAD_PRECIO[unidadPrecio] || unidadPrecio}</span>}
+                                {p && <span className="input-group-text">/ {p.unidadVenta}</span>}
                               </div>
                             </td>
-                            <td className="text-end fw-semibold">{op ? pesos(importeDe(r)) : ""}</td>
+                            <td className="text-end fw-semibold">{p ? pesos(importeDe(r)) : ""}</td>
                             <td>
                               <button type="button" className="btn btn-sm btn-outline-danger border-0" title="Quitar" onClick={() => quitarRenglon(r.id)}>
                                 <i className="bi bi-x-lg"></i>
@@ -577,7 +638,7 @@ const ForratucPresupuestosPage = () => {
                     </tbody>
                     <tfoot>
                       <tr>
-                        <td colSpan={4}>
+                        <td colSpan={6}>
                           <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setRenglones((p) => [...p, renglonVacio()])}>
                             <i className="bi bi-plus-lg me-1"></i>Agregar renglón
                           </button>
@@ -597,7 +658,7 @@ const ForratucPresupuestosPage = () => {
                   <div className="fw-semibold small mb-2">Forma de pago</div>
                   <div className="d-flex flex-wrap gap-2 mb-2">
                     {formasPago.map((f) => {
-                      const elegida = formaPago === f.key;
+                      const elegida = formaPago === f.key || (formaPago === "combinado" && f.key !== "cuenta_corriente");
                       const icono = { efectivo: "bi-cash-coin", mercado_pago: "bi-phone", cuenta_corriente: "bi-journal-text" }[f.key];
                       return (
                         <button key={f.key} type="button"
@@ -610,7 +671,31 @@ const ForratucPresupuestosPage = () => {
                       );
                     })}
                   </div>
-                  {formaPago === "efectivo" ? (
+                  {formaPago === "combinado" ? (
+                    <div className="d-flex flex-wrap align-items-center gap-2 small">
+                      {/* Cada importe se escribe a mano y no toca el otro: abajo se ve si suman el total. */}
+                      <div className="input-group input-group-sm" style={{ maxWidth: 210 }}>
+                        <span className="input-group-text">Efectivo $</span>
+                        <input type="number" min="0" step="0.01" className="form-control text-end sin-flechas" value={importeEfectivo}
+                          onChange={(e) => setImporteEfectivo(e.target.value)} />
+                      </div>
+                      <div className="input-group input-group-sm" style={{ maxWidth: 230 }}>
+                        <span className="input-group-text">Mercado Pago $</span>
+                        <input type="number" min="0" step="0.01" className="form-control text-end sin-flechas" value={importeMP}
+                          onChange={(e) => setImporteMP(e.target.value)} />
+                      </div>
+                      <input className="form-control form-control-sm" style={{ maxWidth: 200 }}
+                        placeholder="N° de operación MP (opcional)" value={operacionMP} onChange={(e) => setOperacionMP(e.target.value)} />
+                      {(() => {
+                        const dif = redondear(total - (Number(importeEfectivo) || 0) - (Number(importeMP) || 0));
+                        return dif === 0 ? (
+                          <span className="text-success"><i className="bi bi-check-circle me-1"></i>Suma {pesos(total)}</span>
+                        ) : (
+                          <span className="text-danger">{dif > 0 ? `Faltan ${pesos(dif)}` : `Sobran ${pesos(-dif)}`}</span>
+                        );
+                      })()}
+                    </div>
+                  ) : formaPago === "efectivo" ? (
                     <div className="small text-muted">Contado en efectivo: {pesos(total)}.</div>
                   ) : formaPago === "mercado_pago" ? (
                     <div className="d-flex flex-wrap align-items-center gap-2 small">
@@ -646,10 +731,17 @@ const ForratucPresupuestosPage = () => {
               </div>
             </div>
           </form>
-        ))}
+        )}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="modal-backdrop show"></div>
+          </>
+        )}
 
         {/* ══════════ EMITIDOS ══════════ */}
-        {tab === "emitidos" && (
+        {(
           <div className="card border-0 shadow-sm">
             <div className="card-body">
               <div className="d-flex flex-wrap align-items-end gap-2 mb-3">
@@ -701,6 +793,11 @@ const ForratucPresupuestosPage = () => {
                               {!p.cliente && <span className="badge bg-light text-secondary border ms-1">cons. final</span>}
                             </td>
                             <td className="small" style={{ maxWidth: 380 }}>
+                              {p.deposito && (
+                                <span className="badge bg-light text-dark border me-1">
+                                  {depositos.find((d) => d.key === p.deposito)?.etiqueta || p.deposito}
+                                </span>
+                              )}
                               {p.lineas.map((l) => `${fmt(l.cantidad)} ${l.unidad} ${l.descripcion}`).join(" · ")}
                               {anulado && p.motivoAnulacion && (
                                 <div className="text-danger">Motivo: {p.motivoAnulacion}</div>

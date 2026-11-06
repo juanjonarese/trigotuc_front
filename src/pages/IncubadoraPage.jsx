@@ -12,6 +12,7 @@ import {
   descartarApiHuevos,
   obtenerTandasIncubacion,
   crearCargaIncubacion,
+  corregirFechaCargaIncubacion,
   registrarTransferenciaNacedora,
   registrarNacimiento,
   cancelarTandaIncubacion,
@@ -207,7 +208,7 @@ const TarjetaMaquina = ({ maquina, etiqueta, color, onVerTanda }) => {
 // Se abre tocando un carro ocupado del mapa. Reemplaza al listado de tarjetas
 // que había abajo: el mapa ya dice dónde está cada cosa, y el detalle y las
 // acciones se ven acá cuando hacen falta.
-const TandaEnCarroModal = ({ tanda, constantes, onClose, onTransferir, onCancelar }) => {
+const TandaEnCarroModal = ({ tanda, constantes, onClose, onTransferir, onCancelar, onCorregirFecha }) => {
   const diasIncubacion = constantes?.diasIncubacion ?? 18;
   const dias = tanda.diasEnIncubadora ?? 0;
   const lista = dias >= diasIncubacion;
@@ -261,7 +262,15 @@ const TandaEnCarroModal = ({ tanda, constantes, onClose, onTransferir, onCancela
                   </tr>
                   <tr>
                     <td className="text-muted small">Ingreso</td>
-                    <td className="small text-end">{formatearFechaLocal(tanda.fechaIngreso)}</td>
+                    <td className="small text-end">
+                      {formatearFechaLocal(tanda.fechaIngreso)}
+                      {onCorregirFecha && (
+                        <button type="button" className="btn btn-link btn-sm p-0 ms-2 align-baseline"
+                          onClick={() => onCorregirFecha(tanda)} title="Si se cargó otro día, se corrige la carga entera">
+                          corregir
+                        </button>
+                      )}
+                    </td>
                   </tr>
                   <tr>
                     <td className="text-muted small">Peso del huevo al cargar</td>
@@ -401,6 +410,8 @@ const AsignarCarroModal = ({ entrada, fecha, constantes, incubadoras, onClose, o
   const [cantidad, setCantidad] = useState("");
   // Peso promedio del huevo en gramos. Opcional.
   const [peso, setPeso] = useState("");
+  // Día que entraron a la máquina: hoy, o uno anterior si se carga tarde.
+  const [fechaCarga, setFechaCarga] = useState(fecha);
   const [saving, setSaving] = useState(false);
 
   const maquinaSel = (incubadoras || []).find((m) => m.numero === Number(maquina));
@@ -446,7 +457,7 @@ const AsignarCarroModal = ({ entrada, fecha, constantes, incubadoras, onClose, o
       const tandas = await crearCargaIncubacion({
         lote: entrada.lote,
         tipo: entrada.tipo,
-        fecha: ajustarFechaParaGuardar(fecha),
+        fecha: ajustarFechaParaGuardar(fechaCarga),
         carros: reparto,
         pesoHuevoIngreso: peso === "" ? undefined : Number(peso),
       });
@@ -611,6 +622,27 @@ const AsignarCarroModal = ({ entrada, fecha, constantes, incubadoras, onClose, o
                       Se compara con el de la transferencia para ver cuánto perdió. Si van varios
                       carros, se usa el mismo para todos.
                     </div>
+
+                    {/* Fecha de carga (2026-11-04, observación del cliente): el día que los
+                        huevos entraron a la máquina. Puede ser anterior (se carga tarde),
+                        nunca futura. De ella sale el nacimiento previsto (21 días). */}
+                    <label className="form-label fw-semibold small mb-1 mt-2">Fecha de carga</label>
+                    <input
+                      type="date"
+                      className="form-control form-control-sm"
+                      max={obtenerFechaHoy()}
+                      value={fechaCarga}
+                      onChange={(e) => setFechaCarga(e.target.value)}
+                      disabled={saving}
+                      required
+                    />
+                    {fechaCarga !== fecha && (
+                      <div className="form-text mt-1 text-warning-emphasis">
+                        <i className="bi bi-calendar-event me-1"></i>
+                        Se carga con fecha {formatearFechaLocal(ajustarFechaParaGuardar(fechaCarga))}: el
+                        nacimiento previsto se cuenta desde ese día.
+                      </div>
+                    )}
 
                     {reparto.length > 0 && enviados > 0 && (
                       <div
@@ -1692,6 +1724,42 @@ const IncubadoraPage = () => {
     }
   };
 
+  // Corregir el día de la carga (2026-11-04, observación del cliente: se cargó
+  // un día tarde). Corrige la carga ENTERA de ese día, todos los planteles, y el
+  // nacimiento previsto se corre con ella.
+  const handleCorregirFecha = async (tanda) => {
+    const dia = new Date(tanda.fechaIngreso).toISOString().slice(0, 10);
+    const { isConfirmed, value } = await Swal.fire({
+      icon: "question",
+      title: "Corregir la fecha de carga",
+      html:
+        `Carga del <strong>${formatearFechaLocal(tanda.fechaIngreso)}</strong>.<br/>` +
+        `<span class="small text-muted">Se corrige la carga entera de ese día (todos los planteles). ` +
+        `Puede ser anterior, no futura.</span>`,
+      input: "date",
+      inputValue: dia,
+      inputAttributes: { max: obtenerFechaHoy() },
+      showCancelButton: true,
+      confirmButtonText: "Corregir",
+      cancelButtonText: "Volver",
+      inputValidator: (v) => (!v ? "Elegí la fecha" : v === dia ? "Es la misma fecha" : undefined),
+    });
+    if (!isConfirmed) return;
+    try {
+      const r = await corregirFechaCargaIncubacion(dia, value);
+      await cargar();
+      Swal.fire({
+        icon: "success",
+        title: "Fecha corregida",
+        text: `${r.tandas} tanda${r.tandas === 1 ? "" : "s"} pasan al ${formatearFechaLocal(ajustarFechaParaGuardar(value))}.`,
+        timer: 2200,
+        showConfirmButton: false,
+      });
+    } catch (err) {
+      Swal.fire("Error", err.message, "error");
+    }
+  };
+
   const diasIncubacion = constantes?.diasIncubacion ?? 18;
   const diasNacedora = constantes?.diasNacedora ?? 3;
   const totalIncubable = stock.reduce((acc, s) => acc + s.huevosDisponibles, 0);
@@ -2343,6 +2411,10 @@ Primero las que están por nacer. 4 carros de 14.400 por nacedora, con el ventil
           onCancelar={(t) => {
             setTandaAbierta(null);
             handleCancelar(tandas.find((x) => x._id === t._id) || t);
+          }}
+          onCorregirFecha={(t) => {
+            setTandaAbierta(null);
+            handleCorregirFecha(t);
           }}
         />
       )}

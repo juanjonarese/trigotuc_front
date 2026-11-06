@@ -28,7 +28,7 @@ import {
 const pesos = (n) =>
   new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(Number(n || 0));
 
-const UNIDAD = { kg: "kg", maple: "maple", pollito: "pollito", bolsa: "bolsa" };
+const UNIDAD = { kg: "kg", maple: "maple", pollito: "pollito", bolsa: "bolsa", unidad: "unidad", caja: "caja" };
 
 const listaVacia = () => ({
   _id: null, nombre: "", tipo: "precios", precios: {}, porcentaje: "",
@@ -64,16 +64,50 @@ const ForratucListasPreciosPage = () => {
     return [...porGrupo];
   }, [catalogo]);
 
-  const editar = (l) =>
+  const editar = (l) => {
+    setEditandoNombre(false);
+    const precios = Object.fromEntries((l.precios || []).map((p) => [p.item, String(p.precio)]));
     setForm({
       _id: l._id,
       nombre: l.nombre,
       tipo: l.tipo,
-      precios: Object.fromEntries((l.precios || []).map((p) => [p.item, String(p.precio)])),
+      precios,
       porcentaje: l.porcentaje != null ? String(l.porcentaje) : "",
+      // Lo que está grabado: un precio distinto muestra su ícono de guardar (2026-11-06).
+      grabado: { nombre: l.nombre, tipo: l.tipo, porcentaje: l.porcentaje, precios },
     });
+  };
+
+  const cambiado = (item) => form?.grabado && (form.precios[item] ?? "") !== (form.grabado.precios[item] ?? "");
+
+  // Graba SOLO ese precio: lo demás va como está grabado (lo que se cambió y no se
+  // grabó sigue pendiente, para el ícono de su renglón o el Guardar del final).
+  const [grabandoItem, setGrabandoItem] = useState(null);
+  const guardarPrecio = async (item) => {
+    const valor = form.precios[item] ?? "";
+    if (valor !== "" && !(Number(valor) >= 0)) return Swal.fire("Precio inválido", "Poné un precio mayor o igual a cero.", "warning");
+    const g = form.grabado;
+    const precios = { ...g.precios, [item]: valor };
+    setGrabandoItem(item);
+    try {
+      await guardarListaPreciosForratuc(form._id, {
+        nombre: g.nombre,
+        tipo: g.tipo,
+        precios: Object.entries(precios).filter(([, v]) => v !== "").map(([i, p]) => ({ item: i, precio: Number(p) })),
+        porcentaje: g.tipo === "descuento" ? Number(g.porcentaje) : undefined,
+      });
+      setForm((f) => ({ ...f, grabado: { ...f.grabado, precios: { ...f.grabado.precios, [item]: valor } } }));
+      Swal.fire({ icon: "success", title: "Precio guardado", toast: true, position: "top-end", timer: 1200, showConfirmButton: false });
+      cargar();
+    } catch (err) {
+      Swal.fire("Error", err.message || "No se pudo guardar el precio.", "error");
+    } finally {
+      setGrabandoItem(null);
+    }
+  };
 
   const set = (cambios) => setForm((f) => ({ ...f, ...cambios }));
+  const [editandoNombre, setEditandoNombre] = useState(false);
 
   // Solo en el Precio de lista: sube (o baja, con negativo) todos los precios
   // cargados un %. Los vacíos siguen vacíos; se guarda recién con Guardar.
@@ -174,17 +208,12 @@ const ForratucListasPreciosPage = () => {
                     className={`card border-0 shadow-sm mb-2 ${form?._id === l._id ? "border border-primary" : ""}`}
                     style={{ cursor: "pointer" }} onClick={() => editar(l)}>
                     <div className="card-body py-2">
-                      <div className="d-flex justify-content-between align-items-start gap-2">
-                        <div className="fw-semibold">
-                          {l.nombre}
-                          {l.porDefecto && <span className="badge bg-primary ms-2">Por defecto</span>}
-                          {l.tipo === "descuento" && <span className="badge bg-light text-dark border ms-2">−{l.porcentaje}%</span>}
-                        </div>
-                        <div className="d-flex">
-                          <button className="btn btn-sm btn-outline-primary border-0" title="Editar"
-                            onClick={(e) => { e.stopPropagation(); editar(l); }}>
-                            <i className="bi bi-pencil"></i>
-                          </button>
+                      <div className="d-flex justify-content-between align-items-center gap-2">
+                        <div className="fw-semibold">{l.nombre}</div>
+                        {/* Las pills a la derecha, junto al tacho (2026-11-06). */}
+                        <div className="d-flex align-items-center gap-2">
+                          {l.porDefecto && <span className="badge bg-primary">Por defecto</span>}
+                          {l.tipo === "descuento" && <span className="badge bg-light text-dark border">−{l.porcentaje}%</span>}
                           {!l.porDefecto && (
                             <button className="btn btn-sm btn-outline-danger border-0" title="Borrar"
                               onClick={(e) => { e.stopPropagation(); borrar(l); }}>
@@ -210,10 +239,26 @@ const ForratucListasPreciosPage = () => {
                   <div className="card-body">
                     {esPrincipal ? (
                       <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                        <h2 className="h5 mb-0">
-                          {form.nombre}
-                          <span className="badge bg-primary ms-2 align-middle fs-6">Por defecto</span>
-                        </h2>
+                        {/* El nombre de la principal se cambia (2026-11-06): el lápiz lo vuelve
+                            editable y se graba con el Guardar del final. */}
+                        {editandoNombre ? (
+                          <div className="input-group" style={{ maxWidth: 360 }}>
+                            <input className="form-control" value={form.nombre} autoFocus maxLength={60}
+                              onChange={(e) => set({ nombre: e.target.value })}
+                              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); setEditandoNombre(false); } }} />
+                          </div>
+                        ) : (
+                          <h2 className="h5 mb-0">
+                            {form.nombre}
+                            <button type="button" className="btn btn-sm btn-link p-0 ms-2 align-baseline" title="Cambiar el nombre"
+                              onClick={() => setEditandoNombre(true)}>
+                              <i className="bi bi-pencil"></i>
+                            </button>
+                            {form.grabado && form.nombre !== form.grabado.nombre && (
+                              <span className="badge bg-warning text-dark ms-2 align-middle">sin guardar</span>
+                            )}
+                          </h2>
+                        )}
                         <div className="input-group input-group-sm" style={{ width: "auto" }}>
                           <span className="input-group-text">Subir / bajar todos</span>
                           <input type="number" step="0.01" className="form-control text-end sin-flechas" style={{ width: "5.5rem" }}
@@ -262,6 +307,7 @@ const ForratucListasPreciosPage = () => {
                               <tbody>
                                 {catalogo.filter((c) => base.preciosResueltos?.[c.item] != null).map((c) => (
                                   <tr key={c.item}>
+                                    <td className="small text-muted" style={{ width: "5rem" }}>{c.codigo}</td>
                                     <td className="small">{c.etiqueta}</td>
                                     <td className="small text-muted text-end text-decoration-line-through">{pesos(base.preciosResueltos[c.item])}</td>
                                     <td className="small fw-semibold text-end">
@@ -285,16 +331,28 @@ const ForratucListasPreciosPage = () => {
                               <tbody>
                                 {items.map((c) => (
                                   <tr key={c.item}>
+                                    <td className="small text-muted" style={{ width: "5rem" }}>{c.codigo}</td>
                                     <td className="small">{c.etiqueta}</td>
                                     <td className="text-end" style={{ width: "13rem" }}>
                                       <div className="input-group input-group-sm">
                                         <span className="input-group-text">$</span>
-                                        <input type="number" min="0" step="0.01" className="form-control text-end sin-flechas"
+                                        <input type="number" min="0" step="0.01"
+                                          className={`form-control text-end sin-flechas ${cambiado(c.item) ? "border-warning bg-warning-subtle" : ""}`}
                                           value={form.precios[c.item] ?? ""}
                                           onChange={(e) => set({ precios: { ...form.precios, [c.item]: e.target.value } })} />
                                       </div>
                                     </td>
                                     <td className="small text-muted" style={{ width: "4.5rem" }}>/ {UNIDAD[c.unidad] || c.unidad}</td>
+                                    <td className="text-end" style={{ width: "2.5rem" }}>
+                                      {cambiado(c.item) && (
+                                        <button type="button" className="btn btn-sm btn-success py-0 px-1" title="Guardar este precio"
+                                          disabled={grabandoItem != null || saving} onClick={() => guardarPrecio(c.item)}>
+                                          {grabandoItem === c.item
+                                            ? <span className="spinner-border spinner-border-sm"></span>
+                                            : <i className="bi bi-floppy"></i>}
+                                        </button>
+                                      )}
+                                    </td>
                                   </tr>
                                 ))}
                               </tbody>

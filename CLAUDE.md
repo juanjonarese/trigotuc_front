@@ -29,9 +29,11 @@ There are no automated tests.
 | `/forratuc/listas-precios` | `ForratucListasPreciosPage` (2026-10-29: "Precio de lista" fija —la por defecto, con subir/bajar todos por %— y las demás de precio por producto o % sobre ella; desde el 30/10 sin clientes: la lista se elige en la venta) | Forratuc |
 | `/forratuc/caja` | `ForratucCajaPage` (2026-10-29: rendición y cierre de caja del día — billetes de caja inicio / bolsa / caja cierre a mano, el resto calculado; imprime la planilla) | Forratuc |
 | `/forratuc/cuentas-corrientes` | `ForratucCuentasCorrientesPage` (saldos por cliente, movimientos con saldo, registrar pago → recibo) | Forratuc |
+| `/forratuc/productos` | `ForratucProductosPage` (2026-11-02: alta de productos con código; los nuevos llevan stock por depósito. Desde el 04/11 los de la avícola salen con su badge y de ellos **solo** se edita el código de Forratuc y si Forratuc los vende) | Forratuc |
 | `/forratuc/pagos` | `ForratucPagosPage` (2026-10-30: los pagos de cuenta corriente por fecha — registrar, reimprimir el recibo, anular; mismo modal que Cuentas corrientes, `components/forratuc/RegistrarPagoModal.jsx`) | Forratuc |
 | `/forratuc/stock` | `ForratucStockPage` (2026-10-26: pollo de la cámara Trigotuc, huevo, pollitos y alimento balanceado en bolsas, todo de `GET /stock-forratuc`; una **tarjeta por lugar** — cámara Trigotuc, huevos, pollitos, cada depósito de alimento — con el **diseño de Frigorífico → Stock** (total arriba, cuadritos con badge, historial abajo); al tocarla, el historial de ese lugar como cuenta corriente, de `GET /stock-forratuc/movimientos/:lugar`; desde el 2026-10-29, botón **Ingresar alimento** y "anular" en los ingresos del historial) | Forratuc |
 | `/forratuc/salidas` | `SalidaMostradorPage` (la salida suelta; las de un presupuesto salen con su número y sin editar/borrar) | Forratuc |
+| `/avicola/productos` | `AvicolaProductosPage` (2026-11-04: los productos de la avícola — pollo entero, trozado, huevo, pollitos — que vende Forratuc; alta a mano eligiendo con qué stock se vincula; ítem "Productos" del menú, solo superadmin) | Avícola |
 | `/dashboard` | `DashboarPage` (typo intencional) | General |
 | `/clientes` | `ClientesPage` | Altas |
 | `/personal` | `PersonalPage` (gestión de usuarios) | Altas |

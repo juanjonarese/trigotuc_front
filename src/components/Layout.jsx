@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import "../css/DashboardPage.css";
 import usePushNotification from "../hooks/usePushNotification";
 import AsistenteFlotante from "./AsistenteFlotante";
+import BannerPrueba from "./BannerPrueba";
 import { empresaActual as calcularEmpresaActual, inicioEmpresa, obtenerEmpresasUsuario } from "../utils/empresas";
 import MenuAvicola from "./MenuAvicola";
 import MenuForratuc from "./forratuc/MenuForratuc";
@@ -302,6 +303,7 @@ const Layout = ({ children }) => {
 
       {/* Main Content */}
       <div className="main-content">
+        <BannerPrueba />
         {/* Header */}
         <header className="main-header bg-white shadow-sm sticky-top">
           <div className="container-fluid">

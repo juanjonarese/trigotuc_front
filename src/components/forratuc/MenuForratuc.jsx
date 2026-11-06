@@ -8,11 +8,14 @@ import React from "react";
 // salen en todas las empresas.
 const ITEMS = [
   { ruta: "/forratuc/stock", icono: "bi-boxes", texto: "Stock" },
-  { ruta: "/forratuc/mostrador", icono: "bi-receipt", texto: "Ventas" },
+  { ruta: "/forratuc/mostrador", icono: "bi-receipt", texto: "Presupuestos" },
   { ruta: "/forratuc/caja", icono: "bi-cash-stack", texto: "Cierre de caja" },
   { ruta: "/forratuc/cuentas-corrientes", icono: "bi-journal-text", texto: "Cuentas corrientes" },
   { ruta: "/forratuc/pagos", icono: "bi-cash-coin", texto: "Pagos" },
   { ruta: "/forratuc/listas-precios", icono: "bi-tags", texto: "Listas de precios" },
+  { ruta: "/forratuc/productos", icono: "bi-upc", texto: "Productos" },
+  // Planta de alimento (2026-11-04): materia prima, fórmulas, elaboración y envíos.
+  { ruta: "/forratuc/planta", icono: "bi-gear-wide-connected", texto: "Planta de alimento" },
 ];
 
 const MenuForratuc = ({ ctx, grupo }) => {

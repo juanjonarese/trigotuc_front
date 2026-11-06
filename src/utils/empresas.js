@@ -51,7 +51,7 @@ const RUTAS_DEL_GRUPO = ["/inicio", "/clientes", "/personal", "/camiones", "/fri
 // explícita: antes era "todo lo que no es /forratuc", y con una tercera
 // empresa una ruta mal registrada caía en la avícola sin que nadie lo notara.
 const PREFIJOS_EMPRESA = {
-  avicola: ["/dashboard", "/proyeccion", "/frigorifico", "/granja", "/reproductores", "/alimento"],
+  avicola: ["/dashboard", "/proyeccion", "/frigorifico", "/granja", "/reproductores", "/alimento", "/avicola"],
   forratuc: ["/forratuc"],
 };
 

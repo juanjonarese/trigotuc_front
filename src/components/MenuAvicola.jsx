@@ -62,6 +62,22 @@ const MenuAvicola = ({ ctx, grupo }) => {
         </a>
       )}
 
+      {/* Productos (2026-11-04): los de la avícola (pollo, trozado, huevo,
+          pollitos), que vende Forratuc. Los administra la avícola. ⚠️ Solo
+          superadmin mientras se define con el cliente (el back también). */}
+      {rolUsuario === "superadmin" && (
+        <a
+          href="#"
+          className={`nav-link d-flex align-items-center gap-2 mb-2 rounded ${
+            isActive("/avicola/productos") ? "text-white" : "text-white-50"
+          }`}
+          onClick={(e) => { e.preventDefault(); navigate("/avicola/productos"); }}
+        >
+          <i className="bi bi-upc fs-5"></i>
+          <span>Productos</span>
+        </a>
+      )}
+
       {/* Envío de alimento — Trigotuc despacha a las granjas. Solo despacha
           administración. Desde el 2026-09-30 es un botón suelto: la recepción
           y los silos viven en Reproductoras (Silos), donde se recibe y se pesa. */}

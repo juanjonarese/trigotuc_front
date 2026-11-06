@@ -1,6 +1,7 @@
 import { escapeHtml } from "../escapeHtml";
 import { formatearFechaLocal } from "../dateUtils";
 import { imprimirHtml } from "../imprimirHtml";
+import { seccionesConteo } from "./conteoStock";
 
 /**
  * Papeles de Forratuc (2026-10-21):
@@ -46,6 +47,9 @@ const pesos = (n) =>
 
 const UNIDAD_PRECIO = { kg: "kg", maple: "maple", pollito: "u.", bolsa: "bolsa" };
 const DEPOSITOS = { forrajeria: "Depósito Forrajería", trigotuc: "Depósito Trigotuc" };
+// De qué cámara salió el pollo (2026-11-02).
+// La cámara "trigotuc" está en la forrajería: en Forratuc se llama así (2026-11-02).
+const CAMARAS = { trigotuc: "Cámara Forrajería", "cañete": "Cámara Cañete" };
 
 // "Mercado Pago — op. 123"
 const detallePago = (p, medios) => {
@@ -135,6 +139,7 @@ const ESTILOS = `
   table.detalle th { border-bottom: 1.5px solid #000; font-size: 8pt; padding: 1.2mm 1.5mm; text-align: left; }
   table.detalle td { border-bottom: 1px solid #bbb; padding: 1.2mm 1.5mm; vertical-align: top; }
   .cant { width: 24mm; }
+  .cod { width: 16mm; }
   .num { text-align: right !important; white-space: nowrap; width: 30mm; }
   .gris { color: #555; font-size: 8pt; }
 
@@ -202,9 +207,18 @@ const copiaPresupuesto = (p, { medios, validezDias, depositos }) => {
     .map(
       (l) => `
       <tr>
+        <td class="cod">${escapeHtml(l.codigo || "")}</td>
         <td class="cant">${cantidadDeLinea(l)}</td>
         <td class="det">${escapeHtml(l.descripcion)}${
-          l.deposito ? `<br/><span class="gris">Sale de: ${escapeHtml(depositos[l.deposito] || l.deposito)}</span>` : ""
+          // Desde el 2026-11-02 el depósito es de toda la venta y va una vez arriba;
+          // los anteriores lo decían en cada renglón.
+          p.deposito
+            ? ""
+            : l.deposito
+            ? `<br/><span class="gris">Sale de: ${escapeHtml(depositos[l.deposito] || l.deposito)}</span>`
+            : l.camara
+            ? `<br/><span class="gris">Sale de: ${escapeHtml(CAMARAS[l.camara] || l.camara)}</span>`
+            : ""
         }</td>
         <td class="num">${pesos(l.precioUnitario)} <span class="gris">/ ${UNIDAD_PRECIO[l.unidadPrecio] || escapeHtml(l.unidadPrecio)}</span></td>
         <td class="num">${pesos(l.importe)}</td>
@@ -217,10 +231,12 @@ const copiaPresupuesto = (p, { medios, validezDias, depositos }) => {
     ${p.estado === "anulado" ? `<div class="sello">ANULADO</div>` : ""}
     ${encabezado("PRESUPUESTO", "", p)}
     ${bloqueCliente(p)}
+    ${p.deposito ? `<div class="condicion"><strong>Sale de:</strong> ${escapeHtml(depositos[p.deposito] || p.deposito)}</div>` : ""}
 
     <table class="detalle">
       <thead>
         <tr>
+          <th class="cod">CÓDIGO</th>
           <th class="cant">CANTIDAD</th>
           <th class="det">DETALLE</th>
           <th class="num">PRECIO UNIT.</th>
@@ -289,9 +305,10 @@ export const imprimirReciboForratuc = (recibo, { medios = [], cliente = null } =
 };
 
 // ── Rendición y cierre de caja (2026-10-29) ─────────────────────────────────
-// El formato de la planilla del cliente (Forratuc Ssitema.xlsx, punto 9): los
-// tres conteos de billetes lado a lado, ventas por rubro, cobranza, efectivo,
-// Mercado Pago, cuenta corriente, el detalle de comprobantes y el control.
+// La hoja que se rinde con la plata y los tickets (rehecha el 2026-11-02): los
+// tres conteos de billetes (inicio, lo que queda para el día siguiente, lo que
+// se rinde), ventas por rubro, la rendición del efectivo (inicio + efectivo −
+// caja del día siguiente), Mercado Pago con sus tickets y el detalle.
 
 const ESTILOS_CAJA = `
   @page { size: A4; margin: 0; }
@@ -367,7 +384,11 @@ export const imprimirCierreCajaForratuc = (caja, { operador = "" } = {}) => {
     </header>
 
     <div class="conteos">
-      ${caja.tiposConteo.map((t) => tablaConteo(t.etiqueta, caja.conteos[t.key], contado)).join("")}
+      ${["inicio", "cierre", "bolsa"]
+        .map((k) => caja.tiposConteo.find((t) => t.key === k))
+        .filter(Boolean)
+        .map((t) => tablaConteo(t.etiqueta, caja.conteos[t.key], contado || (t.key === "inicio" && caja.inicioDesde)))
+        .join("")}
     </div>
 
     <h2>VENTAS</h2>
@@ -381,15 +402,42 @@ export const imprimirCierreCajaForratuc = (caja, { operador = "" } = {}) => {
       ${fila("Cobros de cuenta corriente", caja.totalCobranza)}
     </table>
 
-    <h2>RENDICIÓN</h2>
+    <h2>RENDICIÓN DEL EFECTIVO</h2>
     <table class="resumen">
-      ${fila("Efectivo", contado ? caja.efectivoPlanilla : null, "(Caja inicio + Bolsa − Caja cierre)")}
-      ${fila("Efectivo según comprobantes", caja.medios.efectivo.total, `(ventas ${pesos(caja.medios.efectivo.ventas)} + cobranza ${pesos(caja.medios.efectivo.cobranza)})`)}
-      ${fila("Mercado Pago", caja.medios.mercadoPago.total, `(ventas ${pesos(caja.medios.mercadoPago.ventas)} + cobranza ${pesos(caja.medios.mercadoPago.cobranza)})`)}
-      ${caja.otros ? fila("Otros medios (anteriores)", caja.otros) : ""}
-      ${fila("Cuenta corriente", caja.cuentaCorriente)}
-      <tr><td><strong>Control</strong> <span class="formula">(efectivo contado − efectivo según comprobantes)</span></td><td class="num">${control}</td></tr>
+      ${fila("Caja inicio", caja.conteos.inicio.total)}
+      ${fila("+ Vendido en efectivo", caja.medios.efectivo.ventas)}
+      ${caja.medios.efectivo.cobranza ? fila("+ Cobranza en efectivo", caja.medios.efectivo.cobranza) : ""}
+      ${fila("− Gastos de caja", caja.totalGastos || 0)}
+      ${fila("− Caja para el día siguiente", contado ? caja.conteos.cierre.total : null)}
+      <tr><td><strong>A rendir</strong></td><td class="num"><strong>${caja.aRendir == null ? "" : pesos(caja.aRendir)}</strong></td></tr>
+      ${fila("Billetes que se rinden", contado ? caja.conteos.bolsa.total : null)}
+      <tr><td><strong>Control</strong> <span class="formula">(lo que se rinde − lo que hay que rendir)</span></td><td class="num">${control}</td></tr>
     </table>
+
+    ${(caja.gastos || []).length
+      ? `<h2>GASTOS DE CAJA</h2>
+        <table class="resumen">
+          ${caja.gastos.map((g) => fila(escapeHtml(g.concepto), g.importe)).join("")}
+          <tfoot>${fila("Total gastos", caja.totalGastos)}</tfoot>
+        </table>`
+      : ""}
+
+    <h2>MERCADO PAGO</h2>
+    <table class="resumen">
+      ${fila("Vendido por Mercado Pago", caja.medios.mercadoPago.ventas)}
+      ${caja.medios.mercadoPago.cobranza ? fila("Cobranza por Mercado Pago", caja.medios.mercadoPago.cobranza) : ""}
+      <tfoot>${fila("Total Mercado Pago", caja.medios.mercadoPago.total)}</tfoot>
+    </table>
+    ${(caja.ticketsMP || []).length
+      ? `<table style="margin-top:1.5mm">
+          <thead><tr><th>Ticket (comprobante)</th><th>Cliente</th><th>N° operación</th><th>Importe</th></tr></thead>
+          <tbody>${caja.ticketsMP
+            .map((t) => `<tr><td>${escapeHtml(t.numero)}</td><td>${escapeHtml(t.cliente || "")}</td><td>${escapeHtml(t.operacion || "")}</td><td class="num">${pesos(t.importe)}</td></tr>`)
+            .join("")}</tbody>
+        </table>`
+      : ""}
+    ${caja.otros ? `<table class="resumen" style="margin-top:1.5mm">${fila("Otros medios (anteriores)", caja.otros)}</table>` : ""}
+    <table class="resumen" style="margin-top:1.5mm">${fila("Cuenta corriente (no entra plata)", caja.cuentaCorriente)}</table>
 
     <h2>DETALLE DE COMPROBANTES</h2>
     <table>
@@ -422,4 +470,87 @@ export const imprimirCierreCajaForratuc = (caja, { operador = "" } = {}) => {
   </div>`;
 
   imprimirHtml(documento(`Cierre de caja ${caja.fecha}`, cuerpo, ESTILOS_CAJA));
+};
+
+// ── Planilla de conteo por depósito (2026-11-06) ────────────────────────────
+// Pedido del usuario: una hoja por depósito con lo que dice el sistema y
+// columnas en blanco para lo contado y la diferencia (+/−), para que el
+// personal haga el conteo a mano. Entran todos los productos activos, aunque
+// estén en cero (un cero que aparece en el depósito también es una diferencia).
+// Saltos de página: el margen va en @page (no en el padding de .hoja, que con
+// @page sin margen dejaba la 2ª hoja pegada al borde y cortada), el encabezado
+// de la tabla se repite en cada hoja y ninguna fila ni las firmas se parten.
+const ESTILOS_CONTEO = `${ESTILOS_CAJA}
+  @page { size: A4; margin: 10mm 12mm; }
+  .hoja { padding: 0; }
+  .hoja + .hoja { page-break-before: always; break-before: page; }
+  thead { display: table-header-group; }
+  tfoot { display: table-footer-group; }
+  tr, .firmas, .nota { page-break-inside: avoid; break-inside: avoid; }
+  .rubro { page-break-after: avoid; break-after: avoid; }
+  td { height: 7.5mm; }
+  .rubro td { background: #f3f3f3; font-weight: bold; font-size: 8.5pt; height: auto; }
+  .cod { width: 16mm; }
+  .uni { width: 16mm; }
+  .col { width: 22mm; }
+  .obs { width: 42mm; }
+  .nota { font-size: 8pt; color: #444; margin-top: 2mm; }
+  .gris { color: #555; font-size: 8pt; }
+`;
+
+// Las secciones salen de `seccionesConteo` (utils/forratuc/conteoStock.js), las
+// mismas que el Excel. Cada una lleva su subtotal: las unidades no se suman entre sí.
+const hojaConteo = (deposito, productos, { operador, ahora, extras = [] }) => {
+  const secciones = seccionesConteo(deposito, productos, extras);
+  const cuerpo = secciones
+    .map((sec) => `
+      <tr class="rubro"><td colspan="3">${escapeHtml(sec.titulo)}</td><td class="num">${fmt(sec.filas.reduce((x, p) => x + (p.sistema || 0), 0))}</td><td colspan="3"></td></tr>
+      ${sec.filas.length
+        ? sec.filas.map((p) => `<tr>
+          <td>${escapeHtml(p.codigo || "")}</td>
+          <td>${escapeHtml(p.etiqueta)}</td>
+          <td>${escapeHtml(p.unidad || "")}</td>
+          <td class="num">${fmt(p.sistema)}</td>
+          <td></td><td></td><td></td>
+        </tr>`).join("")
+        : `<tr><td></td><td class="gris">Sin stock en el sistema</td><td></td><td class="num">0</td><td></td><td></td><td></td></tr>`}`)
+    .join("");
+  // Tres renglones en blanco por si aparece algo que el sistema no tiene.
+  const enBlanco = "<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>".repeat(3);
+  return `
+  <div class="hoja">
+    <header>
+      <div>
+        <div class="marca">${escapeHtml(EMISOR.razonSocial)}</div>
+        <div class="titulo">CONTEO DE STOCK — ${escapeHtml(String(deposito.etiqueta).toUpperCase())}</div>
+      </div>
+      <div class="datos">
+        <div><strong>Impreso:</strong> ${escapeHtml(ahora)}</div>
+        <div><strong>Fecha del conteo:</strong> ____ / ____ / ______</div>
+        ${operador ? `<div><strong>Imprimió:</strong> ${escapeHtml(operador)}</div>` : ""}
+      </div>
+    </header>
+    <table>
+      <thead>
+        <tr>
+          <th class="cod">Código</th><th>Producto</th><th class="uni">Unidad</th>
+          <th class="col">Sistema</th><th class="col">Contado</th><th class="col">Diferencia (+/−)</th><th class="obs">Observaciones</th>
+        </tr>
+      </thead>
+      <tbody>${cuerpo}<tr class="rubro"><td colspan="7">Otros (lo que aparezca y no esté en la lista)</td></tr>${enBlanco}</tbody>
+    </table>
+    <div class="nota">Diferencia = Contado − Sistema: <strong>+</strong> sobra, <strong>−</strong> falta. "Sistema" es lo que había al imprimir.</div>
+    <div class="firmas">
+      <div class="firma">Contó (nombre y firma)</div>
+      <div class="firma">Controló (nombre y firma)</div>
+    </div>
+  </div>`;
+};
+
+// `stockAlimento` = `alimento` de GET /stock-forratuc; `depositos` = los que se imprimen (uno por hoja);
+// `extras` = { [deposito]: secciones } (ver hojaConteo).
+export const imprimirConteoDepositos = (stockAlimento, depositos, { operador = "", extras = {} } = {}) => {
+  const ahora = new Date().toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
+  const hojas = depositos.map((d) => hojaConteo(d, stockAlimento.productos || [], { operador, ahora, extras: extras[d.key] || [] })).join("");
+  imprimirHtml(documento(`Conteo de stock ${depositos.length === 1 ? depositos[0].etiqueta : ""}`, hojas, ESTILOS_CONTEO));
 };

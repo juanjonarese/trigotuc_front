@@ -325,6 +325,81 @@ export const anularIngresoAlimentoForratuc = async (id) => {
   return handleResponse(response);
 };
 
+// ── Productos de Forratuc (2026-11-02): alta con código. Los que ya existían se
+// cargan solos la primera vez que se piden.
+export const obtenerProductosForratuc = async ({ soloActivos = false } = {}) => {
+  const response = await fetch(`${API_URL}/productos-forratuc${soloActivos ? "?activos=1" : ""}`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+export const obtenerConstantesProductosForratuc = async () => {
+  const response = await fetch(`${API_URL}/productos-forratuc/constantes`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+// id null = alta. data: { codigo, nombre, activo [, rubro, unidadVenta] }
+// De un producto de la avícola, Forratuc solo manda { codigo, activo }.
+export const guardarProductoForratuc = async (id, data) => {
+  const response = await fetch(`${API_URL}/productos-forratuc${id ? `/${id}` : ""}`, {
+    method: id ? "PUT" : "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+// ── Planta de alimento de Forratuc (2026-11-04): materia prima → fórmula →
+// orden de elaboración (por tandas) → orden de envío a depósitos/galpones.
+const _planta = async (ruta, { method = "GET", body } = {}) => {
+  const response = await fetch(`${API_URL}/planta-forratuc${ruta}`, {
+    method, headers: getAuthHeaders(), ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+  return handleResponse(response);
+};
+export const obtenerConstantesPlanta = () => _planta("/constantes");
+export const obtenerStockPlanta = () => _planta("/stock");
+export const obtenerMateriasPrimas = () => _planta("/materias-primas");
+// id null = alta. { codigo, nombre, activo }
+export const guardarMateriaPrima = (id, data) =>
+  _planta(`/materias-primas${id ? `/${id}` : ""}`, { method: id ? "PUT" : "POST", body: data });
+export const obtenerMovimientosMateriaPrima = (id) => _planta(`/materias-primas/${id}/movimientos`);
+export const ingresarMateriaPrima = (data) => _planta("/materias-primas/ingresos", { method: "POST", body: data });
+export const anularIngresoMateriaPrima = (id) => _planta(`/materias-primas/ingresos/${id}`, { method: "DELETE" });
+export const obtenerFormulas = () => _planta("/formulas");
+// Una por alimento (la receta): { ingredientes: [{ materiaPrima, porcentaje }], observaciones }
+export const guardarFormula = (alimento, data) => _planta(`/formulas/${alimento}`, { method: "PUT", body: data });
+// Catálogo único de alimentos (2026-11-06): { nombre, activo }
+export const guardarAlimentoBalanceado = (id, data) =>
+  _planta(`/alimentos${id ? `/${id}` : ""}`, { method: id ? "PUT" : "POST", body: data });
+export const obtenerOrdenesElaboracion = () => _planta("/elaboracion");
+export const crearOrdenElaboracion = (data) => _planta("/elaboracion", { method: "POST", body: data });
+export const registrarTandaElaboracion = (id, data) => _planta(`/elaboracion/${id}/tandas`, { method: "POST", body: data });
+export const anularTandaElaboracion = (id, tandaId) => _planta(`/elaboracion/${id}/tandas/${tandaId}`, { method: "DELETE" });
+export const cerrarOrdenElaboracion = (id) => _planta(`/elaboracion/${id}/cerrar`, { method: "PATCH" });
+export const anularOrdenElaboracion = (id) => _planta(`/elaboracion/${id}/anular`, { method: "PATCH" });
+export const obtenerOrdenesEnvio = () => _planta("/envios");
+export const crearOrdenEnvio = (data) => _planta("/envios", { method: "POST", body: data });
+export const anularOrdenEnvio = (id) => _planta(`/envios/${id}/anular`, { method: "PATCH" });
+
+// ── Productos de la avícola (2026-11-04): pollo entero, trozado, huevo y
+// pollitos. Los administra la avícola; Forratuc los vende con su código.
+export const obtenerProductosAvicola = async () => {
+  const response = await fetch(`${API_URL}/productos-avicola`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+export const obtenerConstantesProductosAvicola = async () => {
+  const response = await fetch(`${API_URL}/productos-avicola/constantes`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+// id null = alta: { rubro, codigo, nombre, especie, calibre | tipo, claseTrozado | tiposStock }.
+// Edición: { codigo, nombre, activo [, tiposStock] }.
+export const guardarProductoAvicola = async (id, data) => {
+  const response = await fetch(`${API_URL}/productos-avicola${id ? `/${id}` : ""}`, {
+    method: id ? "PUT" : "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
 // ── Listas de precios de Forratuc (2026-10-29): de precios o % de descuento sobre otra.
 export const obtenerCatalogoPreciosForratuc = async () => {
   const response = await fetch(`${API_URL}/listas-precios-forratuc/catalogo`, { headers: getAuthHeaders() });
@@ -1238,6 +1313,15 @@ export const crearCargaIncubacion = async (data) => {
   return handleResponse(response);
 };
 
+// Corrige el día de la carga ENTERA de `fecha` ("AAAA-MM-DD") a `fechaNueva`
+// (2026-11-04: se cargó tarde). Devuelve { fecha, fechaNueva, tandas, planteles }.
+export const corregirFechaCargaIncubacion = async (fecha, fechaNueva) => {
+  const response = await fetch(`${API_URL}/incubacion/cargas/${fecha}`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify({ fechaNueva }),
+  });
+  return handleResponse(response);
+};
+
 export const registrarTransferenciaNacedora = async (id, data) => {
   const response = await fetch(`${API_URL}/incubacion/tandas/${id}/transferencia`, {
     method: "PATCH", headers: getAuthHeaders(), body: JSON.stringify(data),
@@ -1340,11 +1424,28 @@ export const obtenerPlanPollitos = async (filtros = {}) => {
   return handleResponse(response);
 };
 
-// Mover una carga de lunes/jueves a otro día ("AAAA-MM-DD"), o volverla a su
-// día habitual con `fecha: null`. Se lleva sus reservas.
+// Mover una carga futura a otro día ("AAAA-MM-DD"; desde el 2026-11-04 a
+// cualquiera), o volverla a su día habitual con `fecha: null` (también repone una
+// eliminada). Se lleva sus reservas. `fechaHabitual` = lunes/jueves o `extra:<id>`.
 export const moverCargaIncubadora = async (fechaHabitual, fecha) => {
-  const response = await fetch(`${API_URL}/reservas-pollitos/plan/cargas/${fechaHabitual}`, {
+  const response = await fetch(`${API_URL}/reservas-pollitos/plan/cargas/${encodeURIComponent(fechaHabitual)}`, {
     method: "PUT", headers: getAuthHeaders(), body: JSON.stringify({ fecha }),
+  });
+  return handleResponse(response);
+};
+
+// Sacar una carga futura del plan (2026-11-04). Devuelve { reservasSinCarga }.
+export const eliminarCargaIncubadora = async (fechaHabitual) => {
+  const response = await fetch(`${API_URL}/reservas-pollitos/plan/cargas/${encodeURIComponent(fechaHabitual)}`, {
+    method: "DELETE", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+// Agregar una carga tentativa en un día futuro (2026-11-04).
+export const agregarCargaIncubadora = async (fecha) => {
+  const response = await fetch(`${API_URL}/reservas-pollitos/plan/cargas`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify({ fecha }),
   });
   return handleResponse(response);
 };

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "../css/Login.css";
 import Footer from "../components/Footer";
+import BannerPrueba from "../components/BannerPrueba";
 import { inicioEmpresa } from "../utils/empresas";
 
 const LoginScreen = () => {
@@ -88,6 +89,7 @@ const LoginScreen = () => {
 
   return (
     <div className="login-wrapper d-flex flex-column" style={{ minHeight: '100vh' }}>
+      <BannerPrueba />
       <div className="container flex-grow-1">
         <div className="row justify-content-center align-items-center min-vh-100">
           <div className="col-12 col-md-6 col-lg-4">

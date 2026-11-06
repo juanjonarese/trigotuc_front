@@ -311,7 +311,7 @@ const AlimentoEnviosPage = () => {
                               disabled={saving}
                             >
                               <option value="">— Elegí —</option>
-                              {tipos.map((t) => (
+                              {tipos.filter((t) => t.activo !== false || t.key === l.tipo).map((t) => (
                                 <option key={t.key} value={t.key}>{t.etiqueta}</option>
                               ))}
                             </select>

@@ -686,7 +686,7 @@ const AjusteModal = ({ inicial, silos, tipos, stock, onClose, onHecho }) => {
                       disabled={saving || edicion}
                     >
                       <option value="">— Elegí —</option>
-                      {tipos.map((t) => (
+                      {tipos.filter((t) => t.activo !== false || t.key === tipo).map((t) => (
                         <option key={t.key} value={t.key}>{t.etiqueta}</option>
                       ))}
                     </select>

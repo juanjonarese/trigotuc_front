@@ -60,6 +60,7 @@ export const TIPOS_HUEVO = [
   { key: "apiSucio",       label: "API sucio (cinta y piso)", corto: "API sucio",  ayuda: "Incubable — sucio, de la cinta o del piso",   clase: "text-success", icono: "bi-thermometer-half", incubable: true },
   { key: "consumo",        label: "Consumo",          corto: "Consumo",     ayuda: "No incubable, va a venta",                clase: "text-primary", icono: "bi-egg",              incubable: false },
   { key: "dobleYema",      label: "Doble yema",       corto: "D.yema",      ayuda: "No incubable, va a venta",                clase: "text-warning", icono: "bi-egg-fried",        incubable: false },
+  { key: "bb",             label: "BB",               corto: "BB",          ayuda: "Huevo chico, no incubable, va a venta",   clase: "text-info",    icono: "bi-egg",              incubable: false },
 ];
 
 export const TIPOS_HUEVO_KEYS = TIPOS_HUEVO.map((t) => t.key);

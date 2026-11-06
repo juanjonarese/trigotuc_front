@@ -3,9 +3,12 @@ import Layout from "../components/Layout";
 import BotonExcel from "../components/BotonExcel";
 import BuscadorCliente from "../components/BuscadorCliente";
 import PlanPorDestino from "../components/PlanPorDestino";
+import InformeClientesPlan from "../components/InformeClientesPlan";
 import {
   obtenerPlanPollitos,
   moverCargaIncubadora,
+  eliminarCargaIncubadora,
+  agregarCargaIncubadora,
   obtenerClientes,
   crearReservaPollitos,
   eliminarReservaPollitos,
@@ -13,7 +16,7 @@ import {
   crearOrdenCargaPollitos,
   enviarReservaAGranja,
 } from "../services/api";
-import { formatearFechaLocal } from "../utils/dateUtils";
+import { formatearFechaLocal, obtenerFechaHoy } from "../utils/dateUtils";
 import {
   formatearNumero,
   GRANJAS,
@@ -228,8 +231,12 @@ const Pastilla = ({ fila, onAbrir }) => {
 // ── La carga de lunes/jueves: saldo de huevos y mover el día ────────────────
 // Solo para las cargas que todavía no se hicieron. Es lo que en la planilla P7
 // del cliente es la columna "Saldo Huevos" + el "NO se puede".
-const BloqueCarga = ({ fila, onMover }) => {
+// Desde el 2026-11-04 (observación del cliente) la carga futura se mueve a
+// CUALQUIER día, se elimina o se agrega una tentativa; el saldo de huevos la
+// sigue controlando igual.
+const BloqueCarga = ({ fila, onMover, onEliminar }) => {
   const [moviendo, setMoviendo] = useState(false);
+  const [otroDia, setOtroDia] = useState("");
   const c = fila.carga;
   if (!c) return null;
   const noAlcanza = c.estado === "no_alcanza";
@@ -238,6 +245,14 @@ const BloqueCarga = ({ fila, onMover }) => {
     setMoviendo(true);
     try {
       await onMover(c.fechaHabitual, fecha);
+    } finally {
+      setMoviendo(false);
+    }
+  };
+  const eliminar = async () => {
+    setMoviendo(true);
+    try {
+      await onEliminar(c);
     } finally {
       setMoviendo(false);
     }
@@ -275,6 +290,7 @@ const BloqueCarga = ({ fila, onMover }) => {
           Día de carga: <strong>{textoClave(c.claveIngreso)}</strong>
           {c.motivo === "feriado" && ` (el ${textoClave(c.fechaHabitual)} es feriado: ${c.feriadoHabitual})`}
           {c.motivo === "manual" && ` (movida; le tocaba el ${textoClave(c.fechaHabitual)})`}
+          {c.motivo === "agregada" && " (agregada a mano)"}
         </span>
         <div className="btn-group btn-group-sm ms-auto">
           <button
@@ -307,11 +323,41 @@ const BloqueCarga = ({ fila, onMover }) => {
           </button>
         )}
       </div>
+
+      {/* A cualquier día futuro, o sacarla (2026-11-04). */}
+      <div className="d-flex flex-wrap align-items-center gap-2 mt-2">
+        <span className="text-muted">Mover al</span>
+        <input
+          type="date"
+          className="form-control form-control-sm w-auto"
+          min={obtenerFechaHoy()}
+          value={otroDia}
+          onChange={(e) => setOtroDia(e.target.value)}
+          disabled={moviendo}
+        />
+        <button
+          type="button"
+          className="btn btn-sm btn-outline-primary"
+          disabled={moviendo || !otroDia || otroDia === c.claveIngreso}
+          onClick={() => mover(otroDia)}
+        >
+          Mover
+        </button>
+        <button
+          type="button"
+          className="btn btn-sm btn-outline-danger ms-auto"
+          disabled={moviendo}
+          onClick={eliminar}
+          title="Ese día no se carga: el huevo queda para la carga siguiente"
+        >
+          <i className="bi bi-trash me-1"></i>Eliminar carga
+        </button>
+      </div>
     </div>
   );
 };
 
-const CargaModal = ({ fila, destinos, clientes, onCerrar, onEmitir, onEnviarGranja, onBorrar, onPasar, onAgregada, onMover }) => {
+const CargaModal = ({ fila, destinos, clientes, onCerrar, onEmitir, onEnviarGranja, onBorrar, onPasar, onAgregada, onMover, onEliminarCarga }) => {
   const [form, setForm] = useState(FORM_VACIO);
   const [saving, setSaving] = useState(false);
   // La línea que se está pasando a otra carga, y a cuál.
@@ -467,7 +513,7 @@ const CargaModal = ({ fila, destinos, clientes, onCerrar, onEmitir, onEnviarGran
                 </div>
               )}
 
-              {(esProy || noAlcanza) && <BloqueCarga fila={fila} onMover={onMover} />}
+              {(esProy || noAlcanza) && <BloqueCarga fila={fila} onMover={onMover} onEliminar={onEliminarCarga} />}
 
               {sinCarga && (
                 <div className="alert alert-danger py-2 small">
@@ -990,6 +1036,7 @@ const PlanPollitosPage = () => {
   const [dias, setDias] = useState(VENTANA_POR_DEFECTO);
   const [mes, setMes] = useState(null); // { anio, mes } — se fija al cargar
   const [abierta, setAbierta] = useState(null); // clave de la carga en el modal
+  const [informeClientes, setInformeClientes] = useState(false);
   // Almanaque o lista. Se recuerda en el navegador: es preferencia de quien mira.
   const [vista, setVista] = useState(() => {
     try {
@@ -1309,6 +1356,67 @@ const PlanPollitosPage = () => {
     }
   };
 
+  // Sacar una carga futura (2026-11-04): ese día no se carga. Sus reservas
+  // quedan en su día como "sin carga", para pasarlas a otra.
+  const eliminarCarga = async (c) => {
+    const { isConfirmed } = await Swal.fire({
+      icon: "warning",
+      title: `¿Eliminar la carga del ${textoClave(c.claveIngreso)}?`,
+      html:
+        "Ese día no se carga y ese nacimiento desaparece del plan; el huevo queda para la carga siguiente." +
+        (c.motivo === "agregada" ? "" : "<br/><span class='small text-muted'>Se puede volver a poner desde la lista de cargas eliminadas.</span>"),
+      showCancelButton: true,
+      confirmButtonText: "Sí, eliminar",
+      cancelButtonText: "Volver",
+      confirmButtonColor: "#dc3545",
+    });
+    if (!isConfirmed) return;
+    try {
+      const r = await eliminarCargaIncubadora(c.fechaHabitual);
+      setAbierta(null);
+      await cargar({ silencioso: true });
+      Swal.fire({
+        icon: r.reservasSinCarga ? "info" : "success",
+        title: "Carga eliminada",
+        text: r.reservasSinCarga
+          ? `Quedan ${r.reservasSinCarga} reserva(s) sin carga en ese día: pasalas a otra carga.`
+          : undefined,
+        timer: r.reservasSinCarga ? undefined : 1600,
+        showConfirmButton: Boolean(r.reservasSinCarga),
+      });
+    } catch (err) {
+      Swal.fire("No se pudo eliminar", err.message || "Error al eliminar la carga.", "error");
+    }
+  };
+
+  // Agregar una carga tentativa en un día futuro (2026-11-04). El plan la
+  // controla con el saldo de huevos como a las sugeridas.
+  const agregarCarga = async () => {
+    const { isConfirmed, value } = await Swal.fire({
+      title: "Agregar una carga",
+      html: "<span class='small text-muted'>Día en que se cargaría la incubadora. El sistema controla si alcanza el huevo.</span>",
+      input: "date",
+      inputAttributes: { min: obtenerFechaHoy() },
+      showCancelButton: true,
+      confirmButtonText: "Agregar",
+      cancelButtonText: "Volver",
+      inputValidator: (v) => (!v ? "Elegí el día" : undefined),
+    });
+    if (!isConfirmed) return;
+    try {
+      const r = await agregarCargaIncubadora(value);
+      const nuevo = await cargar();
+      const f = nuevo?.nacimientos?.find((x) => x.carga?.fechaHabitual === r.fechaHabitual);
+      if (f) {
+        const pc = partesClave(f.claveNacimiento);
+        setMes({ anio: pc.anio, mes: pc.mes });
+        setAbierta(f.clave);
+      }
+    } catch (err) {
+      Swal.fire("No se pudo agregar", err.message || "Error al agregar la carga.", "error");
+    }
+  };
+
   // Excel: una fila por línea del reparto, con la carga a la que pertenece.
   const exportarExcel = () =>
     exportarTablaExcel({
@@ -1383,6 +1491,16 @@ const PlanPollitosPage = () => {
               ))}
             </select>
             <BotonExcel onClick={exportarExcel} disabled={filas.length === 0} titulo="Descargar el plan" />
+            {/* Carga tentativa en un día futuro (2026-11-04, observación del cliente). */}
+            <button className="btn btn-outline-primary btn-sm" onClick={agregarCarga} disabled={loading}
+              title="Agregar una carga en un día que el sistema no sugiere">
+              <i className="bi bi-plus-lg me-1"></i>Agregar carga
+            </button>
+            {/* Informe a clientes por WhatsApp (2026-11-04, observación del cliente). */}
+            <button className="btn btn-outline-success btn-sm" onClick={() => setInformeClientes(true)}
+              disabled={filas.length === 0} title="PDF de sus reservas a cada cliente, por WhatsApp">
+              <i className="bi bi-whatsapp me-1"></i>Informe a clientes
+            </button>
             <button className="btn btn-outline-secondary btn-sm" onClick={() => cargar()} disabled={loading}>
               <i className="bi bi-arrow-clockwise me-1"></i>Actualizar
             </button>
@@ -1514,6 +1632,25 @@ const PlanPollitosPage = () => {
                   </div>
                 );
               })()}
+
+            {/* Las sugeridas que se sacaron (2026-11-04): para volverlas a poner. */}
+            {plan?.cargasEliminadas?.length > 0 && (
+              <div className="alert alert-secondary py-2 small d-flex flex-wrap align-items-center gap-2">
+                <span>
+                  <i className="bi bi-calendar-x me-1"></i>
+                  Cargas eliminadas del plan:
+                </span>
+                {plan.cargasEliminadas.map((c) => (
+                  <span key={c.fechaHabitual} className="badge text-bg-light border d-inline-flex align-items-center gap-1">
+                    {textoClave(c.claveIngreso)}
+                    <button type="button" className="btn btn-link btn-sm p-0 ms-1"
+                      onClick={() => moverCarga(c.fechaHabitual, null)} title="Volver a ponerla en su día">
+                      volver a poner
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
 
             {resumen?.sobrevendidas > 0 && (
               <div className="alert alert-warning py-2 small">
@@ -1756,8 +1893,10 @@ const PlanPollitosPage = () => {
           onBorrar={borrarLinea}
           onAgregada={() => cargar({ silencioso: true })}
           onMover={moverCarga}
+          onEliminarCarga={eliminarCarga}
         />
       )}
+      {informeClientes && <InformeClientesPlan filas={filas} onClose={() => setInformeClientes(false)} />}
     </Layout>
   );
 };

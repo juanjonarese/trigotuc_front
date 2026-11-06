@@ -11,11 +11,13 @@ import { obtenerCajaForratuc, guardarCierreCajaForratuc } from "../../services/a
  * planilla del cliente: la hoja que el local entrega con la plata y los
  * comprobantes del día.
  *
- * A mano se cargan solo los BILLETES (caja de inicio, bolsa y caja de cierre).
- * Ventas por rubro, cobranza, Mercado Pago, cuenta corriente, el efectivo y el
- * control los calcula el back de los presupuestos y cobros del día
- * (GET /caja-forratuc/:fecha). ⚠️ La fórmula del efectivo vive SOLO en el back
- * (`efectivoDeLaPlanilla`): acá se muestra la que devuelve al guardar.
+ * Desde el 2026-11-02 (pedido del usuario): la caja INICIO viene sola del
+ * último cierre (lo que se dejó para el día siguiente); a mano se cuentan la
+ * caja para el día siguiente y los billetes que se rinden. El efectivo y el
+ * Mercado Pago del día, lo que hay que rendir (inicio + efectivo − caja del día
+ * siguiente) y el control los calcula el back (GET /caja-forratuc/:fecha).
+ * ⚠️ La fórmula es la del back (`efectivoARendir`); acá se repite SOLO para
+ * mostrarla en vivo mientras se tipean los billetes (el guardado usa la del back).
  */
 
 const pesos = (n) =>
@@ -35,7 +37,12 @@ const conteosDeCaja = (caja) =>
   Object.fromEntries(
     caja.tiposConteo.map((t) => [
       t.key,
-      Object.fromEntries(caja.conteos[t.key].filas.map((f) => [f.billete, caja.guardado && f.cantidad ? String(f.cantidad) : ""])),
+      Object.fromEntries(
+        caja.conteos[t.key].filas.map((f) => [
+          f.billete,
+          (caja.guardado || (t.key === "inicio" && caja.inicioDesde)) && f.cantidad ? String(f.cantidad) : "",
+        ])
+      ),
     ])
   );
 
@@ -45,6 +52,8 @@ const ForratucCajaPage = () => {
   const [caja, setCaja] = useState(null);
   const [conteos, setConteos] = useState({});
   const [observaciones, setObservaciones] = useState("");
+  // Gastos pagados con la plata de la caja (2026-11-02): bajan lo que se rinde.
+  const [gastos, setGastos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sinGuardar, setSinGuardar] = useState(false);
@@ -56,6 +65,7 @@ const ForratucCajaPage = () => {
       setCaja(c);
       setConteos(conteosDeCaja(c));
       setObservaciones(c.observaciones || "");
+      setGastos((c.gastos || []).map((g) => ({ concepto: g.concepto, importe: String(g.importe) })));
       setSinGuardar(false);
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudo cargar la caja.", "error");
@@ -71,6 +81,18 @@ const ForratucCajaPage = () => {
   };
   const subtotalDe = (tipo) =>
     (caja?.billetes || []).reduce((a, b) => a + b * (Number(conteos[tipo]?.[b]) || 0), 0);
+  // La rendición con lo que se está tipeando, sin esperar a guardar.
+  const inicioVivo = subtotalDe("inicio");
+  const cierreVivo = subtotalDe("cierre");
+  const bolsaVivo = subtotalDe("bolsa");
+  const gastosVivo = gastos.reduce((a, g) => a + (Number(g.importe) || 0), 0);
+  const aRendirVivo = caja ? Math.round((inicioVivo + caja.medios.efectivo.total - gastosVivo - cierreVivo) * 100) / 100 : null;
+  const setGasto = (i, cambios) => {
+    setGastos((gs) => gs.map((g, k) => (k === i ? { ...g, ...cambios } : g)));
+    setSinGuardar(true);
+  };
+  const contoAlgo = Boolean(caja) && (caja.guardado || ["cierre", "bolsa"].some((t) => Object.values(conteos[t] || {}).some((v) => v !== "")));
+  const controlVivo = contoAlgo ? Math.round((bolsaVivo - aRendirVivo) * 100) / 100 : null;
 
   const guardar = async () => {
     for (const t of caja.tiposConteo)
@@ -91,9 +113,13 @@ const ForratucCajaPage = () => {
           ])
         ),
         observaciones: observaciones.trim(),
+        gastos: gastos
+          .filter((g) => g.concepto.trim() || g.importe !== "")
+          .map((g) => ({ concepto: g.concepto.trim(), importe: Number(g.importe) })),
       });
       setCaja(c);
       setConteos(conteosDeCaja(c));
+      setGastos((c.gastos || []).map((g) => ({ concepto: g.concepto, importe: String(g.importe) })));
       setSinGuardar(false);
       Swal.fire({ icon: "success", title: "Cierre guardado", timer: 1300, showConfirmButton: false });
     } catch (err) {
@@ -146,17 +172,24 @@ const ForratucCajaPage = () => {
             ) : (
               <div className="alert alert-light border py-2 small">
                 <i className="bi bi-info-circle me-1"></i>
-                Cargá los billetes de la caja de inicio, la bolsa y la caja de cierre, y guardá: el efectivo y el control
-                salen de ahí.
+                Contá los billetes que quedan para el día siguiente y los que se rinden, y guardá: lo que hay que
+                rendir y el control salen de ahí.
               </div>
             )}
 
             {/* ── Billetes ── */}
             <div className="row g-3 mb-3">
-              {caja.tiposConteo.map((t) => (
+              {["inicio", "cierre", "bolsa"].map((k) => caja.tiposConteo.find((t) => t.key === k)).filter(Boolean).map((t) => {
+                const soloLectura = t.key === "inicio" && Boolean(caja.inicioDesde);
+                return (
                 <div key={t.key} className="col-12 col-md-4">
                   <div className="card border-0 shadow-sm h-100">
-                    <div className="card-header bg-white fw-semibold">{t.etiqueta}</div>
+                    <div className="card-header bg-white fw-semibold">
+                      {t.etiqueta}
+                      {soloLectura && (
+                        <div className="small text-muted fw-normal">Lo que quedó en el cierre del {caja.inicioDesde.split("-").reverse().join("/")}</div>
+                      )}
+                    </div>
                     <div className="card-body p-2">
                       <table className="table table-sm align-middle mb-0">
                         <thead className="table-light">
@@ -167,7 +200,8 @@ const ForratucCajaPage = () => {
                             <tr key={b}>
                               <td className="text-nowrap">$ {fmt(b)}</td>
                               <td style={{ width: 100 }}>
-                                <input type="number" min="0" step="1" className="form-control form-control-sm"
+                                <input type="number" min="0" step="1" className={`form-control form-control-sm ${soloLectura ? "bg-light" : ""}`}
+                                  readOnly={soloLectura} tabIndex={soloLectura ? -1 : undefined}
                                   value={conteos[t.key]?.[b] ?? ""} onChange={(e) => setCantidad(t.key, b, e.target.value)} />
                               </td>
                               <td className="text-end text-nowrap small">{pesos(b * (Number(conteos[t.key]?.[b]) || 0))}</td>
@@ -181,45 +215,35 @@ const ForratucCajaPage = () => {
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="row g-3">
-              {/* ── Ventas y cobranza ── */}
-              <div className="col-12 col-lg-5">
-                <div className="card border-0 shadow-sm mb-3">
-                  <div className="card-header bg-white fw-semibold">Ventas</div>
-                  <table className="table table-sm mb-0">
-                    <tbody>
-                      {caja.ventas.map((v) => <Fila key={v.key} texto={v.etiqueta} importe={v.importe} />)}
-                      <Fila texto="Total ventas" importe={caja.totalVentas} fuerte />
-                      <Fila texto="Cobranza" importe={caja.totalCobranza} nota="cobros de cuenta corriente" />
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* ── Rendición ── */}
+              {/* Ventas por rubro y detalle de comprobantes: sacados de la pantalla (2026-11-02, pedido del usuario). */}
+              <div className="col-12 col-lg-6">
+                {/* ── Rendición: inicio + efectivo del día − caja del día siguiente ── */}
                 <div className="card border-0 shadow-sm">
-                  <div className="card-header bg-white fw-semibold">Rendición</div>
+                  <div className="card-header bg-white fw-semibold">Rendición del efectivo</div>
                   <table className="table table-sm mb-0">
                     <tbody>
-                      <Fila texto="Efectivo" importe={caja.efectivoPlanilla} nota="Caja inicio + Bolsa − Caja cierre" fuerte />
-                      <Fila texto="Efectivo según comprobantes" importe={caja.medios.efectivo.total}
-                        nota={`ventas ${pesos(caja.medios.efectivo.ventas)} + cobranza ${pesos(caja.medios.efectivo.cobranza)}`} />
-                      <Fila texto="Mercado Pago" importe={caja.medios.mercadoPago.total}
-                        nota={`ventas ${pesos(caja.medios.mercadoPago.ventas)} + cobranza ${pesos(caja.medios.mercadoPago.cobranza)}`} />
-                      {caja.otros > 0 && <Fila texto="Otros medios (anteriores)" importe={caja.otros} />}
-                      <Fila texto="Cuenta corriente" importe={caja.cuentaCorriente} />
+                      <Fila texto="Caja inicio" importe={inicioVivo} />
+                      <Fila texto="+ Vendido en efectivo" importe={caja.medios.efectivo.ventas} />
+                      {caja.medios.efectivo.cobranza > 0 && <Fila texto="+ Cobranza en efectivo" importe={caja.medios.efectivo.cobranza} />}
+                      <Fila texto="− Gastos de caja" importe={gastosVivo} />
+                      <Fila texto="− Caja para el día siguiente" importe={cierreVivo} />
+                      <Fila texto="A rendir" importe={aRendirVivo} fuerte />
+                      <Fila texto="Billetes que se rinden" importe={bolsaVivo} />
                       <tr>
                         <td className="fw-semibold">Control</td>
                         <td className="text-end text-nowrap">
-                          {caja.control == null ? (
+                          {controlVivo == null ? (
                             <span className="text-muted small">falta el conteo</span>
-                          ) : caja.control === 0 ? (
+                          ) : controlVivo === 0 ? (
                             <span className="badge bg-success">Cierra</span>
                           ) : (
-                            <span className={`badge ${caja.control > 0 ? "bg-warning text-dark" : "bg-danger"}`}>
-                              {caja.control > 0 ? "Sobran" : "Faltan"} {pesos(Math.abs(caja.control))}
+                            <span className={`badge ${controlVivo > 0 ? "bg-warning text-dark" : "bg-danger"}`}>
+                              {controlVivo > 0 ? "Sobran" : "Faltan"} {pesos(Math.abs(controlVivo))}
                             </span>
                           )}
                         </td>
@@ -227,40 +251,64 @@ const ForratucCajaPage = () => {
                     </tbody>
                   </table>
                 </div>
+              </div>
+
+              {/* ── Mercado Pago: se rinde con los tickets ── */}
+              <div className="col-12 col-lg-6">
+                {/* ── Gastos de caja: lo que se pagó con la plata de la caja ── */}
+                <div className="card border-0 shadow-sm mb-3">
+                  <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+                    Gastos de caja
+                    <button type="button" className="btn btn-sm btn-outline-primary"
+                      onClick={() => { setGastos((gs) => [...gs, { concepto: "", importe: "" }]); setSinGuardar(true); }}>
+                      <i className="bi bi-plus-lg me-1"></i>Agregar gasto
+                    </button>
+                  </div>
+                  <div className="card-body p-2">
+                    {gastos.length === 0 ? (
+                      <div className="small text-muted px-1">Sin gastos en el día.</div>
+                    ) : (
+                      <>
+                        {gastos.map((g, i) => (
+                          <div key={i} className="d-flex gap-2 mb-2">
+                            <input className="form-control form-control-sm" placeholder="En qué se gastó (ej. lavandina)"
+                              value={g.concepto} onChange={(e) => setGasto(i, { concepto: e.target.value })} />
+                            <div className="input-group input-group-sm" style={{ maxWidth: 160 }}>
+                              <span className="input-group-text">$</span>
+                              <input type="number" min="0" step="0.01" className="form-control text-end sin-flechas"
+                                value={g.importe} onChange={(e) => setGasto(i, { importe: e.target.value })} />
+                            </div>
+                            <button type="button" className="btn btn-sm btn-outline-danger border-0" title="Quitar"
+                              onClick={() => { setGastos((gs) => gs.filter((_, k) => k !== i)); setSinGuardar(true); }}>
+                              <i className="bi bi-x-lg"></i>
+                            </button>
+                          </div>
+                        ))}
+                        <div className="d-flex justify-content-between small fw-semibold px-1">
+                          <span>Total gastos</span><span>{pesos(gastosVivo)}</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div className="card border-0 shadow-sm">
+                  <div className="card-header bg-white fw-semibold">Mercado Pago y cuenta corriente</div>
+                  <table className="table table-sm mb-0">
+                    <tbody>
+                      <Fila texto="Vendido por Mercado Pago" importe={caja.medios.mercadoPago.ventas} />
+                      {caja.medios.mercadoPago.cobranza > 0 && <Fila texto="Cobranza por Mercado Pago" importe={caja.medios.mercadoPago.cobranza} />}
+                      <Fila texto="Total Mercado Pago" importe={caja.medios.mercadoPago.total}
+                        nota={`${caja.ticketsMP.length} ${caja.ticketsMP.length === 1 ? "ticket" : "tickets"} para rendir`} fuerte />
+                      {caja.otros > 0 && <Fila texto="Otros medios (anteriores)" importe={caja.otros} />}
+                      <Fila texto="Cuenta corriente (no entra plata)" importe={caja.cuentaCorriente} />
+                    </tbody>
+                  </table>
+                </div>
 
                 <label className="form-label fw-semibold small mt-3 mb-1">Observaciones</label>
                 <textarea className="form-control" rows={2} value={observaciones}
                   onChange={(e) => { setObservaciones(e.target.value); setSinGuardar(true); }} />
-              </div>
-
-              {/* ── Detalle de comprobantes ── */}
-              <div className="col-12 col-lg-7">
-                <div className="card border-0 shadow-sm">
-                  <div className="card-header bg-white fw-semibold">Detalle de comprobantes</div>
-                  <div className="table-responsive">
-                    <table className="table table-sm table-hover align-middle mb-0">
-                      <thead className="table-light">
-                        <tr><th>Comprobante</th><th>Cliente</th><th>Forma de pago</th><th>Operador</th><th className="text-end">Importe</th></tr>
-                      </thead>
-                      <tbody>
-                        {caja.detalle.length === 0 ? (
-                          <tr><td colSpan={5} className="text-muted text-center py-3">Sin comprobantes en el día.</td></tr>
-                        ) : caja.detalle.map((d) => (
-                          <tr key={`${d.tipo}-${d.numero}`} className={d.anulado ? "text-muted" : ""}>
-                            <td className="text-nowrap">
-                              {d.tipo === "cobro" ? "Recibo" : "Presupuesto"} {d.numero}
-                              {d.anulado && <span className="badge bg-danger ms-1">Anulado</span>}
-                            </td>
-                            <td>{d.cliente}</td>
-                            <td className="small">{d.forma}</td>
-                            <td className="small">{d.operador || "—"}</td>
-                            <td className={`text-end text-nowrap ${d.anulado ? "text-decoration-line-through" : ""}`}>{pesos(d.importe)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
               </div>
             </div>
           </>
