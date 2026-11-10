@@ -318,7 +318,10 @@ const ForratucPresupuestosPage = () => {
     if (r.producto) acc[claveStock(r)] = (acc[claveStock(r)] || 0) + (Number(r.cantidad) || 0);
     return acc;
   }, {});
-  const excedido = (r) => r.producto && (pedidoPorStock[claveStock(r)] || 0) > (disponibleDe(r) ?? 0);
+  const pasaDeLoQueHay = (r) => r.producto && (pedidoPorStock[claveStock(r)] || 0) > (disponibleDe(r) ?? 0);
+  // El alimento balanceado puede quedar en negativo (2026-11-10): se avisa, no se frena.
+  const quedaNegativo = (r) => productoPorClave[r.producto]?.rubro === "alimento" && pasaDeLoQueHay(r);
+  const excedido = (r) => productoPorClave[r.producto]?.rubro !== "alimento" && pasaDeLoQueHay(r);
 
   const limpiar = () => {
     setFecha(obtenerFechaHoy());
@@ -604,6 +607,9 @@ const ForratucPresupuestosPage = () => {
                                   onChange={(e) => setRenglon(r.id, { cantidad: e.target.value })} />
                                 {p && <span className="input-group-text">{unidadCantidad(p)}</span>}
                               </div>
+                              {quedaNegativo(r) && (
+                                <div className="small text-warning-emphasis mt-1">El depósito queda en negativo.</div>
+                              )}
                             </td>
                             <td>
                               {p?.rubro === "pollo" ? (
