@@ -143,13 +143,17 @@ const ForratucPlantaPage = () => {
   const set = (cambios) => setModal((m) => ({ ...m, ...cambios }));
 
   // Lo que consume una tanda (o una orden) de N bolsas, contra el stock.
-  const consumoDe = (kgPorBolsa, ingredientes, bolsas) =>
-    (ingredientes || []).map((i) => {
+  // La fórmula trae kg por bachada (el % se deriva); la orden ya trae el %.
+  const consumoDe = (kgPorBolsa, ingredientes, bolsas) => {
+    const bachada = (ingredientes || []).reduce((a, i) => a + (i.kg || 0), 0);
+    return (ingredientes || []).map((i) => {
       const id = String(i.materiaPrima?._id || i.materiaPrima);
-      const kg = Math.round(((Number(bolsas) || 0) * kgPorBolsa * i.porcentaje) / 100 * 100) / 100;
+      const pct = i.porcentaje ?? (bachada > 0 ? (i.kg / bachada) * 100 : 0);
+      const kg = Math.round(((Number(bolsas) || 0) * kgPorBolsa * pct) / 100 * 100) / 100;
       const hay = mpPorId.get(id)?.kg || 0;
       return { id, nombre: i.nombre || mpPorId.get(id)?.nombre || "?", kg, hay, falta: kg > hay };
     });
+  };
 
   const TablaConsumo = ({ filas }) => (
     <table className="table table-sm small mb-0">
@@ -358,7 +362,8 @@ const ForratucPlantaPage = () => {
                   <div className="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
                     <div className="small text-muted" style={{ maxWidth: 720 }}>
                       El <strong>alimento</strong> es la receta: su nombre es el mismo en toda la app (planta, stock, ventas
-                      y envío a granjas) y se cambia acá. Lleva su fórmula en <strong>porcentajes</strong> (suman 100).
+                      y envío a granjas) y se cambia acá. Su fórmula va en <strong>kg por bachada</strong>, como la
+                      planilla de dosificación; el % de cada materia prima sale de ahí.
                       Las <strong>bolsas</strong> (40 kg, 25 kg…) se dan de alta en Productos, cada una con su precio y su stock:
                       una tanda de N bolsas usa N × kg de la bolsa × % de cada materia prima.
                     </div>
@@ -379,7 +384,10 @@ const ForratucPlantaPage = () => {
                           </td>
                           <td className="small">
                             {f.formula?.ingredientes?.length
-                              ? f.formula.ingredientes.map((i) => `${i.materiaPrima?.nombre || "?"} ${fmt(i.porcentaje, 2)}%`).join(" · ")
+                              ? <>
+                                  {f.formula.ingredientes.map((i) => `${i.materiaPrima?.nombre || "?"} ${fmt(i.kg, 2)} kg`).join(" · ")}
+                                  <span className="text-muted"> — bachada {fmt(f.formula.ingredientes.reduce((a, i) => a + (i.kg || 0), 0), 2)} kg</span>
+                                </>
                               : <span className="badge bg-warning text-dark">Sin fórmula</span>}
                           </td>
                           <td className="text-end text-nowrap">
@@ -387,8 +395,8 @@ const ForratucPlantaPage = () => {
                               onClick={() => setModal({
                                 tipo: "formula", alimento: f,
                                 ingredientes: f.formula?.ingredientes?.length
-                                  ? f.formula.ingredientes.map((i) => ({ materiaPrima: String(i.materiaPrima?._id || i.materiaPrima), porcentaje: String(i.porcentaje) }))
-                                  : [{ materiaPrima: "", porcentaje: "" }],
+                                  ? f.formula.ingredientes.map((i) => ({ materiaPrima: String(i.materiaPrima?._id || i.materiaPrima), kg: String(i.kg) }))
+                                  : [{ materiaPrima: "", kg: "" }],
                                 observaciones: f.formula?.observaciones || "",
                               })}>
                               <i className="bi bi-journal-richtext"></i>
@@ -602,20 +610,19 @@ const ForratucPlantaPage = () => {
         })()}
 
         {modal?.tipo === "formula" && (() => {
-          const total = modal.ingredientes.reduce((a, i) => a + (Number(i.porcentaje) || 0), 0);
-          const cierra = Math.abs(total - 100) < 0.01;
+          const total = modal.ingredientes.reduce((a, i) => a + (Number(i.kg) || 0), 0);
           const setIng = (i, c) => set({ ingredientes: modal.ingredientes.map((x, j) => (j === i ? { ...x, ...c } : x)) });
           return (
             <Modal titulo={`Fórmula — ${modal.alimento.nombre}`} ancho="modal-lg" saving={saving} onClose={() => setModal(null)}
               onSubmit={() => hacer(() => guardarFormula(modal.alimento.alimento, {
-                ingredientes: modal.ingredientes.filter((i) => i.materiaPrima).map((i) => ({ materiaPrima: i.materiaPrima, porcentaje: Number(i.porcentaje) })),
+                ingredientes: modal.ingredientes.filter((i) => i.materiaPrima).map((i) => ({ materiaPrima: i.materiaPrima, kg: Number(i.kg) })),
                 observaciones: modal.observaciones,
               }), "Fórmula guardada")}>
               <div className="row g-3">
                 <div className="col-12">
                   <table className="table table-sm align-middle mb-1">
-                    <thead><tr><th>Materia prima</th><th style={{ width: "8rem" }}>%</th>
-                      <th className="text-end" style={{ width: "9rem" }}>Kg en 100 kg</th><th></th></tr></thead>
+                    <thead><tr><th>Materia prima</th><th style={{ width: "9rem" }}>Kg por bachada</th>
+                      <th className="text-end" style={{ width: "7rem" }}>%</th><th></th></tr></thead>
                     <tbody>
                       {modal.ingredientes.map((ing, i) => (
                         <tr key={i}>
@@ -628,11 +635,11 @@ const ForratucPlantaPage = () => {
                             </select>
                           </td>
                           <td>
-                            <input type="number" min="0" step="0.01" className="form-control form-control-sm" value={ing.porcentaje}
-                              onChange={(e) => setIng(i, { porcentaje: e.target.value })} />
+                            <input type="number" min="0" step="0.01" className="form-control form-control-sm" value={ing.kg}
+                              onChange={(e) => setIng(i, { kg: e.target.value })} />
                           </td>
-                          <td className="text-end small">
-                            {fmt(Number(ing.porcentaje) || 0, 2)} kg
+                          <td className="text-end small text-muted">
+                            {total > 0 ? `${fmt(((Number(ing.kg) || 0) / total) * 100, 2)}%` : "—"}
                           </td>
                           <td className="text-end">
                             {modal.ingredientes.length > 1 && (
@@ -647,14 +654,14 @@ const ForratucPlantaPage = () => {
                     </tbody>
                     <tfoot>
                       <tr>
-                        <td className="text-end fw-semibold">Total</td>
-                        <td className={`fw-semibold ${cierra ? "text-success" : "text-danger"}`}>{fmt(total, 2)}%</td>
-                        <td colSpan={2} className="small text-muted">{cierra ? "" : "tiene que dar 100%"}</td>
+                        <td className="text-end fw-semibold">Bachada</td>
+                        <td className="fw-semibold">{fmt(total, 2)} kg</td>
+                        <td colSpan={2} className="small text-muted">{total > 0 ? "100%" : ""}</td>
                       </tr>
                     </tfoot>
                   </table>
                   <button type="button" className="btn btn-sm btn-outline-secondary"
-                    onClick={() => set({ ingredientes: [...modal.ingredientes, { materiaPrima: "", porcentaje: "" }] })}>
+                    onClick={() => set({ ingredientes: [...modal.ingredientes, { materiaPrima: "", kg: "" }] })}>
                     <i className="bi bi-plus-lg me-1"></i>Otro ingrediente
                   </button>
                 </div>
