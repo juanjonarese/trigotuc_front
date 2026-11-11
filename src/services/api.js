@@ -1044,6 +1044,26 @@ export const anularTrozadoCamara = async (id, motivo) => {
   return handleResponse(response);
 };
 
+// Reserva para trozar (2026-11-11): { lotes: [{ lote, enteros: [{ calibre, cajones }] }] }
+export const obtenerLotesReservaTrozado = async () => {
+  const response = await fetch(`${API_URL}/trozados-camara/reserva/lotes`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+export const reservarParaTrozar = async (data) => {
+  const response = await fetch(`${API_URL}/trozados-camara/reserva`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const liberarReservaTrozado = async (data) => {
+  const response = await fetch(`${API_URL}/trozados-camara/reserva/liberar`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
 // ── Envío a render desde la cámara de Cañete (2026-11-11) ───────────────────
 export const obtenerLotesParaRender = async () => {
   const response = await fetch(`${API_URL}/render-camara/lotes`, { headers: getAuthHeaders() });

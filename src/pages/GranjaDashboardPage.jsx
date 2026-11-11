@@ -13,6 +13,7 @@ import CalibreTable, { calcularCajones } from "../components/CalibreTable";
 import DesgloseFaena from "../components/DesgloseFaena";
 import { TrozarCamaraModal, TrozadosCamaraLista } from "../components/TrozarCamaraModal";
 import { RenderCamaraModal, EnviosRenderLista } from "../components/RenderCamaraModal";
+import { ReservaTrozadoModal } from "../components/ReservaTrozadoModal";
 import { obtenerResumenStock, obtenerLotes, eliminarLote, actualizarLote, obtenerMovimientosCamara } from "../services/api";
 import Swal from "sweetalert2";
 import { exportarTablaExcel } from "../utils/exportarExcel";
@@ -256,6 +257,7 @@ const GranjaDashboardPage = () => {
   const [loteEditar, setLoteEditar] = useState(null);
   const [mostrarTrozar, setMostrarTrozar] = useState(false);
   const [mostrarRender, setMostrarRender] = useState(false);
+  const [modoReserva, setModoReserva] = useState(null); // "reservar" | "liberar"
   const [recargarTrozados, setRecargarTrozados] = useState(0);
 
   const [mostrarHistorial, setMostrarHistorial] = useState(false);
@@ -333,7 +335,7 @@ const GranjaDashboardPage = () => {
     const OP_LABEL = {
       faena: "Faena (ingreso)", venta_pos: "Venta POS", venta_mostrador: "Venta mostrador",
       despacho: "Despacho", envio_camara: "Envío entre cámaras", ajuste_manual: "Ajuste manual",
-      trozado: "Trozado en cámara", render: "Envío a render",
+      trozado: "Trozado en cámara", render: "Envío a render", reserva_trozado: "Reserva para trozar",
     };
     const TIPOS = { filet: "Filet", pata: "Pata muslo", alita: "Alita", menudo: "Menudo", carcaza: "Carcaza", trocitos: "Trocitos" };
     const detalleTxt = (m) => {
@@ -671,7 +673,7 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
       </div>
 
       {/* ── Separador sección cámaras ── */}
-      {(totalCañeteKg > 0 || totalTrigotucKg > 0 || totalCañeteTrozadosKg > 0 || totalTrigotucTrozadosKg > 0) && (
+      {(totalCañeteKg > 0 || totalTrigotucKg > 0 || totalCañeteTrozadosKg > 0 || totalTrigotucTrozadosKg > 0 || (resumen.reservaTrozadoCañete || []).length > 0) && (
         <div className="d-flex align-items-center gap-2 mt-4 mb-3">
           <hr className="flex-grow-1 m-0" />
           <span className="text-muted fw-semibold text-uppercase px-2"
@@ -684,7 +686,7 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
       )}
 
       {/* ── Stock por cámara ── */}
-      {(totalCañeteKg > 0 || totalTrigotucKg > 0 || totalCañeteTrozadosKg > 0 || totalTrigotucTrozadosKg > 0) && (
+      {(totalCañeteKg > 0 || totalTrigotucKg > 0 || totalCañeteTrozadosKg > 0 || totalTrigotucTrozadosKg > 0 || (resumen.reservaTrozadoCañete || []).length > 0) && (
         <div className="row g-3 mb-4">
           {/* Cámara Cañete */}
           <div className="col-12 col-md-6">
@@ -697,6 +699,13 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
                 {puedeGestionar && (
                   <div className="d-flex gap-2">
                     {(resumen.stockCañete || []).some((c) => c.cajones > 0) && (
+                      <button className="btn btn-outline-warning btn-sm py-0" onClick={() => setModoReserva("reservar")}
+                        title="Apartar cajones para trozar en los próximos días (salen del stock para la venta)">
+                        <i className="bi bi-bookmark-plus me-1"></i>Reservar
+                      </button>
+                    )}
+                    {((resumen.stockCañete || []).some((c) => c.cajones > 0) ||
+                      (resumen.reservaTrozadoCañete || []).some((c) => c.cajones > 0)) && (
                       <button className="btn btn-outline-info btn-sm py-0" onClick={() => setMostrarTrozar(true)}
                         title="Trozar pollo entero que está en esta cámara">
                         <i className="bi bi-scissors me-1"></i>Trozar
@@ -754,6 +763,30 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
                 <div className="mt-1 text-muted small">
                   Total: <strong>{formatNum(totalCañeteKg + totalCañeteTrozadosKg)} kg</strong>
                 </div>
+                {(resumen.reservaTrozadoCañete || []).some((c) => c.cajones > 0) && (
+                  <div className="mt-3 p-2 rounded border border-warning" style={{ background: "#fff8e6" }}>
+                    <div className="d-flex justify-content-between align-items-center mb-1">
+                      <span className="small fw-semibold">
+                        <i className="bi bi-bookmark-fill text-warning me-1"></i>
+                        Reservado para trozar <span className="text-muted fw-normal">(no está para la venta)</span>
+                      </span>
+                      {puedeGestionar && (
+                        <button className="btn btn-link btn-sm p-0" onClick={() => setModoReserva("liberar")}>Liberar</button>
+                      )}
+                    </div>
+                    <div className="d-flex flex-wrap gap-2">
+                      {(resumen.reservaTrozadoCañete || []).filter((c) => c.cajones > 0).map((c) => (
+                        <div key={claveEntero(c)} className="text-center border rounded px-2 py-1 bg-white">
+                          <span className={`badge d-block mb-1 ${BADGE_ESPECIE[especieDe(c)]}`}>
+                            {etiquetaEspecie(especieDe(c))} · Cal. {c.calibre}
+                          </span>
+                          <div className="fw-bold small">{formatNum(c.cajones)} caj</div>
+                          <div className="text-muted" style={{ fontSize: "0.72rem" }}>{formatNum(c.cajones * 20)} kg</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -903,13 +936,14 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
                           envio_camara: "Envío entre cámaras", ajuste_manual: "Ajuste manual",
                           trozado: m.referencia?.anulacion ? "Anulación de trozado" : "Trozado en cámara",
                           render: m.referencia?.anulacion ? "Anulación de render" : "Envío a render",
+                          reserva_trozado: m.referencia?.liberacion ? "Liberación de reserva p/ trozar" : "Reserva para trozar",
                         }[m.operacion] || m.operacion;
                         const tipoBadge = {
                           ingreso: "success", salida: "danger", transferencia: "info", ajuste: "warning", transformacion: "primary",
                         }[m.tipo] || "secondary";
                         const detalleTxt = (m.detalle || []).filter(esLineaDeCamara).map((d) =>
                           d.clase === "entero"
-                            ? `Cal.${d.calibre}: ${formatNum(d.cajones)} caj`
+                            ? `Cal.${d.calibre}: ${formatNum(d.cajones)} caj${d.sentido === "reserva" ? " (de la reserva)" : ""}`
                             : `${TIPOS_LABEL[d.tipo] || d.tipo}: ${formatNum(d.cajas)} cajas`
                         ).join(" · ");
                         const camaraTxt = m.camaraDestino
@@ -992,6 +1026,18 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
           onGuardado={() => {
             setMostrarTrozar(false);
             setRecargarTrozados((n) => n + 1);
+            cargarDatos();
+            if (mostrarHistorial) cargarHistorial();
+          }}
+        />
+      )}
+
+      {modoReserva && (
+        <ReservaTrozadoModal
+          modo={modoReserva}
+          onClose={() => setModoReserva(null)}
+          onGuardado={() => {
+            setModoReserva(null);
             cargarDatos();
             if (mostrarHistorial) cargarHistorial();
           }}

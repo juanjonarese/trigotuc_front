@@ -177,6 +177,9 @@ export const TrozarCamaraModal = ({ onClose, onGuardado }) => {
                     <div className="fw-semibold small text-uppercase text-muted" style={{ letterSpacing: "0.05em" }}>
                       1. Marcá los lotes y los cajones de cada uno
                     </div>
+                    <div className="w-100 small text-muted" style={{ order: 3 }}>
+                      Se usa primero lo reservado para trozar de cada lote y, si no alcanza, lo disponible.
+                    </div>
                     <div style={{ width: 170 }}>
                       <label className="form-label small mb-0">Fecha</label>
                       <input type="date" className="form-control form-control-sm" value={fecha} max={hoyLocal()}
@@ -186,11 +189,13 @@ export const TrozarCamaraModal = ({ onClose, onGuardado }) => {
 
                   {lotes.map((l) => (
                     <FilaLote key={l._id} lote={l} marcado={!!marcados[l._id]} onMarcar={(si) => marcar(l._id, si)}
-                      resumen={l.calibres.map((c) => `cal. ${c.calibre}: ${fmt(c.cajones)} caj`).join(" · ")}>
+                      resumen={l.calibres.map((c) => `cal. ${c.calibre}: ${fmt(c.cajones)} caj${c.reservados ? ` (${fmt(c.reservados)} reservados)` : ""}`).join(" · ")}>
                       <div className="d-flex flex-wrap gap-3">
                         {l.calibres.map((c) => (
                           <div key={c.calibre}>
-                            <div className="small text-muted">Cal. {c.calibre} <span className="ms-1">(hay {fmt(c.cajones)})</span></div>
+                            <div className="small text-muted">
+                              Cal. {c.calibre} <span className="ms-1">(hay {fmt(c.cajones)}{c.reservados ? `, ${fmt(c.reservados)} reservados` : ""})</span>
+                            </div>
                             <InputCantidad valor={marcados[l._id]?.[c.calibre]} max={c.cajones}
                               onChange={(v) => setCajones(l._id, c.calibre, v)} />
                           </div>
