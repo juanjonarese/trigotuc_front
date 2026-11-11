@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Navigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import Layout from "../../components/Layout";
 import { formatearFechaLocal, obtenerFechaHoy } from "../../utils/dateUtils";
@@ -781,4 +781,11 @@ const ForratucPlantaPage = () => {
   );
 };
 
-export default ForratucPlantaPage;
+// Forratuc se liberó el 2026-11-11 sin la Planta: solo el superadmin (el back
+// también la corta con esSuperAdmin). El resto vuelve al inicio de Forratuc.
+const ForratucPlantaSoloSuperadmin = () =>
+  localStorage.getItem("rolUsuario") === "superadmin"
+    ? <ForratucPlantaPage />
+    : <Navigate to="/forratuc" replace />;
+
+export default ForratucPlantaSoloSuperadmin;

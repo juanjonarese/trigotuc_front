@@ -15,7 +15,8 @@ const ITEMS = [
   { ruta: "/forratuc/listas-precios", icono: "bi-tags", texto: "Listas de precios" },
   { ruta: "/forratuc/productos", icono: "bi-upc", texto: "Productos" },
   // Planta de alimento (2026-11-04): materia prima, fórmulas, elaboración y envíos.
-  { ruta: "/forratuc/planta", icono: "bi-gear-wide-connected", texto: "Planta de alimento" },
+  // Solo superadmin: Forratuc se liberó el 2026-11-11 sin la Planta.
+  { ruta: "/forratuc/planta", icono: "bi-gear-wide-connected", texto: "Planta de alimento", soloSuperadmin: true },
 ];
 
 const MenuForratuc = ({ ctx, grupo }) => {
@@ -32,7 +33,7 @@ const MenuForratuc = ({ ctx, grupo }) => {
             <i className="bi bi-house-door fs-5"></i>
             <span>Inicio</span>
           </a>
-          {ITEMS.map((it) => (
+          {ITEMS.filter((it) => !it.soloSuperadmin || localStorage.getItem("rolUsuario") === "superadmin").map((it) => (
             <a
               key={it.ruta}
               href="#"
