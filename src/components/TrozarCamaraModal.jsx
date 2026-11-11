@@ -3,27 +3,67 @@ import Swal from "sweetalert2";
 import {
   obtenerLotesParaTrozar, crearTrozadoCamara, obtenerTrozadosCamara, anularTrozadoCamara,
 } from "../services/api";
-import { TrozadoTable, trozadosVacios, trozadosAPayload, trozadoLabel } from "./TrozadoTable";
+import { TrozadoTable, trozadosVacios, trozadosAPayload } from "./TrozadoTable";
+import { KG_POR_CAJON, fmt, hoyLocal, fmtFecha, fechaParaEnviar, nombreCorteCorto } from "../utils/camaraLotes";
 import { BADGE_ESPECIE, etiquetaEspecie } from "../utils/especies";
 
 // Trozado de enteros que ya están en la cámara de Cañete (2026-11-11).
-// Salen cajones de UN lote (lo elige el usuario) y entran los cortes al mismo
-// lote; lo que no vuelve en cortes es merma. Ver services/trozadoCamara.services.js.
+// Se marcan uno o varios lotes con un check y se cargan los cajones de cada uno;
+// los cortes se cargan UNA vez (el total) y el sistema los reparte entre los
+// lotes en proporción a los kg que puso cada uno. Lo que no vuelve en cortes es
+// merma. Ver services/trozadoCamara.services.js.
 
-const KG_POR_CAJON = 20;
-const fmt = (n) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n || 0);
-
-// "Hoy" del navegador (Argentina) como AAAA-MM-DD, sin pasar por UTC.
-const hoyLocal = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+// Mismo reparto que el back (resto mayor; en empate, el lote más viejo), solo
+// para mostrarlo antes de guardar. El que vale es el del back.
+const repartir = (cajas, pesos) => {
+  const total = pesos.reduce((a, p) => a + p, 0);
+  if (!total) return pesos.map(() => 0);
+  const cuotas = pesos.map((p) => (cajas * p) / total);
+  const asignadas = cuotas.map(Math.floor);
+  let sobran = cajas - asignadas.reduce((a, n) => a + n, 0);
+  cuotas
+    .map((q, i) => ({ i, resto: q - Math.floor(q) }))
+    .sort((a, b) => b.resto - a.resto || a.i - b.i)
+    .forEach(({ i }) => { if (sobran > 0) { asignadas[i] += 1; sobran -= 1; } });
+  return asignadas;
 };
-const fmtFecha = (iso) => new Date(iso).toLocaleDateString("es-AR");
+
+const especieDeLote = (l) => l.calibres[0]?.especie || l.trozados?.[0]?.especie || "pollo";
+
+// Fila de un lote con su check. `children` son los inputs, que aparecen al marcarlo.
+export const FilaLote = ({ lote, marcado, onMarcar, resumen, children }) => (
+  <div className={`border rounded mb-2 ${marcado ? "border-info" : ""}`}>
+    <label className="d-flex align-items-start gap-2 p-2 mb-0" style={{ cursor: "pointer" }}>
+      <input type="checkbox" className="form-check-input mt-1" checked={marcado} onChange={(e) => onMarcar(e.target.checked)} />
+      <div className="flex-grow-1">
+        <span className="fw-semibold">Lote #{lote.numeroLote}</span>
+        <span className="text-muted small ms-2">{fmtFecha(lote.fechaIngreso)}</span>
+        {especieDeLote(lote) !== "pollo" && (
+          <span className={`badge ms-2 ${BADGE_ESPECIE[especieDeLote(lote)]}`}>{etiquetaEspecie(especieDeLote(lote))}</span>
+        )}
+        <div className="text-muted small">{resumen}</div>
+      </div>
+    </label>
+    {marcado && <div className="px-2 pb-2">{children}</div>}
+  </div>
+);
+
+// Input de cantidad con botón "todo".
+export const InputCantidad = ({ valor, max, onChange }) => {
+  const pasado = (Number(valor) || 0) > max;
+  return (
+    <div className="input-group input-group-sm" style={{ maxWidth: 150 }}>
+      <input type="number" min="0" step="1" max={max} placeholder="0"
+        className={`form-control ${pasado ? "is-invalid" : ""}`}
+        value={valor ?? ""} onChange={(e) => onChange(e.target.value)} />
+      <button type="button" className="btn btn-outline-secondary" onClick={() => onChange(String(max))}>todo</button>
+    </div>
+  );
+};
 
 export const TrozarCamaraModal = ({ onClose, onGuardado }) => {
   const [lotes, setLotes] = useState(null);
-  const [loteId, setLoteId] = useState("");
-  const [cajones, setCajones] = useState({}); // { calibre: "n" }
+  const [marcados, setMarcados] = useState({}); // { loteId: { calibre: "n" } }
   const [cortes, setCortes] = useState(trozadosVacios());
   const [fecha, setFecha] = useState(hoyLocal());
   const [observaciones, setObservaciones] = useState("");
@@ -35,29 +75,46 @@ export const TrozarCamaraModal = ({ onClose, onGuardado }) => {
       .catch((e) => { Swal.fire("Error", e.message, "error"); setLotes([]); });
   }, []);
 
-  const lote = useMemo(() => (lotes || []).find((l) => l._id === loteId), [lotes, loteId]);
-  const especie = lote?.calibres[0]?.especie || "pollo";
+  // Partes en el orden de la lista (del lote más viejo al más nuevo, como el back).
+  const partes = useMemo(() => (lotes || [])
+    .filter((l) => marcados[l._id])
+    .map((l) => {
+      const enteros = l.calibres
+        .map((c) => ({ calibre: c.calibre, cajones: Number(marcados[l._id][c.calibre]) || 0, max: c.cajones }))
+        .filter((c) => c.cajones > 0);
+      return { lote: l, enteros, kg: enteros.reduce((a, e) => a + e.cajones * KG_POR_CAJON, 0) };
+    }), [lotes, marcados]);
+  const conCajones = partes.filter((p) => p.kg > 0);
 
-  const kgEnteros = (lote?.calibres || []).reduce(
-    (a, c) => a + (Number(cajones[c.calibre]) || 0) * KG_POR_CAJON, 0
-  );
-  const kgCortes = cortes.reduce((a, l) => a + (Number(l.cajas) || 0) * (Number(l.kgCaja) || 0), 0);
+  const especies = new Set(partes.map((p) => especieDeLote(p.lote)));
+  const mezclaEspecies = especies.size > 1;
+  const excedido = partes.some((p) => p.enteros.some((e) => e.cajones > e.max));
+
+  const kgEnteros = conCajones.reduce((a, p) => a + p.kg, 0);
+  const cortesPayload = trozadosAPayload(cortes);
+  const kgCortes = cortesPayload.reduce((a, c) => a + c.kgTotal, 0);
   const merma = kgEnteros - kgCortes;
   const pctMerma = kgEnteros > 0 ? (merma / kgEnteros) * 100 : null;
 
-  const excedidos = (lote?.calibres || []).filter((c) => (Number(cajones[c.calibre]) || 0) > c.cajones);
+  const reparto = useMemo(() => {
+    if (conCajones.length < 2) return null;
+    const pesos = conCajones.map((p) => p.kg);
+    return cortesPayload.map((c) => ({ corte: c, cajas: repartir(c.cajas, pesos) }));
+  }, [conCajones, cortesPayload]);
 
-  const elegirLote = (id) => { setLoteId(id); setCajones({}); };
+  const marcar = (id, si) => {
+    const nuevo = { ...marcados };
+    if (si) nuevo[id] = {}; else delete nuevo[id];
+    setMarcados(nuevo);
+  };
+  const setCajones = (id, calibre, v) =>
+    setMarcados({ ...marcados, [id]: { ...marcados[id], [calibre]: v } });
 
   const guardar = async (e) => {
     e.preventDefault();
-    if (!lote) return Swal.fire("Falta el lote", "Elegí de qué lote se troza.", "warning");
-    const enteros = lote.calibres
-      .map((c) => ({ calibre: c.calibre, cajones: Number(cajones[c.calibre]) || 0 }))
-      .filter((c) => c.cajones > 0);
-    if (!enteros.length) return Swal.fire("Faltan cajones", "Indicá cuántos cajones se trozan.", "warning");
-    if (excedidos.length) return Swal.fire("Stock", "Hay calibres con más cajones de los que tiene el lote.", "warning");
-    const cortesPayload = trozadosAPayload(cortes);
+    if (!conCajones.length) return Swal.fire("Faltan cajones", "Marcá los lotes e indicá cuántos cajones se trozan.", "warning");
+    if (mezclaEspecies) return Swal.fire("Especies", "Un trozado es de una sola especie.", "warning");
+    if (excedido) return Swal.fire("Stock", "Hay calibres con más cajones de los que tiene el lote.", "warning");
     if (!cortesPayload.length) return Swal.fire("Faltan cortes", "Cargá las cajas que salieron del trozado.", "warning");
     if (kgCortes > kgEnteros)
       return Swal.fire("Kg", `Los cortes (${fmt(kgCortes)} kg) pesan más que los cajones (${fmt(kgEnteros)} kg).`, "warning");
@@ -65,8 +122,10 @@ export const TrozarCamaraModal = ({ onClose, onGuardado }) => {
     const ok = await Swal.fire({
       title: "¿Confirmás el trozado?",
       html:
-        `Lote <strong>#${lote.numeroLote}</strong>: salen <strong>${enteros.map((e) => `${e.cajones} caj. cal. ${e.calibre}`).join(", ")}</strong> ` +
-        `(${fmt(kgEnteros)} kg) y entran <strong>${fmt(kgCortes)} kg</strong> de trozado.<br/>` +
+        conCajones.map((p) =>
+          `Lote <strong>#${p.lote.numeroLote}</strong>: ${p.enteros.map((e) => `${e.cajones} caj. cal. ${e.calibre}`).join(", ")}`
+        ).join("<br/>") +
+        `<br/><br/>Salen <strong>${fmt(kgEnteros)} kg</strong> de entero y entran <strong>${fmt(kgCortes)} kg</strong> de trozado.<br/>` +
         `Merma: <strong>${fmt(merma)} kg</strong>${pctMerma != null ? ` (${fmt(pctMerma)}%)` : ""}.`,
       icon: "question",
       showCancelButton: true,
@@ -78,11 +137,12 @@ export const TrozarCamaraModal = ({ onClose, onGuardado }) => {
     setGuardando(true);
     try {
       const doc = await crearTrozadoCamara({
-        lote: lote._id,
-        enteros,
+        lotes: conCajones.map((p) => ({
+          lote: p.lote._id,
+          enteros: p.enteros.map(({ calibre, cajones }) => ({ calibre, cajones })),
+        })),
         cortes: cortesPayload,
-        // Hoy = ahora; otro día = mediodía de Argentina de ese día.
-        ...(fecha && fecha !== hoyLocal() ? { fecha: `${fecha}T12:00:00-03:00` } : {}),
+        ...fechaParaEnviar(fecha),
         observaciones: observaciones.trim() || undefined,
       });
       Swal.fire("Listo", `Trozado ${doc.numero} cargado.`, "success");
@@ -113,75 +173,42 @@ export const TrozarCamaraModal = ({ onClose, onGuardado }) => {
                 <div className="alert alert-light border mb-0">No hay pollo entero en la cámara de Cañete.</div>
               ) : (
                 <form id="form-trozar" onSubmit={guardar}>
-                  <div className="row g-2 mb-3">
-                    <div className="col-12 col-md-8">
-                      <label className="form-label small fw-semibold">Lote</label>
-                      <select className="form-select" value={loteId} onChange={(e) => elegirLote(e.target.value)}>
-                        <option value="">Elegí el lote…</option>
-                        {lotes.map((l) => (
-                          <option key={l._id} value={l._id}>
-                            #{l.numeroLote} — {fmtFecha(l.fechaIngreso)} —{" "}
-                            {l.calibres.map((c) => `cal. ${c.calibre}: ${c.cajones} caj`).join(" · ")}
-                            {l.calibres[0]?.especie !== "pollo" ? ` (${etiquetaEspecie(l.calibres[0]?.especie)})` : ""}
-                          </option>
-                        ))}
-                      </select>
+                  <div className="d-flex justify-content-between align-items-end mb-2 gap-2 flex-wrap">
+                    <div className="fw-semibold small text-uppercase text-muted" style={{ letterSpacing: "0.05em" }}>
+                      1. Marcá los lotes y los cajones de cada uno
                     </div>
-                    <div className="col-12 col-md-4">
-                      <label className="form-label small fw-semibold">Fecha</label>
-                      <input type="date" className="form-control" value={fecha} max={hoyLocal()}
+                    <div style={{ width: 170 }}>
+                      <label className="form-label small mb-0">Fecha</label>
+                      <input type="date" className="form-control form-control-sm" value={fecha} max={hoyLocal()}
                         onChange={(e) => setFecha(e.target.value)} />
                     </div>
                   </div>
 
-                  {lote && (
-                    <>
-                      <div className="fw-semibold mb-2 small text-uppercase text-muted" style={{ letterSpacing: "0.05em" }}>
-                        Cajones que se trozan{" "}
-                        <span className={`badge ${BADGE_ESPECIE[especie]}`}>{etiquetaEspecie(especie)}</span>
+                  {lotes.map((l) => (
+                    <FilaLote key={l._id} lote={l} marcado={!!marcados[l._id]} onMarcar={(si) => marcar(l._id, si)}
+                      resumen={l.calibres.map((c) => `cal. ${c.calibre}: ${fmt(c.cajones)} caj`).join(" · ")}>
+                      <div className="d-flex flex-wrap gap-3">
+                        {l.calibres.map((c) => (
+                          <div key={c.calibre}>
+                            <div className="small text-muted">Cal. {c.calibre} <span className="ms-1">(hay {fmt(c.cajones)})</span></div>
+                            <InputCantidad valor={marcados[l._id]?.[c.calibre]} max={c.cajones}
+                              onChange={(v) => setCajones(l._id, c.calibre, v)} />
+                          </div>
+                        ))}
                       </div>
-                      <div className="table-responsive mb-3">
-                        <table className="table table-sm align-middle mb-0">
-                          <thead className="table-light">
-                            <tr>
-                              <th>Calibre</th>
-                              <th className="text-end">En el lote</th>
-                              <th style={{ width: 140 }}>Cajones a trozar</th>
-                              <th className="text-end">Kg</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {lote.calibres.map((c) => {
-                              const n = Number(cajones[c.calibre]) || 0;
-                              const pasado = n > c.cajones;
-                              return (
-                                <tr key={c.calibre}>
-                                  <td className="fw-semibold">Cal. {c.calibre}</td>
-                                  <td className="text-end small text-muted">
-                                    {fmt(c.cajones)} caj ({fmt(c.pollos)} u.)
-                                  </td>
-                                  <td>
-                                    <div className="input-group input-group-sm">
-                                      <input type="number" min="0" step="1" max={c.cajones} placeholder="0"
-                                        className={`form-control ${pasado ? "is-invalid" : ""}`}
-                                        value={cajones[c.calibre] ?? ""}
-                                        onChange={(e) => setCajones({ ...cajones, [c.calibre]: e.target.value })} />
-                                      <button type="button" className="btn btn-outline-secondary"
-                                        title="Todos" onClick={() => setCajones({ ...cajones, [c.calibre]: String(c.cajones) })}>
-                                        todo
-                                      </button>
-                                    </div>
-                                  </td>
-                                  <td className="text-end">{n > 0 ? `${fmt(n * KG_POR_CAJON)} kg` : "—"}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
+                    </FilaLote>
+                  ))}
 
-                      <div className="fw-semibold mb-2 small text-uppercase text-muted" style={{ letterSpacing: "0.05em" }}>
-                        Lo que salió del trozado (kg reales)
+                  {mezclaEspecies && (
+                    <div className="alert alert-warning small py-2">
+                      Marcaste lotes de especies distintas: un trozado es de una sola especie.
+                    </div>
+                  )}
+
+                  {conCajones.length > 0 && (
+                    <>
+                      <div className="fw-semibold mt-3 mb-2 small text-uppercase text-muted" style={{ letterSpacing: "0.05em" }}>
+                        2. Lo que salió del trozado (kg reales, el total)
                       </div>
                       <TrozadoTable lineas={cortes} onChange={setCortes} />
 
@@ -192,6 +219,34 @@ export const TrozarCamaraModal = ({ onClose, onGuardado }) => {
                         {pctMerma != null && ` (${fmt(pctMerma)}%)`}
                         {merma < 0 && " — los cortes no pueden pesar más que el entero."}
                       </div>
+
+                      {reparto && reparto.length > 0 && (
+                        <div className="mb-3">
+                          <div className="small text-muted mb-1">
+                            Así se reparten las cajas entre los lotes (según los kg que puso cada uno):
+                          </div>
+                          <div className="table-responsive">
+                            <table className="table table-sm table-bordered align-middle mb-0 small">
+                              <thead className="table-light">
+                                <tr>
+                                  <th>Corte</th>
+                                  {conCajones.map((p) => (
+                                    <th key={p.lote._id} className="text-end">#{p.lote.numeroLote} <span className="text-muted fw-normal">({fmt(p.kg)} kg)</span></th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {reparto.map((r) => (
+                                  <tr key={`${r.corte.tipo}|${r.corte.clase || ""}`}>
+                                    <td>{nombreCorteCorto(r.corte)}</td>
+                                    {r.cajas.map((n, i) => <td key={i} className="text-end">{n}</td>)}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
 
                       <label className="form-label small fw-semibold">Observaciones</label>
                       <input className="form-control form-control-sm" value={observaciones}
@@ -204,7 +259,7 @@ export const TrozarCamaraModal = ({ onClose, onGuardado }) => {
             <div className="modal-footer">
               <button className="btn btn-outline-secondary" onClick={onClose} disabled={guardando}>Cancelar</button>
               <button type="submit" form="form-trozar" className="btn btn-info"
-                disabled={guardando || !lote || merma < 0 || excedidos.length > 0}>
+                disabled={guardando || !conCajones.length || merma < 0 || excedido || mezclaEspecies}>
                 {guardando ? "Guardando…" : (<><i className="bi bi-scissors me-1"></i>Trozar</>)}
               </button>
             </div>
@@ -231,7 +286,7 @@ export const TrozadosCamaraLista = ({ recargar, puedeAnular, onAnulado }) => {
   const anular = async (t) => {
     const r = await Swal.fire({
       title: `¿Anular ${t.numero}?`,
-      html: `Vuelven los cajones al lote #${t.numeroLote} y salen las cajas de trozado. ` +
+      html: `Vuelven los cajones a ${t.lotes.length > 1 ? "sus lotes" : `el lote #${t.lotes[0]?.numeroLote}`} y salen las cajas de trozado. ` +
         "Solo se puede si esas cajas siguen en la cámara.",
       input: "text",
       inputPlaceholder: "Motivo (opcional)",
@@ -293,14 +348,25 @@ export const TrozadosCamaraLista = ({ recargar, puedeAnular, onAnulado }) => {
                           {anulado && <span className="badge bg-secondary ms-1">anulado</span>}
                         </td>
                         <td className="small text-nowrap">{fmtFecha(t.fecha)}</td>
-                        <td className="small">#{t.numeroLote}</td>
+                        <td className="small">
+                          {t.lotes.map((p) => (
+                            <div key={String(p.lote)} className="text-nowrap">
+                              #{p.numeroLote}
+                              {t.lotes.length > 1 && (
+                                <span className="text-muted" style={{ fontSize: "0.72rem" }}>
+                                  {" "}→ {p.cortes.map((c) => `${nombreCorteCorto(c)}: ${c.cajas}`).join(", ")}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </td>
                         <td className="small">
                           {t.enteros.map((e) => `cal. ${e.calibre}: ${e.cajones} caj`).join(" · ")}
                           {t.enteros[0]?.especie && t.enteros[0].especie !== "pollo" && ` (${etiquetaEspecie(t.enteros[0].especie)})`}
                           <div className="text-muted" style={{ fontSize: "0.72rem" }}>{fmt(t.kgEnteros)} kg</div>
                         </td>
                         <td className="small">
-                          {t.cortes.map((c) => `${trozadoLabel(c.tipo)}${c.clase && ["filet", "pata", "alita"].includes(c.tipo) ? ` ${c.clase}` : ""}: ${c.cajas}`).join(" · ")}
+                          {t.cortes.map((c) => `${nombreCorteCorto(c)}: ${c.cajas}`).join(" · ")}
                           <div className="text-muted" style={{ fontSize: "0.72rem" }}>{fmt(t.kgCortes)} kg</div>
                         </td>
                         <td className="text-end small">

@@ -12,6 +12,7 @@ import {
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
 import DesgloseFaena from "../components/DesgloseFaena";
 import { TrozarCamaraModal, TrozadosCamaraLista } from "../components/TrozarCamaraModal";
+import { RenderCamaraModal, EnviosRenderLista } from "../components/RenderCamaraModal";
 import { obtenerResumenStock, obtenerLotes, eliminarLote, actualizarLote, obtenerMovimientosCamara } from "../services/api";
 import Swal from "sweetalert2";
 import { exportarTablaExcel } from "../utils/exportarExcel";
@@ -254,6 +255,7 @@ const GranjaDashboardPage = () => {
   const [error, setError]         = useState(null);
   const [loteEditar, setLoteEditar] = useState(null);
   const [mostrarTrozar, setMostrarTrozar] = useState(false);
+  const [mostrarRender, setMostrarRender] = useState(false);
   const [recargarTrozados, setRecargarTrozados] = useState(0);
 
   const [mostrarHistorial, setMostrarHistorial] = useState(false);
@@ -331,7 +333,7 @@ const GranjaDashboardPage = () => {
     const OP_LABEL = {
       faena: "Faena (ingreso)", venta_pos: "Venta POS", venta_mostrador: "Venta mostrador",
       despacho: "Despacho", envio_camara: "Envío entre cámaras", ajuste_manual: "Ajuste manual",
-      trozado: "Trozado en cámara",
+      trozado: "Trozado en cámara", render: "Envío a render",
     };
     const TIPOS = { filet: "Filet", pata: "Pata muslo", alita: "Alita", menudo: "Menudo", carcaza: "Carcaza", trocitos: "Trocitos" };
     const detalleTxt = (m) => {
@@ -366,7 +368,7 @@ const GranjaDashboardPage = () => {
         { header: "Saldo cajas",   valor: (m) => m.saldoCajas },
         { header: "Referencia", valor: (m) => {
             const r = m.referencia || {};
-            return [r.numeroTrozado, r.numeroLote != null ? "Lote #" + r.numeroLote : null, r.numeroEnvio, r.ticket]
+            return [r.numeroTrozado, r.numeroRender, r.numeroLote != null ? "Lote #" + r.numeroLote : null, r.numeroEnvio, r.ticket]
               .filter(Boolean).join(" · ");
           } },
         { header: "Usuario",       valor: (m) => m.registradoPorNombre || m.registradoPor?.nombreUsuario },
@@ -692,11 +694,22 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
                   <i className="bi bi-snow me-2 text-info"></i>
                   Cámara Cañete
                 </h6>
-                {puedeGestionar && (resumen.stockCañete || []).length > 0 && (
-                  <button className="btn btn-outline-info btn-sm py-0" onClick={() => setMostrarTrozar(true)}
-                    title="Trozar pollo entero que está en esta cámara">
-                    <i className="bi bi-scissors me-1"></i>Trozar
-                  </button>
+                {puedeGestionar && (
+                  <div className="d-flex gap-2">
+                    {(resumen.stockCañete || []).some((c) => c.cajones > 0) && (
+                      <button className="btn btn-outline-info btn-sm py-0" onClick={() => setMostrarTrozar(true)}
+                        title="Trozar pollo entero que está en esta cámara">
+                        <i className="bi bi-scissors me-1"></i>Trozar
+                      </button>
+                    )}
+                    {((resumen.stockCañete || []).some((c) => c.cajones > 0) ||
+                      (resumen.trozadosCañete || []).some((t) => t.cajas > 0)) && (
+                      <button className="btn btn-outline-danger btn-sm py-0" onClick={() => setMostrarRender(true)}
+                        title="Mandar a render lo que no se vende o no está en condiciones de venta">
+                        <i className="bi bi-recycle me-1"></i>Render
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
               <div className="card-body py-2">
@@ -810,6 +823,15 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
         />
       )}
 
+      {/* ── Envíos a render (2026-11-11) ── */}
+      {puedeGestionar && (
+        <EnviosRenderLista
+          recargar={recargarTrozados}
+          puedeAnular={puedeGestionar}
+          onAnulado={() => { setRecargarTrozados((n) => n + 1); cargarDatos(); if (mostrarHistorial) cargarHistorial(); }}
+        />
+      )}
+
       {/* ── Historial de movimientos de stock (superadmin y admin) ── */}
       {mandaTodo && (
         <div className="card border-0 shadow-sm mt-4">
@@ -880,6 +902,7 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
                           faena: "Faena (ingreso)", venta_pos: "Venta POS", despacho: "Despacho",
                           envio_camara: "Envío entre cámaras", ajuste_manual: "Ajuste manual",
                           trozado: m.referencia?.anulacion ? "Anulación de trozado" : "Trozado en cámara",
+                          render: m.referencia?.anulacion ? "Anulación de render" : "Envío a render",
                         }[m.operacion] || m.operacion;
                         const tipoBadge = {
                           ingreso: "success", salida: "danger", transferencia: "info", ajuste: "warning", transformacion: "primary",
@@ -968,6 +991,18 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
           onClose={() => setMostrarTrozar(false)}
           onGuardado={() => {
             setMostrarTrozar(false);
+            setRecargarTrozados((n) => n + 1);
+            cargarDatos();
+            if (mostrarHistorial) cargarHistorial();
+          }}
+        />
+      )}
+
+      {mostrarRender && (
+        <RenderCamaraModal
+          onClose={() => setMostrarRender(false)}
+          onGuardado={() => {
+            setMostrarRender(false);
             setRecargarTrozados((n) => n + 1);
             cargarDatos();
             if (mostrarHistorial) cargarHistorial();
