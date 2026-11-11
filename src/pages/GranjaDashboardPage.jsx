@@ -11,6 +11,7 @@ import {
 } from "../utils/especies";
 import CalibreTable, { calcularCajones } from "../components/CalibreTable";
 import DesgloseFaena from "../components/DesgloseFaena";
+import { TrozarCamaraModal, TrozadosCamaraLista } from "../components/TrozarCamaraModal";
 import { obtenerResumenStock, obtenerLotes, eliminarLote, actualizarLote, obtenerMovimientosCamara } from "../services/api";
 import Swal from "sweetalert2";
 import { exportarTablaExcel } from "../utils/exportarExcel";
@@ -190,6 +191,19 @@ const EditarLoteModal = ({ lote, onClose, onGuardado }) => {
 const esLineaDeCamara = (d) => d.clase === "entero" || d.clase === "trozado";
 
 const movimientoEnUnidades = (m) => {
+  // El trozado en cámara (2026-11-11) mueve para los dos lados en el mismo
+  // movimiento: salen cajones de entero y entran cajas de trozado. La dirección
+  // la dice cada línea (`sentido`), no el `tipo`.
+  if (m.tipo === "transformacion") {
+    let cajones = 0;
+    let cajas = 0;
+    for (const d of m.detalle || []) {
+      const s = d.sentido === "entra" ? 1 : d.sentido === "sale" ? -1 : 0;
+      if (d.clase === "entero") cajones += s * (Number(d.cajones) || 0);
+      else if (d.clase === "trozado") cajas += s * (Number(d.cajas) || 0);
+    }
+    return { cajones, cajas, mueveSaldo: true };
+  }
   let cajones = 0;
   let cajas = 0;
   for (const d of m.detalle || []) {
@@ -239,6 +253,8 @@ const GranjaDashboardPage = () => {
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState(null);
   const [loteEditar, setLoteEditar] = useState(null);
+  const [mostrarTrozar, setMostrarTrozar] = useState(false);
+  const [recargarTrozados, setRecargarTrozados] = useState(0);
 
   const [mostrarHistorial, setMostrarHistorial] = useState(false);
   const [historial, setHistorial] = useState([]);
@@ -315,6 +331,7 @@ const GranjaDashboardPage = () => {
     const OP_LABEL = {
       faena: "Faena (ingreso)", venta_pos: "Venta POS", venta_mostrador: "Venta mostrador",
       despacho: "Despacho", envio_camara: "Envío entre cámaras", ajuste_manual: "Ajuste manual",
+      trozado: "Trozado en cámara",
     };
     const TIPOS = { filet: "Filet", pata: "Pata muslo", alita: "Alita", menudo: "Menudo", carcaza: "Carcaza", trocitos: "Trocitos" };
     const detalleTxt = (m) => {
@@ -349,7 +366,7 @@ const GranjaDashboardPage = () => {
         { header: "Saldo cajas",   valor: (m) => m.saldoCajas },
         { header: "Referencia", valor: (m) => {
             const r = m.referencia || {};
-            return [r.numeroLote != null ? "Lote #" + r.numeroLote : null, r.numeroEnvio, r.ticket]
+            return [r.numeroTrozado, r.numeroLote != null ? "Lote #" + r.numeroLote : null, r.numeroEnvio, r.ticket]
               .filter(Boolean).join(" · ");
           } },
         { header: "Usuario",       valor: (m) => m.registradoPorNombre || m.registradoPor?.nombreUsuario },
@@ -670,11 +687,17 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
           {/* Cámara Cañete */}
           <div className="col-12 col-md-6">
             <div className="card border-0 shadow-sm h-100">
-              <div className="card-header bg-white py-2">
+              <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
                 <h6 className="mb-0">
                   <i className="bi bi-snow me-2 text-info"></i>
                   Cámara Cañete
                 </h6>
+                {puedeGestionar && (resumen.stockCañete || []).length > 0 && (
+                  <button className="btn btn-outline-info btn-sm py-0" onClick={() => setMostrarTrozar(true)}
+                    title="Trozar pollo entero que está en esta cámara">
+                    <i className="bi bi-scissors me-1"></i>Trozar
+                  </button>
+                )}
               </div>
               <div className="card-body py-2">
                 {(resumen.stockCañete || []).length === 0 && (resumen.trozadosCañete || []).length === 0 ? (
@@ -778,6 +801,15 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
         </div>
       )}
 
+      {/* ── Trozados de enteros en cámara (2026-11-11) ── */}
+      {puedeGestionar && (
+        <TrozadosCamaraLista
+          recargar={recargarTrozados}
+          puedeAnular={puedeGestionar}
+          onAnulado={() => { setRecargarTrozados((n) => n + 1); cargarDatos(); if (mostrarHistorial) cargarHistorial(); }}
+        />
+      )}
+
       {/* ── Historial de movimientos de stock (superadmin y admin) ── */}
       {mandaTodo && (
         <div className="card border-0 shadow-sm mt-4">
@@ -847,9 +879,10 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
                         const opLabel = {
                           faena: "Faena (ingreso)", venta_pos: "Venta POS", despacho: "Despacho",
                           envio_camara: "Envío entre cámaras", ajuste_manual: "Ajuste manual",
+                          trozado: m.referencia?.anulacion ? "Anulación de trozado" : "Trozado en cámara",
                         }[m.operacion] || m.operacion;
                         const tipoBadge = {
-                          ingreso: "success", salida: "danger", transferencia: "info", ajuste: "warning",
+                          ingreso: "success", salida: "danger", transferencia: "info", ajuste: "warning", transformacion: "primary",
                         }[m.tipo] || "secondary";
                         const detalleTxt = (m.detalle || []).filter(esLineaDeCamara).map((d) =>
                           d.clase === "entero"
@@ -929,6 +962,18 @@ const totalCañeteKg          = (resumen.stockCañete || []).reduce((a, c) => a 
         </p>
       )}
       </div>
+
+      {mostrarTrozar && (
+        <TrozarCamaraModal
+          onClose={() => setMostrarTrozar(false)}
+          onGuardado={() => {
+            setMostrarTrozar(false);
+            setRecargarTrozados((n) => n + 1);
+            cargarDatos();
+            if (mostrarHistorial) cargarHistorial();
+          }}
+        />
+      )}
 
       {loteEditar && (
         <EditarLoteModal

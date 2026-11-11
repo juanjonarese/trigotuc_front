@@ -1014,6 +1014,36 @@ export const obtenerMovimientosCamara = async (filtros = {}) => {
   return handleResponse(response);
 };
 
+// ── Trozado de enteros en la cámara de Cañete (2026-11-11) ──────────────────
+export const obtenerLotesParaTrozar = async () => {
+  const response = await fetch(`${API_URL}/trozados-camara/lotes`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+export const obtenerTrozadosCamara = async (filtros = {}) => {
+  const qs = new URLSearchParams(
+    Object.entries(filtros).filter(([, v]) => v != null && v !== "")
+  ).toString();
+  const response = await fetch(`${API_URL}/trozados-camara${qs ? `?${qs}` : ""}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
+export const crearTrozadoCamara = async (data) => {
+  const response = await fetch(`${API_URL}/trozados-camara`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const anularTrozadoCamara = async (id, motivo) => {
+  const response = await fetch(`${API_URL}/trozados-camara/${id}/anular`, {
+    method: "PATCH", headers: getAuthHeaders(), body: JSON.stringify({ motivo }),
+  });
+  return handleResponse(response);
+};
+
 // ============= REPRODUCTORES (galpones de postura + incubación) =============
 // Sección hermana de Granja y Frigorífico. Flujo: lote reproductor → recría →
 // postura (semana 24) → recolección diaria → incubadora (18 días) → nacedora
