@@ -51,7 +51,6 @@ const DEPOSITOS = {
   planta: "Depósito Producción",
   forrajeria: "Depósito Forrajería",
   carbonato: "Depósito Carbonato",
-  trigotuc: "Depósito Trigotuc", // retirado el 12/11: lo nombran presupuestos viejos
 };
 // De qué cámara salió el pollo (2026-11-02).
 // La cámara "trigotuc" está en la forrajería: en Forratuc se llama así (2026-11-02).
