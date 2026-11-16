@@ -5,7 +5,8 @@ import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
 import Swal from "sweetalert2";
 import { escapeHtml } from "../utils/escapeHtml";
-import { empresaActual, clienteDeEmpresa } from "../utils/empresas";
+import { empresaActual, clienteDeEmpresa, obtenerEmpresasUsuario } from "../utils/empresas";
+import { buscarParecidos } from "../utils/clientesParecidos";
 import "../css/Tablas.css";
 
 // Una etiqueta por empresa del grupo a la que le compra el cliente.
@@ -53,12 +54,18 @@ const ClientesPage = () => {
 
   useEffect(() => {
     cargarClientes();
+    // Desde el 2026-11-16 cada uno tilda las empresas que ve (las que no ve no
+    // se tocan): el superadmin, todas; los demás, las de su login.
     if (esSuperadmin) {
       obtenerEmpresas()
         .then((data) => setCatalogoEmpresas(data.empresas || []))
         .catch(() => setCatalogoEmpresas([]));
+    } else {
+      const suyas = obtenerEmpresasUsuario();
+      setCatalogoEmpresas(suyas.length ? suyas : [{ clave: "avicola", nombre: "Trigotuc Avícola" }]);
     }
   }, [esSuperadmin]);
+  const nombreEmpresa = (clave) => catalogoEmpresas.find((e) => e.clave === clave)?.nombre || clave;
 
   // Los clientes anteriores no tienen la lista: eran de la avícola.
   const empresasDe = (cliente) =>
@@ -135,9 +142,64 @@ const ClientesPage = () => {
     });
   };
 
+  // Las que este usuario puede tildar, y de esas, las tildadas.
+  const tildadasVisibles = empresasCliente.filter((c) => catalogoEmpresas.some((e) => e.clave === c));
+
+  // Alta (2026-11-16): antes de crear, si en el padrón ya hay uno igual (mismo
+  // teléfono o CUIT) o parecido (nombre), se ofrece sumarlo a esta empresa en
+  // vez de cargarlo de nuevo. Devuelve true si se resolvió acá (sumado o cancelado).
+  const revisarParecidos = async () => {
+    const { iguales, parecidos } = buscarParecidos(formData, clientes);
+    if (!iguales.length && !parecidos.length) return false;
+    const lista = iguales.length ? iguales : parecidos;
+    const etiqueta = ({ cliente: c, motivo }) =>
+      `${c.razonSocial}${c.telefono ? ` · tel. ${c.telefono}` : ""}${c.cuit ? ` · CUIT ${c.cuit}` : ""} — cliente de ${empresasDe(c).map(nombreEmpresa).join(" y ")} (${motivo})`;
+    const opciones = Object.fromEntries(lista.map((x, i) => [String(i), etiqueta(x)]));
+    if (!iguales.length) opciones.nuevo = "Ninguno: es un cliente nuevo";
+    const { value, isConfirmed } = await Swal.fire({
+      icon: iguales.length ? "warning" : "question",
+      title: iguales.length ? "Este cliente ya existe" : "¿Es alguno de estos clientes?",
+      html: iguales.length
+        ? "Ya hay un cliente con ese teléfono o CUIT. Podés <strong>sumarlo</strong> a las empresas tildadas, sin cargarlo de nuevo."
+        : "Hay clientes con un nombre parecido. Si es uno de ellos, sumalo en vez de cargarlo de nuevo.",
+      input: "radio",
+      inputOptions: opciones,
+      inputValue: iguales.length ? "0" : undefined,
+      inputValidator: (v) => (!v ? "Elegí una opción." : undefined),
+      showCancelButton: true,
+      confirmButtonText: "Continuar",
+      cancelButtonText: "Volver al formulario",
+      width: 640,
+    });
+    if (!isConfirmed) return true;
+    if (value === "nuevo") return false;
+    const elegido = lista[Number(value)].cliente;
+    const yaTiene = empresasDe(elegido);
+    const faltan = tildadasVisibles.filter((c) => !yaTiene.includes(c));
+    if (!faltan.length) {
+      await Swal.fire("Ya es cliente", `${elegido.razonSocial} ya es cliente de ${tildadasVisibles.map(nombreEmpresa).join(" y ")}.`, "info");
+      handleCloseModal();
+      return true;
+    }
+    try {
+      await actualizarCliente(elegido._id, { empresas: [...yaTiene, ...faltan] });
+      await cargarClientes();
+      handleCloseModal();
+      Swal.fire({
+        icon: "success",
+        title: "Cliente sumado",
+        text: `${elegido.razonSocial} ahora también es cliente de ${faltan.map(nombreEmpresa).join(" y ")}. Sus datos no se tocaron.`,
+        confirmButtonColor: "#198754",
+      });
+    } catch (err) {
+      Swal.fire("Error", err.message || "No se pudo sumar el cliente.", "error");
+    }
+    return true;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (esSuperadmin && empresasCliente.length === 0) {
+    if (tildadasVisibles.length === 0 && (!editingCliente || empresasCliente.length === 0)) {
       Swal.fire({
         icon: "warning",
         title: "Faltan las empresas",
@@ -145,11 +207,10 @@ const ClientesPage = () => {
       });
       return;
     }
-    // El resto no elige empresas: en el alta se manda la actual (el back la
-    // acepta solo si la ve); al editar no se manda, para no tocarle la lista.
-    const datos = esSuperadmin
-      ? { ...formData, empresas: empresasCliente }
-      : editingCliente ? formData : { ...formData, empresas: [empresaActual(location.pathname)] };
+    if (!editingCliente && (await revisarParecidos())) return;
+    // Se manda la lista entera: el back solo toma, de lo que se tilda, las
+    // empresas que este usuario ve, y las demás las deja como estaban.
+    const datos = { ...formData, empresas: empresasCliente };
     try {
       if (editingCliente) {
         await actualizarCliente(editingCliente._id, datos);
@@ -513,8 +574,9 @@ const ClientesPage = () => {
                       </div>
                     </div>
 
-                    {/* Tope de cuenta corriente (2026-11-12): la cuenta corriente es de Forratuc. */}
-                    {(empresasCliente.includes("forratuc") || empresaActual(location.pathname) === "forratuc") && (
+                    {/* Lo de cada empresa aparece al tildarla. Tope de cuenta corriente
+                        (2026-11-12): la cuenta corriente es de Forratuc. */}
+                    {empresasCliente.includes("forratuc") && (
                       <div className="mb-3">
                         <label htmlFor="topeCuentaCorriente" className="form-label">
                           Tope de cuenta corriente
@@ -540,7 +602,7 @@ const ClientesPage = () => {
                       </div>
                     )}
 
-                    {esSuperadmin && catalogoEmpresas.length > 0 && (
+                    {catalogoEmpresas.length > 0 && (
                       <div className="mb-1">
                         <label className="form-label">
                           Le compra a <span className="text-danger">*</span>
@@ -563,6 +625,10 @@ const ClientesPage = () => {
                         </div>
                         <div className="form-text">
                           Un mismo cliente puede comprarle a varias empresas del grupo.
+                          {empresasCliente.some((c) => !catalogoEmpresas.some((e) => e.clave === c)) && (
+                            <> También le compra a empresas que no ves: esas no cambian.</>
+                          )}
+                          {!editingCliente && " Si ya existe en otra empresa, al guardar te ofrece sumarlo."}
                         </div>
                       </div>
                     )}
