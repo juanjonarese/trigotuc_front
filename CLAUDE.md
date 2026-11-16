@@ -249,6 +249,10 @@ no abra la sección Frigorífico.
 
 - `DashboarPage.jsx` — typo en el nombre, **no renombrar** (rompería imports).
 - `._id` siempre, nunca `.id` para documentos MongoDB.
+- Las pantallas se cargan con **`lazyConRecarga`** (`utils/recargaPorDeploy.js`), no con
+  `lazy` a secas: si una pestaña abierta antes de un deploy pide un archivo viejo, recarga
+  una vez sola (también por el evento `vite:preloadError` en `main.jsx`). Una pantalla
+  nueva en `App.jsx` va igual. `vercel.json` no reescribe `/assets/` (404 real).
 - Las funciones de impresión arman HTML con `document.write`. Interpolar SIEMPRE
   los datos de texto del usuario (razón social, observaciones, etc.) con
   `escapeHtml()` de `utils/escapeHtml.js` para evitar XSS.
