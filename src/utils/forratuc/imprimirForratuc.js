@@ -2,6 +2,7 @@ import { escapeHtml } from "../escapeHtml";
 import { formatearFechaLocal } from "../dateUtils";
 import { imprimirHtml } from "../imprimirHtml";
 import { seccionesConteo } from "./conteoStock";
+import { textoDelta, unidadCorta, fechaMovimiento } from "./historialStock";
 
 /**
  * Papeles de Forratuc (2026-10-21):
@@ -599,4 +600,56 @@ export const imprimirConteoDepositos = (stockAlimento, depositos, { operador = "
   const ahora = new Date().toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
   const hojas = depositos.map((d) => hojaConteo(d, stockAlimento.productos || [], { operador, ahora, extras: extras[d.key] || [] })).join("");
   imprimirHtml(documento(`Conteo de stock ${depositos.length === 1 ? depositos[0].etiqueta : ""}`, hojas, ESTILOS_CONTEO));
+};
+
+// ── Historial de movimientos del Stock (2026-11-16) ─────────────────────────
+// Lo que se ve en pantalla: el lugar, con el filtro de rubro / producto y todas
+// las páginas. El saldo es el de lo filtrado (historialStock.js).
+const ESTILOS_HISTORIAL = `${ESTILOS_CONTEO}
+  @page { size: A4 landscape; margin: 8mm 10mm; }
+  td { height: auto; padding-top: 1mm; padding-bottom: 1mm; font-size: 8.5pt; }
+  .sal { width: 20mm; }
+`;
+export const imprimirHistorialStock = (vista, { lugar, filtros = "", operador = "" } = {}) => {
+  const unidades = vista.unidades || [];
+  const ahora = new Date().toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
+  const filas = (vista.movimientos || [])
+    .map((m) => `<tr>
+      <td>${escapeHtml(fechaMovimiento(m))}</td>
+      <td>${escapeHtml(m.titulo || "")}</td>
+      <td>${escapeHtml([...new Set((m.items || []).map((it) => it.rubro))].join(", "))}</td>
+      <td>${escapeHtml(m.detalle || "")}${m.usuario ? ` <span class="gris">· ${escapeHtml(m.usuario)}</span>` : ""}</td>
+      <td class="num">${escapeHtml(textoDelta(m, unidades, 1))}</td>
+      <td class="num">${m.noMueve ? '<span class="gris">no mueve saldo</span>' : escapeHtml(textoDelta(m, unidades, -1))}</td>
+      ${unidades.map((u) => `<td class="num"><strong>${fmt(m.saldo?.[u.key])}</strong></td>`).join("")}
+    </tr>`)
+    .join("");
+  const cuerpo = `
+  <div class="hoja">
+    <header>
+      <div>
+        <div class="marca">${escapeHtml(EMISOR.razonSocial)}</div>
+        <div class="titulo">MOVIMIENTOS DE STOCK — ${escapeHtml(String(lugar).toUpperCase())}</div>
+      </div>
+      <div class="datos">
+        ${filtros ? `<div><strong>Filtro:</strong> ${escapeHtml(filtros)}</div>` : ""}
+        <div><strong>Impreso:</strong> ${escapeHtml(ahora)}</div>
+        ${operador ? `<div><strong>Imprimió:</strong> ${escapeHtml(operador)}</div>` : ""}
+      </div>
+    </header>
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha</th><th>Operación</th><th>Rubro</th><th>Detalle</th><th class="sal">Entrada</th><th class="sal">Salida</th>
+          ${unidades.map((u) => `<th class="sal">Saldo ${escapeHtml(unidadCorta(u.key))}</th>`).join("")}
+        </tr>
+      </thead>
+      <tbody>
+        ${filas || `<tr><td colspan="${6 + unidades.length}" class="gris">Sin movimientos.</td></tr>`}
+        <tr class="rubro"><td colspan="6">Saldo anterior</td>${unidades.map((u) => `<td class="num">${fmt(vista.saldoAnterior?.[u.key])}</td>`).join("")}</tr>
+      </tbody>
+    </table>
+    <div class="nota">El saldo es el que queda después de cada movimiento, del más nuevo al más viejo; arranca del stock de hoy${filtros ? " de lo filtrado" : ""}.</div>
+  </div>`;
+  imprimirHtml(documento(`Movimientos ${lugar}`, cuerpo, ESTILOS_HISTORIAL));
 };

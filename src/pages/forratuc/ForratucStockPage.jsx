@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import Layout from "../../components/Layout";
 import Pagination from "../../components/Pagination";
 import { BADGE_ESPECIE, especieDe, etiquetaEspecie, claveEntero, claveTrozado } from "../../utils/especies";
 import { formatearFechaLocal } from "../../utils/dateUtils";
-import { imprimirConteoDepositos } from "../../utils/forratuc/imprimirForratuc";
+import { imprimirConteoDepositos, imprimirHistorialStock } from "../../utils/forratuc/imprimirForratuc";
+import { filtrarHistorial, opcionesFiltro, exportarHistorialExcel } from "../../utils/forratuc/historialStock";
 import { exportarConteoExcel } from "../../utils/forratuc/conteoStock";
 import IngresoMercaderiaModal from "../../components/forratuc/IngresoMercaderiaModal";
 import {
@@ -83,6 +84,9 @@ const ForratucStockPage = () => {
   const [historial, setHistorial] = useState(null);
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
   const [paginaMov, setPaginaMov] = useState(1);
+  // Filtro del historial por rubro y producto (2026-11-16).
+  const [filtroRubro, setFiltroRubro] = useState("");
+  const [filtroProducto, setFiltroProducto] = useState("");
   const historialRef = useRef(null);
 
   const cargar = async () => {
@@ -101,6 +105,8 @@ const ForratucStockPage = () => {
     setLugar(key);
     setHistorial(null);
     setPaginaMov(1);
+    setFiltroRubro("");
+    setFiltroProducto("");
     setCargandoHistorial(true);
     setTimeout(() => historialRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
     try {
@@ -222,8 +228,24 @@ const ForratucStockPage = () => {
       ]
     : [];
 
+  // Con el filtro de rubro / producto, cada fila se queda con lo filtrado y el
+  // saldo se rehace para eso (utils/forratuc/historialStock.js).
+  const vista = useMemo(
+    () => filtrarHistorial(historial, { rubro: filtroRubro, producto: filtroProducto }),
+    [historial, filtroRubro, filtroProducto]
+  );
+  const opciones = useMemo(() => opcionesFiltro(historial, filtroRubro), [historial, filtroRubro]);
+  const hayFiltro = Boolean(filtroRubro || filtroProducto);
+  const textoFiltro = [filtroRubro, opciones.productos.find((x) => x.key === filtroProducto)?.nombre].filter(Boolean).join(" · ");
+  const tituloLugar = LUGARES.find((l) => l.key === lugar)?.titulo || lugar;
+  const exportar = (como) => {
+    const opts = { lugar: tituloLugar, filtros: textoFiltro, operador: localStorage.getItem("nombreUsuario") || "" };
+    if (como === "excel") exportarHistorialExcel(vista, opts);
+    else imprimirHistorialStock(vista, opts);
+  };
+
   // El saldo viene calculado sobre la lista entera: recién acá se corta la página.
-  const movimientos = historial?.movimientos || [];
+  const movimientos = vista?.movimientos || [];
   const movimientosPagina = movimientos.slice(
     (paginaMov - 1) * MOVIMIENTOS_POR_PAGINA,
     paginaMov * MOVIMIENTOS_POR_PAGINA
@@ -232,7 +254,7 @@ const ForratucStockPage = () => {
   // En los depósitos "bolsas" es la cantidad, cada producto en su unidad.
   const unidadCorta = { cajones: "caj", cajas: "cajas", huevos: "huevos", pollitos: "pollitos", bolsas: "unid." };
   const textoDelta = (m, signo) =>
-    (historial?.unidades || [])
+    (vista?.unidades || [])
       .filter((u) => signo * (m.delta[u.key] || 0) > 0)
       .map((u) => `${fmt(Math.abs(m.delta[u.key]))} ${unidadCorta[u.key] || u.key}`)
       .join(" · ");
@@ -430,18 +452,51 @@ const ForratucStockPage = () => {
               </div>
               {lugar && (
                 <div className="card-body">
+                  {historial && !cargandoHistorial && (
+                    <div className="d-flex flex-wrap align-items-end gap-2 mb-3">
+                      <div>
+                        <label className="form-label small mb-1">Rubro</label>
+                        <select className="form-select form-select-sm" value={filtroRubro}
+                          onChange={(e) => { setFiltroRubro(e.target.value); setFiltroProducto(""); setPaginaMov(1); }}>
+                          <option value="">Todos</option>
+                          {opciones.rubros.map((r) => <option key={r} value={r}>{r}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="form-label small mb-1">Producto</label>
+                        <select className="form-select form-select-sm" style={{ maxWidth: 320 }} value={filtroProducto}
+                          onChange={(e) => { setFiltroProducto(e.target.value); setPaginaMov(1); }}>
+                          <option value="">Todos</option>
+                          {opciones.productos.map((x) => <option key={x.key} value={x.key}>{x.nombre}</option>)}
+                        </select>
+                      </div>
+                      {hayFiltro && (
+                        <button className="btn btn-link btn-sm" onClick={() => { setFiltroRubro(""); setFiltroProducto(""); setPaginaMov(1); }}>
+                          Sacar filtro
+                        </button>
+                      )}
+                      <div className="ms-auto d-flex gap-2">
+                        <button className="btn btn-outline-primary btn-sm" onClick={() => exportar("imprimir")} disabled={!movimientos.length}>
+                          <i className="bi bi-printer me-1"></i>Imprimir
+                        </button>
+                        <button className="btn btn-outline-success btn-sm" onClick={() => exportar("excel")} disabled={!movimientos.length}>
+                          <i className="bi bi-file-earmark-excel me-1"></i>Excel
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {cargandoHistorial ? (
                     <p className="text-muted small mb-0">Cargando…</p>
                   ) : !historial ? null : movimientos.length === 0 ? (
-                    <p className="text-muted small mb-0">Sin movimientos registrados.</p>
+                    <p className="text-muted small mb-0">{hayFiltro ? "Sin movimientos de lo filtrado." : "Sin movimientos registrados."}</p>
                   ) : (
                     <>
                       <div className="alert alert-light border small py-2 mb-2">
                         <i className="bi bi-info-circle me-1"></i>
                         El saldo va como una cuenta corriente y es el que queda{" "}
                         <strong>después</strong> de cada movimiento, del más nuevo al más viejo. Arranca
-                        del stock que hay hoy ({historial.unidades
-                          .map((u) => `${fmt(historial.stockActual[u.key])} ${(unidadCorta[u.key] || u.key)}`)
+                        del stock que hay hoy{hayFiltro ? " de lo filtrado" : ""} ({vista.unidades
+                          .map((u) => `${fmt(vista.stockActual[u.key])} ${(unidadCorta[u.key] || u.key)}`)
                           .join(" y ")}) y se va hacia atrás, así que la primera fila siempre coincide con la realidad.
                       </div>
                       <div className="table-responsive">
@@ -453,7 +508,7 @@ const ForratucStockPage = () => {
                               <th>Detalle</th>
                               <th className="text-end text-success">Entrada</th>
                               <th className="text-end text-danger">Salida</th>
-                              {historial.unidades.map((u, i) => (
+                              {vista.unidades.map((u, i) => (
                                 <th key={u.key} className={`text-end ${i === 0 ? "border-start" : ""}`}>
                                   Saldo {(unidadCorta[u.key] || u.key)}
                                 </th>
@@ -495,7 +550,7 @@ const ForratucStockPage = () => {
                                       ? <span className="text-muted fw-normal" title="Los ajustes guardan una foto de lo afectado, no un movimiento con signo: no mueven el saldo.">no mueve saldo</span>
                                       : "")}
                                   </td>
-                                  {historial.unidades.map((u, i) => (
+                                  {vista.unidades.map((u, i) => (
                                     <td key={u.key} className={`text-end small fw-bold ${i === 0 ? "border-start" : ""}`}>
                                       {fmt(m.saldo[u.key])}
                                     </td>
@@ -506,9 +561,9 @@ const ForratucStockPage = () => {
                             {ultimaPagina && (
                               <tr className="table-light">
                                 <td colSpan={5} className="small text-muted">Saldo anterior</td>
-                                {historial.unidades.map((u, i) => (
+                                {vista.unidades.map((u, i) => (
                                   <td key={u.key} className={`text-end small fw-bold ${i === 0 ? "border-start" : ""}`}>
-                                    {fmt(historial.saldoAnterior[u.key])}
+                                    {fmt(vista.saldoAnterior[u.key])}
                                   </td>
                                 ))}
                               </tr>
