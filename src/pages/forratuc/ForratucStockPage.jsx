@@ -7,6 +7,7 @@ import { BADGE_ESPECIE, especieDe, etiquetaEspecie, claveEntero, claveTrozado } 
 import { formatearFechaLocal } from "../../utils/dateUtils";
 import { imprimirConteoDepositos } from "../../utils/forratuc/imprimirForratuc";
 import { exportarConteoExcel } from "../../utils/forratuc/conteoStock";
+import IngresoMercaderiaModal from "../../components/forratuc/IngresoMercaderiaModal";
 import {
   obtenerStockForratuc,
   obtenerMovimientosStockForratuc,
@@ -75,6 +76,7 @@ const ForratucStockPage = () => {
   const navigate = useNavigate();
   const [stock, setStock] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [ingresoAbierto, setIngresoAbierto] = useState(false);
 
   // Historial del lugar elegido.
   const [lugar, setLugar] = useState(null);
@@ -115,9 +117,10 @@ const ForratucStockPage = () => {
     if (lugar) verMovimientos(lugar);
   };
 
-  // "Ingresar mercadería" se sacó el 2026-11-06 (pedido del usuario): el alimento
-  // entra a los depósitos desde la Planta (orden de envío). Los ingresos viejos se
-  // siguen viendo y se pueden anular desde el historial.
+  // "Ingresar mercadería" se sacó el 2026-11-06 (el alimento iba a entrar por la
+  // Planta) y VOLVIÓ el 2026-11-16 (pedido del usuario: arrancan a vender y la
+  // Producción todavía no está en el sistema): un remito con varios renglones,
+  // solo de productos de depósito. Se anula desde el historial.
   // Planilla de conteo (2026-11-06): una hoja por depósito con lo del sistema y
   // columnas para lo contado y la diferencia (+/−), para el conteo a mano.
   const imprimirConteo = async () => {
@@ -247,6 +250,9 @@ const ForratucStockPage = () => {
             Forratuc — Stock
           </h1>
           <div className="d-flex gap-2">
+            <button className="btn btn-success btn-sm" onClick={() => setIngresoAbierto(true)} disabled={!stock}>
+              <i className="bi bi-box-arrow-in-down me-1"></i>Ingresar mercadería
+            </button>
             <button className="btn btn-outline-primary btn-sm" onClick={imprimirConteo} disabled={!stock}>
               <i className="bi bi-printer me-1"></i>Planilla de conteo
             </button>
@@ -391,8 +397,8 @@ const ForratucStockPage = () => {
             {alimento.totalBolsas === 0 && (
               <p className="text-muted small mb-1">
                 <i className="bi bi-info-circle me-1"></i>
-                Los depósitos todavía están vacíos: el alimento entra desde la Planta de alimento (orden
-                de envío). El presupuesto vende lo que hay en la forrajería.
+                Los depósitos todavía están vacíos: el alimento entra con <strong>Ingresar mercadería</strong> (o
+                desde la Planta, con una orden de envío). El presupuesto vende lo que hay en la forrajería.
               </p>
             )}
             {sinPesoBolsa && (
@@ -518,6 +524,15 @@ const ForratucStockPage = () => {
               )}
             </div>
           </>
+        )}
+
+        {ingresoAbierto && stock && (
+          <IngresoMercaderiaModal
+            depositos={stock.alimento.depositos.filter((d) => !d.retirado)}
+            productos={stock.alimento.productos.filter((p) => p.activo)}
+            onClose={() => setIngresoAbierto(false)}
+            onGuardado={() => { setIngresoAbierto(false); actualizar(); }}
+          />
         )}
       </div>
     </Layout>
