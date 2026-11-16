@@ -21,12 +21,18 @@ const ETIQUETA_RUBRO = { alimento: "Alimento balanceado", otros: "Otros" };
 export const seccionesConteo = (deposito, productos = [], extras = []) => {
   const filas = productos
     .filter((p) => p.activo || (p.porDeposito?.[deposito.key] || 0) !== 0)
-    .map((p) => ({ codigo: p.codigo, etiqueta: p.etiqueta, unidad: p.unidad, rubro: p.rubro, sistema: p.porDeposito?.[deposito.key] || 0 }));
+    .map((p) => ({
+      codigo: p.codigo, etiqueta: p.etiqueta, unidad: p.unidad, sistema: p.porDeposito?.[deposito.key] || 0,
+      // El alimento va por categoría (bovinos, parrilleros…; 2026-11-12).
+      grupo: p.rubro === "alimento"
+        ? `${ETIQUETA_RUBRO.alimento} — ${p.categoriaEtiqueta || "Sin categoría"}`
+        : ETIQUETA_RUBRO[p.rubro] || p.rubro,
+    }));
   return [
     ...extras,
-    ...[...new Set(filas.map((p) => p.rubro))].map((r) => ({
-      titulo: ETIQUETA_RUBRO[r] || r,
-      filas: filas.filter((p) => p.rubro === r),
+    ...[...new Set(filas.map((p) => p.grupo))].map((g) => ({
+      titulo: g,
+      filas: filas.filter((p) => p.grupo === g),
     })),
   ];
 };

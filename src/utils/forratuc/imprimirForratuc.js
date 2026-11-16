@@ -46,7 +46,12 @@ const pesos = (n) =>
   new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(Number(n || 0));
 
 const UNIDAD_PRECIO = { kg: "kg", maple: "maple", pollito: "u.", bolsa: "bolsa" };
-const DEPOSITOS = { forrajeria: "Depósito Forrajería", trigotuc: "Depósito Trigotuc" };
+const DEPOSITOS = {
+  planta: "Depósito Producción",
+  forrajeria: "Depósito Forrajería",
+  carbonato: "Depósito Carbonato",
+  trigotuc: "Depósito Trigotuc", // retirado el 12/11: lo nombran presupuestos viejos
+};
 // De qué cámara salió el pollo (2026-11-02).
 // La cámara "trigotuc" está en la forrajería: en Forratuc se llama así (2026-11-02).
 const CAMARAS = { trigotuc: "Cámara Forrajería", "cañete": "Cámara Cañete" };
@@ -56,7 +61,9 @@ const detallePago = (p, medios) => {
   const nombre = medios.find((m) => m.key === p.medio)?.etiqueta || p.medio;
   const partes = [];
   if (p.banco) partes.push(p.banco);
+  if (p.serie) partes.push(`serie ${p.serie}`);
   if (p.numero) partes.push(`N° ${p.numero}`);
+  if (p.fechaEmision) partes.push(`emisión ${formatearFechaLocal(p.fechaEmision)}`);
   if (p.fechaCobro) partes.push(`cobro ${formatearFechaLocal(p.fechaCobro)}`);
   if (p.librador) partes.push(`librador ${p.librador}`);
   if (p.cuotas) partes.push(`${p.cuotas} ${p.cuotas === 1 ? "cuota" : "cuotas"}`);
@@ -188,11 +195,23 @@ const cantidadDeLinea = (l) =>
     ? `${fmt(l.cantidad)} ${escapeHtml(l.unidad)}<br/><span class="gris">${fmt(l.kg)} kg</span>`
     : `${fmt(l.cantidad)} ${escapeHtml(l.unidad)}`;
 
+// El saldo de la cuenta corriente (2026-11-12, pedido del usuario; sin el tope):
+// el de antes, este presupuesto y el que queda. Es la foto guardada al emitir
+// (o al editar), así la reimpresión dice lo mismo. Los anteriores no lo tienen.
+const saldoCuentaPresupuesto = (p) => {
+  if (p.saldoAnterior == null || p.saldoPosterior == null) return "";
+  return `<div class="pago"><table class="pagos"><tbody>
+    <tr><td>Saldo anterior de la cuenta</td><td class="num">${pesos(p.saldoAnterior)}</td></tr>
+    <tr><td>Este presupuesto</td><td class="num">${pesos(p.total)}</td></tr>
+    <tr><td><strong>Saldo de la cuenta</strong></td><td class="num"><strong>${pesos(p.saldoPosterior)}</strong></td></tr>
+  </tbody></table></div>`;
+};
+
 // "Condiciones de pago: Contado" (o "Contado — Mercado Pago", o "Cuenta corriente").
 const condicionPresupuesto = (p, medios) => {
   if (!p.condicionPago) return "";
   if (p.condicionPago === "cuenta_corriente")
-    return `<div class="condicion"><strong>Condiciones de pago:</strong> Cuenta corriente</div>`;
+    return `<div class="condicion"><strong>Condiciones de pago:</strong> Cuenta corriente</div>${saldoCuentaPresupuesto(p)}`;
   const pagos = p.pagos || [];
   // Lo de siempre (un solo pago en efectivo) es "Contado" a secas.
   if (pagos.length === 1 && pagos[0].medio === "efectivo")
@@ -267,7 +286,9 @@ export const imprimirPresupuestoForratuc = (presupuesto, { medios = [], validezD
     ? Object.fromEntries(depositosAlimento.map((d) => [d.key, d.etiqueta]))
     : DEPOSITOS;
   const copia = copiaPresupuesto(presupuesto, { medios, validezDias, depositos });
-  const entra = (presupuesto.lineas || []).length <= RENGLONES_MEDIA_HOJA;
+  // El recuadro del saldo (cuenta corriente) ocupa como dos renglones.
+  const conSaldo = presupuesto.condicionPago === "cuenta_corriente" && presupuesto.saldoPosterior != null;
+  const entra = (presupuesto.lineas || []).length <= RENGLONES_MEDIA_HOJA - (conSaldo ? 2 : 0);
   imprimirHtml(documento(`Presupuesto ${presupuesto.numero || ""}`, duplicado(copia, entra)));
 };
 
@@ -458,7 +479,7 @@ export const imprimirCierreCajaForratuc = (caja, { operador = "" } = {}) => {
       ? `<table style="margin-top:1.5mm">
           <thead><tr><th>Recibo</th><th>Cliente</th><th>Cheque</th><th>Cobro</th><th>Importe</th></tr></thead>
           <tbody>${caja.cheques
-            .map((c) => `<tr><td>${escapeHtml(c.numero)}</td><td>${escapeHtml(c.cliente || "")}</td><td>${escapeHtml(`${c.medio} ${c.banco || ""} ${c.numeroCheque ? `n° ${c.numeroCheque}` : ""}`)}</td><td>${c.fechaCobro ? escapeHtml(formatearFechaLocal(c.fechaCobro)) : ""}</td><td class="num">${pesos(c.importe)}</td></tr>`)
+            .map((c) => `<tr><td>${escapeHtml(c.numero)}</td><td>${escapeHtml(c.cliente || "")}</td><td>${escapeHtml(`${c.medio} ${c.banco || ""} ${c.serie ? `serie ${c.serie} ` : ""}${c.numeroCheque ? `n° ${c.numeroCheque}` : ""}`)}</td><td>${c.fechaCobro ? escapeHtml(formatearFechaLocal(c.fechaCobro)) : ""}</td><td class="num">${pesos(c.importe)}</td></tr>`)
             .join("")}</tbody>
         </table>`
       : ""}

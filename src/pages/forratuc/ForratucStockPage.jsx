@@ -356,8 +356,15 @@ const ForratucStockPage = () => {
                   así un depósito nuevo aparece solo. Adentro, lo que tiene stock. */}
               {alimento.depositos.map((d) => {
                 const conStock = alimento.productos.filter((p) => p.porDeposito[d.key]);
+                // El alimento, por categoría (bovinos, parrilleros…; 2026-11-12):
+                // el back ya los manda ordenados.
+                const alimentos = conStock.filter((p) => p.rubro !== "otros");
+                const categoriasDep = [...new Set(alimentos.map((p) => p.categoriaEtiqueta || "Sin categoría"))];
                 const rubros = [
-                  { titulo: "Alimento balanceado", items: conStock.filter((p) => p.rubro !== "otros") },
+                  ...categoriasDep.map((c) => ({
+                    titulo: `Alimento balanceado — ${c}`,
+                    items: alimentos.filter((p) => (p.categoriaEtiqueta || "Sin categoría") === c),
+                  })),
                   { titulo: "Otros", items: conStock.filter((p) => p.rubro === "otros") },
                 ].filter((g) => g.items.length > 0);
                 return (

@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { obtenerSolicitudesEdicionForratuc } from "../../services/api";
 
 // Menú de Forratuc (local de venta al público, en desarrollo). Orden pedido por
 // el usuario (2026-10-30): inicio, stock, ventas (presupuestos), cierre de caja,
@@ -21,6 +22,21 @@ const ITEMS = [
 
 const MenuForratuc = ({ ctx, grupo }) => {
   const { navigate, location, isActive } = ctx;
+  // Pedidos de edición de presupuestos esperando al superadmin (2026-11-12):
+  // el número al lado de "Presupuestos", por si no tiene las notificaciones prendidas.
+  const esSuperadmin = localStorage.getItem("rolUsuario") === "superadmin";
+  const [pedidos, setPedidos] = useState(0);
+  useEffect(() => {
+    if (!esSuperadmin) return undefined;
+    let vigente = true;
+    const leer = () =>
+      obtenerSolicitudesEdicionForratuc("pendiente")
+        .then((l) => vigente && setPedidos(Array.isArray(l) ? l.length : 0))
+        .catch(() => {});
+    leer();
+    const t = setInterval(leer, 60000);
+    return () => { vigente = false; clearInterval(t); };
+  }, [esSuperadmin, location.pathname]);
   return (
     <>
           <a
@@ -44,6 +60,9 @@ const MenuForratuc = ({ ctx, grupo }) => {
             >
               <i className={`bi ${it.icono} fs-5`}></i>
               <span>{it.texto}</span>
+              {it.ruta === "/forratuc/mostrador" && pedidos > 0 && (
+                <span className="badge rounded-pill bg-warning text-dark ms-auto" title="Pedidos de edición para autorizar">{pedidos}</span>
+              )}
             </a>
           ))}
 

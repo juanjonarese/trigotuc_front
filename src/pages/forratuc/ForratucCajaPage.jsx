@@ -319,7 +319,7 @@ const ForratucCajaPage = () => {
                             <tr key={i}>
                               <td>{c.numero}</td>
                               <td>{c.cliente}</td>
-                              <td>{c.medio} {c.banco} {c.numeroCheque ? `n° ${c.numeroCheque}` : ""}</td>
+                              <td>{c.medio} {c.banco} {c.serie ? `serie ${c.serie}` : ""} {c.numeroCheque ? `n° ${c.numeroCheque}` : ""}</td>
                               <td className="text-nowrap">{c.fechaCobro ? String(c.fechaCobro).slice(0, 10).split("-").reverse().join("/") : "—"}</td>
                               <td className="text-end">{pesos(c.importe)}</td>
                             </tr>

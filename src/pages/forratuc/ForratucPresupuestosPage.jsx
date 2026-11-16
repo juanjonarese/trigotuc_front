@@ -21,7 +21,11 @@ import {
   obtenerPresupuestosForratuc,
   crearPresupuestoForratuc,
   anularPresupuestoForratuc,
+  editarPresupuestoForratuc,
+  obtenerSolicitudesEdicionForratuc,
+  resolverSolicitudEdicionForratuc,
 } from "../../services/api";
+import SolicitudesEdicionPresupuesto from "../../components/forratuc/SolicitudesEdicionPresupuesto";
 
 /**
  * Mostrador de Forratuc (2026-10-21): el presupuesto, que es su "factura".
@@ -100,6 +104,7 @@ const ForratucPresupuestosPage = () => {
   const [importeEfectivo, setImporteEfectivo] = useState("");
   const [importeMP, setImporteMP] = useState("");
   const [operacionMP, setOperacionMP] = useState("");
+  // { saldo, tope } del cliente en cuenta corriente (tope null = sin tope; 2026-11-12).
   const [saldoCliente, setSaldoCliente] = useState(null);
   // Lista de precios: la por defecto, hasta que se elija otra.
   const [listaId, setListaId] = useState("");
@@ -110,6 +115,30 @@ const ForratucPresupuestosPage = () => {
   const [hasta, setHasta] = useState(obtenerFechaHoy());
   const [presupuestos, setPresupuestos] = useState([]);
   const [loadingLista, setLoadingLista] = useState(false);
+
+  // ── Edición (2026-11-12): el superadmin edita directo; los demás piden
+  // autorización y el superadmin la acepta o rechaza. `editando` es el
+  // presupuesto que se está editando en el mismo modal del nuevo.
+  const esSuperadmin = localStorage.getItem("rolUsuario") === "superadmin";
+  const [editando, setEditando] = useState(null);
+  const [solicitudes, setSolicitudes] = useState([]);
+  const cargarSolicitudes = async () => {
+    try {
+      // El superadmin, lo que espera su respuesta; los demás, los suyos (también
+      // los ya resueltos, para que vean la respuesta).
+      const lista = await obtenerSolicitudesEdicionForratuc(esSuperadmin ? "pendiente" : undefined);
+      setSolicitudes(esSuperadmin ? lista : lista.slice(0, 10));
+    } catch {
+      setSolicitudes([]);
+    }
+  };
+  useEffect(() => {
+    cargarSolicitudes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const pendientePorPresupuesto = new Set(
+    solicitudes.filter((s) => s.estado === "pendiente").map((s) => String(s.presupuesto))
+  );
 
   const cargar = async () => {
     try {
@@ -161,9 +190,74 @@ const ForratucPresupuestosPage = () => {
 
   // Al abrir el modal se relee el stock: entre una venta y otra pudo cambiar.
   const abrirNuevo = () => {
+    // Si lo último fue una edición, el nuevo arranca vacío.
+    if (editando) {
+      setEditando(null);
+      limpiar();
+    }
     setNuevoAbierto(true);
     cargar();
   };
+
+  const cerrarModal = () => {
+    setNuevoAbierto(false);
+    // Lo cargado de un nuevo queda para cuando se vuelva a abrir; una edición, no.
+    if (editando) {
+      setEditando(null);
+      limpiar();
+    }
+  };
+
+  // Carga un presupuesto emitido en el formulario (2026-11-12).
+  const abrirEditar = (p) => {
+    if (p.lineas.some((l) => !l.productoClave))
+      return Swal.fire("No se puede editar", `El presupuesto ${p.numero} es del formato anterior a los productos con código.`, "info");
+    if (pendientePorPresupuesto.has(String(p._id)))
+      return Swal.fire("Ya hay un pedido", `El presupuesto ${p.numero} ya tiene un pedido de edición esperando la respuesta del superadmin.`, "info");
+    setEditando(p);
+    setDeposito(p.deposito || "");
+    setFecha(String(p.fecha).slice(0, 10));
+    if (p.cliente) {
+      setModoCliente("padron");
+      setClienteId(String(p.cliente?._id || p.cliente));
+      setClienteNombre("");
+    } else {
+      setModoCliente("final");
+      setClienteId("");
+      setClienteNombre(p.clienteNombre || "");
+    }
+    setRenglones(p.lineas.map((l) => ({
+      id: siguienteId++,
+      codigo: l.codigo || "",
+      producto: l.productoClave,
+      cantidad: String(l.cantidad),
+      kg: l.clase === "entero" && l.kg != null ? String(l.kg) : "",
+      kgTocado: l.clase === "entero" && l.kg != null,
+      precio: String(l.precioUnitario),
+      precioTocado: true,
+    })));
+    const pagos = p.pagos || [];
+    const mp = pagos.find((pg) => pg.medio === "mercado_pago");
+    if (p.condicionPago === "cuenta_corriente") setFormaPago("cuenta_corriente");
+    else if (pagos.length > 1) {
+      setFormaPago("combinado");
+      setImporteEfectivo(String(pagos.find((pg) => pg.medio === "efectivo")?.importe ?? ""));
+      setImporteMP(String(mp?.importe ?? ""));
+    } else setFormaPago(p.formaPago || (mp ? "mercado_pago" : "efectivo"));
+    setOperacionMP(mp?.operacion || "");
+    setListaId(p.listaPrecio || "");
+    setListaTocada(true);
+    setObservaciones(p.observaciones || "");
+    setNuevoAbierto(true);
+    cargar();
+  };
+
+  // Lo que este mismo presupuesto ya sacó de un producto: al editarlo vuelve al
+  // stock antes de descontar lo nuevo, así que cuenta como disponible.
+  const propioDe = (clave) =>
+    editando && deposito === editando.deposito
+      ? editando.lineas.filter((l) => l.productoClave === clave).reduce((a, l) => a + l.cantidad, 0)
+      : 0;
 
   const kgPorCajon = constantes?.kgPorCajon ?? 20;
   const huevosPorMaple = constantes?.huevosPorMaple ?? stockHuevos?.huevosPorMaple ?? 30;
@@ -196,11 +290,18 @@ const ForratucPresupuestosPage = () => {
     (resumen?.trozadosTrigotucDetalle || []).filter(
       (t) => especieDe(t) === prod?.especie && t.tipo === prod?.tipo && (t.clase || "A") === prod?.claseTrozado && t.cajas > 0
     );
-  const kgCajaDe = (prod) => Number(trozadoDe(prod)[0]?.kgCaja) || 0;
+  // Al editar, si este presupuesto se llevó todas las cajas, vale la de su renglón.
+  const kgCajaDe = (prod) =>
+    Number(trozadoDe(prod)[0]?.kgCaja) ||
+    Number(editando?.lineas.find((l) => l.productoClave === prod?.clave)?.kgCaja) || 0;
 
   // Lo que hay de lo que pide el renglón en el depósito de la venta. null = el
-  // producto no está en ese depósito.
+  // producto no está en ese depósito. Editando, más lo que ya tiene este presupuesto.
   const disponibleDe = (r) => {
+    const hay = disponibleEnStock(r);
+    return hay == null ? null : hay + propioDe(r.producto);
+  };
+  const disponibleEnStock = (r) => {
     const prod = productoPorClave[r.producto];
     if (!prod || !hayEnDeposito(prod)) return null;
     if (prod.rubro === "pollo")
@@ -251,10 +352,17 @@ const ForratucPresupuestosPage = () => {
     if (formaPago !== "cuenta_corriente" || modoCliente !== "padron" || !clienteId) return;
     let vigente = true;
     obtenerCuentaClienteForratuc(clienteId)
-      .then((c) => vigente && setSaldoCliente(c.saldo))
+      .then((c) => vigente && setSaldoCliente({ saldo: c.saldo, tope: c.tope ?? null }))
       .catch(() => {});
     return () => { vigente = false; };
   }, [formaPago, modoCliente, clienteId]);
+
+  // Lo que ya debe, sin lo que este mismo presupuesto suma si se está editando.
+  const deudaCliente = saldoCliente == null
+    ? null
+    : saldoCliente.saldo -
+      (editando?.condicionPago === "cuenta_corriente" && String(editando.cliente?._id || editando.cliente) === String(clienteId) ? editando.total : 0);
+  const superaTope = formaPago === "cuenta_corriente" && saldoCliente?.tope != null && redondear(deudaCliente + total) > saldoCliente.tope;
 
   const elegirFormaPago = (f) => {
     const contado = ["efectivo", "mercado_pago"];
@@ -338,7 +446,8 @@ const ForratucPresupuestosPage = () => {
 
   const emitir = async (e) => {
     e.preventDefault();
-    if (fecha < obtenerFechaHoy())
+    // Editando, la fecha es la del presupuesto (no se cambia).
+    if (!editando && fecha < obtenerFechaHoy())
       return Swal.fire("Fecha anterior a hoy", "El presupuesto no puede llevar una fecha anterior a hoy.", "warning");
     if (modoCliente === "padron" && !clienteId)
       return Swal.fire("Falta el cliente", "Elegí un cliente del padrón, o pasá a consumidor final.", "warning");
@@ -365,6 +474,10 @@ const ForratucPresupuestosPage = () => {
 
     if (formaPago === "cuenta_corriente" && modoCliente !== "padron")
       return Swal.fire("Cuenta corriente", "La cuenta corriente es solo para clientes del padrón.", "warning");
+    // El back lo controla igual (2026-11-12).
+    if (superaTope)
+      return Swal.fire("Pasa el tope de cuenta corriente",
+        `El tope es ${pesos(saldoCliente.tope)}, ya debe ${pesos(deudaCliente)} y le quedan ${pesos(Math.max(0, saldoCliente.tope - deudaCliente))}. Que pague antes o que se cobre al contado.`, "error");
     if (formaPago === "combinado") {
       if (!(Number(importeEfectivo) > 0) || !(Number(importeMP) > 0))
         return Swal.fire("Pago combinado", "Poné cuánto paga en efectivo y cuánto por Mercado Pago.", "warning");
@@ -380,28 +493,31 @@ const ForratucPresupuestosPage = () => {
       return linea;
     });
 
+    const datos = {
+      fecha,
+      ...(modoCliente === "padron" ? { cliente: clienteId } : { clienteNombre: clienteNombre.trim() }),
+      deposito,
+      lineas,
+      ...(formaPago === "combinado"
+        ? {
+            condicionPago: "contado",
+            pagos: [
+              { medio: "efectivo", importe: Number(importeEfectivo) },
+              { medio: "mercado_pago", importe: Number(importeMP), operacion: operacionMP.trim() || undefined },
+            ],
+          }
+        : {
+            formaPago,
+            operacion: formaPago === "mercado_pago" ? operacionMP.trim() || undefined : undefined,
+          }),
+      listaPrecio: listaId || undefined,
+      observaciones: observaciones.trim() || undefined,
+    };
+    if (editando) return guardarEdicion(datos);
+
     setSaving(true);
     try {
-      const presupuesto = await crearPresupuestoForratuc({
-        fecha,
-        ...(modoCliente === "padron" ? { cliente: clienteId } : { clienteNombre: clienteNombre.trim() }),
-        deposito,
-        lineas,
-        ...(formaPago === "combinado"
-          ? {
-              condicionPago: "contado",
-              pagos: [
-                { medio: "efectivo", importe: Number(importeEfectivo) },
-                { medio: "mercado_pago", importe: Number(importeMP), operacion: operacionMP.trim() || undefined },
-              ],
-            }
-          : {
-              formaPago,
-              operacion: formaPago === "mercado_pago" ? operacionMP.trim() || undefined : undefined,
-            }),
-        listaPrecio: listaId || undefined,
-        observaciones: observaciones.trim() || undefined,
-      });
+      const presupuesto = await crearPresupuestoForratuc(datos);
       limpiar();
       setNuevoAbierto(false);
       cargar();
@@ -419,6 +535,117 @@ const ForratucPresupuestosPage = () => {
       Swal.fire("Error", err.message || "No se pudo emitir el presupuesto.", "error");
     } finally {
       setSaving(false);
+    }
+  };
+
+  // El superadmin guarda y reimprime; los demás mandan el pedido con un motivo.
+  const guardarEdicion = async (datos) => {
+    let motivo;
+    if (!esSuperadmin) {
+      const r = await Swal.fire({
+        title: `Pedir autorización — ${escapeHtml(editando.numero)}`,
+        html: "Los cambios <strong>no se aplican</strong> hasta que el superadmin los acepte. Le llega una notificación.",
+        input: "text",
+        inputPlaceholder: "Por qué hay que editarlo",
+        inputValidator: (v) => (!v?.trim() ? "Escribí el motivo." : undefined),
+        showCancelButton: true,
+        confirmButtonText: "Pedir autorización",
+        cancelButtonText: "Volver",
+      });
+      if (!r.isConfirmed) return;
+      motivo = r.value.trim();
+    }
+    setSaving(true);
+    try {
+      const res = await editarPresupuestoForratuc(editando._id, { ...datos, motivo });
+      setNuevoAbierto(false);
+      setEditando(null);
+      limpiar();
+      cargar();
+      cargarLista();
+      cargarSolicitudes();
+      if (res.aplicado) {
+        imprimirPresupuestoForratuc(res.presupuesto, opcionesImpresion);
+        Swal.fire({
+          icon: "success",
+          title: `Presupuesto ${res.presupuesto.numero} editado`,
+          html: `Total ${pesos(res.presupuesto.total)}.<br/><span class="text-muted">Se abrió la impresión con los cambios.</span>`,
+          timer: 3500,
+          showConfirmButton: false,
+        });
+      } else {
+        Swal.fire("Pedido enviado", "Cuando el superadmin lo acepte se aplican los cambios. Lo ves arriba, en tus pedidos.", "success");
+      }
+    } catch (err) {
+      Swal.fire("Error", err.message || "No se pudo editar el presupuesto.", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const aprobarSolicitud = async (s) => {
+    const { isConfirmed } = await Swal.fire({
+      title: `¿Aceptar la edición de ${escapeHtml(s.numero)}?`,
+      html: `Se devuelve el stock de antes y se descuenta el nuevo.<br/>Total ${pesos(s.antes?.total)} → <strong>${pesos(s.propuesta?.total)}</strong>.`,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Aceptar y aplicar",
+      confirmButtonColor: "#198754",
+      cancelButtonText: "Volver",
+    });
+    if (!isConfirmed) return;
+    try {
+      const { presupuesto } = await resolverSolicitudEdicionForratuc(s._id, "aprobar");
+      cargar();
+      cargarLista();
+      cargarSolicitudes();
+      const { isConfirmed: imprimir } = await Swal.fire({
+        icon: "success",
+        title: `Presupuesto ${presupuesto.numero} editado`,
+        text: "¿Lo imprimís con los cambios?",
+        showCancelButton: true,
+        confirmButtonText: "Imprimir",
+        cancelButtonText: "No",
+      });
+      if (imprimir) imprimirPresupuestoForratuc(presupuesto, opcionesImpresion);
+    } catch (err) {
+      // Lo más común: el stock de hoy no alcanza. El pedido sigue esperando.
+      Swal.fire("No se pudo aplicar", `${err.message || "Error"} El pedido sigue esperando: podés rechazarlo.`, "error");
+    }
+  };
+
+  const rechazarSolicitud = async (s) => {
+    const { value, isConfirmed } = await Swal.fire({
+      title: `¿Rechazar la edición de ${escapeHtml(s.numero)}?`,
+      input: "text",
+      inputPlaceholder: "Motivo (opcional, lo ve quien lo pidió)",
+      showCancelButton: true,
+      confirmButtonText: "Rechazar",
+      confirmButtonColor: "#dc3545",
+      cancelButtonText: "Volver",
+    });
+    if (!isConfirmed) return;
+    try {
+      await resolverSolicitudEdicionForratuc(s._id, "rechazar", { motivo: value?.trim() || undefined });
+      cargarSolicitudes();
+    } catch (err) {
+      Swal.fire("Error", err.message || "No se pudo rechazar.", "error");
+    }
+  };
+
+  const cancelarSolicitud = async (s) => {
+    const { isConfirmed } = await Swal.fire({
+      title: `¿Cancelar el pedido de ${escapeHtml(s.numero)}?`,
+      showCancelButton: true,
+      confirmButtonText: "Sí, cancelar",
+      cancelButtonText: "Volver",
+    });
+    if (!isConfirmed) return;
+    try {
+      await resolverSolicitudEdicionForratuc(s._id, "cancelar");
+      cargarSolicitudes();
+    } catch (err) {
+      Swal.fire("Error", err.message || "No se pudo cancelar.", "error");
     }
   };
 
@@ -443,6 +670,7 @@ const ForratucPresupuestosPage = () => {
       await anularPresupuestoForratuc(p._id, motivo.trim());
       await Swal.fire({ icon: "success", title: "Anulado", timer: 1400, showConfirmButton: false });
       cargarLista();
+      cargarSolicitudes(); // un pedido de edición que esperaba queda cancelado
       cargar();
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudo anular.", "error");
@@ -468,7 +696,12 @@ const ForratucPresupuestosPage = () => {
           </button>
         </div>
 
-        {/* ══════════ NUEVO (modal) ══════════ */}
+        {/* ══════════ PEDIDOS DE EDICIÓN (2026-11-12) ══════════ */}
+        <SolicitudesEdicionPresupuesto solicitudes={solicitudes} esSuperadmin={esSuperadmin}
+          mediosPago={constantes?.mediosHistoricos || mediosPago} depositos={depositos}
+          onAprobar={aprobarSolicitud} onRechazar={rechazarSolicitud} onCancelar={cancelarSolicitud} />
+
+        {/* ══════════ NUEVO / EDITAR (modal) ══════════ */}
         {/* Sin modal-dialog-scrollable: le cortaría el desplegable al BuscadorCliente;
             el que scrollea es el .modal entero. */}
         {nuevoAbierto && (
@@ -477,11 +710,23 @@ const ForratucPresupuestosPage = () => {
             <div className="modal-dialog modal-xl" role="document">
               <div className="modal-content">
                 <div className="modal-header">
-                  <h5 className="modal-title"><i className="bi bi-plus-circle me-2"></i>Nuevo presupuesto</h5>
-                  <button type="button" className="btn-close" onClick={() => setNuevoAbierto(false)} disabled={saving}
-                    title="Cerrar (lo cargado queda para cuando lo vuelvas a abrir)"></button>
+                  <h5 className="modal-title">
+                    {editando
+                      ? <><i className="bi bi-pencil-square me-2"></i>Editar presupuesto {editando.numero}</>
+                      : <><i className="bi bi-plus-circle me-2"></i>Nuevo presupuesto</>}
+                  </h5>
+                  <button type="button" className="btn-close" onClick={cerrarModal} disabled={saving}
+                    title={editando ? "Cerrar sin cambios" : "Cerrar (lo cargado queda para cuando lo vuelvas a abrir)"}></button>
                 </div>
                 <div className="modal-body bg-light">
+          {editando && (
+            <div className={`alert ${esSuperadmin ? "alert-info" : "alert-warning"} py-2 small`}>
+              <i className="bi bi-info-circle me-1"></i>
+              {esSuperadmin
+                ? "Al guardar se devuelve el stock de antes y se descuenta el nuevo. El número y la fecha no cambian."
+                : "Los cambios no se aplican hasta que el superadmin los acepte: al guardar le llega el pedido con lo que cambia."}
+            </div>
+          )}
           {loading ? (
           <div className="text-center p-4"><div className="spinner-border text-primary" role="status"></div></div>
         ) : (
@@ -500,7 +745,9 @@ const ForratucPresupuestosPage = () => {
                   <div className="col-12 col-sm-6 col-lg-2">
                     <label className="form-label fw-semibold small mb-1">Fecha</label>
                     {/* No se emite con fecha anterior a hoy (2026-11-02); el back lo controla igual. */}
-                    <input type="date" className="form-control" value={fecha} min={obtenerFechaHoy()} onChange={(e) => setFecha(e.target.value)} required />
+                    <input type="date" className="form-control" value={fecha} min={editando ? undefined : obtenerFechaHoy()}
+                      disabled={!!editando} title={editando ? "La fecha del presupuesto no se edita" : undefined}
+                      onChange={(e) => setFecha(e.target.value)} required />
                   </div>
                   <div className="col-12 col-sm-8 col-lg-4">
                     <div className="d-flex justify-content-between align-items-end mb-1">
@@ -710,12 +957,21 @@ const ForratucPresupuestosPage = () => {
                         placeholder="N° de operación (opcional)" value={operacionMP} onChange={(e) => setOperacionMP(e.target.value)} />
                     </div>
                   ) : (
-                    <div className="alert alert-warning py-2 small mb-0">
+                    <div className={`alert ${superaTope ? "alert-danger" : "alert-warning"} py-2 small mb-0`}>
                       <i className="bi bi-journal-text me-1"></i>
                       Va a la <strong>cuenta corriente</strong> del cliente: {pesos(total)} al debe.
-                      {saldoCliente != null && (
-                        <> Hoy debe <strong>{pesos(saldoCliente)}</strong>; queda en <strong>{pesos(saldoCliente + total)}</strong>.</>
+                      {deudaCliente != null && (
+                        <> Hoy debe <strong>{pesos(deudaCliente)}</strong>; queda en <strong>{pesos(deudaCliente + total)}</strong>.</>
                       )}
+                      {saldoCliente && (saldoCliente.tope == null ? (
+                        <div className="mt-1 text-muted">Sin tope de cuenta corriente.</div>
+                      ) : (
+                        <div className="mt-1">
+                          <i className="bi bi-shield-lock me-1"></i>
+                          Tope <strong>{pesos(saldoCliente.tope)}</strong> · le quedan <strong>{pesos(Math.max(0, saldoCliente.tope - deudaCliente))}</strong>.
+                          {superaTope && <strong className="ms-1">Este presupuesto pasa el tope: que pague antes o que se cobre al contado.</strong>}
+                        </div>
+                      ))}
                       {!clienteId && " Elegí el cliente del padrón."}
                     </div>
                   )}
@@ -727,11 +983,15 @@ const ForratucPresupuestosPage = () => {
                 <div className="d-flex flex-wrap justify-content-between align-items-center gap-2">
                   <span className="text-muted small">
                     <i className="bi bi-info-circle me-1"></i>
-                    Al emitir se descuenta el stock: pollo, huevo y pollitos de la avícola, y el alimento de la forrajería.
+                    {editando
+                      ? "El stock se rehace: vuelve lo de antes y sale lo nuevo."
+                      : "Al emitir se descuenta el stock: pollo, huevo y pollitos de la avícola, y el alimento de la forrajería."}
                   </span>
-                  <button type="submit" className="btn btn-success" disabled={saving}>
-                    {saving ? <span className="spinner-border spinner-border-sm me-1"></span> : <i className="bi bi-printer me-1"></i>}
-                    Emitir e imprimir
+                  <button type="submit" className={`btn ${editando && !esSuperadmin ? "btn-warning" : "btn-success"}`} disabled={saving}>
+                    {saving
+                      ? <span className="spinner-border spinner-border-sm me-1"></span>
+                      : <i className={`bi ${editando && !esSuperadmin ? "bi-send" : "bi-printer"} me-1`}></i>}
+                    {!editando ? "Emitir e imprimir" : esSuperadmin ? "Guardar cambios e imprimir" : "Pedir autorización"}
                   </button>
                 </div>
               </div>
@@ -792,6 +1052,15 @@ const ForratucPresupuestosPage = () => {
                             <td className="fw-semibold text-nowrap">
                               {p.numero}
                               {anulado && <span className="badge bg-danger ms-1">Anulado</span>}
+                              {p.ediciones > 0 && (
+                                <span className="badge bg-info-subtle text-info-emphasis border ms-1"
+                                  title={`Editado${p.editadoPor?.nombreUsuario ? ` por ${p.editadoPor.nombreUsuario}` : ""}${p.fechaEdicion ? ` el ${new Date(p.fechaEdicion).toLocaleString("es-AR")}` : ""}`}>
+                                  editado
+                                </span>
+                              )}
+                              {pendientePorPresupuesto.has(String(p._id)) && (
+                                <span className="badge bg-warning text-dark ms-1">edición pedida</span>
+                              )}
                             </td>
                             <td className="text-nowrap">{formatearFechaLocal(p.fecha)}</td>
                             <td>
@@ -822,6 +1091,12 @@ const ForratucPresupuestosPage = () => {
                               <button className="btn btn-sm btn-outline-secondary me-1" title="Reimprimir" onClick={() => imprimirPresupuestoForratuc(p, opcionesImpresion)}>
                                 <i className="bi bi-printer"></i>
                               </button>
+                              {!anulado && (
+                                <button className="btn btn-sm btn-outline-primary me-1"
+                                  title={esSuperadmin ? "Editar" : "Editar (pide autorización al superadmin)"} onClick={() => abrirEditar(p)}>
+                                  <i className="bi bi-pencil"></i>
+                                </button>
+                              )}
                               {!anulado && (
                                 <button className="btn btn-sm btn-outline-danger" title="Anular" onClick={() => anular(p)}>
                                   <i className="bi bi-x-circle"></i>

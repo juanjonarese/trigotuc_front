@@ -40,6 +40,7 @@ const ClientesPage = () => {
     contacto: "",
     telefono: "",
     email: "",
+    topeCuentaCorriente: "",
   });
 
   // A qué empresas del grupo le compra el cliente (2026-10-16). El padrón es
@@ -93,6 +94,7 @@ const ClientesPage = () => {
         contacto: cliente.contacto || "",
         telefono: cliente.telefono || "",
         email: cliente.email || "",
+        topeCuentaCorriente: cliente.topeCuentaCorriente ?? "",
       });
       setEmpresasCliente(empresasDe(cliente));
     } else {
@@ -106,6 +108,7 @@ const ClientesPage = () => {
         contacto: "",
         telefono: "",
         email: "",
+        topeCuentaCorriente: "",
           });
     }
     setShowModal(true);
@@ -121,6 +124,7 @@ const ClientesPage = () => {
       contacto: "",
       telefono: "",
       email: "",
+      topeCuentaCorriente: "",
       });
   };
 
@@ -508,6 +512,33 @@ const ClientesPage = () => {
                         />
                       </div>
                     </div>
+
+                    {/* Tope de cuenta corriente (2026-11-12): la cuenta corriente es de Forratuc. */}
+                    {(empresasCliente.includes("forratuc") || empresaActual(location.pathname) === "forratuc") && (
+                      <div className="mb-3">
+                        <label htmlFor="topeCuentaCorriente" className="form-label">
+                          Tope de cuenta corriente
+                        </label>
+                        <div className="input-group" style={{ maxWidth: 260 }}>
+                          <span className="input-group-text">$</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            className="form-control"
+                            id="topeCuentaCorriente"
+                            name="topeCuentaCorriente"
+                            value={formData.topeCuentaCorriente}
+                            onChange={handleChange}
+                            placeholder="Sin tope"
+                          />
+                        </div>
+                        <div className="form-text">
+                          Hasta cuánto puede deber en la cuenta corriente de Forratuc. Vacío = sin tope; 0 = no se le fía.
+                          El presupuesto no deja pasarlo.
+                        </div>
+                      </div>
+                    )}
 
                     {esSuperadmin && catalogoEmpresas.length > 0 && (
                       <div className="mb-1">

@@ -252,6 +252,30 @@ export const anularPresupuestoForratuc = async (id, motivo) => {
   return handleResponse(response);
 };
 
+// Editar (2026-11-12): el superadmin lo aplica directo ({ aplicado: true, presupuesto });
+// los demás mandan un pedido con `motivo` ({ aplicado: false, solicitud }).
+export const editarPresupuestoForratuc = async (id, data) => {
+  const response = await fetch(`${API_URL}/presupuestos-forratuc/${id}`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+// estado: "pendiente" | "aprobada" | "rechazada" | "cancelada" (o todos)
+export const obtenerSolicitudesEdicionForratuc = async (estado) => {
+  const qs = estado ? `?estado=${estado}` : "";
+  const response = await fetch(`${API_URL}/presupuestos-forratuc/solicitudes-edicion${qs}`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
+// accion: "aprobar" | "rechazar" | "cancelar"
+export const resolverSolicitudEdicionForratuc = async (id, accion, data = {}) => {
+  const response = await fetch(`${API_URL}/presupuestos-forratuc/solicitudes-edicion/${id}/${accion}`, {
+    method: "PATCH", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
 // ── Asistente de IA (2026-10-22), solo superadmin ──
 // conversacion: [{ rol: "usuario" | "asistente", texto }] — el server no la guarda.
 export const preguntarAsistente = async (pregunta, conversacion = []) => {

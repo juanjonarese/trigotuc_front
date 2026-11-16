@@ -287,7 +287,7 @@ const ForratucPlantaPage = () => {
                                   </td>
                                   <td colSpan={2} className="text-end">
                                     <button className="btn btn-sm btn-link text-danger p-0"
-                                      onClick={() => confirmar("¿Anular la tanda?", "Se devuelve la materia prima y las bolsas salen de la planta.",
+                                      onClick={() => confirmar("¿Anular la tanda?", "Se devuelve la materia prima y las bolsas salen del depósito Producción.",
                                         () => anularTandaElaboracion(o._id, t._id), "Tanda anulada")}>
                                       anular tanda
                                     </button>
@@ -310,7 +310,7 @@ const ForratucPlantaPage = () => {
                 <div className="card-body">
                   <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
                     <div className="small">
-                      <span className="text-muted me-2">En la planta:</span>
+                      <span className="text-muted me-2">En Producción:</span>
                       {stockPlanta.length === 0 ? (
                         <span className="text-muted">nada para enviar</span>
                       ) : (
@@ -551,7 +551,7 @@ const ForratucPlantaPage = () => {
           const hayDe = (p) => stockPlanta.find((s) => s.producto === p)?.bolsas || 0;
           const setLinea = (i, c) => set({ lineas: modal.lineas.map((l, j) => (j === i ? { ...l, ...c } : l)) });
           return (
-            <Modal titulo="Nuevo envío desde la planta" ancho="modal-lg" saving={saving} onClose={() => setModal(null)} textoOk="Enviar"
+            <Modal titulo="Nuevo envío desde Producción" ancho="modal-lg" saving={saving} onClose={() => setModal(null)} textoOk="Enviar"
               onSubmit={() => hacer(() => crearOrdenEnvio({
                 destino: modal.destino, fecha: modal.fecha, observaciones: modal.observaciones,
                 lineas: modal.lineas.filter((l) => l.producto && Number(l.bolsas) > 0).map((l) => ({ producto: l.producto, bolsas: Number(l.bolsas) })),
@@ -569,7 +569,7 @@ const ForratucPlantaPage = () => {
                 </div>
                 <div className="col-12">
                   <table className="table table-sm align-middle mb-1">
-                    <thead><tr><th>Alimento</th><th style={{ width: "9rem" }}>Bolsas</th><th className="text-end">En planta</th><th></th></tr></thead>
+                    <thead><tr><th>Alimento</th><th style={{ width: "9rem" }}>Bolsas</th><th className="text-end">En Producción</th><th></th></tr></thead>
                     <tbody>
                       {modal.lineas.map((l, i) => (
                         <tr key={i} className={Number(l.bolsas) > hayDe(l.producto) ? "table-danger" : ""}>

@@ -215,6 +215,7 @@ const ForratucCuentasCorrientesPage = () => {
                           <td className={`text-end fw-bold ${s.saldo > 0 ? "text-danger" : s.saldo < 0 ? "text-success" : ""}`}>
                             {pesos(s.saldo)}
                             {s.saldo < 0 && <div className="small fw-normal">a favor</div>}
+                            {s.tope != null && <div className="small fw-normal text-muted">tope {pesos(s.tope)}</div>}
                           </td>
                           <td className="small text-muted">{s.ultimoMovimiento ? formatearFechaLocal(s.ultimoMovimiento) : "—"}</td>
                         </tr>
@@ -244,6 +245,10 @@ const ForratucCuentasCorrientesPage = () => {
                     {pesos(cuenta.saldo)}
                   </div>
                   {cuenta.saldo < 0 && <div className="small text-success">a favor del cliente</div>}
+                  {/* Tope de cuenta corriente (2026-11-12): se carga en el cliente (Altas → Clientes). */}
+                  <div className="small text-muted">
+                    {cuenta.tope == null ? "Sin tope de cuenta corriente" : <>Tope {pesos(cuenta.tope)} · le quedan {pesos(Math.max(0, cuenta.disponible))}</>}
+                  </div>
                 </div>
               </div>
 

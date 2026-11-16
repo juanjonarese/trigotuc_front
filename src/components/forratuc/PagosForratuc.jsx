@@ -3,8 +3,8 @@ import { pagoVacio, sumaPagos } from "../../utils/forratuc/pagosForratuc";
 
 /**
  * Editor de pagos de Forratuc (2026-10-21): uno o varios medios, cada uno con su
- * importe y el detalle que pide (cheque: banco, número, fecha de cobro,
- * librador; crédito: cuotas; transferencia / Mercado Pago: n° de operación).
+ * importe y el detalle que pide (cheque: banco, serie, número, fecha de
+ * emisión, fecha de cobro, librador; crédito: cuotas; transferencia / Mercado Pago: n° de operación).
  * Los medios y sus campos vienen del back (`constantes.mediosPago`).
  *
  * Lo usan el presupuesto de contado (con `total`: muestra cuánto falta y ofrece
@@ -16,10 +16,20 @@ const ETIQUETA_CAMPO = {
   cuotas: "Cuotas",
   banco: "Banco",
   numero: "N° de cheque",
+  serie: "Serie",
+  fechaEmision: "Fecha de emisión",
   fechaCobro: "Fecha de cobro",
   librador: "Librador",
   operacion: "N° de operación",
 };
+
+// Cheque (2026-11-12): entre la emisión y el cobro, como mucho 365 días (el back lo controla igual).
+const DIAS_MAX_CHEQUE = 365;
+const diasCheque = (p) =>
+  p.fechaEmision && p.fechaCobro
+    ? Math.round((new Date(`${p.fechaCobro}T12:00:00Z`) - new Date(`${p.fechaEmision}T12:00:00Z`)) / 86400000)
+    : null;
+const FECHAS = ["fechaCobro", "fechaEmision"];
 
 const pesos = (n) =>
   new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(Number(n || 0));
@@ -62,7 +72,7 @@ const PagosForratuc = ({ medios = [], pagos, onChange, total = null }) => {
                     {(medio.obligatorios || []).includes(c) ? " *" : ""}
                   </label>
                   <input
-                    type={c === "fechaCobro" ? "date" : c === "cuotas" ? "number" : "text"}
+                    type={FECHAS.includes(c) ? "date" : c === "cuotas" ? "number" : "text"}
                     min={c === "cuotas" ? 1 : undefined}
                     step={c === "cuotas" ? 1 : undefined}
                     className="form-control form-control-sm"
@@ -71,6 +81,18 @@ const PagosForratuc = ({ medios = [], pagos, onChange, total = null }) => {
                   />
                 </div>
               ))}
+              {(() => {
+                const dias = diasCheque(p);
+                if (dias == null || !(medio?.campos || []).includes("fechaEmision")) return null;
+                const mal = dias < 0 || dias > DIAS_MAX_CHEQUE;
+                return (
+                  <div className={`col-12 small ${mal ? "text-danger" : "text-muted"}`}>
+                    {dias < 0
+                      ? "La fecha de cobro no puede ser anterior a la de emisión."
+                      : `${dias} días entre la emisión y el cobro${dias > DIAS_MAX_CHEQUE ? ` — no puede pasar de ${DIAS_MAX_CHEQUE}.` : "."}`}
+                  </div>
+                );
+              })()}
               <div className="col-auto ms-auto">
                 <button type="button" className="btn btn-sm btn-outline-danger border-0" title="Quitar" onClick={() => quitar(p.id)}>
                   <i className="bi bi-x-lg"></i>

@@ -25,7 +25,7 @@ const ORIGEN = {
   deposito: "Depósito (Trigotuc / Forrajería)",
 };
 
-const vacio = () => ({ _id: null, propio: true, base: false, codigo: "", nombre: "", rubro: "otros", unidadVenta: "unidad", activo: true });
+const vacio = () => ({ _id: null, propio: true, base: false, codigo: "", nombre: "", rubro: "otros", unidadVenta: "unidad", categoria: "", activo: true });
 
 const ForratucProductosPage = () => {
   const navigate = useNavigate();
@@ -51,17 +51,41 @@ const ForratucProductosPage = () => {
   useEffect(() => { cargar(); }, []);
 
   const etiquetaRubro = (k) => constantes?.rubros?.find((r) => r.key === k)?.etiqueta || k;
+  // Categoría del alimento (2026-11-12): bovinos, parrilleros, ponedoras, porcinos, equinos.
+  const categorias = constantes?.categoriasAlimento || [];
+  const etiquetaCategoria = (k) => categorias.find((c) => c.key === k)?.etiqueta || "Sin categoría";
 
-  // Agrupados por rubro, en el orden del alta.
+  // Agrupados por rubro, en el orden del alta; el alimento, además, por categoría.
   const grupos = useMemo(() => {
     const q = filtro.trim().toLowerCase();
     const visibles = productos.filter(
       (p) => (verInactivos || p.activo) && (!q || `${p.codigo} ${p.nombre}`.toLowerCase().includes(q))
     );
-    const porRubro = new Map();
-    for (const p of visibles) porRubro.set(p.rubro, [...(porRubro.get(p.rubro) || []), p]);
-    return [...porRubro];
-  }, [productos, filtro, verInactivos]);
+    const ordenCat = (p) => {
+      const i = categorias.findIndex((c) => c.key === p.categoria);
+      return i < 0 ? categorias.length : i;
+    };
+    const porGrupo = new Map();
+    for (const p of visibles) {
+      const clave = p.rubro === "alimento" ? `alimento|${p.categoria || ""}` : p.rubro;
+      if (!porGrupo.has(clave)) {
+        const titulo = p.rubro === "alimento"
+          ? `${etiquetaRubro("alimento")} — ${etiquetaCategoria(p.categoria)}`
+          : etiquetaRubro(p.rubro);
+        porGrupo.set(clave, { clave, titulo, rubro: p.rubro, orden: ordenCat(p), items: [] });
+      }
+      porGrupo.get(clave).items.push(p);
+    }
+    // Los grupos de alimento, juntos y en el orden de las categorías.
+    const lista = [...porGrupo.values()];
+    const primeroAlimento = lista.findIndex((g) => g.rubro === "alimento");
+    if (primeroAlimento < 0) return lista;
+    const alimento = lista.filter((g) => g.rubro === "alimento").sort((a, b) => a.orden - b.orden);
+    const resto = lista.filter((g) => g.rubro !== "alimento");
+    resto.splice(primeroAlimento, 0, ...alimento);
+    return resto;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productos, filtro, verInactivos, constantes]);
 
   const set = (cambios) => setForm((f) => ({ ...f, ...cambios }));
 
@@ -86,7 +110,10 @@ const ForratucProductosPage = () => {
       // De uno de la avícola, solo el código y si Forratuc lo vende. De una
       // bolsa de alimento, el alimento y los kg (el nombre sale de ahí).
       await guardarProductoForratuc(form._id, esBolsa
-        ? { codigo: form.codigo.trim(), activo: form.activo, rubro: "alimento", alimento: form.alimento, kgBolsa: String(form.kgBolsa).replace(",", ".") }
+        ? {
+            codigo: form.codigo.trim(), activo: form.activo, rubro: "alimento", alimento: form.alimento,
+            kgBolsa: String(form.kgBolsa).replace(",", "."), categoria: form.categoria || "",
+          }
         : form.propio
         ? {
             codigo: form.codigo.trim(),
@@ -138,9 +165,9 @@ const ForratucProductosPage = () => {
             ) : grupos.length === 0 ? (
               <div className="text-muted text-center py-4">Ningún producto coincide.</div>
             ) : (
-              grupos.map(([rubro, items]) => (
-                <div key={rubro} className="mb-3">
-                  <div className="fw-semibold small text-uppercase text-primary mb-1">{etiquetaRubro(rubro)}</div>
+              grupos.map(({ clave, titulo, items }) => (
+                <div key={clave} className="mb-3">
+                  <div className="fw-semibold small text-uppercase text-primary mb-1">{titulo}</div>
                   {/* Anchos fijos: cada rubro es su tabla y así las columnas quedan alineadas entre todas. */}
                   <table className="table table-sm table-hover align-middle mb-0" style={{ tableLayout: "fixed" }}>
                     <tbody>
@@ -214,6 +241,14 @@ const ForratucProductosPage = () => {
                             <label className="form-label fw-semibold small mb-1">Bolsa de (kg)</label>
                             <input className="form-control" inputMode="decimal" value={form.kgBolsa ?? ""}
                               onChange={(e) => set({ kgBolsa: e.target.value })} />
+                          </div>
+                          <div className="col-12">
+                            <label className="form-label fw-semibold small mb-1">Categoría</label>
+                            <select className="form-select" value={form.categoria || ""}
+                              onChange={(e) => set({ categoria: e.target.value })}>
+                              <option value="">— Sin categoría —</option>
+                              {categorias.map((c) => <option key={c.key} value={c.key}>{c.etiqueta}</option>)}
+                            </select>
                           </div>
                           <div className="col-12 small text-muted">
                             <i className="bi bi-info-circle me-1"></i>
