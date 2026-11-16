@@ -47,8 +47,8 @@ const EnviosPollitosMostrador = ({ libre = 0, onCambio }) => {
     if (pedidos <= 0 || excede || noEntero) return;
     const r = await Swal.fire({
       icon: "question",
-      title: `¿Enviar ${formatearNumero(pedidos)} pollitos al mostrador?`,
-      text: "Salen del stock de nacimientos y quedan para vender por Salida de Mostrador.",
+      title: `¿Enviar ${formatearNumero(pedidos)} pollitos al Depósito Forrajería?`,
+      text: "Salen del stock de nacimientos y quedan en el Depósito Forrajería para vender (presupuesto o Salida de Mostrador).",
       showCancelButton: true,
       confirmButtonText: "Sí, enviar",
       cancelButtonText: "Cancelar",
@@ -65,7 +65,7 @@ const EnviosPollitosMostrador = ({ libre = 0, onCambio }) => {
       Swal.fire({
         icon: "success",
         title: `${envio.numero} enviado`,
-        text: `El mostrador ya tiene los ${formatearNumero(envio.cantidad)} pollitos.`,
+        text: `El Depósito Forrajería ya tiene los ${formatearNumero(envio.cantidad)} pollitos.`,
         timer: 2000,
         showConfirmButton: false,
       });
@@ -84,7 +84,7 @@ const EnviosPollitosMostrador = ({ libre = 0, onCambio }) => {
     const { value: motivo, isConfirmed } = await Swal.fire({
       icon: "warning",
       title: `¿Anular ${envio.numero}?`,
-      text: "Los pollitos vuelven al stock de nacimientos. Solo se puede si el mostrador no vendió nada de este envío.",
+      text: "Los pollitos vuelven al stock de nacimientos. Solo se puede si la forrajería no vendió nada de este envío.",
       input: "text",
       inputPlaceholder: "Motivo (opcional)",
       showCancelButton: true,
@@ -105,12 +105,12 @@ const EnviosPollitosMostrador = ({ libre = 0, onCambio }) => {
   return (
     <div className="card shadow-sm mb-4">
       <div className="card-header bg-white fw-bold">
-        <i className="bi bi-shop me-1"></i>Envío al mostrador
+        <i className="bi bi-shop me-1"></i>Envío al Depósito Forrajería
       </div>
       <div className="card-body">
         <p className="text-muted small mb-3">
-          El mostrador vende pollitos de su propio stock. Lo que envíes sale de los nacimientos (lo más
-          viejo primero) y entra directo al mostrador.
+          La forrajería vende pollitos de su propio stock (Depósito Forrajería). Lo que envíes sale de los nacimientos (lo más
+          viejo primero) y entra directo al Depósito Forrajería.
         </p>
         <form onSubmit={enviar} className="row g-2 align-items-end mb-3">
           <div className="col-6 col-md-3">

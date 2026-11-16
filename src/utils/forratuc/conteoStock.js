@@ -11,9 +11,9 @@ import { obtenerFechaHoy } from "../dateUtils";
 const ETIQUETA_RUBRO = { alimento: "Alimento balanceado", otros: "Otros" };
 
 /**
- * Las secciones de un depósito: primero `extras` (en la Forrajería, el pollo
- * de la cámara, los huevos y los pollitos), después los productos de depósito
- * por rubro. Entran todos los activos, aunque estén en cero: un cero que
+ * Las secciones de un depósito: primero `extras` (en la Forrajería, los huevos
+ * y los pollitos), después los productos de depósito por rubro y al final los
+ * extras marcados `alFinal` (en la Forrajería, el pollo de la cámara). Entran todos los activos, aunque estén en cero: un cero que
  * aparece en el depósito también es una diferencia.
  *
  * @returns [{ titulo, filas: [{ codigo, etiqueta, unidad, sistema }] }]
@@ -29,11 +29,12 @@ export const seccionesConteo = (deposito, productos = [], extras = []) => {
         : ETIQUETA_RUBRO[p.rubro] || p.rubro,
     }));
   return [
-    ...extras,
+    ...extras.filter((e) => !e.alFinal),
     ...[...new Set(filas.map((p) => p.grupo))].map((g) => ({
       titulo: g,
       filas: filas.filter((p) => p.grupo === g),
     })),
+    ...extras.filter((e) => e.alFinal),
   ];
 };
 

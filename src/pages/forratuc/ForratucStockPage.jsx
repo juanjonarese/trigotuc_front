@@ -171,12 +171,15 @@ const ForratucStockPage = () => {
       const p = prod(h.producto, h.etiqueta);
       return { ...p, etiqueta: `${p.etiqueta} (${fmt(h.huevos)} huevos)`, unidad: "maples", sistema: h.maples };
     });
-    const pollitos = stock.pollitos?.total ? [{ ...prod("pollito", "Pollitos BB"), unidad: "pollitos", sistema: stock.pollitos.total }] : [];
+    // Siempre la fila de pollitos, aunque esté en cero: un cero que aparece también es una diferencia.
+    const pollitos = [{ ...prod("pollito", "Pollitos BB"), unidad: "pollitos", sistema: stock.pollitos?.total || 0 }];
+    // Como la tarjeta del Depósito Forrajería (2026-11-16): huevos y pollitos con
+    // el alimento, y la cámara (el pollo) al final.
     return [
-      { titulo: "Pollo entero — Cámara Forrajería", filas: enteros },
-      { titulo: "Trozado — Cámara Forrajería", filas: trozados },
       { titulo: "Huevos", filas: huevos },
       { titulo: "Pollitos", filas: pollitos },
+      { titulo: "Pollo entero — Cámara Forrajería", filas: enteros, alFinal: true },
+      { titulo: "Trozado — Cámara Forrajería", filas: trozados, alFinal: true },
     ];
   };
 
@@ -211,8 +214,7 @@ const ForratucStockPage = () => {
   const LUGARES = stock
     ? [
         { key: "camara", titulo: "Cámara Forrajería" },
-        { key: "huevos", titulo: "Huevos" },
-        { key: "pollitos", titulo: "Pollitos del mostrador" },
+        // Huevos y pollitos están en el Depósito Forrajería (2026-11-16).
         ...alimento.depositos.map((d) => ({ key: d.key, titulo: d.etiqueta })),
       ]
     : [];
@@ -327,31 +329,6 @@ const ForratucStockPage = () => {
                 );
               })}
 
-              <TarjetaLugar icono="bi-egg" colorIcono="text-warning" titulo="Huevos"
-                vacio={!huevos.porTipo.length}
-                total={`${fmt(huevos.maples)} maples (${fmt(huevos.total)} huevos)`}
-                activa={lugar === "huevos"} onClick={() => verMovimientos("huevos")}>
-                <Grupo titulo="Para vender">
-                  {huevos.porTipo.map((h) => (
-                    <Cuadro key={h.tipo} badge={h.etiqueta} badgeClase="bg-warning-subtle text-warning-emphasis"
-                      valor={`${fmt(h.maples)} maples`} sub={`${fmt(h.huevos)} huevos`} />
-                  ))}
-                </Grupo>
-              </TarjetaLugar>
-
-              <TarjetaLugar icono="bi-feather" colorIcono="text-info" titulo="Pollitos del mostrador"
-                vacio={!pollitos.envios.length}
-                total={`${fmt(pollitos.total)} pollitos`}
-                activa={lugar === "pollitos"} onClick={() => verMovimientos("pollitos")}>
-                <Grupo titulo="Por envío de Reproductoras">
-                  {pollitos.envios.map((e) => (
-                    <Cuadro key={e._id} badge={e.numero} badgeClase="bg-info-subtle text-info-emphasis"
-                      valor={`${fmt(e.disponibles)} pollitos`}
-                      sub={`${formatearFechaLocal(e.fecha)} · llegaron ${fmt(e.cantidad)}`} />
-                  ))}
-                </Grupo>
-              </TarjetaLugar>
-
               {/* Una por depósito de alimento: salen de `alimento.depositos`,
                   así un depósito nuevo aparece solo. Adentro, lo que tiene stock. */}
               {alimento.depositos.map((d) => {
@@ -367,11 +344,36 @@ const ForratucStockPage = () => {
                   })),
                   { titulo: "Otros", items: conStock.filter((p) => p.rubro === "otros") },
                 ].filter((g) => g.items.length > 0);
+                // La Forrajería guarda además los huevos y los pollitos que le mandan (2026-11-16).
+                const esForrajeria = d.key === "forrajeria";
+                const hayHuevos = esForrajeria && huevos.porTipo.length > 0;
+                const hayPollitos = esForrajeria && pollitos.envios.length > 0;
                 return (
                   <TarjetaLugar key={d.key} icono="bi-bag" colorIcono="text-success" titulo={d.etiqueta}
-                    vacio={!conStock.length}
-                    total={`${fmt(d.bolsas)} unid.`}
+                    vacio={!conStock.length && !hayHuevos && !hayPollitos}
+                    total={[
+                      `${fmt(d.bolsas)} unid.`,
+                      esForrajeria ? `${fmt(huevos.maples)} maples (${fmt(huevos.total)} huevos)` : null,
+                      esForrajeria ? `${fmt(pollitos.total)} pollitos` : null,
+                    ].filter(Boolean).join(" · ")}
                     activa={lugar === d.key} onClick={() => verMovimientos(d.key)}>
+                    {hayHuevos && (
+                      <Grupo titulo="Huevos">
+                        {huevos.porTipo.map((h) => (
+                          <Cuadro key={h.tipo} badge={h.etiqueta} badgeClase="bg-warning-subtle text-warning-emphasis"
+                            valor={`${fmt(h.maples)} maples`} sub={`${fmt(h.huevos)} huevos`} />
+                        ))}
+                      </Grupo>
+                    )}
+                    {hayPollitos && (
+                      <Grupo titulo="Pollitos (envíos de Reproductoras)">
+                        {pollitos.envios.map((e) => (
+                          <Cuadro key={e._id} badge={e.numero} badgeClase="bg-info-subtle text-info-emphasis"
+                            valor={`${fmt(e.disponibles)} pollitos`}
+                            sub={`${formatearFechaLocal(e.fecha)} · llegaron ${fmt(e.cantidad)}`} />
+                        ))}
+                      </Grupo>
+                    )}
                     {rubros.map((g) => (
                       <Grupo key={g.titulo} titulo={g.titulo}>
                         {g.items.map((p) => (
@@ -467,6 +469,9 @@ const ForratucStockPage = () => {
                                   </td>
                                   <td className="small">
                                     <span className={`badge bg-${tipoBadge} me-1`}>{tipo}</span>
+                                    {lugar === "forrajeria" && m.rubro && (
+                                      <span className="badge bg-light text-secondary border me-1">{m.rubro}</span>
+                                    )}
                                     {m.titulo}
                                   </td>
                                   <td className="small">
