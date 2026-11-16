@@ -5,7 +5,7 @@ import Layout from "../components/Layout";
 import Pagination from "../components/Pagination";
 import Swal from "sweetalert2";
 import { escapeHtml } from "../utils/escapeHtml";
-import { empresaActual, clienteDeEmpresa, obtenerEmpresasUsuario } from "../utils/empresas";
+import { empresaActual, clienteDeEmpresa, obtenerEmpresasUsuario, colorEmpresa, nombreEmpresa } from "../utils/empresas";
 import { buscarParecidos } from "../utils/clientesParecidos";
 import "../css/Tablas.css";
 
@@ -16,7 +16,8 @@ const BadgesEmpresas = ({ claves, catalogo }) => (
       const empresa = catalogo.find((e) => e.clave === clave);
       return (
         <span key={clave} className="badge bg-light text-dark border fw-normal">
-          {empresa?.nombre || clave}
+          <i className="bi bi-circle-fill me-1" style={{ color: colorEmpresa(clave), fontSize: "0.55rem" }}></i>
+          {nombreEmpresa(clave, empresa?.nombre || clave)}
         </span>
       );
     })}
@@ -62,10 +63,10 @@ const ClientesPage = () => {
         .catch(() => setCatalogoEmpresas([]));
     } else {
       const suyas = obtenerEmpresasUsuario();
-      setCatalogoEmpresas(suyas.length ? suyas : [{ clave: "avicola", nombre: "Trigotuc Avícola" }]);
+      setCatalogoEmpresas(suyas.length ? suyas : [{ clave: "avicola", nombre: nombreEmpresa("avicola") }]);
     }
   }, [esSuperadmin]);
-  const nombreEmpresa = (clave) => catalogoEmpresas.find((e) => e.clave === clave)?.nombre || clave;
+  const nombreDe = (clave) => nombreEmpresa(clave, catalogoEmpresas.find((e) => e.clave === clave)?.nombre || clave);
 
   // Los clientes anteriores no tienen la lista: eran de la avícola.
   const empresasDe = (cliente) =>
@@ -153,7 +154,7 @@ const ClientesPage = () => {
     if (!iguales.length && !parecidos.length) return false;
     const lista = iguales.length ? iguales : parecidos;
     const etiqueta = ({ cliente: c, motivo }) =>
-      `${c.razonSocial}${c.telefono ? ` · tel. ${c.telefono}` : ""}${c.cuit ? ` · CUIT ${c.cuit}` : ""} — cliente de ${empresasDe(c).map(nombreEmpresa).join(" y ")} (${motivo})`;
+      `${c.razonSocial}${c.telefono ? ` · tel. ${c.telefono}` : ""}${c.cuit ? ` · CUIT ${c.cuit}` : ""} — cliente de ${empresasDe(c).map(nombreDe).join(" y ")} (${motivo})`;
     const opciones = Object.fromEntries(lista.map((x, i) => [String(i), etiqueta(x)]));
     if (!iguales.length) opciones.nuevo = "Ninguno: es un cliente nuevo";
     const { value, isConfirmed } = await Swal.fire({
@@ -177,7 +178,7 @@ const ClientesPage = () => {
     const yaTiene = empresasDe(elegido);
     const faltan = tildadasVisibles.filter((c) => !yaTiene.includes(c));
     if (!faltan.length) {
-      await Swal.fire("Ya es cliente", `${elegido.razonSocial} ya es cliente de ${tildadasVisibles.map(nombreEmpresa).join(" y ")}.`, "info");
+      await Swal.fire("Ya es cliente", `${elegido.razonSocial} ya es cliente de ${tildadasVisibles.map(nombreDe).join(" y ")}.`, "info");
       handleCloseModal();
       return true;
     }
@@ -188,7 +189,7 @@ const ClientesPage = () => {
       Swal.fire({
         icon: "success",
         title: "Cliente sumado",
-        text: `${elegido.razonSocial} ahora también es cliente de ${faltan.map(nombreEmpresa).join(" y ")}. Sus datos no se tocaron.`,
+        text: `${elegido.razonSocial} ahora también es cliente de ${faltan.map(nombreDe).join(" y ")}. Sus datos no se tocaron.`,
         confirmButtonColor: "#198754",
       });
     } catch (err) {
@@ -450,7 +451,7 @@ const ClientesPage = () => {
       {showModal && (
         <>
           <div className="modal show d-block" tabIndex="-1">
-            <div className="modal-dialog modal-lg my-3">
+            <div className="modal-dialog modal-alta my-3">
               <div className="modal-content">
                 <div className="modal-header">
                   <h5 className="modal-title">
@@ -618,7 +619,8 @@ const ClientesPage = () => {
                                 onChange={() => toggleEmpresa(e.clave)}
                               />
                               <label className="form-check-label" htmlFor={`cliente-empresa-${e.clave}`}>
-                                {e.nombre}
+                                <i className="bi bi-circle-fill me-1" style={{ color: colorEmpresa(e.clave), fontSize: "0.6rem" }}></i>
+                                {nombreEmpresa(e.clave, e.nombre)}
                               </label>
                             </div>
                           ))}

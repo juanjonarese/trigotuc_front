@@ -1,7 +1,7 @@
 import React from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import "../css/Login.css";
-import { inicioEmpresa, obtenerEmpresasUsuario } from "../utils/empresas";
+import { inicioEmpresa, obtenerEmpresasUsuario, colorEmpresa } from "../utils/empresas";
 
 // Selección de empresa (2026-10-16): el usuario con más de una empresa del
 // grupo elige acá en cuál entra. Con una sola no tiene sentido: va directo.
@@ -47,10 +47,14 @@ const InicioPage = () => {
                 key={e.clave}
                 type="button"
                 className="selector-empresa"
+                style={{ borderLeft: `5px solid ${colorEmpresa(e.clave)}` }}
                 onClick={() => entrar(e.clave)}
               >
                 <span className="d-flex justify-content-between align-items-baseline gap-2">
-                  <span className="fw-semibold text-dark">{e.nombre}</span>
+                  <span className="fw-semibold text-dark">
+                    <i className="bi bi-circle-fill me-2" style={{ color: colorEmpresa(e.clave), fontSize: "0.65rem" }}></i>
+                    {e.nombre}
+                  </span>
                   {e.enDesarrollo && (
                     <span className="selector-empresa-estado">EN DESARROLLO</span>
                   )}

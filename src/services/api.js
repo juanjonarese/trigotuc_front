@@ -252,6 +252,12 @@ export const anularPresupuestoForratuc = async (id, motivo) => {
   return handleResponse(response);
 };
 
+// Dashboard de ventas del inicio de Forratuc (2026-11-16): { desde, hasta } "AAAA-MM-DD".
+export const obtenerDashboardForratuc = async ({ desde, hasta }) => {
+  const response = await fetch(`${API_URL}/presupuestos-forratuc/dashboard?desde=${desde}&hasta=${hasta}`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
 // Editar (2026-11-12): el superadmin lo aplica directo ({ aplicado: true, presupuesto });
 // los demás mandan un pedido con `motivo` ({ aplicado: false, solicitud }).
 export const editarPresupuestoForratuc = async (id, data) => {

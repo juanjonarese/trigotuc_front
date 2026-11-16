@@ -43,3 +43,10 @@ body:has(.modal.show) {
   -moz-appearance: textfield;
   appearance: textfield;
 }
+
+/* Modales de Altas (2026-11-16, pedido del usuario: más chicos y todos del
+   mismo tamaño): Clientes, Usuarios y Camiones. Un alta nueva usa la misma
+   clase: <div className="modal-dialog modal-alta">. */
+.modal-dialog.modal-alta {
+  --bs-modal-width: 620px;
+}

@@ -12,11 +12,24 @@
 export const obtenerEmpresasUsuario = () => {
   try {
     const lista = JSON.parse(localStorage.getItem("empresas") || "[]");
-    return Array.isArray(lista) ? lista : [];
+    // El nombre, el de acá: una sesión abierta antes del cambio de nombre
+    // (Trigotuc Avícola → Avícola, 2026-11-16) lo muestra igual.
+    return Array.isArray(lista) ? lista.map((e) => ({ ...e, nombre: ESTILO_EMPRESA[e.clave]?.nombre || e.nombre })) : [];
   } catch {
     return [];
   }
 };
+
+// Nombre y COLOR de cada empresa (2026-11-16, pedido del usuario: "ir
+// identificando las empresas por color"). Se ve en el encabezado del menú, el
+// selector, las tarjetas de inicio y las etiquetas de empresa de Clientes.
+// ⚠️ Una empresa nueva suma acá su nombre y su color.
+export const ESTILO_EMPRESA = {
+  avicola: { nombre: "Avícola", color: "#ffc107" },  // ámbar (el de siempre)
+  forratuc: { nombre: "Forratuc", color: "#2fbf71" }, // verde
+};
+export const nombreEmpresa = (clave, porDefecto = clave) => ESTILO_EMPRESA[clave]?.nombre || porDefecto;
+export const colorEmpresa = (clave) => ESTILO_EMPRESA[clave]?.color || "#adb5bd";
 
 // Claves de las empresas en las que puede entrar. Sin ninguna (sesión vieja)
 // es la avícola, igual que `InicioPage`: así nunca queda sin adónde ir.

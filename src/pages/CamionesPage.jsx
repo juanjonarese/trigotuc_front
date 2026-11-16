@@ -285,7 +285,7 @@ const CamionesPage = () => {
         {showCamionModal && (
           <>
             <div className="modal show d-block" tabIndex="-1">
-              <div className="modal-dialog">
+              <div className="modal-dialog modal-alta">
                 <div className="modal-content">
                   <div className="modal-header">
                     <h5 className="modal-title">{editingCamion ? "Editar Camión" : "Crear Camión"}</h5>
@@ -322,7 +322,7 @@ const CamionesPage = () => {
         {showChoferModal && (
           <>
             <div className="modal show d-block" tabIndex="-1">
-              <div className="modal-dialog">
+              <div className="modal-dialog modal-alta">
                 <div className="modal-content">
                   <div className="modal-header">
                     <h5 className="modal-title">Crear Chofer</h5>

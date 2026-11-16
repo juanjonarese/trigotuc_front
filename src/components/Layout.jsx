@@ -4,26 +4,21 @@ import "../css/DashboardPage.css";
 import usePushNotification from "../hooks/usePushNotification";
 import AsistenteFlotante from "./AsistenteFlotante";
 import BannerPrueba from "./BannerPrueba";
-import { empresaActual as calcularEmpresaActual, inicioEmpresa, obtenerEmpresasUsuario } from "../utils/empresas";
+import { empresaActual as calcularEmpresaActual, inicioEmpresa, obtenerEmpresasUsuario, colorEmpresa, nombreEmpresa } from "../utils/empresas";
 import MenuAvicola from "./MenuAvicola";
 import MenuForratuc from "./forratuc/MenuForratuc";
 
 // El encabezado y el menú de cada empresa del grupo (2026-10-26). Una empresa
 // nueva suma su entrada acá; los ítems del grupo (Altas, Actividad) los arma
 // este Layout y cada menú decide dónde ubicarlos.
+// El título es el nombre de la empresa en SU color (2026-11-16: cada empresa
+// se identifica por color; nombre y color en utils/empresas.js, ESTILO_EMPRESA).
+const tituloEmpresa = (clave) => (
+  <span className="d-block fw-bold" style={{ color: colorEmpresa(clave) }}>{nombreEmpresa(clave)}</span>
+);
 const MENUS = {
-  avicola: {
-    titulo: (
-      <span className="d-block fw-bold">
-        Trigotuc <span style={{ color: "#ffc107" }}>Avícola</span>
-      </span>
-    ),
-    Menu: MenuAvicola,
-  },
-  forratuc: {
-    titulo: <span className="d-block fw-bold">Forratuc</span>,
-    Menu: MenuForratuc,
-  },
+  avicola: { titulo: tituloEmpresa("avicola"), Menu: MenuAvicola },
+  forratuc: { titulo: tituloEmpresa("forratuc"), Menu: MenuForratuc },
 };
 
 // Qué sección del sidebar le corresponde a una ruta (null = ninguna).
@@ -130,7 +125,9 @@ const Layout = ({ children }) => {
       <aside
         className={`sidebar bg-dark text-white ${sidebarOpen ? "show" : ""}`}
       >
-        <div className="sidebar-header p-4 border-bottom border-secondary">
+        {/* Una franja del color de la empresa, para saber dónde se está. */}
+        <div className="sidebar-header p-4 border-bottom border-secondary"
+          style={{ borderTop: `4px solid ${colorEmpresa(claveEmpresa)}` }}>
           {empresas.length > 1 ? (
             <>
               <button
@@ -155,7 +152,7 @@ const Layout = ({ children }) => {
                         className="nav-link btn border-0 bg-transparent text-white-50 w-100 text-start d-flex align-items-center gap-2 rounded px-2 py-2"
                         onClick={() => irAEmpresa(e.clave)}
                       >
-                        <i className="bi bi-arrow-left-right"></i>
+                        <i className="bi bi-circle-fill" style={{ color: colorEmpresa(e.clave), fontSize: "0.6rem" }}></i>
                         <span>{e.nombre}</span>
                         {e.enDesarrollo && (
                           <span className="badge bg-warning text-dark ms-auto">en desarrollo</span>

@@ -518,7 +518,7 @@ const PersonalPage = () => {
         {showModal && (
           <>
             <div className="modal show d-block" tabIndex="-1">
-              <div className="modal-dialog modal-lg my-3">
+              <div className="modal-dialog modal-alta my-3">
                 <div className="modal-content">
                   <div className="modal-header">
                     <h5 className="modal-title">
