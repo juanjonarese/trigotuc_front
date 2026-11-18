@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import Layout from "../../components/Layout";
 import { obtenerFechaHoy } from "../../utils/dateUtils";
-import { imprimirCierreCajaForratuc } from "../../utils/forratuc/imprimirForratuc";
+import { imprimirCierreCajaForratuc, imprimirProductosVendidosForratuc } from "../../utils/forratuc/imprimirForratuc";
 import { obtenerCajaForratuc, guardarCierreCajaForratuc } from "../../services/api";
 
 /**
@@ -129,11 +129,15 @@ const ForratucCajaPage = () => {
     }
   };
 
-  const imprimir = () => {
+  // Desde el 18/11 (pedido del cliente) la planilla sale por defecto SIN el
+  // detalle de comprobantes; el detalle y los productos vendidos, aparte.
+  const operador = () => localStorage.getItem("nombreUsuario") || "";
+  const imprimir = ({ conDetalle = false } = {}) => {
     if (sinGuardar)
       return Swal.fire("Falta guardar", "Guardá el conteo antes de imprimir la planilla.", "warning");
-    imprimirCierreCajaForratuc(caja, { operador: localStorage.getItem("nombreUsuario") || "" });
+    imprimirCierreCajaForratuc(caja, { operador: operador(), conDetalle });
   };
+  const imprimirProductos = () => imprimirProductosVendidosForratuc(caja, { operador: operador() });
 
   return (
     <Layout>
@@ -153,9 +157,28 @@ const ForratucCajaPage = () => {
               {saving ? <span className="spinner-border spinner-border-sm me-1"></span> : <i className="bi bi-check-lg me-1"></i>}
               Guardar conteo
             </button>
-            <button className="btn btn-outline-dark btn-sm" onClick={imprimir} disabled={!caja}>
-              <i className="bi bi-printer me-1"></i>Imprimir planilla
-            </button>
+            <div className="btn-group">
+              <button className="btn btn-outline-dark btn-sm" onClick={() => imprimir()} disabled={!caja}
+                title="El resumen de la caja y las ventas, sin el detalle de comprobantes">
+                <i className="bi bi-printer me-1"></i>Imprimir resumen
+              </button>
+              <button type="button" className="btn btn-outline-dark btn-sm dropdown-toggle dropdown-toggle-split"
+                data-bs-toggle="dropdown" aria-expanded="false" disabled={!caja}>
+                <span className="visually-hidden">Más impresiones</span>
+              </button>
+              <ul className="dropdown-menu dropdown-menu-end">
+                <li>
+                  <button className="dropdown-item" onClick={() => imprimir({ conDetalle: true })}>
+                    <i className="bi bi-list-ul me-2"></i>Resumen + detalle de comprobantes
+                  </button>
+                </li>
+                <li>
+                  <button className="dropdown-item" onClick={imprimirProductos}>
+                    <i className="bi bi-box-seam me-2"></i>Productos vendidos (cantidad y $)
+                  </button>
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
 

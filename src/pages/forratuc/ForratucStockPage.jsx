@@ -420,7 +420,7 @@ const ForratucStockPage = () => {
               <p className="text-muted small mb-1">
                 <i className="bi bi-info-circle me-1"></i>
                 Los depósitos todavía están vacíos: el alimento entra con <strong>Ingresar mercadería</strong> (o
-                desde la Planta, con una orden de envío). El presupuesto vende lo que hay en la forrajería.
+                desde la Planta, con una orden de envío). El presupuesto vende de cualquiera de los depósitos.
               </p>
             )}
             {sinPesoBolsa && (

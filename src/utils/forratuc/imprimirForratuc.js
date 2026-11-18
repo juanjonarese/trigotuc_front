@@ -15,6 +15,9 @@ import { textoDelta, unidadCorta, fechaMovimiento } from "./historialStock";
  * una línea de corte. Si los renglones no entran en media hoja, cada copia va
  * en su hoja (mejor eso que cortar el detalle).
  *
+ * Desde el 2026-11-18 (pedido del cliente) una copia dice ORIGINAL y la otra
+ * DUPLICADO, las dos con la firma.
+ *
  * Observaciones del cliente sobre el presupuesto (2026-10-29): sin "Orden de
  * retiro", sin "Original — Cliente" y sin "Presentar presupuesto para retirar
  * mercadería"; sin recuadro de condición de pago, en su lugar la línea
@@ -134,7 +137,7 @@ const ESTILOS = `
   .doc { text-align: right; }
   .titulo { font-size: 14pt; font-weight: bold; letter-spacing: 2px; }
   .noval { font-size: 7.5pt; font-style: italic; }
-  .interno { font-size: 8pt; font-weight: bold; margin-top: .5mm; }
+  .interno { font-size: 9pt; font-weight: bold; letter-spacing: 1.5px; margin-top: .5mm; }
   .numero { font-size: 12pt; font-weight: bold; margin: 1mm 0; }
   .fecha { font-size: 9.5pt; }
   .fecha span { font-size: 8pt; margin-right: 2mm; }
@@ -181,11 +184,12 @@ const documento = (titulo, cuerpo, estilos = ESTILOS) => `
 <body>${cuerpo}</body>
 </html>`;
 
-// Las dos copias: en una sola hoja si entran, si no una por hoja.
-const duplicado = (copia, entraEnMedia) =>
+// Las dos copias: en una sola hoja si entran, si no una por hoja. La segunda
+// puede ser distinta (el presupuesto: "ORIGINAL" / "DUPLICADO").
+const duplicado = (copia, entraEnMedia, segunda = copia) =>
   entraEnMedia
-    ? `<div class="hoja media">${copia}${copia}</div>`
-    : `<div class="hoja">${copia}</div><div class="hoja">${copia}</div>`;
+    ? `<div class="hoja media">${copia}${segunda}</div>`
+    : `<div class="hoja">${copia}</div><div class="hoja">${segunda}</div>`;
 
 // ── Presupuesto ─────────────────────────────────────────────────────────────
 
@@ -221,7 +225,9 @@ const condicionPresupuesto = (p, medios) => {
   return `<div class="condicion"><strong>Condiciones de pago:</strong> Contado</div>${tablaPagos(pagos, medios)}`;
 };
 
-const copiaPresupuesto = (p, { medios, validezDias, depositos }) => {
+// `rotulo`: "ORIGINAL" o "DUPLICADO" (2026-11-18, pedido del cliente; las dos
+// copias llevan la firma, solo cambia el rótulo).
+const copiaPresupuesto = (p, { medios, validezDias, depositos }, rotulo = "") => {
   const filas = (p.lineas || [])
     .map(
       (l) => `
@@ -248,7 +254,7 @@ const copiaPresupuesto = (p, { medios, validezDias, depositos }) => {
   return `
   <div class="copia">
     ${p.estado === "anulado" ? `<div class="sello">ANULADO</div>` : ""}
-    ${encabezado("PRESUPUESTO", "", p)}
+    ${encabezado("PRESUPUESTO", rotulo, p)}
     ${bloqueCliente(p)}
     ${p.deposito ? `<div class="condicion"><strong>Sale de:</strong> ${escapeHtml(depositos[p.deposito] || p.deposito)}</div>` : ""}
 
@@ -285,11 +291,13 @@ export const imprimirPresupuestoForratuc = (presupuesto, { medios = [], validezD
   const depositos = depositosAlimento
     ? Object.fromEntries(depositosAlimento.map((d) => [d.key, d.etiqueta]))
     : DEPOSITOS;
-  const copia = copiaPresupuesto(presupuesto, { medios, validezDias, depositos });
+  const opciones = { medios, validezDias, depositos };
+  const original = copiaPresupuesto(presupuesto, opciones, "ORIGINAL");
+  const copiaDuplicado = copiaPresupuesto(presupuesto, opciones, "DUPLICADO");
   // El recuadro del saldo (cuenta corriente) ocupa como dos renglones.
   const conSaldo = presupuesto.condicionPago === "cuenta_corriente" && presupuesto.saldoPosterior != null;
   const entra = (presupuesto.lineas || []).length <= RENGLONES_MEDIA_HOJA - (conSaldo ? 2 : 0);
-  imprimirHtml(documento(`Presupuesto ${presupuesto.numero || ""}`, duplicado(copia, entra)));
+  imprimirHtml(documento(`Presupuesto ${presupuesto.numero || ""}`, duplicado(original, entra, copiaDuplicado)));
 };
 
 // ── Recibo de cuenta corriente ──────────────────────────────────────────────
@@ -394,7 +402,10 @@ const tablaConteo = (titulo, conteo, contado) => `
   </div>`;
 
 // `caja` = respuesta de GET /caja-forratuc/:fecha
-export const imprimirCierreCajaForratuc = (caja, { operador = "" } = {}) => {
+// Desde el 2026-11-18 (pedido del cliente: "no imprimir todas las hojas, solo
+// el resumen de caja y ventas") el detalle de comprobantes es OPCIONAL
+// (`conDetalle`); por defecto sale solo el resumen.
+export const imprimirCierreCajaForratuc = (caja, { operador = "", conDetalle = false } = {}) => {
   const contado = caja.guardado;
   const fila = (texto, importe, extra = "") =>
     `<tr><td>${texto}${extra ? ` <span class="formula">${extra}</span>` : ""}</td><td class="num">${importe == null ? "" : pesos(importe)}</td></tr>`;
@@ -485,7 +496,7 @@ export const imprimirCierreCajaForratuc = (caja, { operador = "" } = {}) => {
       : ""}
     <table class="resumen" style="margin-top:1.5mm">${fila("Cuenta corriente (no entra plata)", caja.cuentaCorriente)}</table>
 
-    <h2>DETALLE DE COMPROBANTES</h2>
+    ${conDetalle ? `<h2>DETALLE DE COMPROBANTES</h2>
     <table>
       <thead><tr><th>Comprobante</th><th>Cliente</th><th>Forma de pago</th><th>Operador</th><th>Importe</th></tr></thead>
       <tbody>
@@ -505,7 +516,7 @@ export const imprimirCierreCajaForratuc = (caja, { operador = "" } = {}) => {
             : `<tr><td colspan="5">Sin comprobantes en el día.</td></tr>`
         }
       </tbody>
-    </table>
+    </table>` : ""}
 
     ${caja.observaciones ? `<p><strong>Observaciones:</strong> ${escapeHtml(caja.observaciones)}</p>` : ""}
 
@@ -516,6 +527,58 @@ export const imprimirCierreCajaForratuc = (caja, { operador = "" } = {}) => {
   </div>`;
 
   imprimirHtml(documento(`Cierre de caja ${caja.fecha}`, cuerpo, ESTILOS_CAJA));
+};
+
+// ── Productos vendidos del día (2026-11-18) ─────────────────────────────────
+// Pedido del cliente: "resumen de los productos vendidos totalizados por
+// cantidad y $". Va aparte de la planilla de la caja. `caja.productosVendidos`
+// lo arma el back con los presupuestos emitidos del día (sin anulados), por
+// rubro; el total coincide con el total de ventas de la planilla.
+export const imprimirProductosVendidosForratuc = (caja, { operador = "" } = {}) => {
+  const productos = caja.productosVendidos || [];
+  const rubros = [...new Set(productos.map((p) => p.rubro))];
+  const filas = rubros
+    .map((rubro) => {
+      const items = productos.filter((p) => p.rubro === rubro);
+      const subtotal = items.reduce((a, p) => a + p.importe, 0);
+      return `
+        <tr class="rubro"><td colspan="4"><strong>${escapeHtml(items[0].rubroEtiqueta)}</strong></td></tr>
+        ${items
+          .map(
+            (p) => `<tr>
+              <td>${escapeHtml(p.codigo || "")}</td>
+              <td>${escapeHtml(p.descripcion)}</td>
+              <td class="num">${fmt(p.cantidad)} ${escapeHtml(p.unidad || "")}${p.kg != null ? ` <span class="formula">(${fmt(p.kg)} kg)</span>` : ""}</td>
+              <td class="num">${pesos(p.importe)}</td>
+            </tr>`
+          )
+          .join("")}
+        <tr><td colspan="3" class="num"><em>Subtotal ${escapeHtml(items[0].rubroEtiqueta.toLowerCase())}</em></td><td class="num"><em>${pesos(subtotal)}</em></td></tr>`;
+    })
+    .join("");
+  const total = productos.reduce((a, p) => a + p.importe, 0);
+
+  const cuerpo = `
+  <div class="hoja">
+    <header>
+      <div>
+        <div class="marca">${escapeHtml(EMISOR.razonSocial)}</div>
+        <div class="titulo">PRODUCTOS VENDIDOS</div>
+      </div>
+      <div class="datos">
+        <div><strong>Fecha:</strong> ${escapeHtml(formatearFechaLocal(`${caja.fecha}T12:00:00.000Z`))}</div>
+        <div><strong>Operador:</strong> ${escapeHtml(operador || "")}</div>
+      </div>
+    </header>
+    <table>
+      <thead><tr><th style="width:18mm">Código</th><th>Producto</th><th style="width:45mm">Cantidad</th><th style="width:32mm">Importe</th></tr></thead>
+      <tbody>${filas || `<tr><td colspan="4">Sin ventas en el día.</td></tr>`}</tbody>
+      <tfoot><tr><td colspan="3">Total vendido</td><td class="num">${pesos(total)}</td></tr></tfoot>
+    </table>
+    <p class="formula">Presupuestos emitidos del día, sin los anulados. Contado y cuenta corriente.</p>
+  </div>`;
+
+  imprimirHtml(documento(`Productos vendidos ${caja.fecha}`, cuerpo, ESTILOS_CAJA + " .rubro td { background: #f4f4f4; }"));
 };
 
 // ── Planilla de conteo por depósito (2026-11-06) ────────────────────────────

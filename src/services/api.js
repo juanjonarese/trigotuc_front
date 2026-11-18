@@ -252,6 +252,23 @@ export const anularPresupuestoForratuc = async (id, motivo) => {
   return handleResponse(response);
 };
 
+// Cobro con QR de Mercado Pago (2026-11-17, en desarrollo: solo superadmin).
+// { importe, descripcion } → el cobro (estado pendiente / pagado / vencido / cancelado).
+export const crearCobroQrForratuc = async (data) => {
+  const response = await fetch(`${API_URL}/pagos-qr-forratuc`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+export const obtenerCobroQrForratuc = async (id) => {
+  const response = await fetch(`${API_URL}/pagos-qr-forratuc/${id}`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+export const cancelarCobroQrForratuc = async (id) => {
+  const response = await fetch(`${API_URL}/pagos-qr-forratuc/${id}/cancelar`, { method: "POST", headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
 // Dashboard de ventas del inicio de Forratuc (2026-11-16): { desde, hasta } "AAAA-MM-DD".
 export const obtenerDashboardForratuc = async ({ desde, hasta }) => {
   const response = await fetch(`${API_URL}/presupuestos-forratuc/dashboard?desde=${desde}&hasta=${hasta}`, { headers: getAuthHeaders() });

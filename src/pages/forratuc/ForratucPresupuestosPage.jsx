@@ -26,6 +26,7 @@ import {
   resolverSolicitudEdicionForratuc,
 } from "../../services/api";
 import SolicitudesEdicionPresupuesto from "../../components/forratuc/SolicitudesEdicionPresupuesto";
+import CobroQrModal from "../../components/forratuc/CobroQrModal";
 
 /**
  * Mostrador de Forratuc (2026-10-21): el presupuesto, que es su "factura".
@@ -104,6 +105,10 @@ const ForratucPresupuestosPage = () => {
   const [importeEfectivo, setImporteEfectivo] = useState("");
   const [importeMP, setImporteMP] = useState("");
   const [operacionMP, setOperacionMP] = useState("");
+  // Cobro con QR de Mercado Pago (2026-11-17, EN DESARROLLO: solo superadmin).
+  // `pagoQr` = el cobro ya pagado que va con este presupuesto.
+  const [qrAbierto, setQrAbierto] = useState(false);
+  const [pagoQr, setPagoQr] = useState(null);
   // { saldo, tope } del cliente en cuenta corriente (tope null = sin tope; 2026-11-12).
   const [saldoCliente, setSaldoCliente] = useState(null);
   // Lista de precios: la por defecto, hasta que se elija otra.
@@ -421,6 +426,49 @@ const ForratucPresupuestosPage = () => {
   const quitarRenglon = (id) =>
     setRenglones((prev) => (prev.length === 1 ? [renglonVacio()] : prev.filter((r) => r.id !== id)));
 
+  // Carga con el teclado (2026-11-18, pedido del cliente: "que el pase a la
+  // línea siguiente sea automático, sin usar el mouse"). Enter pasa al campo
+  // siguiente del renglón: código → cantidad → kg (solo el entero) → precio; con
+  // un código que no existe, al desplegable del producto. Enter en el precio del
+  // último renglón agrega uno nuevo y se para en su código. Cada campo se marca
+  // con data-fila (id del renglón) y data-campo.
+  const [focoPendiente, setFocoPendiente] = useState(null); // { id, campo }
+  useEffect(() => {
+    if (!focoPendiente) return;
+    const el = document.querySelector(`[data-fila="${focoPendiente.id}"][data-campo="${focoPendiente.campo}"]`);
+    if (el && !el.disabled) {
+      el.focus();
+      if (el.tagName === "INPUT") el.select();
+    }
+    setFocoPendiente(null);
+  }, [focoPendiente, renglones]);
+
+  const alEnterEnRenglon = (e) => {
+    if (e.key !== "Enter" || e.shiftKey) return;
+    const campo = e.target.dataset?.campo;
+    if (!campo) return;
+    // Que el Enter no emita el presupuesto (el form lo haría).
+    e.preventDefault();
+    const id = Number(e.target.dataset.fila);
+    const i = renglones.findIndex((r) => r.id === id);
+    if (i < 0) return;
+    const r = renglones[i];
+    const p = productoPorClave[r.producto];
+    const ir = (campoSig, idSig = id) => setFocoPendiente({ id: idSig, campo: campoSig });
+    if (campo === "codigo") return ir(p ? "cantidad" : "producto");
+    if (campo === "producto") return p ? ir("cantidad") : undefined;
+    if (campo === "cantidad") return ir(p?.rubro === "pollo" ? "kg" : "precio");
+    if (campo === "kg") return ir("precio");
+    if (campo === "precio") {
+      if (!p) return;
+      const sig = renglones[i + 1];
+      if (sig) return ir("codigo", sig.id);
+      const nuevo = renglonVacio();
+      setRenglones((prev) => [...prev, nuevo]);
+      return ir("codigo", nuevo.id);
+    }
+  };
+
   // Lo pedido de un mismo stock entre todos los renglones, contra lo que hay.
   const pedidoPorStock = renglones.reduce((acc, r) => {
     if (r.producto) acc[claveStock(r)] = (acc[claveStock(r)] || 0) + (Number(r.cantidad) || 0);
@@ -441,6 +489,7 @@ const ForratucPresupuestosPage = () => {
     setImporteEfectivo("");
     setImporteMP("");
     setOperacionMP("");
+    setPagoQr(null);
     setListaTocada(false);
   };
 
@@ -472,6 +521,13 @@ const ForratucPresupuestosPage = () => {
         return Swal.fire("Stock insuficiente", `${p.nombre}: hay ${fmt(disponibleDe(r))} ${unidadCantidad(p)}.`, "error");
     }
 
+    if (pagoQr) {
+      const conMp = formaPago === "mercado_pago" ? total : formaPago === "combinado" ? Number(importeMP) || 0 : 0;
+      if (!conMp)
+        return Swal.fire("Cobro con QR", `Hay un cobro con QR ya pagado de ${pesos(pagoQr.montoPagado ?? pagoQr.importe)}: la forma de pago tiene que ser Mercado Pago.`, "warning");
+      if (Math.abs(conMp - (pagoQr.montoPagado ?? pagoQr.importe)) > 0.005)
+        return Swal.fire("Cobro con QR", `Se cobró ${pesos(pagoQr.montoPagado ?? pagoQr.importe)} con QR y el presupuesto cobra ${pesos(conMp)} con Mercado Pago.`, "warning");
+    }
     if (formaPago === "cuenta_corriente" && modoCliente !== "padron")
       return Swal.fire("Cuenta corriente", "La cuenta corriente es solo para clientes del padrón.", "warning");
     // El back lo controla igual (2026-11-12).
@@ -511,6 +567,7 @@ const ForratucPresupuestosPage = () => {
             operacion: formaPago === "mercado_pago" ? operacionMP.trim() || undefined : undefined,
           }),
       listaPrecio: listaId || undefined,
+      pagoQr: pagoQr?._id || undefined,
       observaciones: observaciones.trim() || undefined,
     };
     if (editando) return guardarEdicion(datos);
@@ -696,6 +753,15 @@ const ForratucPresupuestosPage = () => {
           </button>
         </div>
 
+        {qrAbierto && (
+          <CobroQrModal
+            importe={formaPago === "combinado" ? Number(importeMP) || 0 : total}
+            descripcion="Compra en Forratuc"
+            onPagado={(c) => { setPagoQr(c); setOperacionMP(c.paymentId || ""); setQrAbierto(false); }}
+            onCerrar={() => setQrAbierto(false)}
+          />
+        )}
+
         {/* ══════════ PEDIDOS DE EDICIÓN (2026-11-12) ══════════ */}
         <SolicitudesEdicionPresupuesto solicitudes={solicitudes} esSuperadmin={esSuperadmin}
           mediosPago={constantes?.mediosHistoricos || mediosPago} depositos={depositos}
@@ -803,7 +869,7 @@ const ForratucPresupuestosPage = () => {
                         <th style={{ width: 40 }}></th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody onKeyDown={alEnterEnRenglon}>
                       {renglones.map((r) => {
                         const p = productoPorClave[r.producto];
                         const hay = disponibleDe(r);
@@ -814,11 +880,12 @@ const ForratucPresupuestosPage = () => {
                           <tr key={r.id}>
                             <td>
                               <input className={`form-control form-control-sm ${codigoMal ? "is-invalid" : ""}`}
-                                placeholder="Código" value={r.codigo} disabled={!deposito} title={codigoMal ? "No hay un producto con ese código" : undefined}
+                                placeholder="Código" value={r.codigo} disabled={!deposito} data-fila={r.id} data-campo="codigo" title={codigoMal ? "No hay un producto con ese código" : undefined}
                                 onChange={(e) => tipearCodigo(r.id, e.target.value)} />
                             </td>
                             <td>
                               <select className="form-select form-select-sm" value={r.producto} disabled={!deposito}
+                                data-fila={r.id} data-campo="producto"
                                 onChange={(e) => elegirProducto(r.id, e.target.value)}>
                                 <option value="">{deposito ? "Elegí un producto…" : "Primero elegí el depósito"}</option>
                                 {enOtroDeposito && <option value={p.clave}>{p.codigo} · {p.nombre}</option>}
@@ -850,7 +917,7 @@ const ForratucPresupuestosPage = () => {
                               <div className="input-group input-group-sm">
                                 <input type="number" min="0" step="1"
                                   className={`form-control ${excedido(r) ? "is-invalid" : ""}`}
-                                  value={r.cantidad} disabled={!p || enOtroDeposito}
+                                  value={r.cantidad} disabled={!p || enOtroDeposito} data-fila={r.id} data-campo="cantidad"
                                   onChange={(e) => setRenglon(r.id, { cantidad: e.target.value })} />
                                 {p && <span className="input-group-text">{unidadCantidad(p)}</span>}
                               </div>
@@ -861,6 +928,7 @@ const ForratucPresupuestosPage = () => {
                             <td>
                               {p?.rubro === "pollo" ? (
                                 <input type="number" min="0" step="0.01" className="form-control form-control-sm"
+                                  data-fila={r.id} data-campo="kg"
                                   title={`Se propone ${kgPorCajon} kg por cajón; poné el peso real si lo pesaste.`}
                                   value={r.kgTocado ? r.kg : kgDe(r) || ""}
                                   onChange={(e) => setRenglon(r.id, { kg: e.target.value, kgTocado: true })} />
@@ -873,7 +941,7 @@ const ForratucPresupuestosPage = () => {
                             <td>
                               <div className="input-group input-group-sm">
                                 <span className="input-group-text">$</span>
-                                <input type="number" min="0" step="0.01" className="form-control" value={r.precio} disabled={!p}
+                                <input type="number" min="0" step="0.01" className="form-control" value={r.precio} disabled={!p} data-fila={r.id} data-campo="precio"
                                   title={lista && p ? `Lista: ${lista.nombre}` : undefined}
                                   onChange={(e) => setRenglon(r.id, { precio: e.target.value, precioTocado: true })} />
                                 {p && <span className="input-group-text">/ {p.unidadVenta}</span>}
@@ -895,6 +963,9 @@ const ForratucPresupuestosPage = () => {
                           <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setRenglones((p) => [...p, renglonVacio()])}>
                             <i className="bi bi-plus-lg me-1"></i>Agregar renglón
                           </button>
+                          <span className="small text-muted ms-2">
+                            <i className="bi bi-keyboard me-1"></i>Enter pasa al campo siguiente; en el precio, al renglón nuevo.
+                          </span>
                         </td>
                         <td className="text-end">
                           <div className="small text-muted">TOTAL</div>
@@ -939,6 +1010,18 @@ const ForratucPresupuestosPage = () => {
                       </div>
                       <input className="form-control form-control-sm" style={{ maxWidth: 200 }}
                         placeholder="N° de operación MP (opcional)" value={operacionMP} onChange={(e) => setOperacionMP(e.target.value)} />
+                      {esSuperadmin && !editando && (
+                        pagoQr ? (
+                          <span className="badge bg-success-subtle text-success-emphasis border border-success-subtle">
+                            <i className="bi bi-qr-code me-1"></i>Cobrado con QR · op. {pagoQr.paymentId}
+                          </span>
+                        ) : (
+                          <button type="button" className="btn btn-sm btn-outline-primary" disabled={!((Number(importeMP) || 0) > 0)}
+                            onClick={() => setQrAbierto(true)} title="En desarrollo: Mercado Pago de prueba">
+                            <i className="bi bi-qr-code me-1"></i>Cobrar con QR
+                          </button>
+                        )
+                      )}
                       {(() => {
                         const dif = redondear(total - (Number(importeEfectivo) || 0) - (Number(importeMP) || 0));
                         return dif === 0 ? (
@@ -955,6 +1038,18 @@ const ForratucPresupuestosPage = () => {
                       <span className="text-muted">Contado por Mercado Pago: {pesos(total)}.</span>
                       <input className="form-control form-control-sm" style={{ maxWidth: 220 }}
                         placeholder="N° de operación (opcional)" value={operacionMP} onChange={(e) => setOperacionMP(e.target.value)} />
+                      {esSuperadmin && !editando && (
+                        pagoQr ? (
+                          <span className="badge bg-success-subtle text-success-emphasis border border-success-subtle">
+                            <i className="bi bi-qr-code me-1"></i>Cobrado con QR · op. {pagoQr.paymentId}
+                          </span>
+                        ) : (
+                          <button type="button" className="btn btn-sm btn-outline-primary" disabled={!(total > 0)}
+                            onClick={() => setQrAbierto(true)} title="En desarrollo: Mercado Pago de prueba">
+                            <i className="bi bi-qr-code me-1"></i>Cobrar con QR
+                          </button>
+                        )
+                      )}
                     </div>
                   ) : (
                     <div className={`alert ${superaTope ? "alert-danger" : "alert-warning"} py-2 small mb-0`}>
