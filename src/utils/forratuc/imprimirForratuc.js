@@ -405,9 +405,11 @@ const tablaConteo = (titulo, conteo, contado) => `
 // Dos modos (2026-11-18, pedidos del cliente y del usuario):
 //   · "resumen" (el que sale por defecto): los cuadros de billetes, la
 //     rendición del efectivo CON los gastos uno por uno, y la rendición de
-//     Mercado Pago con sus tickets. Nada más.
-//   · "completa": además ventas por rubro, cobranza, transferencias y cheques,
-//     cuenta corriente y el detalle de comprobantes.
+//     Mercado Pago (los totales, sin la lista de tickets: pedido del usuario).
+//     Nada más.
+//   · "completa": además ventas por rubro, cobranza, los tickets de Mercado
+//     Pago, transferencias y cheques, cuenta corriente y el detalle de
+//     comprobantes.
 export const imprimirCierreCajaForratuc = (caja, { operador = "", modo = "resumen" } = {}) => {
   const completa = modo === "completa";
   const contado = caja.guardado;
@@ -480,7 +482,7 @@ export const imprimirCierreCajaForratuc = (caja, { operador = "", modo = "resume
       ${caja.medios.mercadoPago.cobranza ? fila("Cobranza por Mercado Pago", caja.medios.mercadoPago.cobranza) : ""}
       <tfoot>${fila("Total Mercado Pago", caja.medios.mercadoPago.total)}</tfoot>
     </table>
-    ${(caja.ticketsMP || []).length
+    ${completa && (caja.ticketsMP || []).length
       ? `<table style="margin-top:1.5mm">
           <thead><tr><th>Ticket (comprobante)</th><th>Cliente</th><th>N° operación</th><th>Importe</th></tr></thead>
           <tbody>${caja.ticketsMP
