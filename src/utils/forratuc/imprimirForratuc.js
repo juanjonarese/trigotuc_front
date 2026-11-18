@@ -402,10 +402,14 @@ const tablaConteo = (titulo, conteo, contado) => `
   </div>`;
 
 // `caja` = respuesta de GET /caja-forratuc/:fecha
-// Desde el 2026-11-18 (pedido del cliente: "no imprimir todas las hojas, solo
-// el resumen de caja y ventas") el detalle de comprobantes es OPCIONAL
-// (`conDetalle`); por defecto sale solo el resumen.
-export const imprimirCierreCajaForratuc = (caja, { operador = "", conDetalle = false } = {}) => {
+// Dos modos (2026-11-18, pedidos del cliente y del usuario):
+//   · "resumen" (el que sale por defecto): los cuadros de billetes, la
+//     rendición del efectivo CON los gastos uno por uno, y la rendición de
+//     Mercado Pago con sus tickets. Nada más.
+//   · "completa": además ventas por rubro, cobranza, transferencias y cheques,
+//     cuenta corriente y el detalle de comprobantes.
+export const imprimirCierreCajaForratuc = (caja, { operador = "", modo = "resumen" } = {}) => {
+  const completa = modo === "completa";
   const contado = caja.guardado;
   const fila = (texto, importe, extra = "") =>
     `<tr><td>${texto}${extra ? ` <span class="formula">${extra}</span>` : ""}</td><td class="num">${importe == null ? "" : pesos(importe)}</td></tr>`;
@@ -437,7 +441,7 @@ export const imprimirCierreCajaForratuc = (caja, { operador = "", conDetalle = f
         .join("")}
     </div>
 
-    <h2>VENTAS</h2>
+    ${completa ? `<h2>VENTAS</h2>
     <table class="resumen">
       ${caja.ventas.map((v) => fila(escapeHtml(v.etiqueta), v.importe)).join("")}
       <tfoot>${fila("Total ventas", caja.totalVentas)}</tfoot>
@@ -446,21 +450,23 @@ export const imprimirCierreCajaForratuc = (caja, { operador = "", conDetalle = f
     <h2>COBRANZA</h2>
     <table class="resumen">
       ${fila("Cobros de cuenta corriente", caja.totalCobranza)}
-    </table>
+    </table>` : ""}
 
     <h2>RENDICIÓN DEL EFECTIVO</h2>
     <table class="resumen">
       ${fila("Caja inicio", caja.conteos.inicio.total)}
       ${fila("+ Vendido en efectivo", caja.medios.efectivo.ventas)}
       ${caja.medios.efectivo.cobranza ? fila("+ Cobranza en efectivo", caja.medios.efectivo.cobranza) : ""}
-      ${fila("− Gastos de caja", caja.totalGastos || 0)}
+      ${!completa && (caja.gastos || []).length
+        ? caja.gastos.map((g) => fila(`− Gasto: ${escapeHtml(g.concepto)}`, g.importe)).join("")
+        : fila("− Gastos de caja", caja.totalGastos || 0)}
       ${fila("− Caja para el día siguiente", contado ? caja.conteos.cierre.total : null)}
       <tr><td><strong>A rendir</strong></td><td class="num"><strong>${caja.aRendir == null ? "" : pesos(caja.aRendir)}</strong></td></tr>
       ${fila("Billetes que se rinden", contado ? caja.conteos.bolsa.total : null)}
       <tr><td><strong>Control</strong> <span class="formula">(lo que se rinde − lo que hay que rendir)</span></td><td class="num">${control}</td></tr>
     </table>
 
-    ${(caja.gastos || []).length
+    ${completa && (caja.gastos || []).length
       ? `<h2>GASTOS DE CAJA</h2>
         <table class="resumen">
           ${caja.gastos.map((g) => fila(escapeHtml(g.concepto), g.importe)).join("")}
@@ -468,7 +474,7 @@ export const imprimirCierreCajaForratuc = (caja, { operador = "", conDetalle = f
         </table>`
       : ""}
 
-    <h2>MERCADO PAGO</h2>
+    <h2>RENDICIÓN DE MERCADO PAGO</h2>
     <table class="resumen">
       ${fila("Vendido por Mercado Pago", caja.medios.mercadoPago.ventas)}
       ${caja.medios.mercadoPago.cobranza ? fila("Cobranza por Mercado Pago", caja.medios.mercadoPago.cobranza) : ""}
@@ -482,11 +488,11 @@ export const imprimirCierreCajaForratuc = (caja, { operador = "", conDetalle = f
             .join("")}</tbody>
         </table>`
       : ""}
-    ${(caja.otrosPorMedio || []).length
+    ${!completa ? "" : (caja.otrosPorMedio || []).length
       ? `<h2>TRANSFERENCIAS Y CHEQUES</h2>
         <table class="resumen">${caja.otrosPorMedio.map((m) => fila(`Cobrado con ${escapeHtml(m.etiqueta.toLowerCase())}`, m.importe)).join("")}</table>`
       : caja.otros ? `<table class="resumen" style="margin-top:1.5mm">${fila("Otros medios", caja.otros)}</table>` : ""}
-    ${(caja.cheques || []).length
+    ${completa && (caja.cheques || []).length
       ? `<table style="margin-top:1.5mm">
           <thead><tr><th>Recibo</th><th>Cliente</th><th>Cheque</th><th>Cobro</th><th>Importe</th></tr></thead>
           <tbody>${caja.cheques
@@ -494,9 +500,9 @@ export const imprimirCierreCajaForratuc = (caja, { operador = "", conDetalle = f
             .join("")}</tbody>
         </table>`
       : ""}
-    <table class="resumen" style="margin-top:1.5mm">${fila("Cuenta corriente (no entra plata)", caja.cuentaCorriente)}</table>
+    ${completa ? `<table class="resumen" style="margin-top:1.5mm">${fila("Cuenta corriente (no entra plata)", caja.cuentaCorriente)}</table>` : ""}
 
-    ${conDetalle ? `<h2>DETALLE DE COMPROBANTES</h2>
+    ${completa ? `<h2>DETALLE DE COMPROBANTES</h2>
     <table>
       <thead><tr><th>Comprobante</th><th>Cliente</th><th>Forma de pago</th><th>Operador</th><th>Importe</th></tr></thead>
       <tbody>

@@ -443,6 +443,70 @@ const ForratucPresupuestosPage = () => {
     setFocoPendiente(null);
   }, [focoPendiente, renglones]);
 
+  // Todo el presupuesto con el teclado (2026-11-18, pedido del cliente: "que
+  // todo avance con Enter como en las líneas de productos"). Al abrir, el
+  // cursor arranca en el Depósito (con las flechas se elige) y Enter recorre:
+  // Depósito → Fecha → Cliente → Lista → renglones (ver alEnterEnRenglon; Enter
+  // con el código vacío da por terminados los productos) → Forma de pago (las
+  // flechas cambian el botón) → importes / n° de operación si corresponden →
+  // Observaciones (Shift+Enter, otra línea) → Emitir, donde Enter emite.
+  // Cada paso se marca con data-nav.
+  const enfocar = (nav) => {
+    const el =
+      document.querySelector(`[data-nav="${nav}"][data-elegida="true"]`) ||
+      document.querySelector(`[data-nav="${nav}"]`);
+    const campo = el && (el.matches("input, select, textarea, button") ? el : el.querySelector("input, select, textarea, button"));
+    if (!campo || campo.disabled) return false;
+    campo.focus();
+    if (campo.tagName === "INPUT" && campo.type !== "date") campo.select();
+    return true;
+  };
+  const irARenglones = () => {
+    const r = renglones.find((x) => !x.producto) || renglones[0];
+    if (r) setFocoPendiente({ id: r.id, campo: "codigo" });
+  };
+  const SIGUIENTE = {
+    deposito: () => deposito && (enfocar("fecha") || enfocar("cliente")),
+    fecha: () => enfocar("cliente"),
+    cliente: () => enfocar("lista"),
+    lista: irARenglones,
+    forma: () =>
+      formaPago === "combinado" ? enfocar("importeEfectivo")
+        : formaPago === "mercado_pago" ? enfocar("operacionMP")
+        : enfocar("observaciones"),
+    importeEfectivo: () => enfocar("importeMP"),
+    importeMP: () => enfocar("operacionMP"),
+    operacionMP: () => enfocar("observaciones"),
+    observaciones: () => enfocar("emitir"),
+  };
+  // En la forma de pago, las flechas eligen UNA (como tocar el botón solo);
+  // la barra espaciadora toca el botón (así se combinan efectivo y Mercado Pago).
+  const flechaEnFormaPago = (e) => {
+    const botones = [...document.querySelectorAll('[data-nav="forma"]')];
+    const i = botones.indexOf(e.target);
+    if (i < 0) return;
+    e.preventDefault();
+    const adelante = e.key === "ArrowRight" || e.key === "ArrowDown";
+    const sig = botones[(i + (adelante ? 1 : botones.length - 1)) % botones.length];
+    setFormaPago(sig.dataset.forma);
+    if (sig.dataset.forma === "cuenta_corriente") setModoCliente("padron");
+    sig.focus();
+  };
+  const alTeclaEnForm = (e) => {
+    // Los renglones y el buscador de clientes manejan su propio Enter.
+    if (e.defaultPrevented) return;
+    const nav = e.target.closest?.("[data-nav]")?.dataset.nav;
+    if (!nav) return;
+    if (nav === "forma" && ["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp"].includes(e.key)) return flechaEnFormaPago(e);
+    if (e.key !== "Enter" || e.shiftKey || nav === "emitir") return;
+    e.preventDefault();
+    SIGUIENTE[nav]?.();
+  };
+  // Al abrir (nuevo o editar), al Depósito.
+  useEffect(() => {
+    if (nuevoAbierto && !loading) setTimeout(() => enfocar("deposito"), 0);
+  }, [nuevoAbierto, loading]);
+
   const alEnterEnRenglon = (e) => {
     if (e.key !== "Enter" || e.shiftKey) return;
     const campo = e.target.dataset?.campo;
@@ -455,6 +519,11 @@ const ForratucPresupuestosPage = () => {
     const r = renglones[i];
     const p = productoPorClave[r.producto];
     const ir = (campoSig, idSig = id) => setFocoPendiente({ id: idSig, campo: campoSig });
+    // Con el código vacío, los productos están: a la forma de pago.
+    if (campo === "codigo" && !p && !r.codigo.trim()) {
+      if (renglones.some((x) => x.producto)) enfocar("forma");
+      return;
+    }
     if (campo === "codigo") return ir(p ? "cantidad" : "producto");
     if (campo === "producto") return p ? ir("cantidad") : undefined;
     if (campo === "cantidad") return ir(p?.rubro === "pollo" ? "kg" : "precio");
@@ -796,13 +865,13 @@ const ForratucPresupuestosPage = () => {
           {loading ? (
           <div className="text-center p-4"><div className="spinner-border text-primary" role="status"></div></div>
         ) : (
-          <form onSubmit={emitir}>
+          <form onSubmit={emitir} onKeyDown={alTeclaEnForm}>
             <div className="card border-0 shadow-sm mb-3">
               <div className="card-body">
                 <div className="row g-3">
                   <div className="col-12 col-sm-6 col-lg-3">
                     <label className="form-label fw-semibold small mb-1">Depósito</label>
-                    <select className={`form-select ${deposito ? "" : "border-primary"}`} value={deposito}
+                    <select className={`form-select ${deposito ? "" : "border-primary"}`} value={deposito} data-nav="deposito"
                       onChange={(e) => setDeposito(e.target.value)}>
                       <option value="">Elegí de dónde sale…</option>
                       {depositos.map((d) => <option key={d.key} value={d.key}>{d.etiqueta}</option>)}
@@ -811,7 +880,7 @@ const ForratucPresupuestosPage = () => {
                   <div className="col-12 col-sm-6 col-lg-2">
                     <label className="form-label fw-semibold small mb-1">Fecha</label>
                     {/* No se emite con fecha anterior a hoy (2026-11-02); el back lo controla igual. */}
-                    <input type="date" className="form-control" value={fecha} min={editando ? undefined : obtenerFechaHoy()}
+                    <input type="date" className="form-control" value={fecha} min={editando ? undefined : obtenerFechaHoy()} data-nav="fecha"
                       disabled={!!editando} title={editando ? "La fecha del presupuesto no se edita" : undefined}
                       onChange={(e) => setFecha(e.target.value)} required />
                   </div>
@@ -828,15 +897,18 @@ const ForratucPresupuestosPage = () => {
                         </button>
                       </div>
                     </div>
-                    {modoCliente === "padron" ? (
-                      <BuscadorCliente clientes={clientes} value={clienteId} onChange={setClienteId} placeholder="Buscá por nombre, CUIT o teléfono..." />
-                    ) : (
-                      <input className="form-control" placeholder="Nombre de quien compra" value={clienteNombre} onChange={(e) => setClienteNombre(e.target.value)} />
-                    )}
+                    <div data-nav="cliente">
+                      {modoCliente === "padron" ? (
+                        <BuscadorCliente clientes={clientes} value={clienteId} onChange={setClienteId} placeholder="Buscá por nombre, CUIT o teléfono..."
+                          alEnter={() => setTimeout(() => enfocar("lista"), 0)} />
+                      ) : (
+                        <input className="form-control" placeholder="Nombre de quien compra" value={clienteNombre} onChange={(e) => setClienteNombre(e.target.value)} />
+                      )}
+                    </div>
                   </div>
                   <div className="col-12 col-sm-4 col-lg-3">
                     <label className="form-label fw-semibold small mb-1">Lista de precios</label>
-                    <select className="form-select" value={listaId}
+                    <select className="form-select" value={listaId} data-nav="lista"
                       onChange={(e) => { setListaId(e.target.value); setListaTocada(true); }}>
                       <option value="">Sin lista (precios a mano)</option>
                       {listas.map((l) => (
@@ -964,7 +1036,7 @@ const ForratucPresupuestosPage = () => {
                             <i className="bi bi-plus-lg me-1"></i>Agregar renglón
                           </button>
                           <span className="small text-muted ms-2">
-                            <i className="bi bi-keyboard me-1"></i>Enter pasa al campo siguiente; en el precio, al renglón nuevo.
+                            <i className="bi bi-keyboard me-1"></i>Enter pasa al campo siguiente; en el precio, al renglón nuevo; con el código vacío, a la forma de pago.
                           </span>
                         </td>
                         <td className="text-end">
@@ -985,7 +1057,7 @@ const ForratucPresupuestosPage = () => {
                       const elegida = formaPago === f.key || (formaPago === "combinado" && f.key !== "cuenta_corriente");
                       const icono = { efectivo: "bi-cash-coin", mercado_pago: "bi-phone", cuenta_corriente: "bi-journal-text" }[f.key];
                       return (
-                        <button key={f.key} type="button"
+                        <button key={f.key} type="button" data-nav="forma" data-forma={f.key} data-elegida={elegida ? "true" : undefined}
                           className={`btn btn-sm px-3 ${elegida ? "btn-primary" : "btn-outline-secondary"}`}
                           onClick={() => elegirFormaPago(f.key)}>
                           <i className={`bi ${icono || "bi-wallet2"} me-2`}></i>
@@ -1000,15 +1072,15 @@ const ForratucPresupuestosPage = () => {
                       {/* Cada importe se escribe a mano y no toca el otro: abajo se ve si suman el total. */}
                       <div className="input-group input-group-sm" style={{ maxWidth: 210 }}>
                         <span className="input-group-text">Efectivo $</span>
-                        <input type="number" min="0" step="0.01" className="form-control text-end sin-flechas" value={importeEfectivo}
+                        <input type="number" min="0" step="0.01" className="form-control text-end sin-flechas" value={importeEfectivo} data-nav="importeEfectivo"
                           onChange={(e) => setImporteEfectivo(e.target.value)} />
                       </div>
                       <div className="input-group input-group-sm" style={{ maxWidth: 230 }}>
                         <span className="input-group-text">Mercado Pago $</span>
-                        <input type="number" min="0" step="0.01" className="form-control text-end sin-flechas" value={importeMP}
+                        <input type="number" min="0" step="0.01" className="form-control text-end sin-flechas" value={importeMP} data-nav="importeMP"
                           onChange={(e) => setImporteMP(e.target.value)} />
                       </div>
-                      <input className="form-control form-control-sm" style={{ maxWidth: 200 }}
+                      <input className="form-control form-control-sm" style={{ maxWidth: 200 }} data-nav="operacionMP"
                         placeholder="N° de operación MP (opcional)" value={operacionMP} onChange={(e) => setOperacionMP(e.target.value)} />
                       {esSuperadmin && !editando && (
                         pagoQr ? (
@@ -1036,7 +1108,7 @@ const ForratucPresupuestosPage = () => {
                   ) : formaPago === "mercado_pago" ? (
                     <div className="d-flex flex-wrap align-items-center gap-2 small">
                       <span className="text-muted">Contado por Mercado Pago: {pesos(total)}.</span>
-                      <input className="form-control form-control-sm" style={{ maxWidth: 220 }}
+                      <input className="form-control form-control-sm" style={{ maxWidth: 220 }} data-nav="operacionMP"
                         placeholder="N° de operación (opcional)" value={operacionMP} onChange={(e) => setOperacionMP(e.target.value)} />
                       {esSuperadmin && !editando && (
                         pagoQr ? (
@@ -1073,7 +1145,8 @@ const ForratucPresupuestosPage = () => {
                 </div>
 
                 <label className="form-label fw-semibold small mb-1">Observaciones</label>
-                <textarea className="form-control mb-3" rows={2} value={observaciones} onChange={(e) => setObservaciones(e.target.value)} />
+                <textarea className="form-control mb-3" rows={2} value={observaciones} data-nav="observaciones"
+                  placeholder="Enter pasa a Emitir; Shift+Enter, otra línea" onChange={(e) => setObservaciones(e.target.value)} />
 
                 <div className="d-flex flex-wrap justify-content-between align-items-center gap-2">
                   <span className="text-muted small">
@@ -1082,7 +1155,7 @@ const ForratucPresupuestosPage = () => {
                       ? "El stock se rehace: vuelve lo de antes y sale lo nuevo."
                       : "Al emitir se descuenta el stock: pollo, huevo y pollitos de la avícola, y el alimento de la forrajería."}
                   </span>
-                  <button type="submit" className={`btn ${editando && !esSuperadmin ? "btn-warning" : "btn-success"}`} disabled={saving}>
+                  <button type="submit" className={`btn ${editando && !esSuperadmin ? "btn-warning" : "btn-success"}`} disabled={saving} data-nav="emitir">
                     {saving
                       ? <span className="spinner-border spinner-border-sm me-1"></span>
                       : <i className={`bi ${editando && !esSuperadmin ? "bi-send" : "bi-printer"} me-1`}></i>}

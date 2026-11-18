@@ -22,10 +22,16 @@ const BuscadorCliente = ({
   placeholder = "Escribí para buscar...",
   size = "",
   autoFocus = false,
+  // Opcional (2026-11-18, carga del presupuesto con el teclado): se llama
+  // después de un Enter, haya elegido o no. Con él, Enter con el cuadro vacío
+  // no elige el primero de la lista (pasa de largo) y Enter sobre el cliente ya
+  // elegido lo deja como está. Sin él, todo igual que siempre.
+  alEnter,
 }) => {
   const [texto, setTexto] = useState("");
   const [abierto, setAbierto] = useState(false);
   const [marcado, setMarcado] = useState(0);
+  const movido = useRef(false); // se usaron las flechas desde que se abrió
   // Si el input está cerca del borde de abajo (típico: el form al pie de un
   // modal), la lista se abre hacia arriba en vez de quedar cortada.
   const [haciaArriba, setHaciaArriba] = useState(false);
@@ -86,18 +92,35 @@ const BuscadorCliente = ({
   };
 
   const teclas = (e) => {
-    if (!abierto) return;
+    if (!abierto) {
+      if (e.key === "Enter" && alEnter) {
+        e.preventDefault();
+        alEnter();
+      }
+      return;
+    }
     if (e.key === "ArrowDown") {
       e.preventDefault();
+      movido.current = true;
       setMarcado((m) => Math.min(m + 1, resultados.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
+      movido.current = true;
       setMarcado((m) => Math.max(m - 1, 0));
     } else if (e.key === "Enter") {
       // El buscador suele vivir dentro de un form: sin esto, elegir con Enter
       // manda el formulario.
       e.preventDefault();
+      if (alEnter && !movido.current) {
+        const q = texto.trim().toLowerCase();
+        if (!q || (elegido && q === nombreCliente(elegido).toLowerCase())) {
+          setAbierto(false);
+          alEnter();
+          return;
+        }
+      }
       if (resultados[marcado]) elegir(resultados[marcado]);
+      if (alEnter) alEnter();
     } else if (e.key === "Escape") {
       setAbierto(false);
     }
@@ -117,12 +140,14 @@ const BuscadorCliente = ({
           onChange={(e) => {
             setTexto(e.target.value);
             setMarcado(0);
+            movido.current = false;
             abrir();
             // Escribir encima de un cliente ya elegido lo suelta: si no, la
             // pantalla muestra un nombre y guarda otro.
             if (value) onChange("");
           }}
           onFocus={() => {
+            movido.current = false;
             setTexto(elegido ? nombreCliente(elegido) : "");
             abrir();
           }}

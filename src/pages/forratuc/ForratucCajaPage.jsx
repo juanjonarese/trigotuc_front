@@ -129,13 +129,14 @@ const ForratucCajaPage = () => {
     }
   };
 
-  // Desde el 18/11 (pedido del cliente) la planilla sale por defecto SIN el
-  // detalle de comprobantes; el detalle y los productos vendidos, aparte.
+  // Desde el 18/11 (pedido del cliente): por defecto el RESUMEN (billetes,
+  // rendición del efectivo con los gastos y rendición de Mercado Pago); la
+  // planilla completa y los productos vendidos, en el desplegable.
   const operador = () => localStorage.getItem("nombreUsuario") || "";
-  const imprimir = ({ conDetalle = false } = {}) => {
+  const imprimir = ({ modo = "resumen" } = {}) => {
     if (sinGuardar)
       return Swal.fire("Falta guardar", "Guardá el conteo antes de imprimir la planilla.", "warning");
-    imprimirCierreCajaForratuc(caja, { operador: operador(), conDetalle });
+    imprimirCierreCajaForratuc(caja, { operador: operador(), modo });
   };
   const imprimirProductos = () => imprimirProductosVendidosForratuc(caja, { operador: operador() });
 
@@ -159,7 +160,7 @@ const ForratucCajaPage = () => {
             </button>
             <div className="btn-group">
               <button className="btn btn-outline-dark btn-sm" onClick={() => imprimir()} disabled={!caja}
-                title="El resumen de la caja y las ventas, sin el detalle de comprobantes">
+                title="Billetes, rendición del efectivo (con los gastos) y rendición de Mercado Pago">
                 <i className="bi bi-printer me-1"></i>Imprimir resumen
               </button>
               <button type="button" className="btn btn-outline-dark btn-sm dropdown-toggle dropdown-toggle-split"
@@ -168,8 +169,8 @@ const ForratucCajaPage = () => {
               </button>
               <ul className="dropdown-menu dropdown-menu-end">
                 <li>
-                  <button className="dropdown-item" onClick={() => imprimir({ conDetalle: true })}>
-                    <i className="bi bi-list-ul me-2"></i>Resumen + detalle de comprobantes
+                  <button className="dropdown-item" onClick={() => imprimir({ modo: "completa" })}>
+                    <i className="bi bi-list-ul me-2"></i>Planilla completa (ventas, cheques y comprobantes)
                   </button>
                 </li>
                 <li>
