@@ -391,8 +391,10 @@ export const obtenerMateriasPrimas = () => _planta("/materias-primas");
 export const guardarMateriaPrima = (id, data) =>
   _planta(`/materias-primas${id ? `/${id}` : ""}`, { method: id ? "PUT" : "POST", body: data });
 export const obtenerMovimientosMateriaPrima = (id) => _planta(`/materias-primas/${id}/movimientos`);
-export const ingresarMateriaPrima = (data) => _planta("/materias-primas/ingresos", { method: "POST", body: data });
-export const anularIngresoMateriaPrima = (id) => _planta(`/materias-primas/ingresos/${id}`, { method: "DELETE" });
+// La compra entra por remito (2026-11-18): { proveedor, numeroRemito, fecha, lineas: [{ materiaPrima, kg }], observaciones }
+export const obtenerRemitosMateriaPrima = () => _planta("/materias-primas/remitos");
+export const ingresarRemitoMateriaPrima = (data) => _planta("/materias-primas/remitos", { method: "POST", body: data });
+export const anularRemitoMateriaPrima = (id) => _planta(`/materias-primas/remitos/${id}/anular`, { method: "PATCH" });
 export const obtenerFormulas = () => _planta("/formulas");
 // Una por alimento (la receta): { ingredientes: [{ materiaPrima, porcentaje }], observaciones }
 export const guardarFormula = (alimento, data) => _planta(`/formulas/${alimento}`, { method: "PUT", body: data });

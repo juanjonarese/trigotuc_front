@@ -9,7 +9,9 @@ import {
   obtenerMateriasPrimas,
   guardarMateriaPrima,
   obtenerMovimientosMateriaPrima,
-  ingresarMateriaPrima,
+  obtenerRemitosMateriaPrima,
+  ingresarRemitoMateriaPrima,
+  anularRemitoMateriaPrima,
   obtenerFormulas,
   guardarFormula,
   guardarAlimentoBalanceado,
@@ -85,16 +87,19 @@ const ForratucPlantaPage = () => {
   const [ordenes, setOrdenes] = useState([]);
   const [envios, setEnvios] = useState([]);
   const [stockPlanta, setStockPlanta] = useState([]);
+  const [remitosMP, setRemitosMP] = useState([]);
   const [modal, setModal] = useState(null); // { tipo, ...datos }
   const [saving, setSaving] = useState(false);
   const [abierta, setAbierta] = useState(null); // orden con las tandas a la vista
 
   const cargar = useCallback(async () => {
     try {
-      const [cs, mps, fs, os, es, sp] = await Promise.all([
+      const [cs, mps, fs, os, es, sp, rs] = await Promise.all([
         obtenerConstantesPlanta(), obtenerMateriasPrimas(), obtenerFormulas(),
         obtenerOrdenesElaboracion(), obtenerOrdenesEnvio(), obtenerStockPlanta(),
+        obtenerRemitosMateriaPrima(),
       ]);
+      setRemitosMP(rs);
       setConstantes(cs);
       setMaterias(mps);
       setFormulas(fs);
@@ -428,8 +433,8 @@ const ForratucPlantaPage = () => {
                         <i className="bi bi-plus-lg me-1"></i>Nueva materia prima
                       </button>
                       <button className="btn btn-primary btn-sm"
-                        onClick={() => setModal({ tipo: "ingresoMP", materiaPrima: materias.find((m) => m.activo)?._id || "", kg: "", fecha: obtenerFechaHoy(), observaciones: "" })}>
-                        <i className="bi bi-box-arrow-in-down me-1"></i>Ingresar materia prima
+                        onClick={() => setModal({ tipo: "remitoMP", proveedor: "", numeroRemito: "", fecha: obtenerFechaHoy(), observaciones: "", lineas: [{ materiaPrima: "", kg: "" }] })}>
+                        <i className="bi bi-box-arrow-in-down me-1"></i>Ingresar remito de compra
                       </button>
                     </div>
                   </div>
@@ -461,6 +466,48 @@ const ForratucPlantaPage = () => {
                       ))}
                     </tbody>
                   </table>
+
+                  {/* Remitos de compra (2026-11-18): la materia prima entra por remito. */}
+                  <h6 className="fw-semibold mt-4 mb-2"><i className="bi bi-receipt me-1"></i>Remitos de compra</h6>
+                  {remitosMP.length === 0 ? (
+                    <div className="text-muted text-center py-3 small">Todavía no se ingresó ningún remito.</div>
+                  ) : (
+                    <table className="table table-sm table-hover align-middle small">
+                      <thead>
+                        <tr><th>N°</th><th>Fecha</th><th>Proveedor</th><th>Remito</th><th>Materia prima</th><th className="text-end">Kg</th><th></th></tr>
+                      </thead>
+                      <tbody>
+                        {remitosMP.map((r) => {
+                          const anulado = r.estado === "anulado";
+                          return (
+                            <tr key={r._id} className={anulado ? "text-muted text-decoration-line-through" : ""}>
+                              <td className="fw-semibold text-nowrap">{r.numero}</td>
+                              <td className="text-nowrap">{formatearFechaLocal(fechaInput(r.fecha) + "T12:00:00.000Z")}</td>
+                              <td>{r.proveedor}</td>
+                              <td className="text-nowrap">{r.numeroRemito}</td>
+                              <td>
+                                {r.lineas.map((l) => `${l.nombre} ${fmt(l.kg, 2)} kg`).join(" · ")}
+                                {r.observaciones && <div className="text-muted">{r.observaciones}</div>}
+                              </td>
+                              <td className="text-end text-nowrap">{fmt(r.kgTotales, 2)}</td>
+                              <td className="text-end text-nowrap">
+                                {anulado ? (
+                                  <span className="badge bg-light text-muted border">Anulado</span>
+                                ) : (
+                                  <button className="btn btn-sm btn-link text-danger p-0" title="Anular remito"
+                                    onClick={() => confirmar(`¿Anular el remito ${r.numeroRemito}?`,
+                                      "Se descuentan del stock los kg que trajo. Solo se puede si todavía no se usaron en elaboración.",
+                                      () => anularRemitoMateriaPrima(r._id), "Remito anulado")}>
+                                    <i className="bi bi-x-circle"></i>
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
               </div>
             )}
@@ -726,34 +773,77 @@ const ForratucPlantaPage = () => {
           </Modal>
         )}
 
-        {modal?.tipo === "ingresoMP" && (
-          <Modal titulo="Ingresar materia prima" saving={saving} onClose={() => setModal(null)} textoOk="Ingresar"
-            onSubmit={() => hacer(() => ingresarMateriaPrima({
-              materiaPrima: modal.materiaPrima, kg: Number(modal.kg), fecha: modal.fecha, observaciones: modal.observaciones,
-            }), "Ingreso registrado")}>
-            <div className="row g-3">
-              <div className="col-12">
-                <label className="form-label fw-semibold small mb-1">Materia prima</label>
-                <select className="form-select" value={modal.materiaPrima} onChange={(e) => set({ materiaPrima: e.target.value })}>
-                  {materias.filter((m) => m.activo).map((m) => <option key={m._id} value={m._id}>{m.codigo} · {m.nombre}</option>)}
-                </select>
+        {modal?.tipo === "remitoMP" && (() => {
+          const setLinea = (i, cambios) => set({ lineas: modal.lineas.map((l, j) => (j === i ? { ...l, ...cambios } : l)) });
+          const elegidas = new Set(modal.lineas.map((l) => l.materiaPrima).filter(Boolean));
+          const total = modal.lineas.reduce((a, l) => a + (Number(l.kg) || 0), 0);
+          return (
+            <Modal titulo="Ingresar remito de compra" ancho="modal-lg" saving={saving} onClose={() => setModal(null)} textoOk="Ingresar remito"
+              onSubmit={() => hacer(() => ingresarRemitoMateriaPrima({
+                proveedor: modal.proveedor, numeroRemito: modal.numeroRemito, fecha: modal.fecha, observaciones: modal.observaciones,
+                lineas: modal.lineas.filter((l) => l.materiaPrima).map((l) => ({ materiaPrima: l.materiaPrima, kg: Number(l.kg) })),
+              }), "Remito ingresado")}>
+              <div className="row g-3">
+                <div className="col-md-5">
+                  <label className="form-label fw-semibold small mb-1">Proveedor</label>
+                  <input className="form-control" value={modal.proveedor} required autoFocus onChange={(e) => set({ proveedor: e.target.value })} />
+                </div>
+                <div className="col-md-4">
+                  <label className="form-label fw-semibold small mb-1">N° de remito</label>
+                  <input className="form-control" value={modal.numeroRemito} required placeholder="0001-00001234"
+                    onChange={(e) => set({ numeroRemito: e.target.value })} />
+                </div>
+                <div className="col-md-3">
+                  <label className="form-label fw-semibold small mb-1">Fecha</label>
+                  <input type="date" className="form-control" max={obtenerFechaHoy()} value={modal.fecha} onChange={(e) => set({ fecha: e.target.value })} />
+                </div>
+                <div className="col-12">
+                  <table className="table table-sm align-middle mb-1">
+                    <thead><tr><th>Materia prima</th><th style={{ width: "28%" }} className="text-end">Kg</th><th style={{ width: 40 }}></th></tr></thead>
+                    <tbody>
+                      {modal.lineas.map((l, i) => (
+                        <tr key={i}>
+                          <td>
+                            <select className="form-select form-select-sm" value={l.materiaPrima} required onChange={(e) => setLinea(i, { materiaPrima: e.target.value })}>
+                              <option value="">Elegí…</option>
+                              {materias.filter((m) => m.activo && (!elegidas.has(String(m._id)) || String(m._id) === l.materiaPrima)).map((m) => (
+                                <option key={m._id} value={m._id}>{m.codigo} · {m.nombre}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td>
+                            <input type="number" min="0.01" step="0.01" className="form-control form-control-sm text-end" value={l.kg} required
+                              onChange={(e) => setLinea(i, { kg: e.target.value })} />
+                          </td>
+                          <td className="text-end">
+                            {modal.lineas.length > 1 && (
+                              <button type="button" className="btn btn-sm btn-link text-danger p-0" title="Sacar renglón"
+                                onClick={() => set({ lineas: modal.lineas.filter((_, j) => j !== i) })}>
+                                <i className="bi bi-trash"></i>
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr><th className="text-end">Total</th><th className="text-end">{fmt(total, 2)} kg</th><th></th></tr>
+                    </tfoot>
+                  </table>
+                  <button type="button" className="btn btn-sm btn-outline-secondary"
+                    disabled={modal.lineas.length >= materias.filter((m) => m.activo).length}
+                    onClick={() => set({ lineas: [...modal.lineas, { materiaPrima: "", kg: "" }] })}>
+                    <i className="bi bi-plus-lg me-1"></i>Agregar renglón
+                  </button>
+                </div>
+                <div className="col-12">
+                  <input className="form-control form-control-sm" placeholder="Observaciones" value={modal.observaciones}
+                    onChange={(e) => set({ observaciones: e.target.value })} />
+                </div>
               </div>
-              <div className="col-6">
-                <label className="form-label fw-semibold small mb-1">Kg</label>
-                <input type="number" min="0.01" step="0.01" className="form-control" value={modal.kg} required autoFocus
-                  onChange={(e) => set({ kg: e.target.value })} />
-              </div>
-              <div className="col-6">
-                <label className="form-label fw-semibold small mb-1">Fecha</label>
-                <input type="date" className="form-control" max={obtenerFechaHoy()} value={modal.fecha} onChange={(e) => set({ fecha: e.target.value })} />
-              </div>
-              <div className="col-12">
-                <input className="form-control form-control-sm" placeholder="Observaciones (proveedor, remito…)" value={modal.observaciones}
-                  onChange={(e) => set({ observaciones: e.target.value })} />
-              </div>
-            </div>
-          </Modal>
-        )}
+            </Modal>
+          );
+        })()}
 
         {modal?.tipo === "movsMP" && (
           <Modal titulo={`${modal.mp.codigo} · ${modal.mp.nombre}`} ancho="modal-lg" onClose={() => setModal(null)}>
