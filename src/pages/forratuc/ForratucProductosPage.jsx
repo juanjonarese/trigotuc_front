@@ -67,12 +67,14 @@ const ForratucProductosPage = () => {
     };
     const porGrupo = new Map();
     for (const p of visibles) {
-      const clave = p.rubro === "alimento" ? `alimento|${p.categoria || ""}` : p.rubro;
+      // Con categoría (también los de "otros", 19/11) va con el alimento de esa categoría.
+      const conCategoria = p.rubro === "alimento" || (p.categoria && p.origen === "deposito");
+      const clave = conCategoria ? `alimento|${p.categoria || ""}` : p.rubro;
       if (!porGrupo.has(clave)) {
-        const titulo = p.rubro === "alimento"
+        const titulo = conCategoria
           ? `${etiquetaRubro("alimento")} — ${etiquetaCategoria(p.categoria)}`
           : etiquetaRubro(p.rubro);
-        porGrupo.set(clave, { clave, titulo, rubro: p.rubro, orden: ordenCat(p), items: [] });
+        porGrupo.set(clave, { clave, titulo, rubro: conCategoria ? "alimento" : p.rubro, orden: ordenCat(p), items: [] });
       }
       porGrupo.get(clave).items.push(p);
     }
@@ -119,7 +121,7 @@ const ForratucProductosPage = () => {
             codigo: form.codigo.trim(),
             nombre: form.nombre.trim(),
             activo: form.activo,
-            ...(form.base ? {} : { rubro: form.rubro, unidadVenta: form.unidadVenta }),
+            ...(form.base ? {} : { rubro: form.rubro, unidadVenta: form.unidadVenta, categoria: form.categoria || "" }),
           }
         : { codigo: form.codigo.trim(), activo: form.activoAca });
       Swal.fire({ icon: "success", title: "Producto guardado", timer: 1300, showConfirmButton: false });
@@ -284,8 +286,19 @@ const ForratucProductosPage = () => {
                               {(constantes?.unidadesNuevo || []).map((u) => <option key={u.key} value={u.key}>{u.etiqueta}</option>)}
                             </select>
                           </div>
+                          {/* Categoría también para los de "otros" (19/11, pedido del
+                              usuario: muchos alimentos se dieron de alta en "otros"). */}
+                          <div className="col-12">
+                            <label className="form-label fw-semibold small mb-1">Categoría</label>
+                            <select className="form-select" value={form.categoria || ""}
+                              onChange={(e) => set({ categoria: e.target.value })}>
+                              <option value="">— Sin categoría —</option>
+                              {categorias.map((c) => <option key={c.key} value={c.key}>{c.etiqueta}</option>)}
+                            </select>
+                          </div>
                           <div className="col-12 small text-muted">
-                            Lleva stock por depósito (Trigotuc / Forrajería): entra con "Ingresar mercadería" en Stock y sale con el presupuesto.
+                            Lleva stock por depósito: entra con "Ingresar mercadería" en Stock y sale con el presupuesto.
+                            Con categoría se agrupa con el alimento de esa categoría en Productos, Stock y la planilla de conteo.
                           </div>
                         </>
                       )}

@@ -381,6 +381,25 @@ export const registrarAjusteDepositoForratuc = async (data) => {
   return handleResponse(response);
 };
 
+// ── Producción de la forrajería (2026-11-19): el Depósito Producción ──
+export const obtenerDepositoProduccion = async () => {
+  const response = await fetch(`${API_URL}/produccion-forratuc/deposito`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+// data: { fecha, observaciones, lineas: [{ alimento, bolsas }] } — siempre al Depósito Producción.
+export const registrarIngresoProduccion = async (data) => {
+  const response = await fetch(`${API_URL}/produccion-forratuc/ingresos`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+export const anularIngresoProduccion = async (id) => {
+  const response = await fetch(`${API_URL}/produccion-forratuc/ingresos/${id}/anular`, {
+    method: "PATCH", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
 // La constancia de un ajuste (AJ-0001), para reimprimirla (19/11).
 export const obtenerAjusteDepositoForratuc = async (numero) => {
   const response = await fetch(`${API_URL}/stock-forratuc/alimento/ajustes/${encodeURIComponent(numero)}`, { headers: getAuthHeaders() });

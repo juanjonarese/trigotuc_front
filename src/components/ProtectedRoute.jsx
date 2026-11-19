@@ -17,6 +17,11 @@ const MODULO_POR_ROL = {
     prefijos: ["/reproductores", "/alimento/silos"],
     inicio: "/reproductores/galpones",
   },
+  // Producción de la forrajería (2026-11-19): solo su pantalla.
+  produccion: {
+    prefijos: ["/forratuc/produccion"],
+    inicio: "/forratuc/produccion",
+  },
 };
 
 const ProtectedRoute = ({ children, blockedEmails = [] }) => {

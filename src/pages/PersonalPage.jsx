@@ -53,7 +53,7 @@ const PersonalPage = () => {
   // Un usuario sin lista (anterior al 2026-10-26) entra a la empresa de su rol,
   // que para todos los roles de hoy es la avícola.
   const empresasDe = (usuario) =>
-    usuario.empresas?.length ? usuario.empresas : ["avicola"];
+    usuario.empresas?.length ? usuario.empresas : [usuario.rolUsuario === "produccion" ? "forratuc" : "avicola"];
 
   const nombreEmpresa = (clave) =>
     catalogoEmpresas.find((e) => e.clave === clave)?.nombre || clave;
@@ -132,6 +132,8 @@ const PersonalPage = () => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
+      // Producción es de Forratuc (2026-11-19): al elegirlo, se tilda Forratuc.
+      ...(e.target.name === "rolUsuario" && e.target.value === "produccion" ? { empresas: ["forratuc"] } : {}),
     });
   };
 
@@ -668,6 +670,7 @@ const PersonalPage = () => {
                             <option value="frigorifico">Frigorífico (Lotes y envíos cámara)</option>
                             <option value="granja">Granja (Ingreso pollitos, galpones, datos semanales)</option>
                             <option value="reproductoras">Reproductoras (Planteles, recolección, remitos, incubadora)</option>
+                            <option value="produccion">Producción Forratuc (Depósito Producción, órdenes de carga, dosificación)</option>
                             <option value="chofer">Chofer (Carga y entrega de pedidos)</option>
                             <option value="admin">Admin (Todo, menos usuarios y el reset de Reproductoras)</option>
                             <option value="superadmin">Super Admin (Acceso total)</option>

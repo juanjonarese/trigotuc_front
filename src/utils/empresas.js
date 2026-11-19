@@ -51,8 +51,11 @@ export const inicioAvicola = (rolUsuario) => {
   return "/dashboard";
 };
 
+// Producción de la forrajería (2026-11-19) entra directo a su pantalla.
 export const inicioEmpresa = (clave, rolUsuario) =>
-  clave === "forratuc" ? "/forratuc" : inicioAvicola(rolUsuario);
+  clave === "forratuc"
+    ? rolUsuario === "produccion" ? "/forratuc/produccion" : "/forratuc"
+    : inicioAvicola(rolUsuario);
 
 // Rutas del grupo: no son de ninguna empresa, así que al entrar se queda el
 // menú de la empresa en la que estabas (el padrón de clientes es uno solo).

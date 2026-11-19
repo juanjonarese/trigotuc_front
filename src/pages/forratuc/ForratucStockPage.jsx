@@ -7,7 +7,7 @@ import { BADGE_ESPECIE, especieDe, etiquetaEspecie, claveEntero, claveTrozado } 
 import { formatearFechaLocal } from "../../utils/dateUtils";
 import { imprimirConteoDepositos, imprimirHistorialStock, imprimirAjusteDeposito } from "../../utils/forratuc/imprimirForratuc";
 import { filtrarHistorial, opcionesFiltro, exportarHistorialExcel } from "../../utils/forratuc/historialStock";
-import { exportarConteoExcel } from "../../utils/forratuc/conteoStock";
+import { exportarConteoExcel, grupoDeposito } from "../../utils/forratuc/conteoStock";
 import IngresoMercaderiaModal from "../../components/forratuc/IngresoMercaderiaModal";
 import AjusteDepositoModal from "../../components/forratuc/AjusteDepositoModal";
 import {
@@ -383,15 +383,9 @@ const ForratucStockPage = () => {
                 const conStock = alimento.productos.filter((p) => p.porDeposito[d.key]);
                 // El alimento, por categoría (bovinos, parrilleros…; 2026-11-12):
                 // el back ya los manda ordenados.
-                const alimentos = conStock.filter((p) => p.rubro !== "otros");
-                const categoriasDep = [...new Set(alimentos.map((p) => p.categoriaEtiqueta || "Sin categoría"))];
-                const rubros = [
-                  ...categoriasDep.map((c) => ({
-                    titulo: `Alimento balanceado — ${c}`,
-                    items: alimentos.filter((p) => (p.categoriaEtiqueta || "Sin categoría") === c),
-                  })),
-                  { titulo: "Otros", items: conStock.filter((p) => p.rubro === "otros") },
-                ].filter((g) => g.items.length > 0);
+                // Desde el 19/11 los de "otros" con categoría van con su categoría.
+                const rubros = [...new Set(conStock.map(grupoDeposito))]
+                  .map((titulo) => ({ titulo, items: conStock.filter((p) => grupoDeposito(p) === titulo) }));
                 // La Forrajería guarda además los huevos y los pollitos que le mandan (2026-11-16).
                 const esForrajeria = d.key === "forrajeria";
                 const hayHuevos = esForrajeria && huevos.porTipo.length > 0;

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import Swal from "sweetalert2";
 import { obtenerFechaHoy } from "../../utils/dateUtils";
 import { registrarIngresoAlimentoForratuc } from "../../services/api";
+import { grupoDeposito } from "../../utils/forratuc/conteoStock";
 
 /**
  * Ingreso manual de mercadería a un depósito de Forratuc (2026-11-16, pedido
@@ -18,7 +19,8 @@ let siguiente = 1;
 const renglonVacio = () => ({ id: siguiente++, alimento: "", cantidad: "" });
 const UNIDAD = { bolsa: "bolsas", unidad: "unidades", caja: "cajas", maple: "maples" };
 
-const IngresoMercaderiaModal = ({ depositos = [], productos = [], onClose, onGuardado }) => {
+// `registrar` (2026-11-19): Producción guarda por su endpoint, que fija el Depósito Producción.
+const IngresoMercaderiaModal = ({ depositos = [], productos = [], onClose, onGuardado, registrar = registrarIngresoAlimentoForratuc }) => {
   const [fecha, setFecha] = useState(obtenerFechaHoy());
   const [deposito, setDeposito] = useState(depositos.find((d) => d.key === "forrajeria")?.key || depositos[0]?.key || "");
   const [observaciones, setObservaciones] = useState("");
@@ -28,7 +30,7 @@ const IngresoMercaderiaModal = ({ depositos = [], productos = [], onClose, onGua
   // Agrupados como en el Stock: el alimento por categoría y "Otros".
   const grupos = [];
   for (const p of productos) {
-    const titulo = p.rubro === "otros" ? "Otros" : `Alimento — ${p.categoriaEtiqueta || "Sin categoría"}`;
+    const titulo = grupoDeposito(p);
     const g = grupos.find((x) => x.titulo === titulo) || (grupos.push({ titulo, items: [] }), grupos[grupos.length - 1]);
     g.items.push(p);
   }
@@ -47,7 +49,7 @@ const IngresoMercaderiaModal = ({ depositos = [], productos = [], onClose, onGua
     }
     setSaving(true);
     try {
-      await registrarIngresoAlimentoForratuc({
+      await registrar({
         fecha, deposito, observaciones: observaciones.trim() || undefined,
         lineas: usados.map((r) => ({ alimento: r.alimento, bolsas: Number(r.cantidad) })),
       });

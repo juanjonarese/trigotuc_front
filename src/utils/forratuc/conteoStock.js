@@ -11,6 +11,18 @@ import { obtenerFechaHoy } from "../dateUtils";
 const ETIQUETA_RUBRO = { alimento: "Alimento balanceado", otros: "Otros" };
 
 /**
+ * En qué grupo va un producto de depósito (una sola regla para Stock, ingreso,
+ * ajuste y conteo). Con categoría — sea de rubro alimento u "otros" (desde el
+ * 19/11: muchos alimentos se dieron de alta en "otros") — va con el alimento de
+ * esa categoría; sin categoría, el alimento en "Sin categoría" y el resto en "Otros".
+ * `p` es un producto de GET /stock-forratuc (alimento.productos).
+ */
+export const grupoDeposito = (p) =>
+  p.categoria || p.rubro !== "otros"
+    ? `${ETIQUETA_RUBRO.alimento} — ${p.categoriaEtiqueta || "Sin categoría"}`
+    : ETIQUETA_RUBRO.otros;
+
+/**
  * Las secciones de un depósito: primero `extras` (en la Forrajería, los huevos
  * y los pollitos), después los productos de depósito por rubro y al final los
  * extras marcados `alFinal` (en la Forrajería, el pollo de la cámara). Entran todos los activos, aunque estén en cero: un cero que
@@ -24,9 +36,7 @@ export const seccionesConteo = (deposito, productos = [], extras = []) => {
     .map((p) => ({
       codigo: p.codigo, etiqueta: p.etiqueta, unidad: p.unidad, sistema: p.porDeposito?.[deposito.key] || 0,
       // El alimento va por categoría (bovinos, parrilleros…; 2026-11-12).
-      grupo: p.rubro === "alimento"
-        ? `${ETIQUETA_RUBRO.alimento} — ${p.categoriaEtiqueta || "Sin categoría"}`
-        : ETIQUETA_RUBRO[p.rubro] || p.rubro,
+      grupo: grupoDeposito(p),
     }));
   return [
     ...extras.filter((e) => !e.alFinal),

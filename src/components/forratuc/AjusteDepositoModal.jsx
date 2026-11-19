@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import Swal from "sweetalert2";
 import { obtenerFechaHoy } from "../../utils/dateUtils";
 import { registrarAjusteDepositoForratuc } from "../../services/api";
+import { grupoDeposito } from "../../utils/forratuc/conteoStock";
 import { escapeHtml } from "../../utils/escapeHtml";
 import { imprimirAjusteDeposito } from "../../utils/forratuc/imprimirForratuc";
 
@@ -32,7 +33,7 @@ const AjusteDepositoModal = ({ depositos = [], productos = [], motivos = [], onC
 
   const grupos = [];
   for (const p of productos) {
-    const titulo = p.rubro === "otros" ? "Otros" : `Alimento — ${p.categoriaEtiqueta || "Sin categoría"}`;
+    const titulo = grupoDeposito(p);
     const g = grupos.find((x) => x.titulo === titulo) || (grupos.push({ titulo, items: [] }), grupos[grupos.length - 1]);
     g.items.push(p);
   }

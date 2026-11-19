@@ -32,6 +32,7 @@ There are no automated tests.
 | `/forratuc/productos` | `ForratucProductosPage` (2026-11-02: alta de productos con código; los nuevos llevan stock por depósito. Desde el 04/11 los de la avícola salen con su badge y de ellos **solo** se edita el código de Forratuc y si Forratuc los vende) | Forratuc |
 | `/forratuc/pagos` | `ForratucPagosPage` (2026-10-30: los pagos de cuenta corriente por fecha — registrar, reimprimir el recibo, anular; mismo modal que Cuentas corrientes, `components/forratuc/RegistrarPagoModal.jsx`) | Forratuc |
 | `/forratuc/stock` | `ForratucStockPage` (2026-10-26: pollo de la cámara Trigotuc, huevo, pollitos y alimento balanceado en bolsas, todo de `GET /stock-forratuc`; una **tarjeta por lugar** — cámara Trigotuc, huevos, pollitos, cada depósito de alimento — con el **diseño de Frigorífico → Stock** (total arriba, cuadritos con badge, historial abajo); al tocarla, el historial de ese lugar como cuenta corriente, de `GET /stock-forratuc/movimientos/:lugar`; desde el 2026-10-29, botón **Ingresar alimento** y "anular" en los ingresos del historial) | Forratuc |
+| `/forratuc/produccion` | `ForratucProduccionPage` (2026-11-19, en desarrollo: rol `produccion` + superadmin; solapas Depósito Producción — stock, historial, ingreso manual —, Órdenes de carga y Planilla de dosificación, estas dos por hacer) | Forratuc |
 | `/forratuc/salidas` | `SalidaMostradorPage` (la salida suelta; las de un presupuesto salen con su número y sin editar/borrar) | Forratuc |
 | `/avicola/productos` | `AvicolaProductosPage` (2026-11-04: los productos de la avícola — pollo entero, trozado, huevo, pollitos — que vende Forratuc; alta a mano eligiendo con qué stock se vincula; ítem "Productos" del menú, solo superadmin) | Avícola |
 | `/dashboard` | `DashboarPage` (typo intencional) | General |
@@ -80,7 +81,7 @@ Default redirect: `/` y rutas desconocidas → `/login`.
 
 ### Roles (`localStorage.rolUsuario`)
 
-`superadmin`, `admin`, `administracion_frigorifico`, `administracion_granja`, `frigorifico`, `granja`, `reproductoras`, `chofer`.
+`superadmin`, `admin`, `administracion_frigorifico`, `administracion_granja`, `frigorifico`, `granja`, `reproductoras`, `chofer`, `produccion` (2026-11-19: producción de la forrajería, ve solo `/forratuc/produccion`).
 
 > El gateo por rol en el frontend es **cosmético** (oculta secciones del sidebar). La autorización real la aplica el backend con JWT + middleware. No confiar en el front para seguridad.
 

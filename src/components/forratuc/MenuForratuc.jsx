@@ -18,6 +18,9 @@ const ITEMS = [
   // Planta de alimento (2026-11-04): materia prima, fórmulas, elaboración y envíos.
   // Solo superadmin: Forratuc se liberó el 2026-11-11 sin la Planta.
   { ruta: "/forratuc/planta", icono: "bi-gear-wide-connected", texto: "Planta de alimento", soloSuperadmin: true },
+  // Producción de la forrajería (2026-11-19, en desarrollo): depósito, órdenes
+  // de carga y dosificación. La ven el superadmin y el rol `produccion`.
+  { ruta: "/forratuc/produccion", icono: "bi-building-gear", texto: "Producción", soloSuperadmin: true },
 ];
 
 const MenuForratuc = ({ ctx, grupo }) => {
@@ -37,6 +40,19 @@ const MenuForratuc = ({ ctx, grupo }) => {
     const t = setInterval(leer, 60000);
     return () => { vigente = false; clearInterval(t); };
   }, [esSuperadmin, location.pathname]);
+  // El rol de producción ve solo su pantalla (sin Inicio ni lo de ventas).
+  if (localStorage.getItem("rolUsuario") === "produccion") {
+    return (
+      <>
+        <a href="#" className={`nav-link d-flex align-items-center gap-2 mb-2 rounded ${isActive("/forratuc/produccion") ? "text-white" : "text-white-50"}`}
+          onClick={(e) => { e.preventDefault(); navigate("/forratuc/produccion"); }}>
+          <i className="bi bi-building-gear fs-5"></i>
+          <span>Producción</span>
+        </a>
+        {grupo}
+      </>
+    );
+  }
   return (
     <>
           <a

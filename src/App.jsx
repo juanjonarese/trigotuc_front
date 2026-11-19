@@ -54,6 +54,7 @@ const ForratucPagosPage = lazyConRecarga(() => import("./pages/forratuc/Forratuc
 const ForratucProductosPage = lazyConRecarga(() => import("./pages/forratuc/ForratucProductosPage"));
 const ForratucPlantaPage = lazyConRecarga(() => import("./pages/forratuc/ForratucPlantaPage"));
 const ForratucStockPage = lazyConRecarga(() => import("./pages/forratuc/ForratucStockPage"));
+const ForratucProduccionPage = lazyConRecarga(() => import("./pages/forratuc/ForratucProduccionPage"));
 const ForratucListasPreciosPage = lazyConRecarga(() => import("./pages/forratuc/ForratucListasPreciosPage"));
 const ForratucCajaPage = lazyConRecarga(() => import("./pages/forratuc/ForratucCajaPage"));
 const AvicolaProductosPage = lazyConRecarga(() => import("./pages/AvicolaProductosPage"));
@@ -94,6 +95,7 @@ function App() {
         <Route path="/forratuc/planta" element={<ProtectedRoute><ForratucPlantaPage /></ProtectedRoute>} />
         {/* Stock del local (2026-10-26): pollo, huevo, pollitos y alimento balanceado. */}
         <Route path="/forratuc/stock" element={<ProtectedRoute><ForratucStockPage /></ProtectedRoute>} />
+        <Route path="/forratuc/produccion" element={<ProtectedRoute><ForratucProduccionPage /></ProtectedRoute>} />
         {/* Observaciones del cliente (2026-10-29) */}
         <Route path="/forratuc/listas-precios" element={<ProtectedRoute><ForratucListasPreciosPage /></ProtectedRoute>} />
         <Route path="/forratuc/caja" element={<ProtectedRoute><ForratucCajaPage /></ProtectedRoute>} />
