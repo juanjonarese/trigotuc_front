@@ -28,19 +28,24 @@ export const Grupo = ({ titulo, children }) => (
   </>
 );
 
-// Tarjeta de un lugar. Tocarla abre su historial abajo.
+// Tarjeta de un lugar. Tocarla abre su historial abajo. Sin `onClick` (la de
+// Producción, que no muestra movimientos: 19/11) no se toca ni dice "Movimientos".
 export const TarjetaLugar = ({ icono, colorIcono, titulo, vacio, total, activa, onClick, ancho = "col-12 col-md-6", children }) => (
   <div className={ancho}>
     <div className={`card border-0 shadow-sm h-100 ${activa ? "border border-2 border-primary" : ""}`}
-      role="button" tabIndex={0} onClick={onClick}
-      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onClick?.()}>
+      {...(onClick ? {
+        role: "button", tabIndex: 0, onClick,
+        onKeyDown: (e) => (e.key === "Enter" || e.key === " ") && onClick(),
+      } : {})}>
       <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
         <h6 className="mb-0">
           <i className={`bi ${icono} me-2 ${colorIcono}`}></i>{titulo}
         </h6>
-        <span className="small text-primary">
-          <i className="bi bi-clock-history me-1"></i>Movimientos
-        </span>
+        {onClick && (
+          <span className="small text-primary">
+            <i className="bi bi-clock-history me-1"></i>Movimientos
+          </span>
+        )}
       </div>
       <div className="card-body py-2">
         {vacio ? <p className="text-muted small mb-0">Sin stock</p> : children}

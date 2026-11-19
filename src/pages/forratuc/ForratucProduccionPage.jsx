@@ -1,20 +1,21 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import Layout from "../../components/Layout";
 import IngresoMercaderiaModal from "../../components/forratuc/IngresoMercaderiaModal";
-import { Cuadro, TarjetaLugar, CuadrosDeposito, HistorialStock } from "../../components/forratuc/StockPiezas";
+import { Cuadro, TarjetaLugar, CuadrosDeposito } from "../../components/forratuc/StockPiezas";
 import { fmt } from "../../utils/forratuc/formatoStock";
 import { grupoDeposito } from "../../utils/forratuc/conteoStock";
-import { obtenerDepositoProduccion, registrarIngresoProduccion, anularIngresoProduccion } from "../../services/api";
+import { obtenerDepositoProduccion, registrarIngresoProduccion } from "../../services/api";
 
 /**
  * Producción de la forrajería (2026-11-19, pedido del usuario: "vamos armando
  * la estructura"). La pantalla del rol `produccion` (también la ve el
  * superadmin), con tres solapas:
  *
- *   1. Depósito Producción: su stock, el historial y el ingreso manual de
- *      mercadería, con el MISMO diseño que Forratuc → Stock (pedido del
- *      usuario; las piezas son las de components/forratuc/StockPiezas.jsx).
+ *   1. Depósito Producción: su stock y el ingreso manual de mercadería, con el
+ *      MISMO diseño que Forratuc → Stock (pedido del usuario; las piezas son
+ *      las de components/forratuc/StockPiezas.jsx). SIN el historial de
+ *      movimientos (19/11, pedido del usuario; el back tampoco lo manda).
  *      Todo por /produccion-forratuc, que fija el depósito: este rol no ve ni
  *      toca los otros.
  *   2. Órdenes de carga: las que van a venir de los presupuestos. EN CONSTRUCCIÓN.
@@ -44,7 +45,6 @@ const ForratucProduccionPage = () => {
   const [datos, setDatos] = useState(null);
   const [loading, setLoading] = useState(true);
   const [ingresoAbierto, setIngresoAbierto] = useState(false);
-  const historialRef = useRef(null);
 
   const cargar = async () => {
     setLoading(true);
@@ -65,20 +65,6 @@ const ForratucProduccionPage = () => {
       .map((titulo) => ({ titulo, items: conStock.filter((p) => grupoDeposito(p) === titulo) }));
   }, [datos]);
   const productosConStock = grupos.reduce((a, g) => a + g.items.length, 0);
-
-  const anular = async (m) => {
-    const { isConfirmed } = await Swal.fire({
-      title: "¿Anular este ingreso?", text: m.detalle, icon: "warning",
-      showCancelButton: true, confirmButtonText: "Sí, anular", confirmButtonColor: "#dc3545", cancelButtonText: "Cancelar",
-    });
-    if (!isConfirmed) return;
-    try {
-      await anularIngresoProduccion(m.id);
-      cargar();
-    } catch (err) {
-      Swal.fire("Error", err.message || "No se pudo anular.", "error");
-    }
-  };
 
   return (
     <Layout>
@@ -153,8 +139,7 @@ const ForratucProduccionPage = () => {
               {/* ── La tarjeta del depósito ── */}
               <div className="row g-3 mb-4">
                 <TarjetaLugar ancho="col-12" icono="bi-bag" colorIcono="text-success" titulo={datos.deposito.etiqueta}
-                  vacio={grupos.length === 0} total={`${fmt(datos.total)} unid.`} activa
-                  onClick={() => historialRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+                  vacio={grupos.length === 0} total={`${fmt(datos.total)} unid.`}>
                   <CuadrosDeposito grupos={grupos} cantidadDe={(p) => p.cantidad} />
                 </TarjetaLugar>
               </div>
@@ -165,20 +150,6 @@ const ForratucProduccionPage = () => {
                   El depósito está vacío: la mercadería entra con <strong>Ingresar mercadería</strong>.
                 </p>
               )}
-
-              {/* ── Historial de movimientos ── */}
-              <div className="card border-0 shadow-sm mt-4" ref={historialRef}>
-                <div className="card-header bg-white">
-                  <h6 className="mb-0">
-                    <i className="bi bi-clock-history me-2 text-secondary"></i>
-                    Historial de movimientos
-                  </h6>
-                </div>
-                <div className="card-body">
-                  <HistorialStock historial={datos.historial} cargando={loading}
-                    tituloLugar={datos.deposito.etiqueta} onAnular={anular} />
-                </div>
-              </div>
             </>
           )
         )}
