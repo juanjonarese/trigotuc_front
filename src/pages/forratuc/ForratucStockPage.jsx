@@ -9,10 +9,12 @@ import { imprimirConteoDepositos, imprimirHistorialStock } from "../../utils/for
 import { filtrarHistorial, opcionesFiltro, exportarHistorialExcel } from "../../utils/forratuc/historialStock";
 import { exportarConteoExcel } from "../../utils/forratuc/conteoStock";
 import IngresoMercaderiaModal from "../../components/forratuc/IngresoMercaderiaModal";
+import AjusteDepositoModal from "../../components/forratuc/AjusteDepositoModal";
 import {
   obtenerStockForratuc,
   obtenerMovimientosStockForratuc,
   anularIngresoAlimentoForratuc,
+  anularAjusteDepositoForratuc,
   obtenerProductosForratuc,
 } from "../../services/api";
 
@@ -78,6 +80,7 @@ const ForratucStockPage = () => {
   const [stock, setStock] = useState(null);
   const [loading, setLoading] = useState(true);
   const [ingresoAbierto, setIngresoAbierto] = useState(false);
+  const [ajusteAbierto, setAjusteAbierto] = useState(false);
 
   // Historial del lugar elegido.
   const [lugar, setLugar] = useState(null);
@@ -192,10 +195,12 @@ const ForratucStockPage = () => {
     ];
   };
 
+  // Ingreso o ajuste por depósito (2026-11-19): el back dice cuál en `anulable`.
   const anularIngreso = async (m) => {
+    const esAjuste = m.anulable === "ajuste";
     const { isConfirmed } = await Swal.fire({
-      title: "¿Anular este ingreso?",
-      text: m.detalle,
+      title: esAjuste ? "¿Anular este ajuste?" : "¿Anular este ingreso?",
+      text: esAjuste ? `${m.detalle} — la mercadería vuelve al depósito.` : m.detalle,
       icon: "warning",
       showCancelButton: true,
       confirmButtonText: "Sí, anular",
@@ -204,7 +209,7 @@ const ForratucStockPage = () => {
     });
     if (!isConfirmed) return;
     try {
-      await anularIngresoAlimentoForratuc(m.id);
+      await (esAjuste ? anularAjusteDepositoForratuc : anularIngresoAlimentoForratuc)(m.id);
       actualizar();
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudo anular.", "error");
@@ -274,6 +279,9 @@ const ForratucStockPage = () => {
           <div className="d-flex gap-2">
             <button className="btn btn-success btn-sm" onClick={() => setIngresoAbierto(true)} disabled={!stock}>
               <i className="bi bi-box-arrow-in-down me-1"></i>Ingresar mercadería
+            </button>
+            <button className="btn btn-outline-danger btn-sm" onClick={() => setAjusteAbierto(true)} disabled={!stock}>
+              <i className="bi bi-box-arrow-up me-1"></i>Ajuste por depósito
             </button>
             <button className="btn btn-outline-primary btn-sm" onClick={imprimirConteo} disabled={!stock}>
               <i className="bi bi-printer me-1"></i>Planilla de conteo
@@ -587,6 +595,16 @@ const ForratucStockPage = () => {
             productos={stock.alimento.productos.filter((p) => p.activo)}
             onClose={() => setIngresoAbierto(false)}
             onGuardado={() => { setIngresoAbierto(false); actualizar(); }}
+          />
+        )}
+
+        {ajusteAbierto && stock && (
+          <AjusteDepositoModal
+            depositos={stock.alimento.depositos.filter((d) => !d.retirado)}
+            productos={stock.alimento.productos.filter((p) => p.activo || p.bolsas !== 0)}
+            motivos={stock.motivosAjuste || []}
+            onClose={() => setAjusteAbierto(false)}
+            onGuardado={() => { setAjusteAbierto(false); actualizar(); }}
           />
         )}
       </div>

@@ -181,7 +181,7 @@ const ForratucProductosPage = () => {
                           </td>
                           {/* Origen = la empresa dueña del producto (2026-11-04). */}
                           <td className="small text-muted d-none d-md-table-cell" style={{ width: "12rem" }}>{p.empresaNombre}</td>
-                          <td className="small text-muted" style={{ width: "7rem" }}>por {p.unidadVenta}</td>
+                          <td className="small text-muted" style={{ width: "7rem" }}>por {p.unidadVenta === "cajon" ? "cajón" : p.unidadVenta}</td>
                           <td className="text-end" style={{ width: "3rem" }}>
                             <i className="bi bi-pencil text-primary"></i>
                           </td>
@@ -267,7 +267,7 @@ const ForratucProductosPage = () => {
                         </div>
                       ) : form.base ? (
                         <div className="col-12 small text-muted">
-                          {etiquetaRubro(form.rubro)} · se vende por {form.unidadVenta} · sale de {ORIGEN[form.origen] || form.origen}.
+                          {etiquetaRubro(form.rubro)} · se vende por {form.unidadVenta === "cajon" ? "cajón" : form.unidadVenta} · sale de {ORIGEN[form.origen] || form.origen}.
                           De los productos que ya existían se cambian código, nombre y si está activo.
                         </div>
                       ) : (

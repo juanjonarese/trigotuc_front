@@ -28,7 +28,7 @@ import {
 const pesos = (n) =>
   new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(Number(n || 0));
 
-const UNIDAD = { kg: "kg", maple: "maple", pollito: "pollito", bolsa: "bolsa", unidad: "unidad", caja: "caja" };
+const UNIDAD = { kg: "kg", maple: "maple", pollito: "pollito", bolsa: "bolsa", unidad: "unidad", caja: "caja", cajon: "cajón" };
 
 const listaVacia = () => ({
   _id: null, nombre: "", tipo: "precios", precios: {}, porcentaje: "",

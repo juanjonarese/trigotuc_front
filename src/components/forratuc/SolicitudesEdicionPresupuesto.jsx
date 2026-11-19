@@ -50,7 +50,7 @@ const Foto = ({ titulo, foto, otra, mediosPago, depositos }) => {
                 {fmt(l.cantidad)} {l.unidad} {l.descripcion}
                 {l.kg ? <span className="text-muted"> ({fmt(l.kg)} kg)</span> : null}
               </td>
-              <td className="text-end text-nowrap">{pesos(l.precioUnitario)}/{l.unidadPrecio}</td>
+              <td className="text-end text-nowrap">{pesos(l.precioUnitario)}/{l.unidadPrecio === "cajon" ? "cajón" : l.unidadPrecio}</td>
               <td className="text-end text-nowrap">{pesos(l.importe)}</td>
             </tr>
           ))}

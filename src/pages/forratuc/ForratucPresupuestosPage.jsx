@@ -63,12 +63,15 @@ const redondear = (n) => Math.round(n * 100) / 100;
 // Cómo se cuenta cada producto en el renglón (la cantidad) según su rubro / unidad.
 const UNIDAD_CANTIDAD = { pollo: "cajones", trozado: "cajas" };
 const UNIDAD_PLURAL = { maple: "maples", pollito: "pollitos", bolsa: "bolsas", unidad: "unidades", caja: "cajas" };
+// El precio, por qué unidad (desde el 19/11 el pollo va por cajón y el trozado por caja).
+const ETIQUETA_UNIDAD_PRECIO = { cajon: "cajón", kg: "kg" };
+const unidadPrecioDe = (p) => ETIQUETA_UNIDAD_PRECIO[p?.unidadVenta] || p?.unidadVenta || "";
 const unidadCantidad = (p) => UNIDAD_CANTIDAD[p?.rubro] || UNIDAD_PLURAL[p?.unidadVenta] || p?.unidadVenta || "";
 
 let siguienteId = 1;
 // producto = clave del producto (el entero ya es por calibre y el trozado por
 // especie, corte y clase: no hay nada más que elegir).
-const renglonVacio = () => ({ id: siguienteId++, codigo: "", producto: "", cantidad: "", kg: "", kgTocado: false, precio: "", precioTocado: false });
+const renglonVacio = () => ({ id: siguienteId++, codigo: "", producto: "", cantidad: "", precio: "", precioTocado: false });
 
 const ForratucPresupuestosPage = () => {
   const navigate = useNavigate();
@@ -236,8 +239,6 @@ const ForratucPresupuestosPage = () => {
       codigo: l.codigo || "",
       producto: l.productoClave,
       cantidad: String(l.cantidad),
-      kg: l.clase === "entero" && l.kg != null ? String(l.kg) : "",
-      kgTocado: l.clase === "entero" && l.kg != null,
       precio: String(l.precioUnitario),
       precioTocado: true,
     })));
@@ -275,7 +276,7 @@ const ForratucPresupuestosPage = () => {
   );
   const gruposProductos = useMemo(() => {
     const titulo = {
-      pollo: "Pollo entero (precio por kg)", trozado: "Trozado (precio por kg)",
+      pollo: "Pollo entero (precio por cajón)", trozado: "Trozado (precio por caja)",
       huevo: `Huevo (maple de ${huevosPorMaple})`, pollito: "Pollitos", alimento: "Alimento balanceado", otros: "Otros",
     };
     const porRubro = new Map();
@@ -325,21 +326,20 @@ const ForratucPresupuestosPage = () => {
   // Los renglones que salen del mismo stock se suman entre sí.
   const claveStock = (r) => r.producto;
 
-  // Kg que se cobran en un renglón de pollo. Entero: 20 por cajón hasta que se
-  // tipee el peso real. Trozado: cajas × kg de la caja.
+  // Kg de un renglón de pollo, SOLO DE DATO desde el 19/11 (pedido del cliente:
+  // se vende por cajón): entero 20 por cajón, trozado cajas × kg de la caja.
   const kgDe = (r) => {
     const p = productoPorClave[r.producto];
     const cant = Number(r.cantidad) || 0;
-    if (p?.rubro === "pollo") return r.kgTocado ? Number(r.kg) || 0 : cant * kgPorCajon;
+    if (p?.rubro === "pollo") return cant * kgPorCajon;
     if (p?.rubro === "trozado") return redondear(cant * kgCajaDe(p));
     return 0;
   };
-  const porKg = (p) => p?.rubro === "pollo" || p?.rubro === "trozado";
+  // Cantidad × precio para todo (el pollo, por cajón o caja desde el 19/11).
   const importeDe = (r) => {
     const p = productoPorClave[r.producto];
     if (!p) return 0;
-    const precio = Number(r.precio) || 0;
-    return redondear((porKg(p) ? kgDe(r) : Number(r.cantidad) || 0) * precio);
+    return redondear((Number(r.cantidad) || 0) * (Number(r.precio) || 0));
   };
   const total = redondear(renglones.reduce((a, r) => a + importeDe(r), 0));
 
@@ -414,7 +414,6 @@ const ForratucPresupuestosPage = () => {
     setRenglon(id, {
       producto: clave,
       codigo: codigoTipeado ?? prod?.codigo ?? "",
-      kg: "", kgTocado: false,
       precio: precioDeLista(clave), precioTocado: false,
     });
   };
@@ -428,7 +427,7 @@ const ForratucPresupuestosPage = () => {
 
   // Carga con el teclado (2026-11-18, pedido del cliente: "que el pase a la
   // línea siguiente sea automático, sin usar el mouse"). Enter pasa al campo
-  // siguiente del renglón: código → cantidad → kg (solo el entero) → precio; con
+  // siguiente del renglón: código → cantidad → precio; con
   // un código que no existe, al desplegable del producto. Enter en el precio del
   // último renglón agrega uno nuevo y se para en su código. Cada campo se marca
   // con data-fila (id del renglón) y data-campo.
@@ -526,8 +525,7 @@ const ForratucPresupuestosPage = () => {
     }
     if (campo === "codigo") return ir(p ? "cantidad" : "producto");
     if (campo === "producto") return p ? ir("cantidad") : undefined;
-    if (campo === "cantidad") return ir(p?.rubro === "pollo" ? "kg" : "precio");
-    if (campo === "kg") return ir("precio");
+    if (campo === "cantidad") return ir("precio");
     if (campo === "precio") {
       if (!p) return;
       const sig = renglones[i + 1];
@@ -613,7 +611,6 @@ const ForratucPresupuestosPage = () => {
     const lineas = usados.map((r) => {
       const p = productoPorClave[r.producto];
       const linea = { producto: p.clave, cantidad: Number(r.cantidad), precioUnitario: Number(r.precio) };
-      if (p.rubro === "pollo") linea.kg = kgDe(r);
       if (p.rubro === "trozado") linea.kgCaja = kgCajaDe(p);
       return linea;
     });
@@ -998,14 +995,9 @@ const ForratucPresupuestosPage = () => {
                               )}
                             </td>
                             <td>
-                              {p?.rubro === "pollo" ? (
-                                <input type="number" min="0" step="0.01" className="form-control form-control-sm"
-                                  data-fila={r.id} data-campo="kg"
-                                  title={`Se propone ${kgPorCajon} kg por cajón; poné el peso real si lo pesaste.`}
-                                  value={r.kgTocado ? r.kg : kgDe(r) || ""}
-                                  onChange={(e) => setRenglon(r.id, { kg: e.target.value, kgTocado: true })} />
-                              ) : p?.rubro === "trozado" ? (
-                                <span className="small">{fmt(kgDe(r))} kg</span>
+                              {/* Los kg son de dato: el pollo se cobra por cajón / caja (19/11). */}
+                              {p?.rubro === "pollo" || p?.rubro === "trozado" ? (
+                                <span className="small text-muted">{fmt(kgDe(r))} kg</span>
                               ) : (
                                 <span className="text-muted small">—</span>
                               )}
@@ -1016,7 +1008,7 @@ const ForratucPresupuestosPage = () => {
                                 <input type="number" min="0" step="0.01" className="form-control" value={r.precio} disabled={!p} data-fila={r.id} data-campo="precio"
                                   title={lista && p ? `Lista: ${lista.nombre}` : undefined}
                                   onChange={(e) => setRenglon(r.id, { precio: e.target.value, precioTocado: true })} />
-                                {p && <span className="input-group-text">/ {p.unidadVenta}</span>}
+                                {p && <span className="input-group-text">/ {unidadPrecioDe(p)}</span>}
                               </div>
                             </td>
                             <td className="text-end fw-semibold">{p ? pesos(importeDe(r)) : ""}</td>

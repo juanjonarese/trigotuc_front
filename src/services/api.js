@@ -372,6 +372,22 @@ export const anularIngresoAlimentoForratuc = async (id) => {
   return handleResponse(response);
 };
 
+// Ajuste por depósito (2026-11-19): saca mercadería a mano (bolsas rotas, etc.).
+// data: { fecha, deposito, motivo, observaciones, lineas: [{ alimento, bolsas }] }
+export const registrarAjusteDepositoForratuc = async (data) => {
+  const response = await fetch(`${API_URL}/stock-forratuc/alimento/ajustes`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+
+export const anularAjusteDepositoForratuc = async (id) => {
+  const response = await fetch(`${API_URL}/stock-forratuc/alimento/ajustes/${id}/anular`, {
+    method: "PATCH", headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+};
+
 // ── Productos de Forratuc (2026-11-02): alta con código. Los que ya existían se
 // cargan solos la primera vez que se piden.
 export const obtenerProductosForratuc = async ({ soloActivos = false } = {}) => {

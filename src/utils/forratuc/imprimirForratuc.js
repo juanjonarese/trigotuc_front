@@ -49,7 +49,7 @@ const fmt = (n) =>
 const pesos = (n) =>
   new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(Number(n || 0));
 
-const UNIDAD_PRECIO = { kg: "kg", maple: "maple", pollito: "u.", bolsa: "bolsa" };
+const UNIDAD_PRECIO = { kg: "kg", maple: "maple", pollito: "u.", bolsa: "bolsa", cajon: "cajón", caja: "caja", unidad: "u." };
 const DEPOSITOS = {
   planta: "Depósito Producción",
   forrajeria: "Depósito Forrajería",
