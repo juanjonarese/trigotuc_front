@@ -575,8 +575,9 @@ const PersonalPage = () => {
                       <div className="row">
                         <div className="col-md-6 mb-3">
                           <label htmlFor="telefonoUsuario" className="form-label">
-                            Teléfono <span className="text-danger">*</span>
+                            Teléfono <span className="text-muted fw-normal small">(opcional)</span>
                           </label>
+                          {/* Opcional desde el 2026-11-19 (pedido del usuario). */}
                           <input
                             type="number"
                             className="form-control"
@@ -587,7 +588,6 @@ const PersonalPage = () => {
                             placeholder="3814123456"
                             autoComplete="off"
                             data-form-type="other"
-                            required
                           />
                         </div>
                         <div className="col-md-6 mb-3">
