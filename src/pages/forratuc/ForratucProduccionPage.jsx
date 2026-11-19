@@ -1,10 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Swal from "sweetalert2";
 import Layout from "../../components/Layout";
-import Pagination from "../../components/Pagination";
 import IngresoMercaderiaModal from "../../components/forratuc/IngresoMercaderiaModal";
+import { Cuadro, TarjetaLugar, CuadrosDeposito, HistorialStock } from "../../components/forratuc/StockPiezas";
+import { fmt } from "../../utils/forratuc/formatoStock";
 import { grupoDeposito } from "../../utils/forratuc/conteoStock";
-import { formatearFechaLocal } from "../../utils/dateUtils";
 import { obtenerDepositoProduccion, registrarIngresoProduccion, anularIngresoProduccion } from "../../services/api";
 
 /**
@@ -13,10 +13,12 @@ import { obtenerDepositoProduccion, registrarIngresoProduccion, anularIngresoPro
  * superadmin), con tres solapas:
  *
  *   1. Depósito Producción: su stock, el historial y el ingreso manual de
- *      mercadería. Todo por /produccion-forratuc, que fija el depósito: este
- *      rol no ve ni toca los otros.
- *   2. Órdenes de carga: las que van a venir de los presupuestos. POR HACER.
- *   3. Planilla de dosificación: la que manda la planta de alimento. POR HACER.
+ *      mercadería, con el MISMO diseño que Forratuc → Stock (pedido del
+ *      usuario; las piezas son las de components/forratuc/StockPiezas.jsx).
+ *      Todo por /produccion-forratuc, que fija el depósito: este rol no ve ni
+ *      toca los otros.
+ *   2. Órdenes de carga: las que van a venir de los presupuestos. EN CONSTRUCCIÓN.
+ *   3. Planilla de dosificación: la que manda la planta de alimento. EN CONSTRUCCIÓN.
  */
 
 const SOLAPAS = [
@@ -24,9 +26,6 @@ const SOLAPAS = [
   { key: "ordenes", icono: "bi-truck", texto: "Órdenes de carga" },
   { key: "dosificacion", icono: "bi-clipboard2-data", texto: "Planilla de dosificación" },
 ];
-const UNIDAD = { bolsa: "bolsas", unidad: "unidades", caja: "cajas", maple: "maples" };
-const MOVIMIENTOS_POR_PAGINA = 15;
-const fmt = (n) => Number(n || 0).toLocaleString("es-AR");
 
 // Lo que todavía no está: se dice qué va a haber, para que la estructura se entienda.
 const EnConstruccion = ({ icono, titulo, children }) => (
@@ -44,9 +43,8 @@ const ForratucProduccionPage = () => {
   const [solapa, setSolapa] = useState("deposito");
   const [datos, setDatos] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [verTodos, setVerTodos] = useState(false);
   const [ingresoAbierto, setIngresoAbierto] = useState(false);
-  const [pagina, setPagina] = useState(1);
+  const historialRef = useRef(null);
 
   const cargar = async () => {
     setLoading(true);
@@ -60,15 +58,13 @@ const ForratucProduccionPage = () => {
   };
   useEffect(() => { cargar(); }, []);
 
-  // El stock, agrupado como en el Stock de Forratuc (alimento por categoría, otros).
+  // Lo que tiene stock, agrupado como en el Stock (alimento por categoría, otros).
   const grupos = useMemo(() => {
-    const visibles = (datos?.productos || []).filter((p) => verTodos || p.cantidad !== 0);
-    return [...new Set(visibles.map(grupoDeposito))]
-      .map((titulo) => ({ titulo, items: visibles.filter((p) => grupoDeposito(p) === titulo) }));
-  }, [datos, verTodos]);
-
-  const movimientos = datos?.historial?.movimientos || [];
-  const pagMov = movimientos.slice((pagina - 1) * MOVIMIENTOS_POR_PAGINA, pagina * MOVIMIENTOS_POR_PAGINA);
+    const conStock = (datos?.productos || []).filter((p) => p.cantidad !== 0);
+    return [...new Set(conStock.map(grupoDeposito))]
+      .map((titulo) => ({ titulo, items: conStock.filter((p) => grupoDeposito(p) === titulo) }));
+  }, [datos]);
+  const productosConStock = grupos.reduce((a, g) => a + g.items.length, 0);
 
   const anular = async (m) => {
     const { isConfirmed } = await Swal.fire({
@@ -86,10 +82,12 @@ const ForratucProduccionPage = () => {
 
   return (
     <Layout>
-      <div className="container-fluid py-4">
-        <div className="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+      <div className="container-fluid">
+        {/* ── Header (como Stock) ── */}
+        <div className="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-4">
           <h1 className="h3 mb-0">
-            <i className="bi bi-building-gear me-2 text-success"></i>Producción
+            <i className="bi bi-building-gear me-2 text-success"></i>
+            Forratuc — Producción
           </h1>
           {solapa === "deposito" && (
             <div className="d-flex gap-2">
@@ -113,97 +111,75 @@ const ForratucProduccionPage = () => {
           ))}
         </ul>
 
-        {/* ══════════ 1. DEPÓSITO PRODUCCIÓN ══════════ */}
+        {/* ══════════ 1. DEPÓSITO PRODUCCIÓN (mismo diseño que Stock) ══════════ */}
         {solapa === "deposito" && (
           loading && !datos ? (
-            <div className="text-center py-5"><div className="spinner-border text-success"></div></div>
+            <div className="text-center p-4"><div className="spinner-border text-primary" role="status"></div></div>
           ) : datos && (
-            <div className="row g-3">
-              <div className="col-12 col-xl-5">
-                <div className="card border-0 shadow-sm h-100">
-                  <div className="card-header bg-white d-flex justify-content-between align-items-center">
-                    <span className="fw-semibold">{datos.deposito.etiqueta}</span>
-                    <span className="badge bg-success">{fmt(datos.total)} unid.</span>
-                  </div>
-                  <div className="card-body p-0">
-                    {grupos.length === 0 ? (
-                      <div className="text-muted small p-3">
-                        El depósito está vacío. La mercadería entra con <strong>Ingresar mercadería</strong>.
-                      </div>
-                    ) : (
-                      <table className="table table-sm align-middle mb-0">
-                        <tbody>
-                          {grupos.map((g) => (
-                            <React.Fragment key={g.titulo}>
-                              <tr className="table-light"><td colSpan={3} className="small fw-semibold">{g.titulo}</td></tr>
-                              {g.items.map((p) => (
-                                <tr key={p.alimento}>
-                                  <td className="small text-muted" style={{ width: 60 }}>{p.codigo}</td>
-                                  <td className="small">{p.etiqueta}</td>
-                                  <td className={`small text-end fw-semibold ${p.cantidad < 0 ? "text-danger" : ""}`}>
-                                    {fmt(p.cantidad)} <span className="text-muted fw-normal">{UNIDAD[p.unidad] || p.unidad}</span>
-                                  </td>
-                                </tr>
-                              ))}
-                            </React.Fragment>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                  <div className="card-footer bg-white">
-                    <div className="form-check small mb-0">
-                      <input id="verTodos" type="checkbox" className="form-check-input" checked={verTodos} onChange={(e) => setVerTodos(e.target.checked)} />
-                      <label htmlFor="verTodos" className="form-check-label">Ver también los que están en cero</label>
-                    </div>
+            <>
+              {/* ── Stock total ── */}
+              <div className="card border-0 shadow-sm mb-2" style={{ background: "#f0f4f8" }}>
+                <div className="card-header border-0 py-2" style={{ background: "transparent" }}>
+                  <h6 className="mb-0 text-secondary fw-semibold">
+                    <i className="bi bi-layers me-2"></i>
+                    Stock total — {datos.deposito.etiqueta}
+                  </h6>
+                </div>
+                <div className="card-body py-3">
+                  <div className="d-flex flex-wrap gap-2">
+                    <Cuadro badge="Total" badgeClase="bg-success-subtle text-success-emphasis"
+                      valor={`${fmt(datos.total)} unid.`}
+                      sub={`${productosConStock} ${productosConStock === 1 ? "producto" : "productos"} con stock`} />
+                    {grupos.map((g) => (
+                      <Cuadro key={g.titulo} badge={g.titulo.replace(/^Alimento balanceado — /, "")}
+                        valor={`${fmt(g.items.reduce((a, p) => a + p.cantidad, 0))} unid.`}
+                        sub={`${g.items.length} ${g.items.length === 1 ? "producto" : "productos"}`} />
+                    ))}
                   </div>
                 </div>
               </div>
 
-              <div className="col-12 col-xl-7">
-                <div className="card border-0 shadow-sm h-100">
-                  <div className="card-header bg-white fw-semibold">Movimientos</div>
-                  <div className="card-body p-0">
-                    {movimientos.length === 0 ? (
-                      <div className="text-muted small p-3">Todavía no hay movimientos.</div>
-                    ) : (
-                      <div className="table-responsive">
-                        <table className="table table-sm align-middle mb-0">
-                          <thead className="table-light">
-                            <tr><th className="small">Fecha</th><th className="small">Movimiento</th><th className="small">Detalle</th>
-                              <th className="small text-end">Entra</th><th className="small text-end">Sale</th><th className="small text-end">Saldo</th></tr>
-                          </thead>
-                          <tbody>
-                            {pagMov.map((m, i) => (
-                              <tr key={`${m.id || ""}${i}`}>
-                                <td className="small text-nowrap">{formatearFechaLocal(m.fecha)}</td>
-                                <td className="small">{m.titulo}</td>
-                                <td className="small">
-                                  {m.detalle || "—"}
-                                  {m.usuario && <span className="text-muted"> · {m.usuario}</span>}
-                                  {m.anulable === "ingreso" && (
-                                    <button className="btn btn-link btn-sm text-danger p-0 ms-2 align-baseline" onClick={() => anular(m)}>anular</button>
-                                  )}
-                                </td>
-                                <td className="small text-end text-success fw-semibold">{m.delta.bolsas > 0 ? fmt(m.delta.bolsas) : ""}</td>
-                                <td className="small text-end text-danger fw-semibold">{m.delta.bolsas < 0 ? fmt(-m.delta.bolsas) : ""}</td>
-                                <td className="small text-end fw-bold">{fmt(m.saldo?.bolsas)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                  {movimientos.length > MOVIMIENTOS_POR_PAGINA && (
-                    <div className="card-footer bg-white">
-                      <Pagination currentPage={pagina} totalItems={movimientos.length}
-                        itemsPerPage={MOVIMIENTOS_POR_PAGINA} onPageChange={setPagina} />
-                    </div>
-                  )}
+              {/* ── Separador ── */}
+              <div className="d-flex align-items-center gap-2 mt-4 mb-3">
+                <hr className="flex-grow-1 m-0" />
+                <span className="text-muted fw-semibold text-uppercase px-2"
+                  style={{ fontSize: "0.72rem", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
+                  <i className="bi bi-geo-alt me-1"></i>
+                  Depósito
+                </span>
+                <hr className="flex-grow-1 m-0" />
+              </div>
+
+              {/* ── La tarjeta del depósito ── */}
+              <div className="row g-3 mb-4">
+                <TarjetaLugar ancho="col-12" icono="bi-bag" colorIcono="text-success" titulo={datos.deposito.etiqueta}
+                  vacio={grupos.length === 0} total={`${fmt(datos.total)} unid.`} activa
+                  onClick={() => historialRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+                  <CuadrosDeposito grupos={grupos} cantidadDe={(p) => p.cantidad} />
+                </TarjetaLugar>
+              </div>
+
+              {grupos.length === 0 && (
+                <p className="text-muted small mb-1">
+                  <i className="bi bi-info-circle me-1"></i>
+                  El depósito está vacío: la mercadería entra con <strong>Ingresar mercadería</strong>.
+                </p>
+              )}
+
+              {/* ── Historial de movimientos ── */}
+              <div className="card border-0 shadow-sm mt-4" ref={historialRef}>
+                <div className="card-header bg-white">
+                  <h6 className="mb-0">
+                    <i className="bi bi-clock-history me-2 text-secondary"></i>
+                    Historial de movimientos
+                  </h6>
+                </div>
+                <div className="card-body">
+                  <HistorialStock historial={datos.historial} cargando={loading}
+                    tituloLugar={datos.deposito.etiqueta} onAnular={anular} />
                 </div>
               </div>
-            </div>
+            </>
           )
         )}
 
