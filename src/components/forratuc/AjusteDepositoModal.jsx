@@ -10,8 +10,8 @@ import { escapeHtml } from "../../utils/escapeHtml";
  * problema—, así el stock del depósito queda con lo que de verdad hay. Hermano
  * de "Ingresar mercadería": fecha, depósito, motivo y renglones.
  *
- * Misma regla que la venta: el alimento puede quedar en negativo; los productos
- * "otros" no pasan de lo que hay. Un ajuste mal cargado se anula desde el
+ * Misma regla que la venta: no se saca más de lo que hay (el stock no queda en
+ * negativo, 19/11). Un ajuste mal cargado se anula desde el
  * historial del depósito (devuelve lo sacado).
  */
 let siguiente = 1;
@@ -49,6 +49,13 @@ const AjusteDepositoModal = ({ depositos = [], productos = [], motivos = [], onC
       if (!r.alimento) return Swal.fire("Falta el producto", `Renglón ${i + 1}: elegí el producto.`, "warning");
       if (!(Number(r.cantidad) >= 1) || !Number.isInteger(Number(r.cantidad)))
         return Swal.fire("Cantidad", `Renglón ${i + 1}: la cantidad va de 1 en adelante, sin decimales.`, "warning");
+    }
+    // No más de lo que hay (sumando los renglones del mismo producto).
+    const pedido = {};
+    for (const r of usados) pedido[r.alimento] = (pedido[r.alimento] || 0) + Number(r.cantidad);
+    for (const [key, n] of Object.entries(pedido)) {
+      const p = porKey[key];
+      if (n > hayEn(p)) return Swal.fire("No alcanza", `De ${p?.etiqueta || key} hay ${fmt(hayEn(p))} en el depósito y el ajuste saca ${fmt(n)}.`, "warning");
     }
     const dep = depositos.find((d) => d.key === deposito)?.etiqueta || deposito;
     const { isConfirmed } = await Swal.fire({
@@ -159,8 +166,7 @@ const AjusteDepositoModal = ({ depositos = [], productos = [], motivos = [], onC
 
               <div className="alert alert-light border small mt-3 mb-0">
                 <i className="bi bi-info-circle me-1"></i>
-                Descuenta el stock del depósito elegido. El <strong>alimento</strong> puede quedar en negativo (como en la venta);
-                los demás productos no pueden sacar más de lo que hay. Un ajuste mal cargado se anula desde el historial del
+                Descuenta el stock del depósito elegido; no se puede sacar más de lo que hay. Un ajuste mal cargado se anula desde el historial del
                 depósito y la mercadería vuelve.
               </div>
             </div>
