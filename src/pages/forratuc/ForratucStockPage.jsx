@@ -5,7 +5,7 @@ import Layout from "../../components/Layout";
 import Pagination from "../../components/Pagination";
 import { BADGE_ESPECIE, especieDe, etiquetaEspecie, claveEntero, claveTrozado } from "../../utils/especies";
 import { formatearFechaLocal } from "../../utils/dateUtils";
-import { imprimirConteoDepositos, imprimirHistorialStock } from "../../utils/forratuc/imprimirForratuc";
+import { imprimirConteoDepositos, imprimirHistorialStock, imprimirAjusteDeposito } from "../../utils/forratuc/imprimirForratuc";
 import { filtrarHistorial, opcionesFiltro, exportarHistorialExcel } from "../../utils/forratuc/historialStock";
 import { exportarConteoExcel } from "../../utils/forratuc/conteoStock";
 import IngresoMercaderiaModal from "../../components/forratuc/IngresoMercaderiaModal";
@@ -15,6 +15,7 @@ import {
   obtenerMovimientosStockForratuc,
   anularIngresoAlimentoForratuc,
   anularAjusteDepositoForratuc,
+  obtenerAjusteDepositoForratuc,
   obtenerProductosForratuc,
 } from "../../services/api";
 
@@ -195,12 +196,23 @@ const ForratucStockPage = () => {
     ];
   };
 
+  // Reimprimir la constancia firmada de un ajuste (19/11).
+  const imprimirAjuste = async (numero) => {
+    try {
+      imprimirAjusteDeposito(await obtenerAjusteDepositoForratuc(numero));
+    } catch (err) {
+      Swal.fire("Error", err.message || "No se pudo leer el ajuste.", "error");
+    }
+  };
+
   // Ingreso o ajuste por depósito (2026-11-19): el back dice cuál en `anulable`.
   const anularIngreso = async (m) => {
     const esAjuste = m.anulable === "ajuste";
     const { isConfirmed } = await Swal.fire({
       title: esAjuste ? "¿Anular este ajuste?" : "¿Anular este ingreso?",
-      text: esAjuste ? `${m.detalle} — la mercadería vuelve al depósito.` : m.detalle,
+      text: esAjuste
+        ? `${m.comprobanteAjuste ? `Se anula el ajuste ${m.comprobanteAjuste} entero (todos sus renglones). ` : ""}La mercadería vuelve al depósito.`
+        : m.detalle,
       icon: "warning",
       showCancelButton: true,
       confirmButtonText: "Sí, anular",
@@ -546,6 +558,11 @@ const ForratucStockPage = () => {
                                   <td className="small">
                                     {m.detalle || "—"}
                                     {m.usuario && <span className="text-muted"> · {m.usuario}</span>}
+                                    {m.comprobanteAjuste && (
+                                      <button className="btn btn-link btn-sm p-0 ms-2 align-baseline" onClick={() => imprimirAjuste(m.comprobanteAjuste)}>
+                                        <i className="bi bi-printer me-1"></i>constancia
+                                      </button>
+                                    )}
                                     {m.id && (
                                       <button className="btn btn-link btn-sm text-danger p-0 ms-2 align-baseline" onClick={() => anularIngreso(m)}>
                                         anular

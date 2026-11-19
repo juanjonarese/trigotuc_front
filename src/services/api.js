@@ -381,6 +381,12 @@ export const registrarAjusteDepositoForratuc = async (data) => {
   return handleResponse(response);
 };
 
+// La constancia de un ajuste (AJ-0001), para reimprimirla (19/11).
+export const obtenerAjusteDepositoForratuc = async (numero) => {
+  const response = await fetch(`${API_URL}/stock-forratuc/alimento/ajustes/${encodeURIComponent(numero)}`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
 export const anularAjusteDepositoForratuc = async (id) => {
   const response = await fetch(`${API_URL}/stock-forratuc/alimento/ajustes/${id}/anular`, {
     method: "PATCH", headers: getAuthHeaders(),

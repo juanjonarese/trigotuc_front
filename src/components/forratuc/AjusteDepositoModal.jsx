@@ -3,6 +3,7 @@ import Swal from "sweetalert2";
 import { obtenerFechaHoy } from "../../utils/dateUtils";
 import { registrarAjusteDepositoForratuc } from "../../services/api";
 import { escapeHtml } from "../../utils/escapeHtml";
+import { imprimirAjusteDeposito } from "../../utils/forratuc/imprimirForratuc";
 
 /**
  * Ajuste por depósito (2026-11-19, pedido del usuario): SACAR mercadería de un
@@ -24,6 +25,8 @@ const AjusteDepositoModal = ({ depositos = [], productos = [], motivos = [], onC
   const [deposito, setDeposito] = useState(depositos.find((d) => d.key === "forrajeria")?.key || depositos[0]?.key || "");
   const [motivo, setMotivo] = useState(motivos[0]?.key || "");
   const [observaciones, setObservaciones] = useState("");
+  // A quién / adónde va la mercadería (19/11): sale en la constancia firmada.
+  const [entregadoA, setEntregadoA] = useState("");
   const [renglones, setRenglones] = useState([renglonVacio()]);
   const [saving, setSaving] = useState(false);
 
@@ -72,11 +75,13 @@ const AjusteDepositoModal = ({ depositos = [], productos = [], motivos = [], onC
     if (!isConfirmed) return;
     setSaving(true);
     try {
-      await registrarAjusteDepositoForratuc({
-        fecha, deposito, motivo, observaciones: observaciones.trim() || undefined,
+      const ajuste = await registrarAjusteDepositoForratuc({
+        fecha, deposito, motivo, observaciones: observaciones.trim() || undefined, entregadoA: entregadoA.trim() || undefined,
         lineas: usados.map((r) => ({ alimento: r.alimento, bolsas: Number(r.cantidad) })),
       });
-      Swal.fire({ icon: "success", title: "Ajuste registrado", timer: 1500, showConfirmButton: false });
+      // La constancia para firmar sale sola, por duplicado (19/11).
+      imprimirAjusteDeposito(ajuste);
+      Swal.fire({ icon: "success", title: `Ajuste ${ajuste.numero} registrado`, text: "Se imprime la constancia para firmar.", timer: 2000, showConfirmButton: false });
       onGuardado?.();
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudo registrar el ajuste.", "error");
@@ -113,7 +118,14 @@ const AjusteDepositoModal = ({ depositos = [], productos = [], motivos = [], onC
                     {motivos.map((m) => <option key={m.key} value={m.key}>{m.etiqueta}</option>)}
                   </select>
                 </div>
-                <div className="col-12">
+                <div className="col-12 col-md-5">
+                  <label className="form-label fw-semibold small mb-1">
+                    Se entrega a <span className="text-muted fw-normal">(opcional)</span>
+                  </label>
+                  <input className="form-control" value={entregadoA} maxLength={120}
+                    placeholder="Ej.: Planta, chofer Juan Pérez…" onChange={(e) => setEntregadoA(e.target.value)} />
+                </div>
+                <div className="col-12 col-md-7">
                   <label className="form-label fw-semibold small mb-1">
                     Detalle {motivo === "otro" ? <span className="text-danger">*</span> : <span className="text-muted fw-normal">(opcional)</span>}
                   </label>
@@ -166,8 +178,8 @@ const AjusteDepositoModal = ({ depositos = [], productos = [], motivos = [], onC
 
               <div className="alert alert-light border small mt-3 mb-0">
                 <i className="bi bi-info-circle me-1"></i>
-                Descuenta el stock del depósito elegido; no se puede sacar más de lo que hay. Un ajuste mal cargado se anula desde el historial del
-                depósito y la mercadería vuelve.
+                Descuenta el stock del depósito elegido; no se puede sacar más de lo que hay. Al registrarlo se imprime la <strong>constancia por duplicado</strong> para
+                firmar (entregó / recibió); se reimprime desde el historial del depósito, donde también se anula (la mercadería vuelve).
               </div>
             </div>
             <div className="modal-footer">

@@ -347,6 +347,45 @@ export const imprimirReciboForratuc = (recibo, { medios = [], cliente = null } =
   imprimirHtml(documento(`Recibo ${recibo.numero || ""}`, duplicado(copia, (recibo.pagos || []).length + (recibo.imputaciones || []).length <= 6)));
 };
 
+// ── Constancia de ajuste por depósito (2026-11-19) ──────────────────────────
+// Pedido del usuario: la mercadería que se saca de un depósito (rota, en mal
+// estado, que se reenvía…) tiene que quedar en una constancia FIRMADA. Va por
+// duplicado (una queda en el depósito, otra con la mercadería), las dos con las
+// firmas de quien entrega y quien recibe.
+const UNIDAD_AJUSTE = { bolsa: ["bolsa", "bolsas"], unidad: ["unidad", "unidades"], caja: ["caja", "cajas"], maple: ["maple", "maples"] };
+const copiaAjuste = (a, rotulo) => `
+  <div class="copia">
+    ${a.anulado ? `<div class="sello">ANULADO</div>` : ""}
+    ${encabezado("AJUSTE DE STOCK", rotulo, { numero: a.numero, fecha: a.fecha, registradoPor: { nombreUsuario: a.registradoPor } })}
+    <section class="cliente">
+      <div><strong>Sale de:</strong> ${escapeHtml(a.depositoEtiqueta)} &nbsp;·&nbsp; <strong>Motivo:</strong> ${escapeHtml(a.motivoEtiqueta)}</div>
+      ${a.entregadoA ? `<div><strong>Se entrega a:</strong> ${escapeHtml(a.entregadoA)}</div>` : ""}
+    </section>
+    <table class="detalle">
+      <thead><tr><th class="cod">Código</th><th>Producto</th><th class="num">Cantidad</th></tr></thead>
+      <tbody>
+        ${(a.lineas || []).map((l) => {
+          const [uno, varios] = UNIDAD_AJUSTE[l.unidad] || [l.unidad, l.unidad];
+          return `<tr><td>${escapeHtml(l.codigo)}</td><td>${escapeHtml(l.nombre)}</td><td class="num">${fmt(l.cantidad)} ${escapeHtml(l.cantidad === 1 ? uno : varios)}</td></tr>`;
+        }).join("")}
+      </tbody>
+    </table>
+    ${a.observaciones ? `<div class="obs"><strong>Detalle:</strong> ${escapeHtml(a.observaciones)}</div>` : ""}
+    <footer>
+      <div class="leyenda">La mercadería detallada se descontó del stock del ${escapeHtml(a.depositoEtiqueta)}.</div>
+      <div class="firmas">
+        <div class="firma">Entregó (firma y aclaración)</div>
+        <div class="firma">Recibió (firma y aclaración)</div>
+      </div>
+    </footer>
+  </div>`;
+
+// `ajuste` = lo que devuelve POST/GET /stock-forratuc/alimento/ajustes.
+export const imprimirAjusteDeposito = (ajuste) => {
+  const entra = (ajuste.lineas || []).length <= RENGLONES_MEDIA_HOJA;
+  imprimirHtml(documento(`Ajuste ${ajuste.numero || ""}`, duplicado(copiaAjuste(ajuste, "ORIGINAL"), entra, copiaAjuste(ajuste, "DUPLICADO"))));
+};
+
 // ── Rendición y cierre de caja (2026-10-29) ─────────────────────────────────
 // La hoja que se rinde con la plata y los tickets (rehecha el 2026-11-02): los
 // tres conteos de billetes (inicio, lo que queda para el día siguiente, lo que
