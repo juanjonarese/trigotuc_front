@@ -10,7 +10,7 @@ import { obtenerSolicitudesEdicionForratuc } from "../../services/api";
 const ITEMS = [
   { ruta: "/forratuc/stock", icono: "bi-boxes", texto: "Stock" },
   { ruta: "/forratuc/mostrador", icono: "bi-receipt", texto: "Presupuestos" },
-  { ruta: "/forratuc/caja", icono: "bi-cash-stack", texto: "Cierre de caja" },
+  { ruta: "/forratuc/caja", icono: "bi-cash-stack", texto: "Caja" },
   { ruta: "/forratuc/cuentas-corrientes", icono: "bi-journal-text", texto: "Cuentas corrientes" },
   { ruta: "/forratuc/pagos", icono: "bi-cash-coin", texto: "Pagos" },
   { ruta: "/forratuc/listas-precios", icono: "bi-tags", texto: "Listas de precios" },

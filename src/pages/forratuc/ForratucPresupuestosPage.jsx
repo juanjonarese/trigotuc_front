@@ -24,6 +24,7 @@ import {
   editarPresupuestoForratuc,
   obtenerSolicitudesEdicionForratuc,
   resolverSolicitudEdicionForratuc,
+  obtenerMiCajaForratuc,
 } from "../../services/api";
 import SolicitudesEdicionPresupuesto from "../../components/forratuc/SolicitudesEdicionPresupuesto";
 import CobroQrModal from "../../components/forratuc/CobroQrModal";
@@ -180,6 +181,13 @@ const ForratucPresupuestosPage = () => {
     }
   };
   useEffect(() => { cargar(); }, []);
+
+  // Caja por usuario (2026-11-20): sin la caja abierta el back no deja emitir;
+  // se avisa arriba para no enterarse al final del presupuesto.
+  const [cajaAbierta, setCajaAbierta] = useState(null); // null = no se sabe todavía
+  useEffect(() => {
+    obtenerMiCajaForratuc().then((m) => setCajaAbierta(Boolean(m?.abierta))).catch(() => setCajaAbierta(null));
+  }, []);
 
   const cargarLista = async () => {
     setLoadingLista(true);
@@ -817,6 +825,16 @@ const ForratucPresupuestosPage = () => {
             <i className="bi bi-plus-lg me-1"></i>Nuevo presupuesto
           </button>
         </div>
+
+        {cajaAbierta === false && (
+          <div className="alert alert-warning d-flex flex-wrap align-items-center gap-2 py-2">
+            <i className="bi bi-lock"></i>
+            <span>Tu caja está cerrada: para emitir presupuestos tenés que abrirla.</span>
+            <button className="btn btn-sm btn-warning ms-auto" onClick={() => navigate("/forratuc/caja")}>
+              <i className="bi bi-unlock me-1"></i>Abrir caja
+            </button>
+          </div>
+        )}
 
         {qrAbierto && (
           <CobroQrModal

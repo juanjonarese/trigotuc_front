@@ -440,7 +440,7 @@ const tablaConteo = (titulo, conteo, contado) => `
     </table>
   </div>`;
 
-// `caja` = respuesta de GET /caja-forratuc/:fecha
+// `caja` = respuesta de GET /caja-forratuc/:id (caja por usuario desde el 20/11; el inicio siempre está contado)
 // Dos modos (2026-11-18, pedidos del cliente y del usuario):
 //   · "resumen" (el que sale por defecto): los cuadros de billetes, la
 //     rendición del efectivo CON los gastos uno por uno, y la rendición de
@@ -469,6 +469,7 @@ export const imprimirCierreCajaForratuc = (caja, { operador = "", modo = "resume
         <div class="titulo">RENDICIÓN Y CIERRE DE CAJA</div>
       </div>
       <div class="datos">
+        ${caja.numero ? `<div><strong>Caja:</strong> ${escapeHtml(caja.numero)}${caja.estado === "abierta" ? " (abierta)" : ""}</div>` : ""}
         <div><strong>Fecha:</strong> ${escapeHtml(formatearFechaLocal(`${caja.fecha}T12:00:00.000Z`))}</div>
         <div><strong>Operador:</strong> ${escapeHtml(caja.cerradoPor || operador || "")}</div>
       </div>
@@ -478,7 +479,7 @@ export const imprimirCierreCajaForratuc = (caja, { operador = "", modo = "resume
       ${["inicio", "cierre", "bolsa"]
         .map((k) => caja.tiposConteo.find((t) => t.key === k))
         .filter(Boolean)
-        .map((t) => tablaConteo(t.etiqueta, caja.conteos[t.key], contado || (t.key === "inicio" && caja.inicioDesde)))
+        .map((t) => tablaConteo(t.etiqueta, caja.conteos[t.key], contado || t.key === "inicio"))
         .join("")}
     </div>
 

@@ -517,19 +517,26 @@ export const eliminarListaPreciosForratuc = async (id) => {
   return handleResponse(response);
 };
 
-// ── Rendición y cierre de caja de Forratuc (2026-10-29). fecha = "YYYY-MM-DD".
-export const obtenerCajaForratuc = async (fecha) => {
-  const response = await fetch(`${API_URL}/caja-forratuc/${fecha}`, { headers: getAuthHeaders() });
-  return handleResponse(response);
-};
-
-// data: { conteos: { inicio|bolsa|cierre: [{ billete, cantidad }] }, observaciones }
-export const guardarCierreCajaForratuc = async (fecha, data) => {
-  const response = await fetch(`${API_URL}/caja-forratuc/${fecha}`, {
-    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify(data),
+// ── Caja de Forratuc por usuario, con apertura y cierre (2026-11-20). Cada uno
+// maneja la suya; el superadmin ve todas. Sin caja abierta no se vende ni se cobra.
+const pedirCaja = async (ruta = "", { method = "GET", body } = {}) => {
+  const response = await fetch(`${API_URL}/caja-forratuc${ruta}`, {
+    method, headers: getAuthHeaders(), ...(body ? { body: JSON.stringify(body) } : {}),
   });
   return handleResponse(response);
 };
+// { abierta: caja | null, inicioPropuesto: { numero, cerradaEn, conteo } | null, billetes, tiposConteo }
+export const obtenerMiCajaForratuc = () => pedirCaja("/mia");
+// { conteos: { inicio: [{ billete, cantidad }] }, observaciones }
+export const abrirCajaForratuc = (data) => pedirCaja("/abrir", { method: "POST", body: data });
+export const obtenerCajaForratuc = (id) => pedirCaja(`/${id}`);
+// { desde, hasta, usuario } (fechas "YYYY-MM-DD")
+export const listarCajasForratuc = (filtros = {}) =>
+  pedirCaja(`?${new URLSearchParams(Object.entries(filtros).filter(([, v]) => v))}`);
+// { conteos: { bolsa, cierre }, gastos, observaciones }
+export const guardarConteoCajaForratuc = (id, data) => pedirCaja(`/${id}`, { method: "PUT", body: data });
+export const cerrarCajaForratuc = (id, data) => pedirCaja(`/${id}/cerrar`, { method: "POST", body: data });
+export const reabrirCajaForratuc = (id) => pedirCaja(`/${id}/reabrir`, { method: "POST" });
 
 // Borra una salida de mostrador (devuelve el stock a la cámara).
 export const eliminarSalidaMostrador = async (id) => {
