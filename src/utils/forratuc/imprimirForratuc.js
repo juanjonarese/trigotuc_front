@@ -386,6 +386,50 @@ export const imprimirAjusteDeposito = (ajuste) => {
   imprimirHtml(documento(`Ajuste ${ajuste.numero || ""}`, duplicado(copiaAjuste(ajuste, "ORIGINAL"), entra, copiaAjuste(ajuste, "DUPLICADO"))));
 };
 
+// ── Pedido de Forratuc a Producción (2026-11-20) ────────────────────────────
+// El remito que viaja con la mercadería: lo pedido, lo que manda Producción y,
+// ya recibido, lo que llegó. Por duplicado, con firma de quien entrega y de
+// quien recibe.
+const copiaPedido = (p, rotulo) => {
+  const recibido = p.estado === "recibido" || (p.estado === "anulado" && p.estadoAlAnular === "recibido");
+  const cant = (n, unidad) => {
+    if (n == null) return "";
+    const [uno, varios] = UNIDAD_AJUSTE[unidad] || [unidad, unidad];
+    return `${fmt(n)} ${escapeHtml(n === 1 ? uno : varios)}`;
+  };
+  return `
+  <div class="copia">
+    ${p.estado === "anulado" ? `<div class="sello">ANULADO</div>` : ""}
+    ${encabezado("PEDIDO A PRODUCCIÓN", rotulo, { numero: p.numero, fecha: p.fecha, registradoPor: { nombreUsuario: p.pedidoPorNombre } })}
+    <section class="cliente">
+      <div><strong>Sale de:</strong> ${escapeHtml(p.origenEtiqueta)} &nbsp;·&nbsp; <strong>Entra a:</strong> ${escapeHtml(p.destinoEtiqueta)}</div>
+      ${p.enviadoPorNombre ? `<div><strong>Preparó:</strong> ${escapeHtml(p.enviadoPorNombre)}</div>` : ""}
+    </section>
+    <table class="detalle">
+      <thead><tr><th class="cod">Código</th><th>Producto</th><th class="num">Pedido</th><th class="num">Enviado</th>${recibido ? `<th class="num">Recibido</th>` : ""}</tr></thead>
+      <tbody>
+        ${(p.lineas || []).map((l) => `<tr><td>${escapeHtml(l.codigo)}</td><td>${escapeHtml(l.nombre)}</td><td class="num">${cant(l.pedido, l.unidad)}</td><td class="num">${cant(l.enviado, l.unidad)}</td>${recibido ? `<td class="num">${cant(l.recibido, l.unidad)}</td>` : ""}</tr>`).join("")}
+      </tbody>
+    </table>
+    ${p.observaciones ? `<div class="obs"><strong>Pedido:</strong> ${escapeHtml(p.observaciones)}</div>` : ""}
+    ${p.observacionesEnvio ? `<div class="obs"><strong>Producción:</strong> ${escapeHtml(p.observacionesEnvio)}</div>` : ""}
+    ${p.motivoDiferencia ? `<div class="obs"><strong>Diferencia al recibir:</strong> ${escapeHtml(p.motivoDiferencia)}</div>` : ""}
+    <footer>
+      <div class="leyenda">${recibido ? `Recibido: lo que llegó se descontó del ${escapeHtml(p.origenEtiqueta)} y entró al ${escapeHtml(p.destinoEtiqueta)}.` : "El stock se mueve cuando Forratuc lo recibe."}</div>
+      <div class="firmas">
+        <div class="firma">Entregó — Producción (firma y aclaración)</div>
+        <div class="firma">Recibió — Forratuc (firma y aclaración)</div>
+      </div>
+    </footer>
+  </div>`;
+};
+
+// `pedido` = lo que devuelven las rutas /produccion-forratuc/pedidos.
+export const imprimirPedidoProduccion = (pedido) => {
+  const entra = (pedido.lineas || []).length <= RENGLONES_MEDIA_HOJA;
+  imprimirHtml(documento(`Pedido ${pedido.numero || ""}`, duplicado(copiaPedido(pedido, "ORIGINAL"), entra, copiaPedido(pedido, "DUPLICADO"))));
+};
+
 // ── Rendición y cierre de caja (2026-10-29) ─────────────────────────────────
 // La hoja que se rinde con la plata y los tickets (rehecha el 2026-11-02): los
 // tres conteos de billetes (inicio, lo que queda para el día siguiente, lo que

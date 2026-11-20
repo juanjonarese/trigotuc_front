@@ -382,6 +382,24 @@ export const registrarAjusteDepositoForratuc = async (data) => {
 };
 
 // ── Producción de la forrajería (2026-11-19): el Depósito Producción ──
+// ── Pedidos de Forratuc a Producción (2026-11-20): pide → envía → recibe (ahí se mueve el stock).
+const pedirPedidos = async (ruta = "", { method = "GET", body } = {}) => {
+  const response = await fetch(`${API_URL}/produccion-forratuc/pedidos${ruta}`, {
+    method, headers: getAuthHeaders(), ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  return handleResponse(response);
+};
+// filtros: { abiertos: true } o { desde, hasta }
+export const listarPedidosProduccion = (filtros = {}) =>
+  pedirPedidos(`?${new URLSearchParams(Object.entries(filtros).filter(([, v]) => v))}`);
+// { observaciones, lineas: [{ producto, cantidad }] }
+export const crearPedidoProduccion = (data) => pedirPedidos("", { method: "POST", body: data });
+// { observaciones, lineas: [{ producto, enviado }] }
+export const enviarPedidoProduccion = (id, data) => pedirPedidos(`/${id}/enviar`, { method: "PATCH", body: data });
+// { motivoDiferencia, lineas: [{ producto, recibido }] }
+export const recibirPedidoProduccion = (id, data) => pedirPedidos(`/${id}/recibir`, { method: "PATCH", body: data });
+export const anularPedidoProduccion = (id, data = {}) => pedirPedidos(`/${id}/anular`, { method: "PATCH", body: data });
+
 export const obtenerDepositoProduccion = async () => {
   const response = await fetch(`${API_URL}/produccion-forratuc/deposito`, { headers: getAuthHeaders() });
   return handleResponse(response);

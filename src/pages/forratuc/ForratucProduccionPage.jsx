@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import Layout from "../../components/Layout";
 import IngresoMercaderiaModal from "../../components/forratuc/IngresoMercaderiaModal";
+import PedidosProduccion from "../../components/forratuc/PedidosProduccion";
 import { Cuadro, TarjetaLugar, CuadrosDeposito } from "../../components/forratuc/StockPiezas";
 import { fmt } from "../../utils/forratuc/formatoStock";
 import { grupoDeposito } from "../../utils/forratuc/conteoStock";
@@ -12,18 +13,22 @@ import { obtenerDepositoProduccion, registrarIngresoProduccion } from "../../ser
  * la estructura"). La pantalla del rol `produccion` (también la ve el
  * superadmin), con tres solapas:
  *
- *   1. Depósito Producción: su stock y el ingreso manual de mercadería, con el
+ *   1. Depósito Producción: su stock y el ingreso manual de mercadería (y desde
+ *      el 20/11 el stock del Depósito Carbonato, solo para mirar: `soloVer`), con el
  *      MISMO diseño que Forratuc → Stock (pedido del usuario; las piezas son
  *      las de components/forratuc/StockPiezas.jsx). SIN el historial de
  *      movimientos (19/11, pedido del usuario; el back tampoco lo manda).
  *      Todo por /produccion-forratuc, que fija el depósito: este rol no ve ni
  *      toca los otros.
+ *   1b. Pedidos de Forratuc (20/11): los prepara y los manda (imprime el remito);
+ *      el stock sale de acá cuando Forratuc los recibe. components/forratuc/PedidosProduccion.jsx.
  *   2. Órdenes de carga: las que van a venir de los presupuestos. EN CONSTRUCCIÓN.
  *   3. Planilla de dosificación: la que manda la planta de alimento. EN CONSTRUCCIÓN.
  */
 
 const SOLAPAS = [
   { key: "deposito", icono: "bi-box-seam", texto: "Depósito Producción" },
+  { key: "pedidos", icono: "bi-cart-check", texto: "Pedidos de Forratuc" },
   { key: "ordenes", icono: "bi-truck", texto: "Órdenes de carga" },
   { key: "dosificacion", icono: "bi-clipboard2-data", texto: "Planilla de dosificación" },
 ];
@@ -65,6 +70,10 @@ const ForratucProduccionPage = () => {
       .map((titulo) => ({ titulo, items: conStock.filter((p) => grupoDeposito(p) === titulo) }));
   }, [datos]);
   const productosConStock = grupos.reduce((a, g) => a + g.items.length, 0);
+  // Los depósitos que solo mira (20/11: Carbonato), agrupados igual.
+  const agrupar = (items) => [...new Set(items.map(grupoDeposito))]
+    .map((titulo) => ({ titulo, items: items.filter((p) => grupoDeposito(p) === titulo) }));
+  const soloVer = (datos?.soloVer || []).map((d) => ({ ...d, grupos: agrupar(d.productos) }));
 
   return (
     <Layout>
@@ -131,17 +140,25 @@ const ForratucProduccionPage = () => {
                 <span className="text-muted fw-semibold text-uppercase px-2"
                   style={{ fontSize: "0.72rem", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
                   <i className="bi bi-geo-alt me-1"></i>
-                  Depósito
+                  {soloVer.length ? "Depósitos" : "Depósito"}
                 </span>
                 <hr className="flex-grow-1 m-0" />
               </div>
 
               {/* ── La tarjeta del depósito ── */}
               <div className="row g-3 mb-4">
-                <TarjetaLugar ancho="col-12" icono="bi-bag" colorIcono="text-success" titulo={datos.deposito.etiqueta}
+                <TarjetaLugar ancho={soloVer.length ? "col-12 col-xl-6" : "col-12"} icono="bi-bag" colorIcono="text-success" titulo={datos.deposito.etiqueta}
                   vacio={grupos.length === 0} total={`${fmt(datos.total)} unid.`}>
                   <CuadrosDeposito grupos={grupos} cantidadDe={(p) => p.cantidad} />
                 </TarjetaLugar>
+                {/* Carbonato (20/11, pedido del usuario): solo para mirar. */}
+                {soloVer.map((d) => (
+                  <TarjetaLugar key={d.key} ancho="col-12 col-xl-6" icono="bi-eye" colorIcono="text-secondary"
+                    titulo={<>{d.etiqueta} <span className="badge bg-light text-secondary border ms-1 fw-normal">solo ver</span></>}
+                    vacio={d.grupos.length === 0} total={`${fmt(d.total)} unid.`}>
+                    <CuadrosDeposito grupos={d.grupos} cantidadDe={(p) => p.cantidad} />
+                  </TarjetaLugar>
+                ))}
               </div>
 
               {grupos.length === 0 && (
@@ -153,6 +170,9 @@ const ForratucProduccionPage = () => {
             </>
           )
         )}
+
+        {/* ══════════ PEDIDOS DE FORRATUC (20/11) ══════════ */}
+        {solapa === "pedidos" && <PedidosProduccion lado="produccion" />}
 
         {/* ══════════ 2. ÓRDENES DE CARGA (en construcción) ══════════ */}
         {solapa === "ordenes" && (

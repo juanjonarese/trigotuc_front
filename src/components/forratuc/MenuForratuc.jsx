@@ -11,6 +11,9 @@ const ITEMS = [
   { ruta: "/forratuc/stock", icono: "bi-boxes", texto: "Stock" },
   { ruta: "/forratuc/mostrador", icono: "bi-receipt", texto: "Presupuestos" },
   { ruta: "/forratuc/caja", icono: "bi-cash-stack", texto: "Caja" },
+  // Pedidos a Producción (2026-11-20, en desarrollo): pedir, recibir (ahí se mueve el stock).
+  // Para liberarlo al admin: sacar soloSuperadmin.
+  { ruta: "/forratuc/pedidos-produccion", icono: "bi-cart-check", texto: "Pedidos a Producción", soloSuperadmin: true },
   { ruta: "/forratuc/cuentas-corrientes", icono: "bi-journal-text", texto: "Cuentas corrientes" },
   { ruta: "/forratuc/pagos", icono: "bi-cash-coin", texto: "Pagos" },
   { ruta: "/forratuc/listas-precios", icono: "bi-tags", texto: "Listas de precios" },
