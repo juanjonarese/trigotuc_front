@@ -344,11 +344,9 @@ const PedidosProduccion = ({ lado = "forratuc" }) => {
                         <i className="bi bi-box-arrow-in-down me-1"></i>Recibir
                       </button>
                     )}
-                    {p.estado !== "pendiente" && (
-                      <button className="btn btn-outline-dark btn-sm" onClick={() => imprimirPedidoProduccion(p)}>
-                        <i className="bi bi-printer me-1"></i>Remito
-                      </button>
-                    )}
+                    <button className="btn btn-outline-dark btn-sm" onClick={() => imprimirPedidoProduccion(p)}>
+                      <i className="bi bi-printer me-1"></i>{p.estado === "pendiente" ? "Imprimir pedido" : "Remito"}
+                    </button>
                     {esForratuc && p.estado !== "anulado" && (
                       <button className="btn btn-outline-danger btn-sm" onClick={() => anular(p)}>Anular</button>
                     )}

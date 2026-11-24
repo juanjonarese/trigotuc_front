@@ -406,16 +406,16 @@ const copiaPedido = (p, rotulo) => {
       ${p.enviadoPorNombre ? `<div><strong>Preparó:</strong> ${escapeHtml(p.enviadoPorNombre)}</div>` : ""}
     </section>
     <table class="detalle">
-      <thead><tr><th class="cod">Código</th><th>Producto</th><th class="num">Pedido</th><th class="num">Enviado</th>${recibido ? `<th class="num">Recibido</th>` : ""}</tr></thead>
+      <thead><tr><th class="cod">Código</th><th>Producto</th><th class="num">Pedido</th><th class="num">Enviado</th>${recibido ? `<th class="num">Recibido</th>` : `<th class="num" style="width:22%">Control (contado)</th>`}</tr></thead>
       <tbody>
-        ${(p.lineas || []).map((l) => `<tr><td>${escapeHtml(l.codigo)}</td><td>${escapeHtml(l.nombre)}</td><td class="num">${cant(l.pedido, l.unidad)}</td><td class="num">${cant(l.enviado, l.unidad)}</td>${recibido ? `<td class="num">${cant(l.recibido, l.unidad)}</td>` : ""}</tr>`).join("")}
+        ${(p.lineas || []).map((l) => `<tr><td>${escapeHtml(l.codigo)}</td><td>${escapeHtml(l.nombre)}</td><td class="num">${cant(l.pedido, l.unidad)}</td><td class="num">${cant(l.enviado, l.unidad)}</td>${recibido ? `<td class="num">${cant(l.recibido, l.unidad)}</td>` : `<td></td>`}</tr>`).join("")}
       </tbody>
     </table>
     ${p.observaciones ? `<div class="obs"><strong>Pedido:</strong> ${escapeHtml(p.observaciones)}</div>` : ""}
     ${p.observacionesEnvio ? `<div class="obs"><strong>Producción:</strong> ${escapeHtml(p.observacionesEnvio)}</div>` : ""}
     ${p.motivoDiferencia ? `<div class="obs"><strong>Diferencia al recibir:</strong> ${escapeHtml(p.motivoDiferencia)}</div>` : ""}
     <footer>
-      <div class="leyenda">${recibido ? `Recibido: lo que llegó se descontó del ${escapeHtml(p.origenEtiqueta)} y entró al ${escapeHtml(p.destinoEtiqueta)}.` : "El stock se mueve cuando Forratuc lo recibe."}</div>
+      <div class="leyenda">${recibido ? `Recibido: lo que llegó se descontó del ${escapeHtml(p.origenEtiqueta)} y entró al ${escapeHtml(p.destinoEtiqueta)}.` : p.estado === "pendiente" ? "Pedido pendiente: todavía no lo envió Producción. El stock se mueve cuando Forratuc lo recibe." : "Anotar en Control lo que se cuenta al bajar la mercadería. El stock se mueve cuando Forratuc lo recibe."}</div>
       <div class="firmas">
         <div class="firma">Entregó — Producción (firma y aclaración)</div>
         <div class="firma">Recibió — Forratuc (firma y aclaración)</div>
