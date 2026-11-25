@@ -288,8 +288,10 @@ const ForratucPresupuestosPage = () => {
       huevo: `Huevo (maple de ${huevosPorMaple})`, pollito: "Pollitos", alimento: "Alimento balanceado", otros: "Otros",
     };
     const porRubro = new Map();
-    for (const p of productos) porRubro.set(p.rubro, [...(porRubro.get(p.rubro) || []), p]);
-    return [...porRubro].map(([rubro, items]) => ({ titulo: titulo[rubro] || rubro, items }));
+    // Los de un rubro creado por el usuario (25/11), con su nombre.
+    const grupo = (p) => (p.rubro === "otros" && p.rubroPropioNombre ? `propio:${p.rubroPropioNombre}` : p.rubro);
+    for (const p of productos) porRubro.set(grupo(p), [...(porRubro.get(grupo(p)) || []), p]);
+    return [...porRubro].map(([rubro, items]) => ({ titulo: titulo[rubro] || rubro.replace(/^propio:/, ""), items }));
   }, [productos, huevosPorMaple]);
 
   // Qué hay en cada depósito de la venta (por origen del producto: ver el back).

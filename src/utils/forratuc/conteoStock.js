@@ -17,10 +17,11 @@ const ETIQUETA_RUBRO = { alimento: "Alimento balanceado", otros: "Otros" };
  * esa categoría; sin categoría, el alimento en "Sin categoría" y el resto en "Otros".
  * `p` es un producto de GET /stock-forratuc (alimento.productos).
  */
+// Un "otros" con rubro creado por el usuario (25/11) va con el nombre de ese rubro.
 export const grupoDeposito = (p) =>
   p.categoria || p.rubro !== "otros"
     ? `${ETIQUETA_RUBRO.alimento} — ${p.categoriaEtiqueta || "Sin categoría"}`
-    : ETIQUETA_RUBRO.otros;
+    : p.rubroPropioNombre || ETIQUETA_RUBRO.otros;
 
 /**
  * Si un producto de depósito va en ese depósito (2026-11-25, pedido del usuario:

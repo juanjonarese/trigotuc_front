@@ -2,10 +2,12 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import Layout from "../../components/Layout";
+import SelectorRubro from "../../components/forratuc/SelectorRubro";
 import {
   obtenerProductosForratuc,
   obtenerConstantesProductosForratuc,
   guardarProductoForratuc,
+  obtenerRubrosForratuc,
 } from "../../services/api";
 
 /**
@@ -31,6 +33,7 @@ const ForratucProductosPage = () => {
   const navigate = useNavigate();
   const [productos, setProductos] = useState([]);
   const [constantes, setConstantes] = useState(null);
+  const [rubrosPropios, setRubrosPropios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState("");
   const [verInactivos, setVerInactivos] = useState(false);
@@ -39,9 +42,12 @@ const ForratucProductosPage = () => {
 
   const cargar = async () => {
     try {
-      const [ps, cs] = await Promise.all([obtenerProductosForratuc(), obtenerConstantesProductosForratuc()]);
+      const [ps, cs, rs] = await Promise.all([
+        obtenerProductosForratuc(), obtenerConstantesProductosForratuc(), obtenerRubrosForratuc().catch(() => []),
+      ]);
       setProductos(ps);
       setConstantes(cs);
+      setRubrosPropios(rs);
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudieron cargar los productos.", "error");
     } finally {
@@ -69,11 +75,13 @@ const ForratucProductosPage = () => {
     for (const p of visibles) {
       // Con categoría (también los de "otros", 19/11) va con el alimento de esa categoría.
       const conCategoria = p.rubro === "alimento" || (p.categoria && p.origen === "deposito");
-      const clave = conCategoria ? `alimento|${p.categoria || ""}` : p.rubro;
+      // Un rubro creado por el usuario (25/11) es su propio grupo.
+      const propio = !conCategoria && p.rubro === "otros" && p.rubroPropioNombre;
+      const clave = conCategoria ? `alimento|${p.categoria || ""}` : propio ? `propio|${p.rubroPropio}` : p.rubro;
       if (!porGrupo.has(clave)) {
         const titulo = conCategoria
           ? `${etiquetaRubro("alimento")} — ${etiquetaCategoria(p.categoria)}`
-          : etiquetaRubro(p.rubro);
+          : propio || etiquetaRubro(p.rubro);
         porGrupo.set(clave, { clave, titulo, rubro: conCategoria ? "alimento" : p.rubro, orden: ordenCat(p), items: [] });
       }
       porGrupo.get(clave).items.push(p);
@@ -90,6 +98,19 @@ const ForratucProductosPage = () => {
   }, [productos, filtro, verInactivos, constantes]);
 
   const set = (cambios) => setForm((f) => ({ ...f, ...cambios }));
+  // Rubro (25/11): los del sistema + los que crea el usuario (SelectorRubro).
+  const selectorRubro = form && (
+    <SelectorRubro
+      value={{ rubro: form.rubro, rubroPropio: form.rubroPropio }}
+      onChange={(v) => set(v)}
+      sistema={constantes?.rubrosNuevo || []}
+      propios={rubrosPropios}
+      onRubrosCambiaron={async () => {
+        setRubrosPropios(await obtenerRubrosForratuc().catch(() => rubrosPropios));
+        setProductos(await obtenerProductosForratuc().catch(() => productos));
+      }}
+    />
+  );
   // En qué depósitos está (25/11, pedido del usuario: hay productos solo de
   // Producción). Vacío = en todos; se muestran todos tildados.
   const depositosCatalogo = constantes?.depositos || [];
@@ -137,7 +158,10 @@ const ForratucProductosPage = () => {
             codigo: form.codigo.trim(),
             nombre: form.nombre.trim(),
             activo: form.activo,
-            ...(form.base ? {} : { rubro: form.rubro, unidadVenta: form.unidadVenta, categoria: form.categoria || "" }),
+            ...(form.base ? {} : {
+              rubro: form.rubro, unidadVenta: form.unidadVenta, categoria: form.categoria || "",
+              rubroPropio: form.rubro === "otros" ? form.rubroPropio || null : null,
+            }),
             ...depositosPayload,
           }
         : { codigo: form.codigo.trim(), activo: form.activoAca });
@@ -247,9 +271,7 @@ const ForratucProductosPage = () => {
                           {!form._id && (
                             <div className="col-12">
                               <label className="form-label fw-semibold small mb-1">Rubro</label>
-                              <select className="form-select" value={form.rubro} onChange={(e) => set({ rubro: e.target.value })}>
-                                {(constantes?.rubrosNuevo || []).map((r) => <option key={r.key} value={r.key}>{r.etiqueta}</option>)}
-                              </select>
+                              {selectorRubro}
                             </div>
                           )}
                           <div className="col-8">
@@ -298,9 +320,7 @@ const ForratucProductosPage = () => {
                         <>
                           <div className="col-6">
                             <label className="form-label fw-semibold small mb-1">Rubro</label>
-                            <select className="form-select" value={form.rubro} onChange={(e) => set({ rubro: e.target.value })}>
-                              {(constantes?.rubrosNuevo || []).map((r) => <option key={r.key} value={r.key}>{r.etiqueta}</option>)}
-                            </select>
+                            {selectorRubro}
                           </div>
                           <div className="col-6">
                             <label className="form-label fw-semibold small mb-1">Se vende por</label>

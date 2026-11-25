@@ -463,6 +463,24 @@ export const obtenerConstantesProductosForratuc = async () => {
   return handleResponse(response);
 };
 
+// Rubros propios de Forratuc (2026-11-25): crear y renombrar.
+export const obtenerRubrosForratuc = async () => {
+  const response = await fetch(`${API_URL}/productos-forratuc/rubros`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+export const crearRubroForratuc = async (nombre) => {
+  const response = await fetch(`${API_URL}/productos-forratuc/rubros`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify({ nombre }),
+  });
+  return handleResponse(response);
+};
+export const renombrarRubroForratuc = async (id, nombre) => {
+  const response = await fetch(`${API_URL}/productos-forratuc/rubros/${id}`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify({ nombre }),
+  });
+  return handleResponse(response);
+};
+
 // id null = alta. data: { codigo, nombre, activo [, rubro, unidadVenta] }
 // De un producto de la avícola, Forratuc solo manda { codigo, activo }.
 export const guardarProductoForratuc = async (id, data) => {
