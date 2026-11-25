@@ -3,10 +3,26 @@ import Swal from "sweetalert2";
 import Layout from "../../components/Layout";
 import IngresoMercaderiaModal from "../../components/forratuc/IngresoMercaderiaModal";
 import PedidosProduccion from "../../components/forratuc/PedidosProduccion";
+import PlanillasProduccion from "../../components/forratuc/PlanillasProduccion";
 import { Cuadro, TarjetaLugar, CuadrosDeposito } from "../../components/forratuc/StockPiezas";
 import { fmt } from "../../utils/forratuc/formatoStock";
 import { grupoDeposito } from "../../utils/forratuc/conteoStock";
-import { obtenerDepositoProduccion, registrarIngresoProduccion } from "../../services/api";
+import { obtenerDepositoProduccion, registrarIngresoProduccion, listarPedidosProduccion, obtenerPlanillasProduccion } from "../../services/api";
+
+// Avisos en las solapas (2026-11-21, pedido del usuario: "una pill avisando que hay pedidos"):
+// lo que Producción tiene que hacer. Pedidos de Forratuc sin mandar; planillas por
+// hacer y camiones de granel sin cargar. Se refresca solo cada minuto y al cambiar de solapa.
+const contarPendientes = async () => {
+  const [pedidos, planillas] = await Promise.all([
+    listarPedidosProduccion({ abiertos: true }).catch(() => []),
+    obtenerPlanillasProduccion().catch(() => null),
+  ]);
+  const porCargar = (o) => o.envase === "granel" && (o.tandas || []).some((t) => !t.anulada && !t.envioAlimento);
+  return {
+    pedidos: (Array.isArray(pedidos) ? pedidos : []).filter((p) => p.estado === "pendiente").length,
+    dosificacion: (planillas?.planillas || []).filter((o) => o.estado !== "completa" || porCargar(o)).length,
+  };
+};
 
 /**
  * Producción de la forrajería (2026-11-19, pedido del usuario: "vamos armando
@@ -23,7 +39,9 @@ import { obtenerDepositoProduccion, registrarIngresoProduccion } from "../../ser
  *   1b. Pedidos de Forratuc (20/11): los prepara y los manda (imprime el remito);
  *      el stock sale de acá cuando Forratuc los recibe. components/forratuc/PedidosProduccion.jsx.
  *   2. Órdenes de carga: las que van a venir de los presupuestos. EN CONSTRUCCIÓN.
- *   3. Planilla de dosificación: la que manda la planta de alimento. EN CONSTRUCCIÓN.
+ *   3. Planilla de dosificación (21/11): la emite la Planta de alimento en bachadas y
+ *      Producción carga lo que hizo — en bolsa, al Depósito Producción; a granel, el
+ *      camión con el peso de la balanza va directo a la granja. components/forratuc/PlanillasProduccion.jsx.
  */
 
 const SOLAPAS = [
@@ -50,6 +68,14 @@ const ForratucProduccionPage = () => {
   const [datos, setDatos] = useState(null);
   const [loading, setLoading] = useState(true);
   const [ingresoAbierto, setIngresoAbierto] = useState(false);
+  const [avisos, setAvisos] = useState({});
+  useEffect(() => {
+    let vivo = true;
+    const refrescar = () => contarPendientes().then((a) => { if (vivo) setAvisos(a); });
+    refrescar();
+    const id = setInterval(refrescar, 60000);
+    return () => { vivo = false; clearInterval(id); };
+  }, [solapa]);
 
   const cargar = async () => {
     setLoading(true);
@@ -101,6 +127,9 @@ const ForratucProduccionPage = () => {
             <li key={s.key} className="nav-item">
               <button className={`nav-link ${solapa === s.key ? "active" : ""}`} onClick={() => setSolapa(s.key)}>
                 <i className={`bi ${s.icono} me-1`}></i>{s.texto}
+                {avisos[s.key] > 0 && (
+                  <span className="badge rounded-pill bg-danger ms-2" title="Pendientes">{avisos[s.key]}</span>
+                )}
               </button>
             </li>
           ))}
@@ -182,13 +211,8 @@ const ForratucProduccionPage = () => {
           </EnConstruccion>
         )}
 
-        {/* ══════════ 3. PLANILLA DE DOSIFICACIÓN (en construcción) ══════════ */}
-        {solapa === "dosificacion" && (
-          <EnConstruccion icono="bi-clipboard2-data" titulo="Planilla de dosificación">
-            La <strong>planilla de dosificación que manda la planta de alimento</strong>: por cada alimento a
-            elaborar, los kg de cada materia prima por bachada (como la planilla de papel).
-          </EnConstruccion>
-        )}
+        {/* ══════════ 3. PLANILLA DE DOSIFICACIÓN (21/11) ══════════ */}
+        {solapa === "dosificacion" && <PlanillasProduccion />}
 
         {ingresoAbierto && datos && (
           <IngresoMercaderiaModal

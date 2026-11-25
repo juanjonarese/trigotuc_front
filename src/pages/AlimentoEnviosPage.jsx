@@ -457,7 +457,7 @@ const AlimentoEnviosPage = () => {
                         <tr key={e._id} className={e.estado === "anulado" ? "text-muted" : ""}>
                           <td className="fw-semibold">{e.numero}</td>
                           <td>{formatearFechaLocal(e.fechaEnvio)}</td>
-                          <td className="text-capitalize">{e.destino}</td>
+                          <td>{etiquetaDestino(e.destino)}</td>
                           <td className="small">
                             {(e.lineas || []).map((l, i) => (
                               <div key={i}>

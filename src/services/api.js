@@ -411,6 +411,26 @@ export const registrarIngresoProduccion = async (data) => {
   });
   return handleResponse(response);
 };
+// Planilla de dosificación (2026-11-21): la emite la Planta, la carga Producción.
+// → { planillas, insumos: { [materiaPrima]: kg }, destinos: [{ key, etiqueta, galpones }] }
+export const obtenerPlanillasProduccion = async () => {
+  const response = await fetch(`${API_URL}/produccion-forratuc/planillas`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+// data: { fecha, bachadas, bolsas | kgPesados, lotes: { [materiaPrima]: "lote" }, observaciones }
+export const cargarTandaPlanilla = async (id, data) => {
+  const response = await fetch(`${API_URL}/produccion-forratuc/planillas/${id}/tandas`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
+// Granel: cargar el camión de una tanda lista. data: { kgPesados, fecha, observaciones }
+export const cargarCamionPlanilla = async (id, tandaId, data) => {
+  const response = await fetch(`${API_URL}/produccion-forratuc/planillas/${id}/tandas/${tandaId}/camion`, {
+    method: "POST", headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+  return handleResponse(response);
+};
 export const anularIngresoProduccion = async (id) => {
   const response = await fetch(`${API_URL}/produccion-forratuc/ingresos/${id}/anular`, {
     method: "PATCH", headers: getAuthHeaders(),

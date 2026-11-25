@@ -5,7 +5,6 @@ import Layout from "../../components/Layout";
 import { formatearFechaLocal, obtenerFechaHoy } from "../../utils/dateUtils";
 import {
   obtenerConstantesPlanta,
-  obtenerStockPlanta,
   obtenerMateriasPrimas,
   guardarMateriaPrima,
   obtenerMovimientosMateriaPrima,
@@ -17,14 +16,11 @@ import {
   guardarAlimentoBalanceado,
   obtenerOrdenesElaboracion,
   crearOrdenElaboracion,
-  registrarTandaElaboracion,
   anularTandaElaboracion,
   cerrarOrdenElaboracion,
   anularOrdenElaboracion,
-  obtenerOrdenesEnvio,
-  crearOrdenEnvio,
-  anularOrdenEnvio,
 } from "../../services/api";
+import { imprimirPlanillaDosificacion } from "../../utils/forratuc/imprimirForratuc";
 
 /**
  * Planta de alimento de Forratuc (2026-11-04, pedido del usuario).
@@ -34,6 +30,12 @@ import {
  *       descuenta su materia prima y suma bolsas a la planta
  *     → Orden de envío: de la planta a un depósito o galpón (la Forrajería es
  *       la del mostrador).
+ *
+ * Desde el 2026-11-21 la orden es la PLANILLA DE DOSIFICACIÓN (RAB-003): se emite
+ * EN BACHADAS, en bolsa o a granel (a granel: granja + galpones). La carga
+ * Producción en su pantalla (solapa "Planilla de dosificación"); acá se emite,
+ * se imprime y se anula. Sin solapa de Envíos (21/11, pedido del usuario): lo
+ * embolsado queda en el Depósito Producción y sale con los pedidos de Forratuc.
  *
  * ⚠️ La materia prima y uno de los galpones van EMULADOS hasta tener los
  * nombres reales (se editan acá y en utils/forratuc.js del back).
@@ -79,14 +81,12 @@ const Modal = ({ titulo, onClose, onSubmit, saving, children, ancho = "", textoO
 
 const ForratucPlantaPage = () => {
   const navigate = useNavigate();
-  const [solapa, setSolapa] = useState("elaboracion");
+  const [solapa, setSolapa] = useState("formulas");
   const [loading, setLoading] = useState(true);
   const [constantes, setConstantes] = useState(null);
   const [materias, setMaterias] = useState([]);
   const [formulas, setFormulas] = useState([]);
   const [ordenes, setOrdenes] = useState([]);
-  const [envios, setEnvios] = useState([]);
-  const [stockPlanta, setStockPlanta] = useState([]);
   const [remitosMP, setRemitosMP] = useState([]);
   const [modal, setModal] = useState(null); // { tipo, ...datos }
   const [saving, setSaving] = useState(false);
@@ -94,18 +94,15 @@ const ForratucPlantaPage = () => {
 
   const cargar = useCallback(async () => {
     try {
-      const [cs, mps, fs, os, es, sp, rs] = await Promise.all([
+      const [cs, mps, fs, os, rs] = await Promise.all([
         obtenerConstantesPlanta(), obtenerMateriasPrimas(), obtenerFormulas(),
-        obtenerOrdenesElaboracion(), obtenerOrdenesEnvio(), obtenerStockPlanta(),
-        obtenerRemitosMateriaPrima(),
+        obtenerOrdenesElaboracion(), obtenerRemitosMateriaPrima(),
       ]);
       setRemitosMP(rs);
       setConstantes(cs);
       setMaterias(mps);
       setFormulas(fs);
       setOrdenes(os);
-      setEnvios(es);
-      setStockPlanta(sp);
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudo cargar la planta.", "error");
     } finally {
@@ -121,8 +118,14 @@ const ForratucPlantaPage = () => {
     ...b, alimentoActivo: f.activo, formula: f.formula, conFormula: !!f.formula?.ingredientes?.length,
   }))), [formulas]);
   const formulaDe = useMemo(() => new Map(bolsas.map((b) => [b.producto, b])), [bolsas]);
-  const destinos = constantes?.depositosDestino || [];
-  const etiquetaDestino = (k) => destinos.find((d) => d.key === k)?.etiqueta || k;
+  const destinosGranel = constantes?.destinosGranel || [];
+  // Alimentos (recetas) con fórmula, para el granel.
+  const recetas = useMemo(() => formulas.filter((f) => f.activo && f.formula?.ingredientes?.length), [formulas]);
+  const etiquetaOrden = (o) => {
+    if (o.envase !== "granel") return "Depósito Producción";
+    const d = destinosGranel.find((x) => x.key === o.destino)?.etiqueta || o.destino;
+    return `${d}${o.galpones?.length ? ` — galpón ${o.galpones.join(", ")}` : ""}`;
+  };
 
   // Ejecuta una acción con el spinner del modal, recarga y avisa.
   const hacer = async (fn, exito) => {
@@ -147,19 +150,6 @@ const ForratucPlantaPage = () => {
   };
   const set = (cambios) => setModal((m) => ({ ...m, ...cambios }));
 
-  // Lo que consume una tanda (o una orden) de N bolsas, contra el stock.
-  // La fórmula trae kg por bachada (el % se deriva); la orden ya trae el %.
-  const consumoDe = (kgPorBolsa, ingredientes, bolsas) => {
-    const bachada = (ingredientes || []).reduce((a, i) => a + (i.kg || 0), 0);
-    return (ingredientes || []).map((i) => {
-      const id = String(i.materiaPrima?._id || i.materiaPrima);
-      const pct = i.porcentaje ?? (bachada > 0 ? (i.kg / bachada) * 100 : 0);
-      const kg = Math.round(((Number(bolsas) || 0) * kgPorBolsa * pct) / 100 * 100) / 100;
-      const hay = mpPorId.get(id)?.kg || 0;
-      return { id, nombre: i.nombre || mpPorId.get(id)?.nombre || "?", kg, hay, falta: kg > hay };
-    });
-  };
-
   const TablaConsumo = ({ filas }) => (
     <table className="table table-sm small mb-0">
       <thead><tr><th>Materia prima</th><th className="text-end">Usa</th><th className="text-end">Hay</th></tr></thead>
@@ -177,10 +167,10 @@ const ForratucPlantaPage = () => {
 
   // ══════════ Solapas ══════════
   const SOLAPAS = [
-    ["elaboracion", "bi-gear", "Elaboración"],
-    ["envios", "bi-truck", "Envíos"],
     ["formulas", "bi-journal-richtext", "Alimentos y fórmulas"],
-    ["materia", "bi-basket2", "Materia prima"],
+    ["elaboracion", "bi-gear", "Pedidos de elaboración"],
+    ["materia", "bi-basket2", "Insumos"],
+    ["remitos", "bi-receipt", "Remitos de compra"],
   ];
 
   const conFormula = bolsas.filter((b) => b.conFormula && b.activo && b.alimentoActivo);
@@ -217,13 +207,14 @@ const ForratucPlantaPage = () => {
               <div className="card border-0 shadow-sm">
                 <div className="card-body">
                   <div className="d-flex justify-content-between align-items-center mb-3">
-                    <div className="small text-muted">
-                      Se pide una cantidad de bolsas; a medida que se produce se cargan las tandas, y cada una descuenta su materia prima.
-                    </div>
-                    <button className="btn btn-primary btn-sm" disabled={conFormula.length === 0}
-                      title={conFormula.length === 0 ? "Primero cargá la fórmula de un alimento (y que tenga su bolsa en Productos)" : undefined}
-                      onClick={() => setModal({ tipo: "orden", producto: conFormula[0]?.producto || "", bolsas: "", fecha: obtenerFechaHoy(), observaciones: "" })}>
-                      <i className="bi bi-plus-lg me-1"></i>Nueva orden
+                    <div></div>
+                    <button className="btn btn-primary btn-sm text-nowrap" disabled={recetas.length === 0}
+                      title={recetas.length === 0 ? "Primero cargá la fórmula de un alimento" : undefined}
+                      onClick={() => setModal({
+                        tipo: "orden", envase: "bolsa", producto: conFormula[0]?.producto || "", alimento: recetas[0]?.alimento || "",
+                        bachadas: "", destino: destinosGranel[0]?.key || "", galpones: [], refPedido: "", fecha: obtenerFechaHoy(), observaciones: "",
+                      })}>
+                      <i className="bi bi-plus-lg me-1"></i>Nueva planilla
                     </button>
                   </div>
                   {ordenes.length === 0 ? (
@@ -233,32 +224,47 @@ const ForratucPlantaPage = () => {
                       <thead>
                         <tr>
                           <th>N°</th><th>Fecha</th><th>Alimento</th>
-                          <th className="text-end">Pedidas</th><th style={{ width: "22%" }}>Producidas</th><th>Estado</th><th></th>
+                          <th className="text-end">Pedido</th><th style={{ width: "22%" }}>Hecho</th><th>Estado</th><th></th>
                         </tr>
                       </thead>
                       <tbody>
                         {ordenes.map((o) => {
-                          const pct = Math.min(100, Math.round((o.bolsasProducidas / o.bolsasPedidas) * 100));
+                          const planilla = o.bachadas != null;
+                          const granel = o.envase === "granel";
+                          const pct = planilla
+                            ? Math.min(100, Math.round(((o.bachadasHechas || 0) / o.bachadas) * 100))
+                            : Math.min(100, Math.round((o.bolsasProducidas / o.bolsasPedidas) * 100));
                           const vivas = o.tandas.filter((t) => !t.anulada);
                           return (
                             <React.Fragment key={o._id}>
                               <tr className={o.estado === "anulada" ? "text-muted" : ""}>
                                 <td className="fw-semibold">{o.numero}</td>
                                 <td>{formatearFechaLocal(o.fecha)}</td>
-                                <td>{o.productoNombre}<div className="small text-muted">bolsa de {fmt(o.kgPorBolsa, 2)} kg</div></td>
-                                <td className="text-end">{fmt(o.bolsasPedidas)}</td>
                                 <td>
-                                  <div className="small">{fmt(o.bolsasProducidas)} bolsas</div>
+                                  {o.productoNombre}
+                                  <div className="small text-muted">
+                                    {granel ? <span className="badge bg-info text-dark me-1">Granel</span> : <>bolsa de {fmt(o.kgPorBolsa, 2)} kg · </>}
+                                    {planilla && etiquetaOrden(o)}
+                                    {o.refPedido && <> · Ref. {o.refPedido}</>}
+                                  </div>
+                                </td>
+                                <td className="text-end text-nowrap">{planilla ? <>{fmt(o.bachadas, 2)} bach.</> : fmt(o.bolsasPedidas)}</td>
+                                <td>
+                                  <div className="small">
+                                    {planilla
+                                      ? <>{fmt(o.bachadasHechas, 2)} bach. · {granel ? `${fmt(o.kgPesados, 2)} kg` : `${fmt(o.bolsasProducidas)} bolsas`}</>
+                                      : <>{fmt(o.bolsasProducidas)} bolsas</>}
+                                  </div>
                                   <div className="progress" style={{ height: 6 }}>
                                     <div className={`progress-bar ${o.estado === "completa" ? "bg-success" : "bg-warning"}`} style={{ width: `${pct}%` }}></div>
                                   </div>
                                 </td>
                                 <td><span className={`badge ${ESTADO[o.estado]?.clase}`}>{ESTADO[o.estado]?.texto}</span></td>
                                 <td className="text-end text-nowrap">
-                                  {["pendiente", "en_proceso"].includes(o.estado) && (
-                                    <button className="btn btn-sm btn-success me-1"
-                                      onClick={() => setModal({ tipo: "tanda", orden: o, bolsas: String(o.bolsasPedidas - o.bolsasProducidas), fecha: obtenerFechaHoy() })}>
-                                      <i className="bi bi-plus-circle me-1"></i>Tanda
+                                  {planilla && (
+                                    <button className="btn btn-sm btn-outline-secondary me-1" title="Imprimir la planilla"
+                                      onClick={() => imprimirPlanillaDosificacion(o, { destinos: destinosGranel })}>
+                                      <i className="bi bi-printer"></i>
                                     </button>
                                   )}
                                   {vivas.length > 0 && (
@@ -286,13 +292,19 @@ const ForratucPlantaPage = () => {
                                   <td></td>
                                   <td>{formatearFechaLocal(t.fecha)}</td>
                                   <td colSpan={3}>
-                                    <strong>{fmt(t.bolsas)} bolsas</strong> ({fmt(t.kg, 2)} kg) — usó{" "}
+                                    {t.bachadas != null && <>{fmt(t.bachadas, 2)} bachadas → </>}
+                                    {t.envioAlimento
+                                      ? <strong>{fmt(t.kgPesados, 2)} kg en la balanza (envío {t.envioAlimento.numero}{t.envioAlimento.estado === "aceptado" ? ", recibido" : ""})</strong>
+                                      : <strong>{fmt(t.bolsas)} bolsas</strong>}{" "}
+                                    ({fmt(t.kg, 2)} kg) — usó{" "}
                                     {t.consumos.map((c) => `${c.nombre} ${fmt(c.kg, 2)} kg`).join(" · ")}
                                     {t.registradoPor?.nombreUsuario && <span className="text-muted"> · {t.registradoPor.nombreUsuario}</span>}
                                   </td>
                                   <td colSpan={2} className="text-end">
                                     <button className="btn btn-sm btn-link text-danger p-0"
-                                      onClick={() => confirmar("¿Anular la tanda?", "Se devuelve la materia prima y las bolsas salen del depósito Producción.",
+                                      onClick={() => confirmar("¿Anular la tanda?", t.envioAlimento
+                                          ? `Se devuelve la materia prima y se anula el envío ${t.envioAlimento.numero} a la granja (si la granja ya usó ese alimento, no se puede).`
+                                          : "Se devuelve la materia prima y las bolsas salen del depósito Producción.",
                                         () => anularTandaElaboracion(o._id, t._id), "Tanda anulada")}>
                                       anular tanda
                                     </button>
@@ -309,69 +321,12 @@ const ForratucPlantaPage = () => {
               </div>
             )}
 
-            {/* ─────────── ENVÍOS ─────────── */}
-            {solapa === "envios" && (
-              <div className="card border-0 shadow-sm">
-                <div className="card-body">
-                  <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                    <div className="small">
-                      <span className="text-muted me-2">En Producción:</span>
-                      {stockPlanta.length === 0 ? (
-                        <span className="text-muted">nada para enviar</span>
-                      ) : (
-                        stockPlanta.map((s) => (
-                          <span key={s.producto} className="badge text-bg-light border me-1">{s.nombre}: {fmt(s.bolsas)} bolsas</span>
-                        ))
-                      )}
-                    </div>
-                    <button className="btn btn-primary btn-sm" disabled={stockPlanta.length === 0}
-                      onClick={() => setModal({ tipo: "envio", destino: destinos.find((d) => d.key === "forrajeria")?.key || destinos[0]?.key, fecha: obtenerFechaHoy(), observaciones: "", lineas: [{ producto: stockPlanta[0]?.producto, bolsas: "" }] })}>
-                      <i className="bi bi-truck me-1"></i>Nuevo envío
-                    </button>
-                  </div>
-                  {envios.length === 0 ? (
-                    <div className="text-muted text-center py-4">Todavía no hay envíos.</div>
-                  ) : (
-                    <table className="table table-sm table-hover align-middle">
-                      <thead><tr><th>N°</th><th>Fecha</th><th>Destino</th><th>Lleva</th><th>Estado</th><th></th></tr></thead>
-                      <tbody>
-                        {envios.map((e) => (
-                          <tr key={e._id} className={e.estado === "anulada" ? "text-muted" : ""}>
-                            <td className="fw-semibold">{e.numero}</td>
-                            <td>{formatearFechaLocal(e.fecha)}</td>
-                            <td>{etiquetaDestino(e.destino)}</td>
-                            <td className="small">{e.lineas.map((l) => `${l.nombre}: ${fmt(l.bolsas)} bolsas`).join(" · ")}</td>
-                            <td>{e.estado === "anulada" ? <span className="badge bg-light text-muted border">Anulado</span> : <span className="badge bg-success">Enviado</span>}</td>
-                            <td className="text-end">
-                              {e.estado !== "anulada" && (
-                                <button className="btn btn-sm btn-link text-danger p-0"
-                                  onClick={() => confirmar(`¿Anular ${e.numero}?`, "Sale del destino y vuelve a la planta (si el destino todavía lo tiene).",
-                                    () => anularOrdenEnvio(e._id), "Envío anulado")}>
-                                  anular
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              </div>
-            )}
-
             {/* ─────────── FÓRMULAS ─────────── */}
             {solapa === "formulas" && (
               <div className="card border-0 shadow-sm">
                 <div className="card-body">
                   <div className="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
-                    <div className="small text-muted" style={{ maxWidth: 720 }}>
-                      El <strong>alimento</strong> es la receta: su nombre es el mismo en toda la app (planta, stock, ventas
-                      y envío a granjas) y se cambia acá. Su fórmula va en <strong>kg por bachada</strong>, como la
-                      planilla de dosificación; el % de cada materia prima sale de ahí.
-                      Las <strong>bolsas</strong> (40 kg, 25 kg…) se dan de alta en Productos, cada una con su precio y su stock:
-                      una tanda de N bolsas usa N × kg de la bolsa × % de cada materia prima.
-                    </div>
+                    <div></div>
                     <button className="btn btn-outline-primary btn-sm" onClick={() => setModal({ tipo: "alimento", _id: null, nombre: "", activo: true })}>
                       <i className="bi bi-plus-lg me-1"></i>Nuevo alimento
                     </button>
@@ -396,7 +351,7 @@ const ForratucPlantaPage = () => {
                               : <span className="badge bg-warning text-dark">Sin fórmula</span>}
                           </td>
                           <td className="text-end text-nowrap">
-                            <button className="btn btn-sm btn-link p-0 me-3" title="Fórmula"
+                            <button className={`btn btn-sm me-2 ${f.formula?.ingredientes?.length ? "btn-outline-primary" : "btn-primary"}`} title="Fórmula"
                               onClick={() => setModal({
                                 tipo: "formula", alimento: f,
                                 ingredientes: f.formula?.ingredientes?.length
@@ -404,7 +359,7 @@ const ForratucPlantaPage = () => {
                                   : [{ materiaPrima: "", kg: "" }],
                                 observaciones: f.formula?.observaciones || "",
                               })}>
-                              <i className="bi bi-journal-richtext"></i>
+                              <i className="bi bi-journal-richtext me-1"></i>{f.formula?.ingredientes?.length ? "Fórmula" : "Cargar fórmula"}
                             </button>
                             <button className="btn btn-sm btn-link p-0" title="Nombre y activo"
                               onClick={() => setModal({ tipo: "alimento", _id: f._id, nombre: f.nombre, activo: f.activo })}>
@@ -424,19 +379,10 @@ const ForratucPlantaPage = () => {
               <div className="card border-0 shadow-sm">
                 <div className="card-body">
                   <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                    <div className="small text-warning-emphasis">
-                      <i className="bi bi-info-circle me-1"></i>
-                      Los nombres son de ejemplo hasta tener los reales: se cambian con el lápiz.
-                    </div>
-                    <div className="d-flex gap-2">
-                      <button className="btn btn-outline-primary btn-sm" onClick={() => setModal({ tipo: "mp", _id: null, codigo: "", nombre: "", activo: true })}>
-                        <i className="bi bi-plus-lg me-1"></i>Nueva materia prima
-                      </button>
-                      <button className="btn btn-primary btn-sm"
-                        onClick={() => setModal({ tipo: "remitoMP", proveedor: "", numeroRemito: "", fecha: obtenerFechaHoy(), observaciones: "", lineas: [{ materiaPrima: "", kg: "" }] })}>
-                        <i className="bi bi-box-arrow-in-down me-1"></i>Ingresar remito de compra
-                      </button>
-                    </div>
+                    <div></div>
+                    <button className="btn btn-outline-primary btn-sm" onClick={() => setModal({ tipo: "mp", _id: null, codigo: "", nombre: "", activo: true })}>
+                      <i className="bi bi-plus-lg me-1"></i>Nuevo insumo
+                    </button>
                   </div>
                   <table className="table table-sm table-hover align-middle">
                     <thead><tr><th>Código</th><th>Nombre</th><th className="text-end">Stock</th><th></th></tr></thead>
@@ -466,15 +412,27 @@ const ForratucPlantaPage = () => {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            )}
 
-                  {/* Remitos de compra (2026-11-18): la materia prima entra por remito. */}
-                  <h6 className="fw-semibold mt-4 mb-2"><i className="bi bi-receipt me-1"></i>Remitos de compra</h6>
+            {/* ─────────── REMITOS DE COMPRA (solapa propia desde el 21/11) ─────────── */}
+            {solapa === "remitos" && (
+              <div className="card border-0 shadow-sm">
+                <div className="card-body">
+                  <div className="d-flex justify-content-between align-items-center gap-2 mb-3">
+                    <div></div>
+                    <button className="btn btn-primary btn-sm"
+                      onClick={() => setModal({ tipo: "remitoMP", proveedor: "", numeroRemito: "", fecha: obtenerFechaHoy(), observaciones: "", lineas: [{ materiaPrima: "", kg: "" }] })}>
+                      <i className="bi bi-box-arrow-in-down me-1"></i>Ingresar remito de compra
+                    </button>
+                  </div>
                   {remitosMP.length === 0 ? (
                     <div className="text-muted text-center py-3 small">Todavía no se ingresó ningún remito.</div>
                   ) : (
                     <table className="table table-sm table-hover align-middle small">
                       <thead>
-                        <tr><th>N°</th><th>Fecha</th><th>Proveedor</th><th>Remito</th><th>Materia prima</th><th className="text-end">Kg</th><th></th></tr>
+                        <tr><th>N°</th><th>Fecha</th><th>Proveedor</th><th>Remito</th><th>Insumos</th><th className="text-end">Kg</th><th></th></tr>
                       </thead>
                       <tbody>
                         {remitosMP.map((r) => {
@@ -516,141 +474,106 @@ const ForratucPlantaPage = () => {
 
         {/* ══════════ MODALES ══════════ */}
         {modal?.tipo === "orden" && (() => {
+          const granel = modal.envase === "granel";
           const b = formulaDe.get(modal.producto);
-          const f = b?.formula;
-          const kgBolsa = b?.kgBolsa || 0;
-          const filas = f ? consumoDe(kgBolsa, f.ingredientes, modal.bolsas) : [];
+          const receta = granel ? recetas.find((r) => r.alimento === modal.alimento) : (b ? formulas.find((x) => x.bolsas?.some((y) => y.producto === modal.producto)) : null);
+          const ingredientes = (granel ? receta?.formula : b?.formula)?.ingredientes || [];
+          const kgBachada = ingredientes.reduce((a, i) => a + (i.kg || 0), 0);
+          const bach = Number(modal.bachadas) || 0;
+          const filas = ingredientes.map((i) => {
+            const id = String(i.materiaPrima?._id || i.materiaPrima);
+            const kg = Math.round(bach * i.kg * 100) / 100;
+            const hay = mpPorId.get(id)?.kg || 0;
+            return { id, nombre: i.materiaPrima?.nombre || mpPorId.get(id)?.nombre || "?", kg, hay, falta: kg > hay };
+          });
+          const dest = destinosGranel.find((d) => d.key === modal.destino);
+          const toggleGalpon = (g) => set({ galpones: modal.galpones.includes(g) ? modal.galpones.filter((x) => x !== g) : [...modal.galpones, g] });
           return (
-            <Modal titulo="Nueva orden de elaboración" saving={saving} onClose={() => setModal(null)} textoOk="Pedir"
+            <Modal titulo="Nueva planilla de dosificación" ancho="modal-lg" saving={saving} onClose={() => setModal(null)} textoOk="Emitir"
               onSubmit={() => hacer(() => crearOrdenElaboracion({
-                producto: modal.producto, bolsas: Number(modal.bolsas), fecha: modal.fecha, observaciones: modal.observaciones,
-              }), "Orden creada")}>
+                envase: modal.envase, bachadas: Number(modal.bachadas), fecha: modal.fecha, refPedido: modal.refPedido, observaciones: modal.observaciones,
+                ...(granel ? { alimento: modal.alimento, destino: modal.destino, galpones: modal.galpones } : { producto: modal.producto }),
+              }), "Planilla emitida: le aparece a Producción")}>
               <div className="row g-3">
                 <div className="col-12">
-                  <label className="form-label fw-semibold small mb-1">Alimento y bolsa</label>
-                  <select className="form-select" value={modal.producto} onChange={(e) => set({ producto: e.target.value })}>
-                    {bolsas.filter((x) => (x.activo && x.alimentoActivo) || x.producto === modal.producto).map((x) => (
-                      <option key={x.producto} value={x.producto} disabled={!x.conFormula}>
-                        {x.codigo} · {x.nombre}{!x.conFormula ? " (sin fórmula)" : ""}
-                      </option>
+                  <div className="btn-group w-100" role="group">
+                    {[["bolsa", "bi-bag", "En bolsa"], ["granel", "bi-truck", "A granel (camión a la granja)"]].map(([k, ic, txt]) => (
+                      <button key={k} type="button" className={`btn btn-sm ${modal.envase === k ? "btn-primary" : "btn-outline-primary"}`} onClick={() => set({ envase: k })}>
+                        <i className={`bi ${ic} me-1`}></i>{txt}
+                      </button>
                     ))}
-                  </select>
+                  </div>
                 </div>
-                <div className="col-6">
-                  <label className="form-label fw-semibold small mb-1">Bolsas</label>
-                  <input type="number" min="1" step="1" className="form-control" value={modal.bolsas} required autoFocus
-                    onChange={(e) => set({ bolsas: e.target.value })} />
-                  {f && <div className="form-text">Bolsa de {fmt(kgBolsa, 2)} kg = {fmt((Number(modal.bolsas) || 0) * kgBolsa, 2)} kg</div>}
+                <div className="col-12">
+                  <label className="form-label fw-semibold small mb-1">{granel ? "Alimento" : "Alimento y bolsa"}</label>
+                  {granel ? (
+                    <select className="form-select" value={modal.alimento} onChange={(e) => set({ alimento: e.target.value })}>
+                      {recetas.map((r) => <option key={r.alimento} value={r.alimento}>{r.nombre}</option>)}
+                    </select>
+                  ) : (
+                    <select className="form-select" value={modal.producto} onChange={(e) => set({ producto: e.target.value })}>
+                      {bolsas.filter((x) => (x.activo && x.alimentoActivo) || x.producto === modal.producto).map((x) => (
+                        <option key={x.producto} value={x.producto} disabled={!x.conFormula}>
+                          {x.codigo} · {x.nombre}{!x.conFormula ? " (sin fórmula)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
-                <div className="col-6">
+                <div className="col-6 col-md-4">
+                  <label className="form-label fw-semibold small mb-1">Bachadas</label>
+                  <input type="number" min="0.01" step="0.01" className="form-control" value={modal.bachadas} required autoFocus
+                    onChange={(e) => set({ bachadas: e.target.value })} />
+                  {kgBachada > 0 && (
+                    <div className="form-text">
+                      Bachada de {fmt(kgBachada, 2)} kg = {fmt(bach * kgBachada, 2)} kg
+                      {!granel && b?.kgBolsa ? ` ≈ ${fmt(Math.floor((bach * kgBachada) / b.kgBolsa))} bolsas` : ""}
+                    </div>
+                  )}
+                </div>
+                <div className="col-6 col-md-4">
                   <label className="form-label fw-semibold small mb-1">Fecha</label>
                   <input type="date" className="form-control" value={modal.fecha} onChange={(e) => set({ fecha: e.target.value })} />
                 </div>
+                <div className="col-12 col-md-4">
+                  <label className="form-label fw-semibold small mb-1">Ref. pedido N°</label>
+                  <input className="form-control" value={modal.refPedido} placeholder="opcional" onChange={(e) => set({ refPedido: e.target.value })} />
+                </div>
+                {granel && (
+                  <>
+                    <div className="col-12 col-md-5">
+                      <label className="form-label fw-semibold small mb-1">Granja</label>
+                      <select className="form-select" value={modal.destino} onChange={(e) => set({ destino: e.target.value, galpones: [] })}>
+                        {destinosGranel.map((d) => <option key={d.key} value={d.key}>{d.etiqueta}</option>)}
+                      </select>
+                    </div>
+                    <div className="col-12 col-md-7">
+                      <label className="form-label fw-semibold small mb-1">Galpones</label>
+                      <div className="d-flex flex-wrap gap-1">
+                        {(dest?.galpones || []).map((g) => (
+                          <button key={g} type="button" className={`btn btn-sm ${modal.galpones.includes(g) ? "btn-success" : "btn-outline-secondary"}`} onClick={() => toggleGalpon(g)}>
+                            G{g}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
                 <div className="col-12">
                   <input className="form-control form-control-sm" placeholder="Observaciones (opcional)" value={modal.observaciones}
                     onChange={(e) => set({ observaciones: e.target.value })} />
                 </div>
-                {Number(modal.bolsas) > 0 && filas.length > 0 && (
+                {bach > 0 && filas.length > 0 && (
                   <div className="col-12">
-                    <div className="small fw-semibold mb-1">Materia prima para toda la orden</div>
+                    <div className="small fw-semibold mb-1">Insumos para toda la planilla</div>
                     <TablaConsumo filas={filas} />
                     {filas.some((x) => x.falta) && (
                       <div className="small text-danger mt-1">
-                        Hoy no alcanza para toda la orden: se puede pedir igual, pero cada tanda se controla al producirla.
+                        Hoy no alcanza para toda la planilla: se puede emitir igual, pero cada carga de Producción se controla.
                       </div>
                     )}
                   </div>
                 )}
-              </div>
-            </Modal>
-          );
-        })()}
-
-        {modal?.tipo === "tanda" && (() => {
-          const o = modal.orden;
-          const filas = consumoDe(o.kgPorBolsa, o.ingredientes, modal.bolsas);
-          const faltan = o.bolsasPedidas - o.bolsasProducidas;
-          return (
-            <Modal titulo={`Tanda de ${o.numero} — ${o.productoNombre}`} saving={saving} onClose={() => setModal(null)} textoOk="Registrar tanda"
-              onSubmit={() => hacer(() => registrarTandaElaboracion(o._id, { bolsas: Number(modal.bolsas), fecha: modal.fecha }), "Tanda registrada")}>
-              <div className="row g-3">
-                <div className="col-6">
-                  <label className="form-label fw-semibold small mb-1">Bolsas producidas</label>
-                  <input type="number" min="1" max={faltan} step="1" className="form-control" value={modal.bolsas} required autoFocus
-                    onChange={(e) => set({ bolsas: e.target.value })} />
-                  <div className="form-text">Faltan {fmt(faltan)} de {fmt(o.bolsasPedidas)}.</div>
-                </div>
-                <div className="col-6">
-                  <label className="form-label fw-semibold small mb-1">Fecha</label>
-                  <input type="date" className="form-control" max={obtenerFechaHoy()} value={modal.fecha} onChange={(e) => set({ fecha: e.target.value })} />
-                </div>
-                <div className="col-12">
-                  <div className="small fw-semibold mb-1">Se descuenta</div>
-                  <TablaConsumo filas={filas} />
-                  {filas.some((x) => x.falta) && <div className="small text-danger mt-1">No alcanza la materia prima marcada en rojo.</div>}
-                </div>
-              </div>
-            </Modal>
-          );
-        })()}
-
-        {modal?.tipo === "envio" && (() => {
-          const hayDe = (p) => stockPlanta.find((s) => s.producto === p)?.bolsas || 0;
-          const setLinea = (i, c) => set({ lineas: modal.lineas.map((l, j) => (j === i ? { ...l, ...c } : l)) });
-          return (
-            <Modal titulo="Nuevo envío desde Producción" ancho="modal-lg" saving={saving} onClose={() => setModal(null)} textoOk="Enviar"
-              onSubmit={() => hacer(() => crearOrdenEnvio({
-                destino: modal.destino, fecha: modal.fecha, observaciones: modal.observaciones,
-                lineas: modal.lineas.filter((l) => l.producto && Number(l.bolsas) > 0).map((l) => ({ producto: l.producto, bolsas: Number(l.bolsas) })),
-              }), "Envío registrado")}>
-              <div className="row g-3">
-                <div className="col-md-7">
-                  <label className="form-label fw-semibold small mb-1">Destino</label>
-                  <select className="form-select" value={modal.destino} onChange={(e) => set({ destino: e.target.value })}>
-                    {destinos.map((d) => <option key={d.key} value={d.key}>{d.etiqueta}</option>)}
-                  </select>
-                </div>
-                <div className="col-md-5">
-                  <label className="form-label fw-semibold small mb-1">Fecha</label>
-                  <input type="date" className="form-control" max={obtenerFechaHoy()} value={modal.fecha} onChange={(e) => set({ fecha: e.target.value })} />
-                </div>
-                <div className="col-12">
-                  <table className="table table-sm align-middle mb-1">
-                    <thead><tr><th>Alimento</th><th style={{ width: "9rem" }}>Bolsas</th><th className="text-end">En Producción</th><th></th></tr></thead>
-                    <tbody>
-                      {modal.lineas.map((l, i) => (
-                        <tr key={i} className={Number(l.bolsas) > hayDe(l.producto) ? "table-danger" : ""}>
-                          <td>
-                            <select className="form-select form-select-sm" value={l.producto || ""} onChange={(e) => setLinea(i, { producto: e.target.value })}>
-                              {stockPlanta.map((s) => <option key={s.producto} value={s.producto}>{s.codigo} · {s.nombre}</option>)}
-                            </select>
-                          </td>
-                          <td>
-                            <input type="number" min="1" step="1" className="form-control form-control-sm" value={l.bolsas}
-                              onChange={(e) => setLinea(i, { bolsas: e.target.value })} />
-                          </td>
-                          <td className="text-end small">{fmt(hayDe(l.producto))}</td>
-                          <td className="text-end">
-                            {modal.lineas.length > 1 && (
-                              <button type="button" className="btn btn-sm btn-link text-danger p-0"
-                                onClick={() => set({ lineas: modal.lineas.filter((_, j) => j !== i) })}>
-                                <i className="bi bi-x-lg"></i>
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <button type="button" className="btn btn-sm btn-outline-secondary"
-                    onClick={() => set({ lineas: [...modal.lineas, { producto: stockPlanta[0]?.producto, bolsas: "" }] })}>
-                    <i className="bi bi-plus-lg me-1"></i>Otro alimento
-                  </button>
-                </div>
-                <div className="col-12">
-                  <input className="form-control form-control-sm" placeholder="Observaciones (opcional)" value={modal.observaciones}
-                    onChange={(e) => set({ observaciones: e.target.value })} />
-                </div>
               </div>
             </Modal>
           );
@@ -668,7 +591,7 @@ const ForratucPlantaPage = () => {
               <div className="row g-3">
                 <div className="col-12">
                   <table className="table table-sm align-middle mb-1">
-                    <thead><tr><th>Materia prima</th><th style={{ width: "9rem" }}>Kg por bachada</th>
+                    <thead><tr><th>Insumo</th><th style={{ width: "9rem" }}>Kg por bachada</th>
                       <th className="text-end" style={{ width: "7rem" }}>%</th><th></th></tr></thead>
                     <tbody>
                       {modal.ingredientes.map((ing, i) => (
@@ -724,7 +647,22 @@ const ForratucPlantaPage = () => {
 
         {modal?.tipo === "alimento" && (
           <Modal titulo={modal._id ? "Editar alimento" : "Nuevo alimento"} saving={saving} onClose={() => setModal(null)}
-            onSubmit={() => hacer(() => guardarAlimentoBalanceado(modal._id, { nombre: modal.nombre, activo: modal.activo }), "Alimento guardado")}>
+            onSubmit={async () => {
+              if (modal._id) return hacer(() => guardarAlimentoBalanceado(modal._id, { nombre: modal.nombre, activo: modal.activo }), "Alimento guardado");
+              // Alimento nuevo: se guarda y se abre directo su fórmula (21/11).
+              setSaving(true);
+              try {
+                const nuevo = await guardarAlimentoBalanceado(null, { nombre: modal.nombre, activo: modal.activo });
+                const lista = await obtenerFormulas();
+                setFormulas(lista);
+                const f = lista.find((x) => String(x._id) === String(nuevo?._id)) || lista.find((x) => x.nombre === modal.nombre.trim());
+                setModal(f ? { tipo: "formula", alimento: f, ingredientes: [{ materiaPrima: "", kg: "" }], observaciones: "" } : null);
+              } catch (err) {
+                Swal.fire("Error", err.message || "No se pudo guardar.", "error");
+              } finally {
+                setSaving(false);
+              }
+            }}>
             <div className="row g-3">
               <div className="col-12">
                 <label className="form-label fw-semibold small mb-1">Nombre</label>

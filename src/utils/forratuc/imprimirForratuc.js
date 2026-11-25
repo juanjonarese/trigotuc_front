@@ -807,3 +807,86 @@ export const imprimirHistorialStock = (vista, { lugar, filtros = "", operador = 
   </div>`;
   imprimirHtml(documento(`Movimientos ${lugar}`, cuerpo, ESTILOS_HISTORIAL));
 };
+
+// ── Planilla de dosificación (2026-11-21) ───────────────────────────────────
+// La que la Planta le manda a Producción: el formato de la RAB-003 del molino
+// (planilla de dosificacion.jpeg en la raíz): producto, bachadas, envase, la
+// "Orden" (a qué granja y galpones va el granel), por insumo el lote, los kg por
+// bachada y la producción (bachadas × kg); al pie lo que completa Producción.
+const ESTILOS_PLANILLA = `
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #000; margin: 0; font-size: 10pt; }
+  .hoja { padding: 12mm 14mm; }
+  table { width: 100%; border-collapse: collapse; }
+  td, th { border: 1px solid #000; padding: 1.6mm 2mm; }
+  .cab td { text-align: center; }
+  .titulo { background: #fff200; font-weight: bold; letter-spacing: 1px; }
+  .marca { font-size: 15pt; font-weight: bold; width: 32%; }
+  .sep { height: 5mm; }
+  .k { font-weight: bold; white-space: nowrap; width: 1%; }
+  .prod { font-weight: bold; text-align: center; }
+  th { background: #eee; font-size: 9pt; }
+  .num { text-align: right; white-space: nowrap; }
+  .total td { font-weight: bold; }
+  .pie td { border: 0; border-bottom: 1px solid #000; height: 9mm; vertical-align: bottom; font-size: 9pt; }
+  .pie td.l { width: 18%; border-bottom: 0; }
+  .sello { position: fixed; top: 45%; left: 50%; transform: translate(-50%, -50%) rotate(-20deg);
+           font-size: 48pt; font-weight: bold; color: rgba(200, 0, 0, .25); border: 5px solid rgba(200, 0, 0, .25); padding: 1mm 6mm; }
+`;
+
+// `orden` = una orden de elaboración en bachadas; `destinos` = [{ key, etiqueta }].
+export const imprimirPlanillaDosificacion = (orden, { destinos = [] } = {}) => {
+  const n = (x, d = 2) => Number(x || 0).toLocaleString("es-AR", { maximumFractionDigits: d });
+  const granel = orden.envase === "granel";
+  const destino = destinos.find((d) => d.key === orden.destino)?.etiqueta || orden.destino || "";
+  const ordenTxt = granel
+    ? `${destino}${orden.galpones?.length ? ` — galpón ${orden.galpones.join(", ")}` : ""}`
+    : "Depósito Producción";
+  // El lote: el que anotó Producción en las tandas (si hubo varios, todos).
+  const lotes = new Map();
+  for (const t of (orden.tandas || []).filter((x) => !x.anulada))
+    for (const c of t.consumos || []) if (c.lote) lotes.set(String(c.materiaPrima), [...new Set([...(lotes.get(String(c.materiaPrima)) || []), c.lote])]);
+  const filas = (orden.ingredientes || []).map((i) => `
+    <tr><td>${escapeHtml(i.nombre)}</td><td>${escapeHtml((lotes.get(String(i.materiaPrima)) || []).join(", "))}</td>
+      <td class="num">${n(i.kgBachada)}</td><td class="num">${n((i.kgBachada || 0) * orden.bachadas)}</td></tr>`).join("");
+  const vivas = (orden.tandas || []).filter((t) => !t.anulada);
+  const producida = vivas.length
+    ? (granel ? `${n(vivas.reduce((a, t) => a + (t.kgPesados || 0), 0))} kg pesados` : `${n(vivas.reduce((a, t) => a + (t.bolsas || 0), 0), 0)} bolsas`)
+      + ` (${n(vivas.reduce((a, t) => a + (t.bachadas || 0), 0))} bachadas)`
+    : "";
+  const cuerpo = `
+  <div class="hoja">
+    ${orden.estado === "anulada" ? `<div class="sello">ANULADA</div>` : ""}
+    <table class="cab">
+      <tr><td class="marca" rowspan="3">Molino Trigotuc</td><td>${escapeHtml(orden.numero)}</td><td>Página 1 de 1</td></tr>
+      <tr><td class="titulo" colspan="2">PLANILLA DE DOSIFICACIÓN</td></tr>
+      <tr><td>Emitió: ${escapeHtml(orden.registradoPor?.nombreUsuario || "")}</td><td>Fecha: ${escapeHtml(formatearFechaLocal(orden.fecha))}</td></tr>
+    </table>
+    <div class="sep"></div>
+    <table>
+      <tr><td class="k">REF. PEDIDO N°</td><td>${escapeHtml(orden.refPedido || "")}</td><td class="k">ORDEN</td><td>${escapeHtml(ordenTxt)}</td></tr>
+    </table>
+    <div class="sep"></div>
+    <table>
+      <tr><td class="k">PRODUCTO</td><td class="prod" colspan="5">${escapeHtml(orden.productoNombre)}</td></tr>
+      <tr><td class="k">BACHADAS</td><td class="num">${n(orden.bachadas)}</td><td class="k">BACHADA</td><td class="num">${n(orden.kgBachada)} kg</td>
+        <td class="k">ENVASE</td><td>${granel ? "GRANEL" : `BOLSA DE ${n(orden.kgPorBolsa)} KG (≈ ${n(orden.bolsasPedidas, 0)} bolsas)`}</td></tr>
+    </table>
+    <div class="sep"></div>
+    <table>
+      <thead><tr><th>INSUMO</th><th>LOTE</th><th>BACHADA (kg)</th><th>PRODUCCIÓN (kg)</th></tr></thead>
+      <tbody>${filas}
+        <tr class="total"><td colspan="2">TOTAL</td><td class="num">${n(orden.kgBachada)}</td><td class="num">${n(orden.kgBachada * orden.bachadas)}</td></tr>
+      </tbody>
+    </table>
+    <div class="sep"></div>
+    <table class="pie">
+      <tr><td class="l">ADITIVACIÓN:</td><td></td><td class="l">CANTIDAD PRODUCIDA:</td><td>${escapeHtml(producida)}</td></tr>
+      <tr><td class="l">PRODUCCIÓN:</td><td></td><td class="l">FECHA:</td><td></td></tr>
+      <tr><td class="l">${granel ? "CAMIÓN / BALANZA:" : "ENVASADO:"}</td><td></td><td class="l">OBSERVACIONES:</td><td>${escapeHtml(orden.observaciones || "")}</td></tr>
+      <tr><td class="l">ALTA STOCK:</td><td></td><td class="l"></td><td style="border-bottom:0"></td></tr>
+    </table>
+  </div>`;
+  imprimirHtml(documento(`Planilla ${orden.numero || ""}`, cuerpo, ESTILOS_PLANILLA));
+};

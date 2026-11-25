@@ -137,6 +137,8 @@ function App() {
         <Route path="/granja/recepcion-ordenes" element={<ProtectedRoute><RecepcionOrdenCargaPage /></ProtectedRoute>} />
         <Route path="/granja/ventas" element={<ProtectedRoute><VentasGranjaPage /></ProtectedRoute>} />
         <Route path="/granja/remitos" element={<ProtectedRoute><GranjaRemitosPage /></ProtectedRoute>} />
+        {/* Silos de la Granja de engorde (2026-11-21): la misma pantalla que Reproductoras. */}
+        <Route path="/granja/silos" element={<ProtectedRoute><AlimentoSilosPage destinos={["granja_canete", "granja_los_pinos"]} /></ProtectedRoute>} />
 
         {/* Reproductores (postura + incubación) */}
         <Route path="/reproductores/galpones" element={<ProtectedRoute><ReproductoresLotesPage /></ProtectedRoute>} />

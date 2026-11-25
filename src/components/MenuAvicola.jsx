@@ -299,6 +299,18 @@ const MenuAvicola = ({ ctx, grupo }) => {
                 <span>Datos Semanales</span>
               </a>
             )}
+            {/* 3b — Silos de la Granja (2026-11-21): Cañete y Los Pinos reciben acá el
+                granel de la Planta de alimento. En desarrollo: solo superadmin. */}
+            {rolUsuario === "superadmin" && (
+              <a
+                href="#"
+                className={`nav-link d-flex align-items-center gap-2 rounded mb-1 ${isActive("/granja/silos") ? "text-white" : "text-white-50"}`}
+                onClick={(e) => { e.preventDefault(); navigate("/granja/silos"); }}
+              >
+                <i className="bi bi-database"></i>
+                <span>Silos</span>
+              </a>
+            )}
             {/* 4 — Órdenes de Carga */}
             {(mandaTodo || rolUsuario === "administracion_granja") && (
               <a

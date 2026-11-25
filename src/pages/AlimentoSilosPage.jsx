@@ -31,8 +31,13 @@ const fmt = (n) =>
  * Desde el 2026-09-30 la RECEPCIÓN vive acá (antes era su propia página): el
  * alimento se recibe donde están los silos, y lo que se pesa al camión es lo que
  * entra. Las diferencias contra lo despachado quedan en el historial de abajo.
+ *
+ * Desde el 2026-11-21 la usa también la Granja de engorde (/granja/silos), con
+ * sus dos establecimientos (Cañete y Los Pinos): `destinos` dice cuáles muestra
+ * y, si son varios, arriba se elige. Reproductoras sigue en /alimento/silos.
  */
-const AlimentoSilosPage = () => {
+const AlimentoSilosPage = ({ destinos = ["reproductoras"] }) => {
+  const [destino, setDestino] = useState(destinos[0]);
   const [constantes, setConstantes] = useState(null);
   const [stock, setStock] = useState(null);
   const [ajustes, setAjustes] = useState([]);
@@ -49,11 +54,11 @@ const AlimentoSilosPage = () => {
     try {
       const [cons, st, aj, viaje, rec, trs] = await Promise.all([
         obtenerConstantesAlimento(),
-        obtenerStockSilos("reproductoras"),
-        obtenerAjustesSilo({ destino: "reproductoras", limite: 30 }),
-        obtenerEnviosAlimento({ destino: "reproductoras", estado: "en_viaje" }),
-        obtenerEnviosAlimento({ destino: "reproductoras", estado: "aceptado", limite: 30 }),
-        obtenerTransferenciasSilo({ destino: "reproductoras", limite: 30 }),
+        obtenerStockSilos(destino),
+        obtenerAjustesSilo({ destino, limite: 30 }),
+        obtenerEnviosAlimento({ destino, estado: "en_viaje" }),
+        obtenerEnviosAlimento({ destino, estado: "aceptado", limite: 30 }),
+        obtenerTransferenciasSilo({ destino, limite: 30 }),
       ]);
       setConstantes(cons);
       setStock(st);
@@ -66,7 +71,7 @@ const AlimentoSilosPage = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [destino]);
 
   useEffect(() => { cargar(); }, [cargar]);
 
@@ -164,6 +169,16 @@ const AlimentoSilosPage = () => {
             <div className="text-muted small">
               Entra por la recepción (lo que se pesa acá), sale por el consumo semanal.
             </div>
+            {destinos.length > 1 && (
+              <div className="btn-group btn-group-sm mt-2" role="group">
+                {destinos.map((d) => (
+                  <button key={d} type="button" className={`btn ${destino === d ? "btn-primary" : "btn-outline-primary"}`}
+                    onClick={() => setDestino(d)} disabled={loading}>
+                    {(constantes?.destinos || []).find((x) => x.key === d)?.etiqueta || d}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="d-flex gap-2">
             <button className="btn btn-outline-secondary" onClick={cargar} disabled={loading}>
@@ -536,7 +551,8 @@ const AlimentoSilosPage = () => {
       {ajustando && (
         <AjusteModal
           inicial={ajustando}
-          silos={(constantes?.destinos || []).find((d) => d.key === "reproductoras")?.silos || []}
+          silos={(constantes?.destinos || []).find((d) => d.key === destino)?.silos || []}
+          destino={destino}
           tipos={tipos}
           stock={stock}
           onClose={() => setAjustando(null)}
@@ -547,7 +563,8 @@ const AlimentoSilosPage = () => {
       {transfiriendo && (
         <TransferenciaModal
           inicial={transfiriendo}
-          silos={(constantes?.destinos || []).find((d) => d.key === "reproductoras")?.silos || []}
+          silos={(constantes?.destinos || []).find((d) => d.key === destino)?.silos || []}
+          destino={destino}
           tipos={tipos}
           stock={stock}
           onClose={() => setTransfiriendo(null)}
@@ -573,7 +590,7 @@ const AlimentoSilosPage = () => {
 // ── Modal: ajuste por recuento ──────────────────────────────────────────────
 // Se carga LO QUE SE MIDIÓ, no la diferencia: es más difícil equivocarse anotando
 // un recuento que una corrección con signo. El sistema hace la resta.
-const AjusteModal = ({ inicial, silos, tipos, stock, onClose, onHecho }) => {
+const AjusteModal = ({ inicial, silos, destino, tipos, stock, onClose, onHecho }) => {
   // Con `inicial.ajuste` el modal CORRIGE ese ajuste (2026-09-30): silo y tipo
   // quedan fijos, y el back lo deshace antes de aplicar el recuento nuevo.
   const ajuste = inicial.ajuste || null;
@@ -614,7 +631,7 @@ const AjusteModal = ({ inicial, silos, tipos, stock, onClose, onHecho }) => {
         });
       } else {
         await ajustarSilo({
-          destino: "reproductoras",
+          destino,
           silo: Number(silo),
           tipo,
           kgReal: real,
@@ -782,7 +799,7 @@ const AjusteModal = ({ inicial, silos, tipos, stock, onClose, onHecho }) => {
 // Sale del silo de origen (lo más viejo primero) y entra al de destino arriba de
 // lo que ya tenía. Con `inicial.transferencia` corrige esa transferencia: el back
 // la deshace y la vuelve a aplicar.
-const TransferenciaModal = ({ inicial, silos, tipos, stock, onClose, onHecho }) => {
+const TransferenciaModal = ({ inicial, silos, destino, tipos, stock, onClose, onHecho }) => {
   const tr = inicial.transferencia || null;
   const edicion = !!tr;
   const [siloOrigen, setSiloOrigen] = useState(
@@ -832,7 +849,7 @@ const TransferenciaModal = ({ inicial, silos, tipos, stock, onClose, onHecho }) 
     if (!puedeGuardar) return;
     setSaving(true);
     const data = {
-      destino: "reproductoras",
+      destino,
       siloOrigen: Number(siloOrigen),
       siloDestino: Number(siloDestino),
       tipo,
