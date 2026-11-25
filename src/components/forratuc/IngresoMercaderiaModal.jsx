@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import Swal from "sweetalert2";
 import { obtenerFechaHoy } from "../../utils/dateUtils";
 import { registrarIngresoAlimentoForratuc } from "../../services/api";
-import { grupoDeposito } from "../../utils/forratuc/conteoStock";
+import { grupoDeposito, vaEnDeposito } from "../../utils/forratuc/conteoStock";
 
 /**
  * Ingreso manual de mercadería a un depósito de Forratuc (2026-11-16, pedido
@@ -28,8 +28,9 @@ const IngresoMercaderiaModal = ({ depositos = [], productos = [], onClose, onGua
   const [saving, setSaving] = useState(false);
 
   // Agrupados como en el Stock: el alimento por categoría y "Otros".
+  // Solo los que van en el depósito elegido (25/11: los de solo Producción).
   const grupos = [];
-  for (const p of productos) {
+  for (const p of productos.filter((x) => vaEnDeposito(x, deposito))) {
     const titulo = grupoDeposito(p);
     const g = grupos.find((x) => x.titulo === titulo) || (grupos.push({ titulo, items: [] }), grupos[grupos.length - 1]);
     g.items.push(p);
@@ -44,6 +45,8 @@ const IngresoMercaderiaModal = ({ depositos = [], productos = [], onClose, onGua
     if (usados.length === 0) return Swal.fire("Sin productos", "Cargá al menos un producto.", "warning");
     for (const [i, r] of usados.entries()) {
       if (!r.alimento) return Swal.fire("Falta el producto", `Renglón ${i + 1}: elegí el producto.`, "warning");
+      if (!vaEnDeposito(porKey[r.alimento], deposito))
+        return Swal.fire("Depósito", `Renglón ${i + 1}: ${porKey[r.alimento]?.etiqueta} no va en ese depósito.`, "warning");
       if (!(Number(r.cantidad) >= 1) || !Number.isInteger(Number(r.cantidad)))
         return Swal.fire("Cantidad", `Renglón ${i + 1}: la cantidad va de 1 en adelante, sin decimales.`, "warning");
     }

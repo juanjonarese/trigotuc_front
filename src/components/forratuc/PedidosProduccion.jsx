@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import Swal from "sweetalert2";
 import { escapeHtml } from "../../utils/escapeHtml";
-import { grupoDeposito } from "../../utils/forratuc/conteoStock";
+import { grupoDeposito, vaEnDeposito } from "../../utils/forratuc/conteoStock";
 import { imprimirPedidoProduccion } from "../../utils/forratuc/imprimirForratuc";
 import {
   obtenerDepositoProduccion, listarPedidosProduccion, crearPedidoProduccion,
@@ -56,7 +56,8 @@ const PedidoModal = ({ modo, pedido, productos, onClose, onListo }) => {
   const [saving, setSaving] = useState(false);
 
   const grupos = [];
-  for (const p of (productos || []).filter((x) => x.activo)) {
+  // Lo pedido entra a la Forrajería: solo lo que va ahí (25/11).
+  for (const p of (productos || []).filter((x) => x.activo && vaEnDeposito(x, "forrajeria"))) {
     const titulo = grupoDeposito(p);
     const g = grupos.find((x) => x.titulo === titulo) || (grupos.push({ titulo, items: [] }), grupos[grupos.length - 1]);
     g.items.push(p);

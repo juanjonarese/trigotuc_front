@@ -90,6 +90,16 @@ const ForratucProductosPage = () => {
   }, [productos, filtro, verInactivos, constantes]);
 
   const set = (cambios) => setForm((f) => ({ ...f, ...cambios }));
+  // En qué depósitos está (25/11, pedido del usuario: hay productos solo de
+  // Producción). Vacío = en todos; se muestran todos tildados.
+  const depositosCatalogo = constantes?.depositos || [];
+  const enDeposito = (k) => !form?.depositos?.length || form.depositos.includes(k);
+  const alternarDeposito = (k) => {
+    const actuales = depositosCatalogo.map((d) => d.key).filter(enDeposito);
+    const nuevos = actuales.includes(k) ? actuales.filter((x) => x !== k) : [...actuales, k];
+    set({ depositos: nuevos.length === depositosCatalogo.length ? [] : nuevos });
+  };
+  const etiquetaDepositoCorta = (k) => (depositosCatalogo.find((d) => d.key === k)?.etiqueta || k).replace(/^Depósito /, "");
 
   // Una bolsa de alimento (2026-11-06): se elige el alimento del catálogo único
   // (Planta → Alimentos) y los kg; el nombre sale solo ("Postura Fase 1 x 40 kg").
@@ -107,6 +117,11 @@ const ForratucProductosPage = () => {
       if (!form.alimento) return Swal.fire("Falta el alimento", "Elegí el alimento de la bolsa.", "warning");
       if (!(Number(String(form.kgBolsa).replace(",", ".")) > 0)) return Swal.fire("Faltan los kg", "Poné de cuántos kg es la bolsa.", "warning");
     } else if (!form.nombre.trim()) return Swal.fire("Falta el nombre", "Poné el nombre del producto.", "warning");
+    if (form.origen === "deposito" || (!form._id && form.propio)) {
+      if (depositosCatalogo.length && !depositosCatalogo.some((d) => enDeposito(d.key)))
+        return Swal.fire("Depósitos", "Tildá al menos un depósito donde está el producto.", "warning");
+    }
+    const depositosPayload = form.propio && (form.origen === "deposito" || !form._id) ? { depositos: form.depositos || [] } : {};
     setSaving(true);
     try {
       // De uno de la avícola, solo el código y si Forratuc lo vende. De una
@@ -115,6 +130,7 @@ const ForratucProductosPage = () => {
         ? {
             codigo: form.codigo.trim(), activo: form.activo, rubro: "alimento", alimento: form.alimento,
             kgBolsa: String(form.kgBolsa).replace(",", "."), categoria: form.categoria || "",
+            ...depositosPayload,
           }
         : form.propio
         ? {
@@ -122,6 +138,7 @@ const ForratucProductosPage = () => {
             nombre: form.nombre.trim(),
             activo: form.activo,
             ...(form.base ? {} : { rubro: form.rubro, unidadVenta: form.unidadVenta, categoria: form.categoria || "" }),
+            ...depositosPayload,
           }
         : { codigo: form.codigo.trim(), activo: form.activoAca });
       Swal.fire({ icon: "success", title: "Producto guardado", timer: 1300, showConfirmButton: false });
@@ -180,6 +197,11 @@ const ForratucProductosPage = () => {
                           <td className="text-truncate">
                             {p.nombre}
                             {!p.activo && <span className="badge bg-secondary ms-2">Inactivo</span>}
+                            {p.depositos?.length > 0 && (
+                              <span className="badge bg-info-subtle text-info-emphasis border ms-2 fw-normal" title="Depósitos donde está">
+                                Solo {p.depositos.map(etiquetaDepositoCorta).join(" y ")}
+                              </span>
+                            )}
                           </td>
                           {/* Origen = la empresa dueña del producto (2026-11-04). */}
                           <td className="small text-muted d-none d-md-table-cell" style={{ width: "12rem" }}>{p.empresaNombre}</td>
@@ -301,6 +323,23 @@ const ForratucProductosPage = () => {
                             Con categoría se agrupa con el alimento de esa categoría en Productos, Stock y la planilla de conteo.
                           </div>
                         </>
+                      )}
+                      {form.propio && (form.origen === "deposito" || !form._id) && depositosCatalogo.length > 0 && (
+                        <div className="col-12">
+                          <label className="form-label fw-semibold small mb-1">Depósitos donde está</label>
+                          <div className="d-flex flex-wrap gap-3">
+                            {depositosCatalogo.map((d) => (
+                              <div key={d.key} className="form-check">
+                                <input id={`dep-${d.key}`} type="checkbox" className="form-check-input"
+                                  checked={enDeposito(d.key)} onChange={() => alternarDeposito(d.key)} />
+                                <label htmlFor={`dep-${d.key}`} className="form-check-label">{d.etiqueta}</label>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="small text-muted">
+                            Fuera de esos depósitos no se ingresa, no se vende, no se pide a Producción ni sale en el conteo.
+                          </div>
+                        </div>
                       )}
                       <div className="col-12">
                         {form.propio ? (

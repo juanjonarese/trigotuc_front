@@ -295,7 +295,9 @@ const ForratucPresupuestosPage = () => {
   // Qué hay en cada depósito de la venta (por origen del producto: ver el back).
   const depositos = constantes?.depositosAlimento || [];
   const etiquetaDeposito = depositos.find((d) => d.key === deposito)?.etiqueta || "";
-  const hayEnDeposito = (prod) => Boolean(prod && (constantes?.origenesPorDeposito?.[deposito] || []).includes(prod.origen));
+  // Y los de depósito, solo donde van (25/11: los de solo Producción no se venden en la Forrajería).
+  const hayEnDeposito = (prod) => Boolean(prod && (constantes?.origenesPorDeposito?.[deposito] || []).includes(prod.origen)
+    && (prod.origen !== "deposito" || !prod.depositos?.length || prod.depositos.includes(deposito)));
 
   // Cada producto de cámara es UN stock (2026-11-02): el entero por especie y
   // calibre, el trozado por especie, corte y clase. Las cajas de trozado son de

@@ -23,6 +23,13 @@ export const grupoDeposito = (p) =>
     : ETIQUETA_RUBRO.otros;
 
 /**
+ * Si un producto de depósito va en ese depósito (2026-11-25, pedido del usuario:
+ * hay productos que son solo de Producción). `p.depositos` vacío = en todos.
+ * Misma regla que el back (`vaEnDeposito` en utils/forratuc.js).
+ */
+export const vaEnDeposito = (p, deposito) => !p?.depositos?.length || p.depositos.includes(deposito);
+
+/**
  * Las secciones de un depósito: primero `extras` (en la Forrajería, los huevos
  * y los pollitos), después los productos de depósito por rubro y al final los
  * extras marcados `alFinal` (en la Forrajería, el pollo de la cámara). Entran todos los activos, aunque estén en cero: un cero que
@@ -35,7 +42,8 @@ export const grupoDeposito = (p) =>
  */
 export const seccionesConteo = (deposito, productos = [], extras = [], rubros = null) => {
   const filas = productos
-    .filter((p) => p.activo || (p.porDeposito?.[deposito.key] || 0) !== 0)
+    // Los que van en ese depósito; uno que no va, solo si le quedó saldo ahí (25/11).
+    .filter((p) => (p.activo && vaEnDeposito(p, deposito.key)) || (p.porDeposito?.[deposito.key] || 0) !== 0)
     .map((p) => ({
       codigo: p.codigo, etiqueta: p.etiqueta, unidad: p.unidad, sistema: p.porDeposito?.[deposito.key] || 0,
       // El alimento va por categoría (bovinos, parrilleros…; 2026-11-12).

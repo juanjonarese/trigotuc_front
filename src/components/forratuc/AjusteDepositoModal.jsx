@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import Swal from "sweetalert2";
 import { obtenerFechaHoy } from "../../utils/dateUtils";
 import { registrarAjusteDepositoForratuc } from "../../services/api";
-import { grupoDeposito } from "../../utils/forratuc/conteoStock";
+import { grupoDeposito, vaEnDeposito } from "../../utils/forratuc/conteoStock";
 import { escapeHtml } from "../../utils/escapeHtml";
 import { imprimirAjusteDeposito } from "../../utils/forratuc/imprimirForratuc";
 
@@ -31,8 +31,9 @@ const AjusteDepositoModal = ({ depositos = [], productos = [], motivos = [], onC
   const [renglones, setRenglones] = useState([renglonVacio()]);
   const [saving, setSaving] = useState(false);
 
+  // Los que van en el depósito, o que tienen algo ahí (25/11).
   const grupos = [];
-  for (const p of productos) {
+  for (const p of productos.filter((x) => vaEnDeposito(x, deposito) || (x.porDeposito?.[deposito] || 0) !== 0)) {
     const titulo = grupoDeposito(p);
     const g = grupos.find((x) => x.titulo === titulo) || (grupos.push({ titulo, items: [] }), grupos[grupos.length - 1]);
     g.items.push(p);
