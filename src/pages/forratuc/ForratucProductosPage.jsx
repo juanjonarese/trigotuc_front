@@ -37,6 +37,10 @@ const ForratucProductosPage = () => {
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState("");
   const [verInactivos, setVerInactivos] = useState(false);
+  // Filtro por depósito (2026-11-25, pedido del usuario: "todos, o los de
+  // Producción solo, y así"): "todos" | "comun" (en todos los depósitos) |
+  // "en:<depósito>" (está ahí) | "solo:<depósito>" (está solo ahí).
+  const [filtroDeposito, setFiltroDeposito] = useState("todos");
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
 
@@ -56,6 +60,19 @@ const ForratucProductosPage = () => {
   };
   useEffect(() => { cargar(); }, []);
 
+  // En qué depósitos está: los de depósito, según `depositos` (vacío = todos);
+  // pollo, huevo y pollitos (de la avícola) se venden solo en la Forrajería.
+  const depositosDe = (p) =>
+    p.origen !== "deposito" ? ["forrajeria"]
+      : p.depositos?.length ? p.depositos : (constantes?.depositos || []).map((d) => d.key);
+  const pasaDeposito = (p) => {
+    if (filtroDeposito === "todos") return true;
+    if (filtroDeposito === "comun") return p.origen === "deposito" && !p.depositos?.length;
+    const [modo, key] = filtroDeposito.split(":");
+    const ds = depositosDe(p);
+    return modo === "solo" ? ds.length === 1 && ds[0] === key : ds.includes(key);
+  };
+
   const etiquetaRubro = (k) => constantes?.rubros?.find((r) => r.key === k)?.etiqueta || k;
   // Categoría del alimento (2026-11-12): bovinos, parrilleros, ponedoras, porcinos, equinos.
   const categorias = constantes?.categoriasAlimento || [];
@@ -65,7 +82,7 @@ const ForratucProductosPage = () => {
   const grupos = useMemo(() => {
     const q = filtro.trim().toLowerCase();
     const visibles = productos.filter(
-      (p) => (verInactivos || p.activo) && (!q || `${p.codigo} ${p.nombre}`.toLowerCase().includes(q))
+      (p) => (verInactivos || p.activo) && (!q || `${p.codigo} ${p.nombre}`.toLowerCase().includes(q)) && pasaDeposito(p)
     );
     const ordenCat = (p) => {
       const i = categorias.findIndex((c) => c.key === p.categoria);
@@ -95,7 +112,7 @@ const ForratucProductosPage = () => {
     resto.splice(primeroAlimento, 0, ...alimento);
     return resto;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productos, filtro, verInactivos, constantes]);
+  }, [productos, filtro, verInactivos, constantes, filtroDeposito]);
 
   const set = (cambios) => setForm((f) => ({ ...f, ...cambios }));
   // Rubro (25/11): los del sistema + los que crea el usuario (SelectorRubro).
@@ -201,6 +218,19 @@ const ForratucProductosPage = () => {
                   onChange={(e) => setVerInactivos(e.target.checked)} />
                 <label htmlFor="verInactivos" className="form-check-label small">Ver inactivos</label>
               </div>
+              <select className="form-select form-select-sm" style={{ maxWidth: 260 }} value={filtroDeposito}
+                onChange={(e) => setFiltroDeposito(e.target.value)} title="Filtrar por depósito">
+                <option value="todos">Todos los productos</option>
+                <option value="comun">En todos los depósitos</option>
+                <optgroup label="Están en…">
+                  {(constantes?.depositos || []).map((d) => <option key={d.key} value={`en:${d.key}`}>{d.etiqueta}</option>)}
+                </optgroup>
+                <optgroup label="Solo en…">
+                  {(constantes?.depositos || []).map((d) => (
+                    <option key={d.key} value={`solo:${d.key}`}>Solo {d.etiqueta.replace(/^Depósito /, "")}</option>
+                  ))}
+                </optgroup>
+              </select>
             </div>
 
             {loading ? (
