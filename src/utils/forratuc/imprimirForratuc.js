@@ -701,8 +701,8 @@ const ESTILOS_CONTEO = `${ESTILOS_CAJA}
 
 // Las secciones salen de `seccionesConteo` (utils/forratuc/conteoStock.js), las
 // mismas que el Excel. Cada una lleva su subtotal: las unidades no se suman entre sí.
-const hojaConteo = (deposito, productos, { operador, ahora, extras = [] }) => {
-  const secciones = seccionesConteo(deposito, productos, extras);
+const hojaConteo = (deposito, productos, { operador, ahora, extras = [], rubros = null }) => {
+  const secciones = seccionesConteo(deposito, productos, extras, rubros);
   const cuerpo = secciones
     .map((sec) => `
       <tr class="rubro"><td colspan="3">${escapeHtml(sec.titulo)}</td><td class="num">${fmt(sec.filas.reduce((x, p) => x + (p.sistema || 0), 0))}</td><td colspan="3"></td></tr>
@@ -750,9 +750,9 @@ const hojaConteo = (deposito, productos, { operador, ahora, extras = [] }) => {
 
 // `stockAlimento` = `alimento` de GET /stock-forratuc; `depositos` = los que se imprimen (uno por hoja);
 // `extras` = { [deposito]: secciones } (ver hojaConteo).
-export const imprimirConteoDepositos = (stockAlimento, depositos, { operador = "", extras = {} } = {}) => {
+export const imprimirConteoDepositos = (stockAlimento, depositos, { operador = "", extras = {}, rubros = null } = {}) => {
   const ahora = new Date().toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
-  const hojas = depositos.map((d) => hojaConteo(d, stockAlimento.productos || [], { operador, ahora, extras: extras[d.key] || [] })).join("");
+  const hojas = depositos.map((d) => hojaConteo(d, stockAlimento.productos || [], { operador, ahora, extras: extras[d.key] || [], rubros })).join("");
   imprimirHtml(documento(`Conteo de stock ${depositos.length === 1 ? depositos[0].etiqueta : ""}`, hojas, ESTILOS_CONTEO));
 };
 

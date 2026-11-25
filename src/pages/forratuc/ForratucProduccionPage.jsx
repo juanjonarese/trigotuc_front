@@ -30,7 +30,8 @@ const contarPendientes = async () => {
  * superadmin), con tres solapas:
  *
  *   1. Depósito Producción: su stock y el ingreso manual de mercadería (y desde
- *      el 20/11 el stock del Depósito Carbonato, solo para mirar: `soloVer`), con el
+ *      el 20/11 el stock del Depósito Carbonato: `soloVer`; desde el 25/11 también
+ *      le ingresa mercadería — `depositosIngreso` —, sin historial), con el
  *      MISMO diseño que Forratuc → Stock (pedido del usuario; las piezas son
  *      las de components/forratuc/StockPiezas.jsx). SIN el historial de
  *      movimientos (19/11, pedido del usuario; el back tampoco lo manda).
@@ -180,10 +181,10 @@ const ForratucProduccionPage = () => {
                   vacio={grupos.length === 0} total={`${fmt(datos.total)} unid.`}>
                   <CuadrosDeposito grupos={grupos} cantidadDe={(p) => p.cantidad} />
                 </TarjetaLugar>
-                {/* Carbonato (20/11, pedido del usuario): solo para mirar. */}
+                {/* Carbonato (20/11): se ve; desde el 25/11 también se le ingresa (`ingreso`). */}
                 {soloVer.map((d) => (
-                  <TarjetaLugar key={d.key} ancho="col-12 col-xl-6" icono="bi-eye" colorIcono="text-secondary"
-                    titulo={<>{d.etiqueta} <span className="badge bg-light text-secondary border ms-1 fw-normal">solo ver</span></>}
+                  <TarjetaLugar key={d.key} ancho="col-12 col-xl-6" icono={d.ingreso ? "bi-bag" : "bi-eye"} colorIcono="text-secondary"
+                    titulo={d.ingreso ? d.etiqueta : <>{d.etiqueta} <span className="badge bg-light text-secondary border ms-1 fw-normal">solo ver</span></>}
                     vacio={d.grupos.length === 0} total={`${fmt(d.total)} unid.`}>
                     <CuadrosDeposito grupos={d.grupos} cantidadDe={(p) => p.cantidad} />
                   </TarjetaLugar>
@@ -216,7 +217,7 @@ const ForratucProduccionPage = () => {
 
         {ingresoAbierto && datos && (
           <IngresoMercaderiaModal
-            depositos={[datos.deposito]}
+            depositos={datos.depositosIngreso?.length ? datos.depositosIngreso : [datos.deposito]}
             productos={datos.productos.filter((p) => p.activo)}
             registrar={registrarIngresoProduccion}
             onClose={() => setIngresoAbierto(false)}

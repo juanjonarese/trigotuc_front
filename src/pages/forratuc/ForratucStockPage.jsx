@@ -5,9 +5,10 @@ import Layout from "../../components/Layout";
 import { BADGE_ESPECIE, especieDe, etiquetaEspecie, claveEntero, claveTrozado } from "../../utils/especies";
 import { formatearFechaLocal } from "../../utils/dateUtils";
 import { imprimirConteoDepositos, imprimirAjusteDeposito } from "../../utils/forratuc/imprimirForratuc";
-import { exportarConteoExcel, grupoDeposito } from "../../utils/forratuc/conteoStock";
+import { exportarConteoExcel, grupoDeposito, seccionesConteo } from "../../utils/forratuc/conteoStock";
 import IngresoMercaderiaModal from "../../components/forratuc/IngresoMercaderiaModal";
 import AjusteDepositoModal from "../../components/forratuc/AjusteDepositoModal";
+import ConteoStockModal from "../../components/forratuc/ConteoStockModal";
 import { Cuadro, Grupo, TarjetaLugar, CuadrosDeposito, HistorialStock } from "../../components/forratuc/StockPiezas";
 import { fmt } from "../../utils/forratuc/formatoStock";
 import {
@@ -40,6 +41,8 @@ const ForratucStockPage = () => {
   const [loading, setLoading] = useState(true);
   const [ingresoAbierto, setIngresoAbierto] = useState(false);
   const [ajusteAbierto, setAjusteAbierto] = useState(false);
+  // Planilla de conteo (25/11): { extras } mientras el modal está abierto.
+  const [conteo, setConteo] = useState(null);
 
   // Historial del lugar elegido.
   const [lugar, setLugar] = useState(null);
@@ -84,37 +87,24 @@ const ForratucStockPage = () => {
   // solo de productos de depósito. Se anula desde el historial.
   // Planilla de conteo (2026-11-06): una hoja por depósito con lo del sistema y
   // columnas para lo contado y la diferencia (+/−), para el conteo a mano.
+  // Desde el 25/11 (pedido del usuario: "seleccionar lo que voy a controlar") se
+  // elige el depósito y después los rubros, varios con tilde (ConteoStockModal).
   const imprimirConteo = async () => {
-    const depositos = stock?.alimento?.depositos || [];
-    const { value, isConfirmed, isDenied } = await Swal.fire({
-      title: "Planilla de conteo",
-      input: "select",
-      inputOptions: { todos: "Todos los depósitos (uno por hoja)", ...Object.fromEntries(depositos.map((d) => [d.key, d.etiqueta])) },
-      inputValue: "forrajeria",
-      showCancelButton: true,
-      showDenyButton: true,
-      returnInputValueOnDeny: true,
-      confirmButtonText: '<i class="bi bi-printer me-1"></i>Imprimir',
-      denyButtonText: '<i class="bi bi-file-earmark-excel me-1"></i>Excel',
-      denyButtonColor: "#198754",
-      cancelButtonText: "Cancelar",
-    });
-    if (!isConfirmed && !isDenied) return;
-    const elegidos = value === "todos" ? depositos : depositos.filter((d) => d.key === value);
     // En la Forrajería también se cuenta lo de la cámara, los huevos y los pollitos.
-    let extras = {};
-    if (elegidos.some((d) => d.key === "forrajeria")) {
-      let productos = [];
-      try {
-        productos = await obtenerProductosForratuc();
-      } catch {
-        // Sin productos sale igual, sin códigos.
-      }
-      extras = { forrajeria: seccionesForrajeria(productos) };
+    let productos = [];
+    try {
+      productos = await obtenerProductosForratuc();
+    } catch {
+      // Sin productos sale igual, sin códigos.
     }
-    const opciones = { operador: localStorage.getItem("nombreUsuario") || "", extras };
-    if (isDenied) exportarConteoExcel(elegidos, stock.alimento.productos || [], opciones);
+    setConteo({ extras: { forrajeria: seccionesForrajeria(productos) } });
+  };
+
+  const generarConteo = ({ elegidos, rubros, excel }) => {
+    const opciones = { operador: localStorage.getItem("nombreUsuario") || "", extras: conteo.extras, rubros };
+    if (excel) exportarConteoExcel(elegidos, stock.alimento.productos || [], opciones);
     else imprimirConteoDepositos(stock.alimento, elegidos, opciones);
+    setConteo(null);
   };
 
   // Pollo (cámara Forrajería), huevos y pollitos, con el código y el nombre del producto.
@@ -389,6 +379,14 @@ const ForratucStockPage = () => {
           </>
         )}
 
+        {conteo && stock && (
+          <ConteoStockModal
+            depositos={stock.alimento?.depositos || []}
+            seccionesDe={(d) => seccionesConteo(d, stock.alimento?.productos || [], conteo.extras[d.key] || [])}
+            onClose={() => setConteo(null)}
+            onGenerar={generarConteo}
+          />
+        )}
         {ingresoAbierto && stock && (
           <IngresoMercaderiaModal
             depositos={stock.alimento.depositos.filter((d) => !d.retirado)}

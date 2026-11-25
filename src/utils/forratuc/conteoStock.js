@@ -28,9 +28,12 @@ export const grupoDeposito = (p) =>
  * extras marcados `alFinal` (en la Forrajería, el pollo de la cámara). Entran todos los activos, aunque estén en cero: un cero que
  * aparece en el depósito también es una diferencia.
  *
+ * `rubros` (2026-11-25, pedido del usuario: "elegir lo que voy a controlar"):
+ * los títulos de sección que entran; null = todos.
+ *
  * @returns [{ titulo, filas: [{ codigo, etiqueta, unidad, sistema }] }]
  */
-export const seccionesConteo = (deposito, productos = [], extras = []) => {
+export const seccionesConteo = (deposito, productos = [], extras = [], rubros = null) => {
   const filas = productos
     .filter((p) => p.activo || (p.porDeposito?.[deposito.key] || 0) !== 0)
     .map((p) => ({
@@ -38,7 +41,7 @@ export const seccionesConteo = (deposito, productos = [], extras = []) => {
       // El alimento va por categoría (bovinos, parrilleros…; 2026-11-12).
       grupo: grupoDeposito(p),
     }));
-  return [
+  const todas = [
     ...extras.filter((e) => !e.alFinal),
     ...[...new Set(filas.map((p) => p.grupo))].map((g) => ({
       titulo: g,
@@ -46,6 +49,7 @@ export const seccionesConteo = (deposito, productos = [], extras = []) => {
     })),
     ...extras.filter((e) => e.alFinal),
   ];
+  return rubros ? todas.filter((s) => rubros.includes(s.titulo)) : todas;
 };
 
 // Nombre de hoja válido para Excel: sin \ / ? * [ ] :, hasta 31, sin repetir.
@@ -61,7 +65,7 @@ const nombreHoja = (texto, usados) => {
  * Un .xlsx con una hoja por depósito. "Contado" queda en blanco para cargar y
  * "Diferencia" es una fórmula (Contado − Sistema) que se completa sola.
  */
-export const exportarConteoExcel = (depositos, productos, { extras = {}, operador = "" } = {}) => {
+export const exportarConteoExcel = (depositos, productos, { extras = {}, operador = "", rubros = null } = {}) => {
   const wb = XLSX.utils.book_new();
   const usados = new Set();
   const ahora = new Date().toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
@@ -74,7 +78,7 @@ export const exportarConteoExcel = (depositos, productos, { extras = {}, operado
       ["Código", "Producto", "Unidad", "Sistema", "Contado", "Diferencia (+/−)", "Observaciones"],
     ];
     const formulas = []; // filas (0-based) que llevan la fórmula de diferencia
-    for (const sec of seccionesConteo(d, productos, extras[d.key] || [])) {
+    for (const sec of seccionesConteo(d, productos, extras[d.key] || [], rubros)) {
       filas.push(["", sec.titulo.toUpperCase()]);
       if (!sec.filas.length) filas.push(["", "Sin stock en el sistema", "", 0]);
       for (const p of sec.filas) {
