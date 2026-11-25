@@ -45,9 +45,12 @@ const renglonVacio = () => ({ id: siguiente++, producto: "", cantidad: "" });
 const PedidoModal = ({ modo, pedido, productos, onClose, onListo }) => {
   const hay = Object.fromEntries((productos || []).map((p) => [p.alimento, p.cantidad]));
   const [renglones, setRenglones] = useState([renglonVacio()]);
-  // Enviar: arranca en lo pedido. Recibir: en lo enviado.
+  // Recibir directo (25/11): Forratuc recibe un pedido que Producción no puso en
+  // camino (el camión llegó igual). Arranca en lo pedido y no pide motivo.
+  const directo = modo === "recibir" && pedido?.estado === "pendiente";
+  // Enviar y recibir directo: arrancan en lo pedido. Recibir: en lo enviado.
   const [cantidades, setCantidades] = useState(() =>
-    Object.fromEntries((pedido?.lineas || []).map((l) => [l.producto, String(modo === "enviar" ? l.pedido : l.enviado ?? 0)]))
+    Object.fromEntries((pedido?.lineas || []).map((l) => [l.producto, String(modo === "enviar" || directo ? l.pedido : l.enviado ?? 0)]))
   );
   const [texto, setTexto] = useState("");
   const [saving, setSaving] = useState(false);
@@ -61,7 +64,7 @@ const PedidoModal = ({ modo, pedido, productos, onClose, onListo }) => {
   const porKey = Object.fromEntries((productos || []).map((p) => [p.alimento, p]));
   const set = (id, cambios) => setRenglones((prev) => prev.map((r) => (r.id === id ? { ...r, ...cambios } : r)));
   const entero = (v, min) => v !== "" && Number.isInteger(Number(v)) && Number(v) >= min;
-  const conDiferencia = modo === "recibir" && (pedido?.lineas || []).some((l) => Number(cantidades[l.producto]) !== (l.enviado ?? 0));
+  const conDiferencia = modo === "recibir" && !directo && (pedido?.lineas || []).some((l) => Number(cantidades[l.producto]) !== (l.enviado ?? 0));
 
   const guardar = async (e) => {
     e.preventDefault();
@@ -80,7 +83,7 @@ const PedidoModal = ({ modo, pedido, productos, onClose, onListo }) => {
       const campo = modo === "enviar" ? "enviado" : "recibido";
       for (const l of pedido.lineas) {
         if (!entero(cantidades[l.producto], 0)) return Swal.fire("Cantidad", `${l.nombre}: de 0 en adelante, sin decimales.`, "warning");
-        if (modo === "enviar" && Number(cantidades[l.producto]) > (hay[l.producto] ?? 0))
+        if ((modo === "enviar" || directo) && Number(cantidades[l.producto]) > (hay[l.producto] ?? 0))
           return Swal.fire("No alcanza", `De ${l.nombre} hay ${cant(hay[l.producto] ?? 0, l.unidad)} en Producción.`, "warning");
       }
       if (!pedido.lineas.some((l) => Number(cantidades[l.producto]) > 0))
@@ -89,7 +92,7 @@ const PedidoModal = ({ modo, pedido, productos, onClose, onListo }) => {
       const lineas = pedido.lineas.map((l) => ({ producto: l.producto, [campo]: Number(cantidades[l.producto]) }));
       confirmar = modo === "enviar"
         ? `Mandás a la Forrajería:<br>${pedido.lineas.map((l) => `${escapeHtml(cant(Number(cantidades[l.producto]), l.unidad))} ${escapeHtml(l.nombre)}`).join("<br>")}<br><br>Se imprime el remito para que viaje con la mercadería.`
-        : `Recibís:<br>${pedido.lineas.map((l) => `${escapeHtml(cant(Number(cantidades[l.producto]), l.unidad))} ${escapeHtml(l.nombre)}`).join("<br>")}<br><br>Sale del Depósito Producción y entra a la Forrajería.`;
+        : `Recibís:<br>${pedido.lineas.map((l) => `${escapeHtml(cant(Number(cantidades[l.producto]), l.unidad))} ${escapeHtml(l.nombre)}`).join("<br>")}<br><br>Sale del Depósito Producción y entra a la Forrajería.${directo ? "<br><br>Producción no lo puso en camino: queda como enviado y recibido con esto." : ""}`;
       accion = () => modo === "enviar"
         ? enviarPedidoProduccion(pedido.id, { observaciones: texto.trim(), lineas })
         : recibirPedidoProduccion(pedido.id, { motivoDiferencia: texto.trim(), lineas });
@@ -172,26 +175,32 @@ const PedidoModal = ({ modo, pedido, productos, onClose, onListo }) => {
                   </button>
                 </>
               ) : (
+                <>
+                {directo && (
+                  <div className="alert alert-info small py-2 mb-2">
+                    <i className="bi bi-info-circle me-1"></i>Producción todavía no lo puso <strong>en camino</strong>. Si la mercadería ya llegó, cargá lo que llegó y se recibe directo: sale del Depósito Producción y entra a la Forrajería.
+                  </div>
+                )}
                 <table className="table table-sm align-middle mb-3">
                   <thead className="table-light">
                     <tr>
                       <th>Producto</th>
                       <th className="text-end">Pedido</th>
-                      {modo === "enviar" && <th className="text-end">En Producción</th>}
-                      {modo === "recibir" && <th className="text-end">Enviado</th>}
+                      {(modo === "enviar" || directo) && <th className="text-end">En Producción</th>}
+                      {modo === "recibir" && !directo && <th className="text-end">Enviado</th>}
                       <th style={{ width: 150 }}>{modo === "enviar" ? "Mandás" : "Llegó"}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {pedido.lineas.map((l) => {
                       const v = cantidades[l.producto];
-                      const distinto = modo === "recibir" ? Number(v) !== (l.enviado ?? 0) : Number(v) !== l.pedido;
+                      const distinto = modo === "recibir" && !directo ? Number(v) !== (l.enviado ?? 0) : Number(v) !== l.pedido;
                       return (
                         <tr key={l.producto}>
                           <td>{l.codigo ? `${l.codigo} · ` : ""}{l.nombre}</td>
                           <td className="text-end text-nowrap">{cant(l.pedido, l.unidad)}</td>
-                          {modo === "enviar" && <td className={`text-end text-nowrap small ${(hay[l.producto] ?? 0) < l.pedido ? "text-danger" : "text-muted"}`}>{cant(hay[l.producto] ?? 0, l.unidad)}</td>}
-                          {modo === "recibir" && <td className="text-end text-nowrap">{cant(l.enviado, l.unidad)}</td>}
+                          {(modo === "enviar" || directo) && <td className={`text-end text-nowrap small ${(hay[l.producto] ?? 0) < l.pedido ? "text-danger" : "text-muted"}`}>{cant(hay[l.producto] ?? 0, l.unidad)}</td>}
+                          {modo === "recibir" && !directo && <td className="text-end text-nowrap">{cant(l.enviado, l.unidad)}</td>}
                           <td>
                             <input type="number" min="0" step="1" className={`form-control form-control-sm ${distinto ? "border-warning" : ""}`}
                               value={v ?? ""} onChange={(e) => setCantidades((c) => ({ ...c, [l.producto]: e.target.value }))} />
@@ -201,6 +210,7 @@ const PedidoModal = ({ modo, pedido, productos, onClose, onListo }) => {
                     })}
                   </tbody>
                 </table>
+                </>
               )}
 
               {pedido?.observaciones && <div className="small mb-2"><strong>Pedido:</strong> {pedido.observaciones}</div>}
@@ -309,6 +319,7 @@ const PedidosProduccion = ({ lado = "forratuc" }) => {
                   <div className="card-header bg-white d-flex flex-wrap gap-2 align-items-center">
                     <strong>{p.numero}</strong>
                     <span className={`badge ${e.clase}`}>{e.texto}</span>
+                    {p.recibidoDirecto && <span className="badge bg-light text-dark border">recibido directo</span>}
                     {p.conDiferencia && <span className="badge bg-danger-subtle text-danger-emphasis">con diferencia</span>}
                     <span className="small text-muted ms-auto">{dia(p.fecha)} · pidió {p.pedidoPorNombre || "—"}</span>
                   </div>
@@ -339,9 +350,10 @@ const PedidosProduccion = ({ lado = "forratuc" }) => {
                         <i className="bi bi-truck me-1"></i>Enviar
                       </button>
                     )}
-                    {esForratuc && p.estado === "enviado" && (
-                      <button className="btn btn-success btn-sm" onClick={() => setModal({ modo: "recibir", pedido: p })}>
-                        <i className="bi bi-box-arrow-in-down me-1"></i>Recibir
+                    {esForratuc && (p.estado === "enviado" || p.estado === "pendiente") && (
+                      <button className={`btn btn-sm ${p.estado === "enviado" ? "btn-success" : "btn-outline-success"}`} onClick={() => setModal({ modo: "recibir", pedido: p })}
+                        title={p.estado === "pendiente" ? "Producción no lo puso en camino: si ya llegó, recibilo directo" : undefined}>
+                        <i className="bi bi-box-arrow-in-down me-1"></i>{p.estado === "pendiente" ? "Ya llegó: recibir" : "Recibir"}
                       </button>
                     )}
                     <button className="btn btn-outline-dark btn-sm" onClick={() => imprimirPedidoProduccion(p)}>
