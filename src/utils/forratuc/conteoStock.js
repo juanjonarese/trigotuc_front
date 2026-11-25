@@ -8,7 +8,11 @@ import { obtenerFechaHoy } from "../dateUtils";
  * salen de las MISMAS secciones (`seccionesConteo`).
  */
 
-const ETIQUETA_RUBRO = { alimento: "Alimento balanceado", otros: "Otros" };
+const ETIQUETA_RUBRO = {
+  alimento: "Alimento balanceado", otros: "Otros",
+  // Uno de "otros" que se muestra con la avícola (25/11).
+  pollo: "Pollo entero", trozado: "Trozado", huevo: "Huevo", pollito: "Pollitos",
+};
 
 /**
  * En qué grupo va un producto de depósito (una sola regla para Stock, ingreso,
@@ -21,7 +25,7 @@ const ETIQUETA_RUBRO = { alimento: "Alimento balanceado", otros: "Otros" };
 export const grupoDeposito = (p) =>
   p.categoria || p.rubro !== "otros"
     ? `${ETIQUETA_RUBRO.alimento} — ${p.categoriaEtiqueta || "Sin categoría"}`
-    : p.rubroPropioNombre || ETIQUETA_RUBRO.otros;
+    : p.rubroPropioNombre || ETIQUETA_RUBRO[p.rubroVista] || ETIQUETA_RUBRO.otros;
 
 /**
  * Si un producto de depósito va en ese depósito (2026-11-25, pedido del usuario:

@@ -94,12 +94,14 @@ const ForratucProductosPage = () => {
       const conCategoria = p.rubro === "alimento" || (p.categoria && p.origen === "deposito");
       // Un rubro creado por el usuario (25/11) es su propio grupo.
       const propio = !conCategoria && p.rubro === "otros" && p.rubroPropioNombre;
-      const clave = conCategoria ? `alimento|${p.categoria || ""}` : propio ? `propio|${p.rubroPropio}` : p.rubro;
+      // Uno de "otros" que se muestra con la avícola (25/11) va en ese grupo.
+      const vista = !conCategoria && p.rubro === "otros" && !propio && p.rubroVista;
+      const clave = conCategoria ? `alimento|${p.categoria || ""}` : propio ? `propio|${p.rubroPropio}` : vista || p.rubro;
       if (!porGrupo.has(clave)) {
         const titulo = conCategoria
           ? `${etiquetaRubro("alimento")} — ${etiquetaCategoria(p.categoria)}`
-          : propio || etiquetaRubro(p.rubro);
-        porGrupo.set(clave, { clave, titulo, rubro: conCategoria ? "alimento" : p.rubro, orden: ordenCat(p), items: [] });
+          : propio || etiquetaRubro(vista || p.rubro);
+        porGrupo.set(clave, { clave, titulo, rubro: conCategoria ? "alimento" : vista || p.rubro, orden: ordenCat(p), items: [] });
       }
       porGrupo.get(clave).items.push(p);
     }
@@ -118,10 +120,11 @@ const ForratucProductosPage = () => {
   // Rubro (25/11): los del sistema + los que crea el usuario (SelectorRubro).
   const selectorRubro = form && (
     <SelectorRubro
-      value={{ rubro: form.rubro, rubroPropio: form.rubroPropio }}
+      value={{ rubro: form.rubro, rubroPropio: form.rubroPropio, rubroVista: form.rubroVista }}
       onChange={(v) => set(v)}
       sistema={constantes?.rubrosNuevo || []}
       propios={rubrosPropios}
+      vista={constantes?.rubrosVista || []}
       onRubrosCambiaron={async () => {
         setRubrosPropios(await obtenerRubrosForratuc().catch(() => rubrosPropios));
         setProductos(await obtenerProductosForratuc().catch(() => productos));
@@ -178,6 +181,7 @@ const ForratucProductosPage = () => {
             ...(form.base ? {} : {
               rubro: form.rubro, unidadVenta: form.unidadVenta, categoria: form.categoria || "",
               rubroPropio: form.rubro === "otros" ? form.rubroPropio || null : null,
+              rubroVista: form.rubro === "otros" && !form.rubroPropio ? form.rubroVista || null : null,
             }),
             ...depositosPayload,
           }

@@ -11,10 +11,14 @@ import { crearRubroForratuc, renombrarRubroForratuc } from "../../services/api";
  * creó el usuario (con el lápiz para renombrar) y al final "Crear rubro".
  * Un rubro propio es, para el sistema, uno de "otros" con `rubroPropio`.
  *
- * value: { rubro, rubroPropio }  ·  onChange({ rubro, rubroPropio })
+ * Desde el 25/11 también "Mostrar con la avícola" (`vista`: Pollo entero,
+ * Trozado, Huevo, Pollitos): uno de "otros" que se agrupa ahí (la "Bolsa de
+ * trocitos" en Trozado) sin cambiar de dónde sale su stock.
+ *
+ * value: { rubro, rubroPropio, rubroVista }  ·  onChange({ rubro, rubroPropio, rubroVista })
  * onRubrosCambiaron(): se llama al crear o renombrar, para recargar listas.
  */
-const SelectorRubro = ({ value, onChange, sistema = [], propios = [], onRubrosCambiaron }) => {
+const SelectorRubro = ({ value, onChange, sistema = [], propios = [], vista = [], onRubrosCambiaron }) => {
   const [abierto, setAbierto] = useState(false);
   const caja = useRef(null);
 
@@ -26,7 +30,8 @@ const SelectorRubro = ({ value, onChange, sistema = [], propios = [], onRubrosCa
   }, [abierto]);
 
   const propioActual = value?.rubroPropio ? propios.find((r) => r._id === String(value.rubroPropio)) : null;
-  const etiqueta = propioActual?.nombre || sistema.find((r) => r.key === value?.rubro)?.etiqueta || "Elegí el rubro";
+  const vistaActual = !value?.rubroPropio && value?.rubroVista ? vista.find((r) => r.key === value.rubroVista) : null;
+  const etiqueta = propioActual?.nombre || vistaActual?.etiqueta || sistema.find((r) => r.key === value?.rubro)?.etiqueta || "Elegí el rubro";
 
   const pedirNombre = (titulo, inicial = "") =>
     Swal.fire({
@@ -48,7 +53,7 @@ const SelectorRubro = ({ value, onChange, sistema = [], propios = [], onRubrosCa
     try {
       const r = await crearRubroForratuc(nombre.trim());
       await onRubrosCambiaron?.();
-      onChange({ rubro: "otros", rubroPropio: r._id });
+      onChange({ rubro: "otros", rubroPropio: r._id, rubroVista: null });
     } catch (err) {
       Swal.fire("Error", err.message || "No se pudo crear el rubro.", "error");
     }
@@ -80,17 +85,31 @@ const SelectorRubro = ({ value, onChange, sistema = [], propios = [], onRubrosCa
         <ul className="dropdown-menu show w-100 shadow" style={{ maxHeight: 320, overflowY: "auto" }}>
           {sistema.map((r) => (
             <li key={r.key}>
-              <button type="button" className={`dropdown-item ${!value?.rubroPropio && value?.rubro === r.key ? "active" : ""}`}
-                onClick={() => elegir({ rubro: r.key, rubroPropio: null })}>
+              <button type="button" className={`dropdown-item ${!value?.rubroPropio && !value?.rubroVista && value?.rubro === r.key ? "active" : ""}`}
+                onClick={() => elegir({ rubro: r.key, rubroPropio: null, rubroVista: null })}>
                 {r.etiqueta}
               </button>
             </li>
           ))}
+          {vista.length > 0 && (
+            <>
+              <li><hr className="dropdown-divider" /></li>
+              <li><h6 className="dropdown-header">Mostrar con la avícola</h6></li>
+              {vista.map((r) => (
+                <li key={r.key}>
+                  <button type="button" className={`dropdown-item ${vistaActual?.key === r.key ? "active" : ""}`}
+                    onClick={() => elegir({ rubro: "otros", rubroPropio: null, rubroVista: r.key })}>
+                    {r.etiqueta}
+                  </button>
+                </li>
+              ))}
+            </>
+          )}
           {propios.length > 0 && <li><hr className="dropdown-divider" /></li>}
           {propios.map((r) => (
             <li key={r._id} className="d-flex align-items-center">
               <button type="button" className={`dropdown-item flex-grow-1 ${String(value?.rubroPropio) === r._id ? "active" : ""}`}
-                onClick={() => elegir({ rubro: "otros", rubroPropio: r._id })}>
+                onClick={() => elegir({ rubro: "otros", rubroPropio: r._id, rubroVista: null })}>
                 {r.nombre}
               </button>
               <button type="button" className="btn btn-sm btn-link text-secondary px-2" title="Cambiar el nombre"

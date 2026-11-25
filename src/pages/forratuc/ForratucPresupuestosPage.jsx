@@ -289,7 +289,9 @@ const ForratucPresupuestosPage = () => {
     };
     const porRubro = new Map();
     // Los de un rubro creado por el usuario (25/11), con su nombre.
-    const grupo = (p) => (p.rubro === "otros" && p.rubroPropioNombre ? `propio:${p.rubroPropioNombre}` : p.rubro);
+    // Y los que se muestran con la avícola (25/11: la bolsa de trocitos en Trozado).
+    const grupo = (p) => (p.rubro === "otros" && p.rubroPropioNombre ? `propio:${p.rubroPropioNombre}`
+      : p.rubro === "otros" && p.rubroVista ? p.rubroVista : p.rubro);
     for (const p of productos) porRubro.set(grupo(p), [...(porRubro.get(grupo(p)) || []), p]);
     return [...porRubro].map(([rubro, items]) => ({ titulo: titulo[rubro] || rubro.replace(/^propio:/, ""), items }));
   }, [productos, huevosPorMaple]);
