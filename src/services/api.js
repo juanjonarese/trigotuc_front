@@ -566,6 +566,14 @@ export const guardarListaPreciosForratuc = async (id, data) => {
   return handleResponse(response);
 };
 
+// La lista del cliente (2026-11-26): se elige en su primera venta y queda guardada.
+export const asignarListaClienteForratuc = async (clienteId, lista) => {
+  const response = await fetch(`${API_URL}/listas-precios-forratuc/clientes/${clienteId}`, {
+    method: "PUT", headers: getAuthHeaders(), body: JSON.stringify({ lista: lista || null }),
+  });
+  return handleResponse(response);
+};
+
 export const eliminarListaPreciosForratuc = async (id) => {
   const response = await fetch(`${API_URL}/listas-precios-forratuc/${id}`, {
     method: "DELETE", headers: getAuthHeaders(),

@@ -38,7 +38,7 @@ There are no automated tests.
 | `/forratuc/salidas` | `SalidaMostradorPage` (la salida suelta; las de un presupuesto salen con su número y sin editar/borrar) | Forratuc |
 | `/avicola/productos` | `AvicolaProductosPage` (2026-11-04: los productos de la avícola — pollo entero, trozado, huevo, pollitos — que vende Forratuc; alta a mano eligiendo con qué stock se vincula; ítem "Productos" del menú, solo superadmin) | Avícola |
 | `/dashboard` | `DashboarPage` (typo intencional) | General |
-| `/clientes` | `ClientesPage` | Altas |
+| `/clientes` | `ClientesPage` (2026-11-26: formulario del Excel del cliente — tipo cuenta corriente / consumidor final, datos personales con provincia → localidad, autorizados, impositivos y comerciales; código y búsqueda por código/CUIT/DNI/teléfono; constantes en `utils/clientes.js`) | Altas |
 | `/personal` | `PersonalPage` (gestión de usuarios) | Altas |
 | `/camiones` | `CamionesPage` (camiones + choferes inline) | Altas |
 | `/proyeccion` | `ProyeccionPage` (almanaque de faena: galpones + faena + huevos) | General (cruza Reproductores y Granja) |

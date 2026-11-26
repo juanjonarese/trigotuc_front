@@ -4,7 +4,7 @@
  * es uno para todas las empresas y un cliente de la avícola puede empezar a
  * comprar en Forratuc). Se busca sobre TODO el padrón, no solo la empresa actual.
  *
- *   · `iguales`: mismo teléfono o mismo CUIT. Es el mismo cliente seguro (el
+ *   · `iguales`: mismo teléfono, CUIT o DNI (el DNI desde el 26/11). Es el mismo cliente seguro (el
  *     back no deja cargar otro con esos datos).
  *   · `parecidos`: nombre parecido (sin tildes, mayúsculas, puntuación ni
  *     "S.A." / "SRL"…): puede ser el mismo, lo decide quien carga.
@@ -28,6 +28,7 @@ const mismoTelefono = (a, b) => {
   return x.length >= 6 && y.length >= 6 && x.slice(-8) === y.slice(-8);
 };
 const mismoCuit = (a, b) => digitos(a).length === 11 && digitos(a) === digitos(b);
+const mismoDni = (a, b) => digitos(a).length >= 7 && digitos(a) === digitos(b);
 
 // Distancia de edición (cuántas letras cambian), para errores de tipeo.
 const distancia = (a, b) => {
@@ -67,6 +68,7 @@ export const buscarParecidos = (nuevo, padron = []) => {
     const motivos = [];
     if (nuevo.telefono && mismoTelefono(nuevo.telefono, c.telefono)) motivos.push("mismo teléfono");
     if (nuevo.cuit && mismoCuit(nuevo.cuit, c.cuit)) motivos.push("mismo CUIT");
+    if (nuevo.dni && mismoDni(nuevo.dni, c.dni)) motivos.push("mismo DNI");
     if (motivos.length) iguales.push({ cliente: c, motivo: motivos.join(" y ") });
     else if (nombreParecido(nuevo.razonSocial, c.razonSocial)) parecidos.push({ cliente: c, motivo: "nombre parecido" });
   }

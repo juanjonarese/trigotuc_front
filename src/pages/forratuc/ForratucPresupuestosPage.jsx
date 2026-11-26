@@ -25,7 +25,9 @@ import {
   obtenerSolicitudesEdicionForratuc,
   resolverSolicitudEdicionForratuc,
   obtenerMiCajaForratuc,
+  asignarListaClienteForratuc,
 } from "../../services/api";
+import { esConsumidorFinal } from "../../utils/clientes";
 import SolicitudesEdicionPresupuesto from "../../components/forratuc/SolicitudesEdicionPresupuesto";
 import CobroQrModal from "../../components/forratuc/CobroQrModal";
 
@@ -123,6 +125,8 @@ const ForratucPresupuestosPage = () => {
   const [desde, setDesde] = useState(obtenerFechaHoy());
   const [hasta, setHasta] = useState(obtenerFechaHoy());
   const [presupuestos, setPresupuestos] = useState([]);
+  // Filtro por cliente de la tabla (2026-11-26): por nombre, sin tildes ni mayúsculas.
+  const [filtroCliente, setFiltroCliente] = useState("");
   const [loadingLista, setLoadingLista] = useState(false);
 
   // ── Edición (2026-11-12): el superadmin edita directo; los demás piden
@@ -400,8 +404,50 @@ const ForratucPresupuestosPage = () => {
     if (f === "cuenta_corriente") setModoCliente("padron");
   };
 
-  // Arranca en el "Precio de lista" (la por defecto); la lista se elige a mano en
-  // cada venta, no va atada al cliente (pedido del usuario, 2026-10-30).
+  // Lista del cliente (2026-11-26, decisión del usuario): en su PRIMERA venta se
+  // pide elegirla y queda guardada en el cliente; en las siguientes se propone
+  // sola (y se puede cambiar en esa venta). Un cliente consumidor final del padrón
+  // compra solo al contado.
+  const clienteElegido = clientes.find((c) => String(c._id) === String(clienteId)) || null;
+  const clienteSinCuenta = modoCliente === "padron" && esConsumidorFinal(clienteElegido);
+  const elegirCliente = async (id) => {
+    setClienteId(id);
+    const c = clientes.find((x) => String(x._id) === String(id));
+    if (!c) return;
+    if (esConsumidorFinal(c) && formaPago === "cuenta_corriente") {
+      setFormaPago("efectivo");
+      Swal.fire({ toast: true, position: "top-end", timer: 3500, showConfirmButton: false, icon: "info",
+        title: `${c.razonSocial} es consumidor final: compra al contado.` });
+    }
+    if (editando || !listas.length) return;
+    const suya = c.listaPrecioForratuc && listas.find((l) => l._id === String(c.listaPrecioForratuc));
+    if (suya) {
+      setListaId(suya._id);
+      setListaTocada(true);
+      return;
+    }
+    const { value, isConfirmed } = await Swal.fire({
+      title: "Lista de precios del cliente",
+      html: `Es la primera venta de <strong>${escapeHtml(c.razonSocial)}</strong>: elegí su lista de precios. Queda guardada para las próximas ventas.`,
+      input: "select",
+      inputOptions: Object.fromEntries(listas.map((l) => [l._id, `${l.nombre}${l.tipo === "descuento" ? ` (${fmt(l.porcentaje)}% menos)` : ""}`])),
+      inputValue: listaId || listaPorDefecto?._id || "",
+      showCancelButton: true,
+      confirmButtonText: "Guardar",
+      cancelButtonText: "Ahora no",
+    });
+    if (!isConfirmed || !value) return;
+    try {
+      await asignarListaClienteForratuc(c._id, value);
+      setClientes((prev) => prev.map((x) => (String(x._id) === String(c._id) ? { ...x, listaPrecioForratuc: value } : x)));
+      setListaId(value);
+      setListaTocada(true);
+    } catch (err) {
+      Swal.fire("Error", err.message || "No se pudo guardar la lista del cliente.", "error");
+    }
+  };
+
+  // Arranca en el "Precio de lista" (la por defecto) o en la del cliente.
   const listaPorDefecto = listas.find((l) => l.porDefecto) || null;
   useEffect(() => {
     if (!listaTocada) setListaId(listaPorDefecto?._id || "");
@@ -495,7 +541,7 @@ const ForratucPresupuestosPage = () => {
   // En la forma de pago, las flechas eligen UNA (como tocar el botón solo);
   // la barra espaciadora toca el botón (así se combinan efectivo y Mercado Pago).
   const flechaEnFormaPago = (e) => {
-    const botones = [...document.querySelectorAll('[data-nav="forma"]')];
+    const botones = [...document.querySelectorAll('[data-nav="forma"]:not(:disabled)')];
     const i = botones.indexOf(e.target);
     if (i < 0) return;
     e.preventDefault();
@@ -610,6 +656,8 @@ const ForratucPresupuestosPage = () => {
     }
     if (formaPago === "cuenta_corriente" && modoCliente !== "padron")
       return Swal.fire("Cuenta corriente", "La cuenta corriente es solo para clientes del padrón.", "warning");
+    if (formaPago === "cuenta_corriente" && clienteSinCuenta)
+      return Swal.fire("Cuenta corriente", `${clienteElegido.razonSocial} es consumidor final: compra al contado.`, "warning");
     // El back lo controla igual (2026-11-12).
     if (superaTope)
       return Swal.fire("Pasa el tope de cuenta corriente",
@@ -813,7 +861,12 @@ const ForratucPresupuestosPage = () => {
     }
   };
 
-  const emitidos = presupuestos.filter((p) => p.estado === "emitido");
+  const sinTildes = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+  const nombresClientes = [...new Set(presupuestos.map((p) => p.clienteNombre).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const presupuestosFiltrados = filtroCliente.trim()
+    ? presupuestos.filter((p) => sinTildes(p.clienteNombre).includes(sinTildes(filtroCliente)))
+    : presupuestos;
+  const emitidos = presupuestosFiltrados.filter((p) => p.estado === "emitido");
   const totalEmitidos = emitidos.reduce((a, p) => a + p.total, 0);
 
   return (
@@ -919,7 +972,7 @@ const ForratucPresupuestosPage = () => {
                     </div>
                     <div data-nav="cliente">
                       {modoCliente === "padron" ? (
-                        <BuscadorCliente clientes={clientes} value={clienteId} onChange={setClienteId} placeholder="Buscá por nombre, CUIT o teléfono..."
+                        <BuscadorCliente clientes={clientes} value={clienteId} onChange={elegirCliente} placeholder="Buscá por nombre, CUIT o teléfono..."
                           alEnter={() => setTimeout(() => enfocar("lista"), 0)} />
                       ) : (
                         <input className="form-control" placeholder="Nombre de quien compra" value={clienteNombre} onChange={(e) => setClienteNombre(e.target.value)} />
@@ -1074,6 +1127,8 @@ const ForratucPresupuestosPage = () => {
                       return (
                         <button key={f.key} type="button" data-nav="forma" data-forma={f.key} data-elegida={elegida ? "true" : undefined}
                           className={`btn btn-sm px-3 ${elegida ? "btn-primary" : "btn-outline-secondary"}`}
+                          disabled={f.key === "cuenta_corriente" && clienteSinCuenta}
+                          title={f.key === "cuenta_corriente" && clienteSinCuenta ? "Es consumidor final: compra al contado" : undefined}
                           onClick={() => elegirFormaPago(f.key)}>
                           <i className={`bi ${icono || "bi-wallet2"} me-2`}></i>
                           {f.etiqueta}
@@ -1202,6 +1257,21 @@ const ForratucPresupuestosPage = () => {
                   <label className="form-label small mb-1">Hasta</label>
                   <input type="date" className="form-control form-control-sm" value={hasta} onChange={(e) => setHasta(e.target.value)} />
                 </div>
+                <div style={{ minWidth: 220 }}>
+                  <label className="form-label small mb-1">Cliente</label>
+                  <div className="input-group input-group-sm">
+                    <input type="text" className="form-control" list="clientes-emitidos" placeholder="Todos"
+                      value={filtroCliente} onChange={(e) => setFiltroCliente(e.target.value)} />
+                    {filtroCliente && (
+                      <button type="button" className="btn btn-outline-secondary" title="Sacar el filtro" onClick={() => setFiltroCliente("")}>
+                        <i className="bi bi-x-lg"></i>
+                      </button>
+                    )}
+                  </div>
+                  <datalist id="clientes-emitidos">
+                    {nombresClientes.map((n) => <option key={n} value={n} />)}
+                  </datalist>
+                </div>
                 <div className="ms-auto text-end">
                   <div className="small text-muted">{emitidos.length} emitidos (sin anulados)</div>
                   <div className="fw-bold">{pesos(totalEmitidos)}</div>
@@ -1212,6 +1282,8 @@ const ForratucPresupuestosPage = () => {
                 <div className="text-center p-4"><div className="spinner-border text-primary" role="status"></div></div>
               ) : presupuestos.length === 0 ? (
                 <div className="text-muted text-center py-4">No hay presupuestos en esas fechas.</div>
+              ) : presupuestosFiltrados.length === 0 ? (
+                <div className="text-muted text-center py-4">No hay presupuestos de ese cliente en esas fechas.</div>
               ) : (
                 <div className="table-responsive">
                   <table className="table table-sm table-hover align-middle mb-0">
@@ -1228,7 +1300,7 @@ const ForratucPresupuestosPage = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {presupuestos.map((p) => {
+                      {presupuestosFiltrados.map((p) => {
                         const anulado = p.estado === "anulado";
                         return (
                           <tr key={p._id} className={anulado ? "text-muted" : ""}>
@@ -1246,10 +1318,7 @@ const ForratucPresupuestosPage = () => {
                               )}
                             </td>
                             <td className="text-nowrap">{formatearFechaLocal(p.fecha)}</td>
-                            <td>
-                              {p.clienteNombre}
-                              {!p.cliente && <span className="badge bg-light text-secondary border ms-1">cons. final</span>}
-                            </td>
+                            <td>{p.clienteNombre}</td>
                             <td className="small" style={{ maxWidth: 380 }}>
                               {p.deposito && (
                                 <span className="badge bg-light text-dark border me-1">
