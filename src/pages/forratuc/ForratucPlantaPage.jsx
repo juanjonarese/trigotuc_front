@@ -50,6 +50,29 @@ const ESTADO = {
 };
 const fechaInput = (d) => (d ? String(d).slice(0, 10) : obtenerFechaHoy());
 
+// Cómo se elabora cada alimento (28/11): sin marca, los dos.
+const envasesDe = (f) => (f?.envases?.length ? f.envases : ["bolsa", "granel"]);
+const enBolsa = (f) => envasesDe(f).includes("bolsa");
+const aGranel = (f) => envasesDe(f).includes("granel");
+const ENVASES = [["bolsa", "bi-bag", "En bolsa"], ["granel", "bi-truck", "A granel"]];
+
+// Los dos tildes de envase, para la fórmula y el alimento.
+const TildesEnvase = ({ valor, onChange, id }) => (
+  <div>
+    <div className="form-label fw-semibold small mb-1">Se elabora</div>
+    <div className="d-flex flex-wrap gap-3">
+      {ENVASES.map(([k, ic, txt]) => (
+        <div key={k} className="form-check">
+          <input id={`${id}-${k}`} type="checkbox" className="form-check-input" checked={valor.includes(k)}
+            onChange={(e) => onChange(e.target.checked ? [...new Set([...valor, k])] : valor.filter((x) => x !== k))} />
+          <label htmlFor={`${id}-${k}`} className="form-check-label"><i className={`bi ${ic} me-1`}></i>{txt}</label>
+        </div>
+      ))}
+    </div>
+    {valor.length === 0 && <div className="form-text text-danger">Marcá al menos uno.</div>}
+  </div>
+);
+
 // Modal genérico (Bootstrap sin JS, como el resto de las pantallas).
 const Modal = ({ titulo, onClose, onSubmit, saving, children, ancho = "", textoOk = "Guardar" }) => (
   <>
@@ -114,13 +137,25 @@ const ForratucPlantaPage = () => {
   const mpPorId = useMemo(() => new Map(materias.map((m) => [String(m._id), m])), [materias]);
   // Las bolsas que se pueden elaborar: cada una con la fórmula de su alimento
   // (la receta es del alimento; los kg, de la bolsa — 2026-11-06).
-  const bolsas = useMemo(() => formulas.flatMap((f) => (f.bolsas || []).map((b) => ({
+  // Desde el 28/11 cada alimento dice si se elabora en bolsa, a granel o los dos
+  // (`envases`): en bolsa se listan solo los marcados "bolsa"; a granel, los "granel".
+  const bolsas = useMemo(() => formulas.filter((f) => enBolsa(f)).flatMap((f) => (f.bolsas || []).map((b) => ({
     ...b, alimentoActivo: f.activo, formula: f.formula, conFormula: !!f.formula?.ingredientes?.length,
   }))), [formulas]);
   const formulaDe = useMemo(() => new Map(bolsas.map((b) => [b.producto, b])), [bolsas]);
   const destinosGranel = constantes?.destinosGranel || [];
   // Alimentos (recetas) con fórmula, para el granel.
-  const recetas = useMemo(() => formulas.filter((f) => f.activo && f.formula?.ingredientes?.length), [formulas]);
+  const recetas = useMemo(() => formulas.filter((f) => f.activo && aGranel(f) && f.formula?.ingredientes?.length), [formulas]);
+  // Abrir la fórmula de un alimento, con su envase (y la bolsa a crear si hace falta).
+  const abrirFormula = (f) => setModal({
+    tipo: "formula", alimento: f,
+    ingredientes: f.formula?.ingredientes?.length
+      ? f.formula.ingredientes.map((i) => ({ materiaPrima: String(i.materiaPrima?._id || i.materiaPrima), kg: String(i.kg) }))
+      : [{ materiaPrima: "", kg: "" }],
+    observaciones: f.formula?.observaciones || "",
+    envases: f.envases?.length ? f.envases : ["bolsa", "granel"],
+    bolsa: { codigo: "", kgBolsa: String(constantes?.kgBolsaInicial || 40), categoria: "" },
+  });
   const etiquetaOrden = (o) => {
     if (o.envase !== "granel") return "Depósito Producción";
     const d = destinosGranel.find((x) => x.key === o.destino)?.etiqueta || o.destino;
@@ -208,10 +243,10 @@ const ForratucPlantaPage = () => {
                 <div className="card-body">
                   <div className="d-flex justify-content-between align-items-center mb-3">
                     <div></div>
-                    <button className="btn btn-primary btn-sm text-nowrap" disabled={recetas.length === 0}
-                      title={recetas.length === 0 ? "Primero cargá la fórmula de un alimento" : undefined}
+                    <button className="btn btn-primary btn-sm text-nowrap" disabled={recetas.length === 0 && conFormula.length === 0}
+                      title={recetas.length === 0 && conFormula.length === 0 ? "Primero cargá la fórmula de un alimento" : undefined}
                       onClick={() => setModal({
-                        tipo: "orden", envase: "bolsa", producto: conFormula[0]?.producto || "", alimento: recetas[0]?.alimento || "",
+                        tipo: "orden", envase: conFormula.length ? "bolsa" : "granel", producto: conFormula[0]?.producto || "", alimento: recetas[0]?.alimento || "",
                         bachadas: "", destino: destinosGranel[0]?.key || "", galpones: [], refPedido: "", fecha: obtenerFechaHoy(), observaciones: "",
                       })}>
                       <i className="bi bi-plus-lg me-1"></i>Nueva planilla
@@ -327,20 +362,26 @@ const ForratucPlantaPage = () => {
                 <div className="card-body">
                   <div className="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
                     <div></div>
-                    <button className="btn btn-outline-primary btn-sm" onClick={() => setModal({ tipo: "alimento", _id: null, nombre: "", activo: true })}>
+                    <button className="btn btn-outline-primary btn-sm" onClick={() => setModal({ tipo: "alimento", _id: null, nombre: "", activo: true, envases: ["bolsa", "granel"] })}>
                       <i className="bi bi-plus-lg me-1"></i>Nuevo alimento
                     </button>
                   </div>
                   <table className="table table-sm table-hover align-middle">
-                    <thead><tr><th>Alimento</th><th>Bolsas</th><th>Fórmula</th><th></th></tr></thead>
+                    <thead><tr><th>Alimento</th><th>Se elabora</th><th>Bolsas</th><th>Fórmula</th><th></th></tr></thead>
                     <tbody>
                       {formulas.map((f) => (
                         <tr key={f.alimento} className={f.activo ? "" : "text-muted"}>
                           <td>{f.nombre}{!f.activo && <span className="badge bg-secondary ms-2">Inactivo</span>}</td>
+                          <td className="small text-nowrap">
+                            {enBolsa(f) && <span className="badge bg-light text-dark border me-1"><i className="bi bi-bag me-1"></i>Bolsa</span>}
+                            {aGranel(f) && <span className="badge bg-info text-dark"><i className="bi bi-truck me-1"></i>Granel</span>}
+                          </td>
                           <td className="small">
                             {f.bolsas?.length
                               ? f.bolsas.map((b) => `${b.codigo} · ${fmt(b.kgBolsa, 2)} kg`).join(" / ")
-                              : <span className="text-warning-emphasis">sin bolsa (alta en Productos)</span>}
+                              : enBolsa(f)
+                                ? <span className="text-warning-emphasis">sin bolsa: cargala en la fórmula</span>
+                                : <span className="text-muted">—</span>}
                           </td>
                           <td className="small">
                             {f.formula?.ingredientes?.length
@@ -352,17 +393,11 @@ const ForratucPlantaPage = () => {
                           </td>
                           <td className="text-end text-nowrap">
                             <button className={`btn btn-sm me-2 ${f.formula?.ingredientes?.length ? "btn-outline-primary" : "btn-primary"}`} title="Fórmula"
-                              onClick={() => setModal({
-                                tipo: "formula", alimento: f,
-                                ingredientes: f.formula?.ingredientes?.length
-                                  ? f.formula.ingredientes.map((i) => ({ materiaPrima: String(i.materiaPrima?._id || i.materiaPrima), kg: String(i.kg) }))
-                                  : [{ materiaPrima: "", kg: "" }],
-                                observaciones: f.formula?.observaciones || "",
-                              })}>
+                              onClick={() => abrirFormula(f)}>
                               <i className="bi bi-journal-richtext me-1"></i>{f.formula?.ingredientes?.length ? "Fórmula" : "Cargar fórmula"}
                             </button>
-                            <button className="btn btn-sm btn-link p-0" title="Nombre y activo"
-                              onClick={() => setModal({ tipo: "alimento", _id: f._id, nombre: f.nombre, activo: f.activo })}>
+                            <button className="btn btn-sm btn-link p-0" title="Nombre, envase y activo"
+                              onClick={() => setModal({ tipo: "alimento", _id: f._id, nombre: f.nombre, activo: f.activo, envases: envasesDe(f) })}>
                               <i className="bi bi-pencil"></i>
                             </button>
                           </td>
@@ -582,13 +617,53 @@ const ForratucPlantaPage = () => {
         {modal?.tipo === "formula" && (() => {
           const total = modal.ingredientes.reduce((a, i) => a + (Number(i.kg) || 0), 0);
           const setIng = (i, c) => set({ ingredientes: modal.ingredientes.map((x, j) => (j === i ? { ...x, ...c } : x)) });
+          // En bolsa y sin bolsa a la venta: se crea acá (28/11), sin pasar por Productos.
+          const pideBolsa = modal.envases.includes("bolsa") && !modal.alimento.bolsas?.length;
+          const setBolsa = (c) => set({ bolsa: { ...modal.bolsa, ...c } });
           return (
             <Modal titulo={`Fórmula — ${modal.alimento.nombre}`} ancho="modal-lg" saving={saving} onClose={() => setModal(null)}
               onSubmit={() => hacer(() => guardarFormula(modal.alimento.alimento, {
                 ingredientes: modal.ingredientes.filter((i) => i.materiaPrima).map((i) => ({ materiaPrima: i.materiaPrima, kg: Number(i.kg) })),
                 observaciones: modal.observaciones,
+                envases: modal.envases,
+                ...(pideBolsa ? { bolsa: modal.bolsa } : {}),
               }), "Fórmula guardada")}>
               <div className="row g-3">
+                <div className="col-12">
+                  <TildesEnvase id="formEnv" valor={modal.envases} onChange={(envases) => set({ envases })} />
+                </div>
+                {pideBolsa && (
+                  <div className="col-12">
+                    <div className="border rounded p-2 bg-light">
+                      <div className="small fw-semibold mb-2">
+                        <i className="bi bi-bag me-1"></i>La bolsa a la venta (no tiene ninguna todavía)
+                      </div>
+                      <div className="row g-2">
+                        <div className="col-4">
+                          <label className="form-label small mb-1">Código</label>
+                          <input className="form-control form-control-sm" value={modal.bolsa.codigo} required maxLength={20}
+                            onChange={(e) => setBolsa({ codigo: e.target.value })} />
+                        </div>
+                        <div className="col-4">
+                          <label className="form-label small mb-1">Kg de la bolsa</label>
+                          <input type="number" min="0.01" step="0.01" className="form-control form-control-sm" value={modal.bolsa.kgBolsa} required
+                            onChange={(e) => setBolsa({ kgBolsa: e.target.value })} />
+                        </div>
+                        <div className="col-4">
+                          <label className="form-label small mb-1">Categoría</label>
+                          <select className="form-select form-select-sm" value={modal.bolsa.categoria}
+                            onChange={(e) => setBolsa({ categoria: e.target.value })}>
+                            <option value="">— Sin categoría —</option>
+                            {(constantes?.categoriasAlimento || []).map((c) => <option key={c.key} value={c.key}>{c.etiqueta}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div className="form-text">
+                        Se da de alta sola en Productos como "{modal.alimento.nombre} x {modal.bolsa.kgBolsa || "?"} kg". El precio se pone en Listas de precios.
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div className="col-12">
                   <table className="table table-sm align-middle mb-1">
                     <thead><tr><th>Insumo</th><th style={{ width: "9rem" }}>Kg por bachada</th>
@@ -648,15 +723,17 @@ const ForratucPlantaPage = () => {
         {modal?.tipo === "alimento" && (
           <Modal titulo={modal._id ? "Editar alimento" : "Nuevo alimento"} saving={saving} onClose={() => setModal(null)}
             onSubmit={async () => {
-              if (modal._id) return hacer(() => guardarAlimentoBalanceado(modal._id, { nombre: modal.nombre, activo: modal.activo }), "Alimento guardado");
-              // Alimento nuevo: se guarda y se abre directo su fórmula (21/11).
+              const datos = { nombre: modal.nombre, activo: modal.activo, envases: modal.envases };
+              if (modal._id) return hacer(() => guardarAlimentoBalanceado(modal._id, datos), "Alimento guardado");
+              // Alimento nuevo: se guarda y se abre directo su fórmula (21/11),
+              // donde se carga la bolsa si va en bolsa (28/11).
               setSaving(true);
               try {
-                const nuevo = await guardarAlimentoBalanceado(null, { nombre: modal.nombre, activo: modal.activo });
+                const nuevo = await guardarAlimentoBalanceado(null, datos);
                 const lista = await obtenerFormulas();
                 setFormulas(lista);
                 const f = lista.find((x) => String(x._id) === String(nuevo?._id)) || lista.find((x) => x.nombre === modal.nombre.trim());
-                setModal(f ? { tipo: "formula", alimento: f, ingredientes: [{ materiaPrima: "", kg: "" }], observaciones: "" } : null);
+                if (f) abrirFormula(f); else setModal(null);
               } catch (err) {
                 Swal.fire("Error", err.message || "No se pudo guardar.", "error");
               } finally {
@@ -683,6 +760,10 @@ const ForratucPlantaPage = () => {
                 {!modal.activo && modal._id && (
                   <div className="form-text text-warning-emphasis">Dado de baja: sus bolsas dejan de venderse y no se elabora ni se envía.</div>
                 )}
+              </div>
+              <div className="col-12">
+                <TildesEnvase id="alimEnv" valor={modal.envases} onChange={(envases) => set({ envases })} />
+                <div className="form-text">En la planilla de dosificación aparece solo en lo que esté marcado.</div>
               </div>
             </div>
           </Modal>
