@@ -2,12 +2,13 @@ import React, { useState, useRef, useEffect } from "react";
 import { preguntarAsistente } from "../services/api";
 
 /**
- * El asistente de IA, como botón flotante (2026-10-22). Solo para el
- * superadmin: lo monta el Layout, así que está en todas las pantallas.
+ * El asistente de IA, como botón flotante (2026-10-22). Lo monta el Layout, así
+ * que está en todas las pantallas.
  *
- * Se le pregunta en castellano por cualquier dato de la plataforma —avícola y
- * Forratuc— y contesta consultando la base. Es de SOLO LECTURA: no carga,
- * modifica ni borra nada.
+ * Desde el 2026-11-28 lo ven TODOS los roles: explica cómo se usa la plataforma
+ * (la guía de uso del back, recortada a su rol). Además, solo el superadmin le
+ * pregunta por los datos (stock, ventas…) y contesta consultando la base. Es de
+ * SOLO LECTURA: no carga, modifica ni borra nada. El corte real es del back.
  *
  * El servidor no guarda la conversación: viaja entera en cada pregunta. Como
  * cada pantalla monta su propio Layout, la conversación y si el panel está
@@ -30,13 +31,56 @@ const guardar = (clave, valor) => {
   try { sessionStorage.setItem(clave, JSON.stringify(valor)); } catch { /* sin storage */ }
 };
 
-// Arranques: las preguntas que se hacen igual, y muestran qué entiende.
-const EJEMPLOS = [
+// Arranques: las preguntas que se hacen igual, y muestran qué entiende. El
+// superadmin ve de datos; cada rol, de cómo se usan SUS pantallas.
+const EJEMPLOS_SUPERADMIN = [
   "¿Cuánto pollo hay en la cámara de Trigotuc, por calibre?",
   "¿Qué cargas de pollitos de noviembre tienen lugar libre para vender?",
-  "¿Cómo vienen los galpones de engorde: mortandad y peso contra el objetivo?",
+  "¿Cómo se carga un cliente nuevo?",
   "¿Qué se vendió hoy por el mostrador?",
 ];
+const EJEMPLOS_POR_ROL = {
+  admin: [
+    "¿Cómo hago un presupuesto en cuenta corriente?",
+    "¿Cómo se carga un cliente nuevo?",
+    "¿Cómo abro y cierro la caja?",
+    "¿Cómo le pido mercadería a Producción?",
+  ],
+  administracion_frigorifico: [
+    "¿Cómo creo una orden de carga para un cliente?",
+    "¿Cómo mando pollo de Cañete a Trigotuc?",
+    "¿Cómo se carga un cliente nuevo?",
+  ],
+  administracion_granja: [
+    "¿Cómo mando pollitos a un galpón?",
+    "¿Cómo hago una orden de carga de pollo en pie?",
+    "¿Cómo se carga un cliente nuevo?",
+  ],
+  frigorifico: [
+    "¿Cómo cargo una faena?",
+    "¿Cómo le pido pollos a la granja?",
+    "¿Cómo trozo pollo entero que está en cámara?",
+  ],
+  granja: [
+    "¿Cómo confirmo que llegaron los pollitos?",
+    "¿Cómo cargo la mortandad y el peso de la semana?",
+    "¿Cómo entrego una orden de carga con el código del cliente?",
+  ],
+  reproductoras: [
+    "¿Cómo cargo un remito de huevos?",
+    "¿Cómo paso una tanda a la nacedora?",
+    "¿Cómo muevo la fecha de nacimiento de una carga?",
+  ],
+  produccion: [
+    "¿Cómo preparo un pedido de Forratuc?",
+    "¿Cómo cargo una planilla de dosificación?",
+    "¿Cómo ingreso mercadería al depósito?",
+  ],
+};
+const rolActual = () => localStorage.getItem("rolUsuario");
+const esSuperadmin = () => rolActual() === "superadmin";
+const ejemplos = () =>
+  esSuperadmin() ? EJEMPLOS_SUPERADMIN : EJEMPLOS_POR_ROL[rolActual()] || ["¿Qué puedo hacer en la plataforma?"];
 
 // Formato mínimo para la respuesta: negritas, títulos, viñetas y tablas. Sin
 // librería de Markdown para un chat, pero tampoco los asteriscos a la vista.
@@ -165,7 +209,9 @@ const AsistenteFlotante = () => {
             <i className="bi bi-stars"></i>
             <div className="flex-grow-1">
               <div className="fw-semibold lh-1">Asistente</div>
-              <div className="small opacity-75">Consultas sobre los datos de la plataforma</div>
+              <div className="small opacity-75">
+                {esSuperadmin() ? "Cómo se usa la plataforma y consultas de datos" : "Cómo se usa la plataforma"}
+              </div>
             </div>
             {conversacion.length > 0 && (
               <button
@@ -185,10 +231,11 @@ const AsistenteFlotante = () => {
             {conversacion.length === 0 && (
               <div className="py-2">
                 <p className="text-muted mb-2">
-                  Preguntame lo que quieras sobre la avícola o Forratuc: stock, galpones, incubadora, plan de
-                  pollitos, ventas del mostrador, cuentas corrientes… Solo consulto, no modifico nada.
+                  {esSuperadmin()
+                    ? "Preguntame cómo se hace algo en la plataforma, o lo que quieras sobre los datos de la avícola o Forratuc: stock, galpones, incubadora, plan de pollitos, ventas, cuentas corrientes… Solo consulto, no modifico nada."
+                    : "Preguntame cómo se hace cualquier cosa en tus pantallas: qué botón tocar, en qué orden y qué tener en cuenta. Solo explico, no modifico nada."}
                 </p>
-                {EJEMPLOS.map((e) => (
+                {ejemplos().map((e) => (
                   <button
                     key={e}
                     type="button"
@@ -222,7 +269,7 @@ const AsistenteFlotante = () => {
             {pensando && (
               <div className="bg-white border rounded-3 px-3 py-2 mb-2 text-muted">
                 <span className="spinner-border spinner-border-sm me-2"></span>
-                Consultando los datos…
+                {esSuperadmin() ? "Consultando…" : "Buscando en la guía…"}
               </div>
             )}
             <div ref={finRef}></div>

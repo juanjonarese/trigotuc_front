@@ -353,8 +353,10 @@ const Layout = ({ children }) => {
         <div className="page-content p-2 p-md-4">{children}</div>
       </div>
 
-      {/* Asistente de IA (2026-10-22): solo el superadmin, en todas las pantallas. */}
-      {rolUsuario === "superadmin" && <AsistenteFlotante />}
+      {/* Asistente de IA (2026-10-22), en todas las pantallas. Desde el 2026-11-28
+          lo ven todos los roles: guía de uso para todos, datos solo el superadmin
+          (el corte lo hace el back). */}
+      {rolUsuario && <AsistenteFlotante />}
     </div>
   );
 };
